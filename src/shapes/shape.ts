@@ -1,5 +1,5 @@
 import { valueof } from "../stay/types"
-import { ShapeDrawTypes } from "../userConstants"
+import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { SimplePoint } from "../userTypes"
 
 export interface ShapeProps {
@@ -7,7 +7,7 @@ export interface ShapeProps {
   lineWidth?: number
   zoomY?: number
   zoomCenter?: SimplePoint
-  type?: valueof<typeof ShapeDrawTypes>
+  type?: valueof<typeof SHAPE_DRAW_TYPES>
 }
 
 export abstract class Shape {
@@ -16,7 +16,7 @@ export abstract class Shape {
   lineWidth: number
   offsetX: number
   offsetY: number
-  type: valueof<typeof ShapeDrawTypes>
+  type: valueof<typeof SHAPE_DRAW_TYPES>
   zeroPoint: SimplePoint
   zeroPointCopy: SimplePoint
   zoomCenter: SimplePoint
@@ -25,7 +25,7 @@ export abstract class Shape {
     this.color = color || "white"
     this.lineWidth = lineWidth || 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
-    this.type = type || ShapeDrawTypes.STROKE // this is a placeholder for the type property that will be implemented in the subclasses
+    this.type = type || SHAPE_DRAW_TYPES.STROKE // this is a placeholder for the type property that will be implemented in the subclasses
     this.zoomY = 1
     this.zoomCenter = { x: 0, y: 0 }
 

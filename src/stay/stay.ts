@@ -22,12 +22,12 @@ import {
 } from "../types"
 import {
   DEFAULTSTATE,
-  DrawActions,
-  DrawParents,
-  MouseEvents,
+  DRAW_ACTIONS,
+  DRAW_PARENTS,
+  MOUSE_EVENTS,
   ROOTNAME,
+  SORT_CHILDREN_METHODS,
   SUPPORT_OPRATOR,
-  SortChildrenMethods,
 } from "../userConstants"
 import { ActionEvent, StayTools, UserStayAction } from "../userTypes"
 import { StayChild } from "./stayChild"
@@ -79,7 +79,7 @@ class Stay {
       }),
 
       className: ROOTNAME,
-      parent: DrawParents.MAIN,
+      parent: DRAW_PARENTS.MAIN,
     })
     this.#children.set(rootChild.id, rootChild)
     this.events = {}
@@ -101,8 +101,8 @@ class Stay {
     this.tools = this.getTools.bind(this)()
 
     this.drawParents = {
-      [DrawParents.DRAW]: { forceUpdate: false },
-      [DrawParents.MAIN]: { forceUpdate: false },
+      [DRAW_PARENTS.DRAW]: { forceUpdate: false },
+      [DRAW_PARENTS.MAIN]: { forceUpdate: false },
     }
 
     this.initEvents()
@@ -114,7 +114,7 @@ class Stay {
     callback,
     state = DEFAULTSTATE,
     selector = `.${ROOTNAME}`,
-    sortBy = SortChildrenMethods.AREA_ASC,
+    sortBy = SORT_CHILDREN_METHODS.AREA_ASC,
     log = false,
   }: UserStayAction) {
     let eventList = event
@@ -164,17 +164,17 @@ class Stay {
   draw(forceUpdate = false) {
     type Children = Record<string, { update: boolean; members: StayChild[] }>
     const children: Children = {
-      [DrawParents.DRAW]: {
+      [DRAW_PARENTS.DRAW]: {
         update:
           false ||
-          this.drawParents[DrawParents.DRAW].forceUpdate ||
+          this.drawParents[DRAW_PARENTS.DRAW].forceUpdate ||
           forceUpdate,
         members: [],
       },
-      [DrawParents.MAIN]: {
+      [DRAW_PARENTS.MAIN]: {
         update:
           false ||
-          this.drawParents[DrawParents.MAIN].forceUpdate ||
+          this.drawParents[DRAW_PARENTS.MAIN].forceUpdate ||
           forceUpdate,
         members: [],
       },
@@ -186,7 +186,7 @@ class Stay {
         children[child.beforeParent].update ||= true
       } else {
         children[child.parent].update ||=
-          child.drawAction === DrawActions.UPDATE
+          child.drawAction === DRAW_ACTIONS.UPDATE
       }
     })
 
@@ -194,11 +194,11 @@ class Stay {
       const particalChildren = children[drawParent]
 
       const context =
-        drawParent === DrawParents.MAIN
+        drawParent === DRAW_PARENTS.MAIN
           ? this.root.mainContext
           : this.root.drawContext
       const canvasData =
-        drawParent === DrawParents.MAIN
+        drawParent === DRAW_PARENTS.MAIN
           ? this.root.mainData
           : this.root.drawData
       if (particalChildren.update) {
@@ -269,7 +269,7 @@ class Stay {
         actionEvent.x = mouseE.clientX - this.root.x
         actionEvent.y = mouseE.clientY - this.root.y
         actionEvent.point = new Point(actionEvent.x, actionEvent.y)
-        if (event.trigger === MouseEvents.WHEEL) {
+        if (event.trigger === MOUSE_EVENTS.WHEEL) {
           const wheelE = e as WheelEvent
           actionEvent.deltaX = wheelE.deltaX
           actionEvent.deltaY = wheelE.deltaY
@@ -302,8 +302,8 @@ class Stay {
 
     this.tools.triggerAction(e, triggerEvents, {})
   }
-  forceUpdateCanvas(canvasName: keyof typeof DrawParents) {
-    this.drawParents[DrawParents[canvasName]].forceUpdate = true
+  forceUpdateCanvas(canvasName: keyof typeof DRAW_PARENTS) {
+    this.drawParents[DRAW_PARENTS[canvasName]].forceUpdate = true
   }
 
   getChildById(id: string) {

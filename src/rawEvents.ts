@@ -1,5 +1,5 @@
 import { FireEvent } from "./types"
-import { KeyboardEvents, MouseEvents } from "./userConstants"
+import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
 
 interface ReleasePressKey {
   (key: string): void
@@ -10,7 +10,7 @@ export function keyup(
   e: KeyboardEvent
 ) {
   releaseKey(e.key)
-  fireEvent(e, KeyboardEvents.KEY_UP)
+  fireEvent(e, KEYBOARRD_EVENTS.KEY_UP)
 }
 
 export function keydown(
@@ -19,10 +19,10 @@ export function keydown(
   e: KeyboardEvent
 ) {
   pressKey(e.key)
-  fireEvent(e, KeyboardEvents.KEY_DOWN)
+  fireEvent(e, KEYBOARRD_EVENTS.KEY_DOWN)
 }
 export function mousemove(fireEvent: FireEvent, e: MouseEvent) {
-  fireEvent(e, MouseEvents.MOUSE_MOVE)
+  fireEvent(e, MOUSE_EVENTS.MOUSE_MOVE)
 }
 export function mousedown(
   fireEvent: FireEvent,
@@ -30,7 +30,7 @@ export function mousedown(
   e: MouseEvent
 ) {
   pressKey("mouse" + e.button)
-  fireEvent(e, MouseEvents.MOUSE_DOWN)
+  fireEvent(e, MOUSE_EVENTS.MOUSE_DOWN)
 }
 export function mouseup(
   fireEvent: FireEvent,
@@ -38,20 +38,20 @@ export function mouseup(
   e: MouseEvent
 ) {
   releaseKey("mouse" + e.button)
-  fireEvent(e, MouseEvents.MOUSE_UP)
+  fireEvent(e, MOUSE_EVENTS.MOUSE_UP)
 }
 export function wheel(fireEvent: FireEvent, e: WheelEvent) {
-  fireEvent(e, MouseEvents.WHEEL)
+  fireEvent(e, MOUSE_EVENTS.WHEEL)
 }
 
 export function click(fireEvent: FireEvent, e: MouseEvent) {
-  fireEvent(e, MouseEvents.CLICK)
+  fireEvent(e, MOUSE_EVENTS.CLICK)
 }
 
 export function dblclick(fireEvent: FireEvent, e: MouseEvent) {
-  fireEvent(e, MouseEvents.DB_CLICK)
+  fireEvent(e, MOUSE_EVENTS.DB_CLICK)
 }
 
 export function contextmenu(fireEvent: FireEvent, e: MouseEvent) {
-  fireEvent(e, MouseEvents.CONTEXT_MENU)
+  fireEvent(e, MOUSE_EVENTS.CONTEXT_MENU)
 }

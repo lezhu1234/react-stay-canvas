@@ -1,9 +1,9 @@
 import { UserStayEventProps } from "./types"
-import { KeyboardEvents, MouseEvents } from "./userConstants"
+import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
 
 export const mouseDownEvent: UserStayEventProps = {
   name: "mousedown",
-  trigger: MouseEvents.MOUSE_DOWN,
+  trigger: MOUSE_EVENTS.MOUSE_DOWN,
   conditionCallback: () => true,
   successCallback: ({ e, store }) => {
     store.set("lastMouseDownPosition", { x: e.x, y: e.y })
@@ -13,7 +13,7 @@ export const mouseDownEvent: UserStayEventProps = {
 
 export const BackwardEvent: UserStayEventProps = {
   name: "backward",
-  trigger: KeyboardEvents.KEY_UP,
+  trigger: KEYBOARRD_EVENTS.KEY_UP,
   conditionCallback: ({ e }) => {
     return (
       e.pressedKeys.has("Control") &&
@@ -25,7 +25,7 @@ export const BackwardEvent: UserStayEventProps = {
 
 export const ForwardEvent: UserStayEventProps = {
   name: "forward",
-  trigger: KeyboardEvents.KEY_UP,
+  trigger: KEYBOARRD_EVENTS.KEY_UP,
   conditionCallback: ({ e }) => {
     return (
       e.pressedKeys.has("Control") &&
@@ -37,7 +37,7 @@ export const ForwardEvent: UserStayEventProps = {
 
 export const ClickEvent: UserStayEventProps = {
   name: "click",
-  trigger: MouseEvents.MOUSE_UP,
+  trigger: MOUSE_EVENTS.MOUSE_UP,
   conditionCallback: ({ e, store }) => {
     const { x, y } = store.get("lastMouseDownPosition")
     const now = Date.now()
@@ -49,7 +49,7 @@ export const ClickEvent: UserStayEventProps = {
 
 export const MousemoveEvent: UserStayEventProps = {
   name: "mousemove",
-  trigger: MouseEvents.MOUSE_MOVE,
+  trigger: MOUSE_EVENTS.MOUSE_MOVE,
   conditionCallback: ({ e }) => {
     return !e.pressedKeys.has("mouse0")
   },
@@ -57,7 +57,7 @@ export const MousemoveEvent: UserStayEventProps = {
 
 const DragEndEvent: UserStayEventProps = {
   name: "dragend",
-  trigger: MouseEvents.MOUSE_UP,
+  trigger: MOUSE_EVENTS.MOUSE_UP,
   conditionCallback: () => true,
   successCallback: ({ store, deleteEvent }) => {
     deleteEvent("drag")
@@ -68,7 +68,7 @@ const DragEndEvent: UserStayEventProps = {
 
 const DragEvent: UserStayEventProps = {
   name: "drag",
-  trigger: MouseEvents.MOUSE_MOVE,
+  trigger: MOUSE_EVENTS.MOUSE_MOVE,
   conditionCallback: ({ e, store }) => {
     let distance = 0
     if (store.get("lastMouseDownPosition")) {
@@ -89,7 +89,7 @@ const DragEvent: UserStayEventProps = {
 
 export const DragStartEvent: UserStayEventProps = {
   name: "dragstart",
-  trigger: MouseEvents.MOUSE_DOWN,
+  trigger: MOUSE_EVENTS.MOUSE_DOWN,
   conditionCallback: ({ e }) => {
     return e.pressedKeys.has("mouse0") && !e.pressedKeys.has("Control")
   },
@@ -100,7 +100,7 @@ export const DragStartEvent: UserStayEventProps = {
 
 const MoveEndEvent: UserStayEventProps = {
   name: "moveend",
-  trigger: MouseEvents.MOUSE_UP,
+  trigger: MOUSE_EVENTS.MOUSE_UP,
   conditionCallback: () => true,
   successCallback: ({ deleteEvent }) => {
     deleteEvent("move")
@@ -110,7 +110,7 @@ const MoveEndEvent: UserStayEventProps = {
 
 const MoveEvent: UserStayEventProps = {
   name: "move",
-  trigger: MouseEvents.MOUSE_MOVE,
+  trigger: MOUSE_EVENTS.MOUSE_MOVE,
   conditionCallback: ({ e, store }) => {
     return e.pressedKeys.has("Control") && e.pressedKeys.has("mouse0")
   },
@@ -121,7 +121,7 @@ const MoveEvent: UserStayEventProps = {
 
 export const StartMoveEvent: UserStayEventProps = {
   name: "startmove",
-  trigger: MouseEvents.MOUSE_DOWN,
+  trigger: MOUSE_EVENTS.MOUSE_DOWN,
   conditionCallback: ({ e }) => {
     return e.pressedKeys.has("mouse0") && e.pressedKeys.has("Control")
   },
@@ -132,7 +132,7 @@ export const StartMoveEvent: UserStayEventProps = {
 
 export const MouseUpEvent: UserStayEventProps = {
   name: "mouseup",
-  trigger: MouseEvents.MOUSE_UP,
+  trigger: MOUSE_EVENTS.MOUSE_UP,
   conditionCallback: () => true,
   successCallback: ({ store }) => {
     store.delete("lastMouseDownPosition")
@@ -142,12 +142,12 @@ export const MouseUpEvent: UserStayEventProps = {
 
 export const ZoomInEvent: UserStayEventProps = {
   name: "zoomIn",
-  trigger: MouseEvents.WHEEL,
+  trigger: MOUSE_EVENTS.WHEEL,
   conditionCallback: ({ e }) => e.deltaY < 0,
 }
 
 export const ZoomOutEvent: UserStayEventProps = {
   name: "zoomOut",
-  trigger: MouseEvents.WHEEL,
+  trigger: MOUSE_EVENTS.WHEEL,
   conditionCallback: ({ e }) => e.deltaY > 0,
 }

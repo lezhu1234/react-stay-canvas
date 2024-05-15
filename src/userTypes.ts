@@ -2,14 +2,18 @@ import { Point } from "./shapes/point"
 import { Shape } from "./shapes/shape"
 import { StayChild } from "./stay/stayChild"
 import { valueof } from "./stay/types"
-import { DrawActions, DrawParents, SortChildrenMethods } from "./userConstants"
+import {
+  DRAW_ACTIONS,
+  DRAW_PARENTS,
+  SORT_CHILDREN_METHODS,
+} from "./userConstants"
 
-type SortChildrenMethodsKeys = keyof typeof SortChildrenMethods
+type SortChildrenMethodsKeys = keyof typeof SORT_CHILDREN_METHODS
 export type StayChildren = Record<string, StayChild>
-export type DrawParentsValuesType = valueof<typeof DrawParents>
-export type DrawActionsValuesType = valueof<typeof DrawActions>
+export type DrawParentsValuesType = valueof<typeof DRAW_PARENTS>
+export type DrawActionsValuesType = valueof<typeof DRAW_ACTIONS>
 
-export type storeType = Map<string, any>
+export type StoreType = Map<string, any>
 export type Dict = Record<string, any>
 
 export interface SimplePoint {
@@ -32,7 +36,7 @@ export interface ActionEvent {
   deltaZ: number
 }
 
-export interface createChildProps {
+export interface CreateChildProps {
   id?: string
   zIndex?: number
   shape: Shape
@@ -40,7 +44,7 @@ export interface createChildProps {
   individual?: boolean
 }
 
-export interface updateChildProps {
+export interface UpdateChildProps {
   child: StayChild
   zIndex?: number
   className?: string
@@ -55,7 +59,7 @@ export interface UpdateStayChildProps {
   zIndex?: number
 }
 
-export interface getContainPointChildrenProps {
+export interface GetContainPointChildrenProps {
   selector: string | string[]
   point: SimplePoint
   returnFirst?: boolean | undefined
@@ -63,13 +67,13 @@ export interface getContainPointChildrenProps {
 }
 
 export type SortChildrenMethodsValues =
-  (typeof SortChildrenMethods)[SortChildrenMethodsKeys]
+  (typeof SORT_CHILDREN_METHODS)[SortChildrenMethodsKeys]
 
 export interface ActionCallbackProps {
   originEvent: Event
   e: ActionEvent
-  store: storeType
-  stateStore: storeType
+  store: StoreType
+  stateStore: StoreType
   composeStore: { [key: string]: any }
   tools: StayTools
   payload: Dict
@@ -86,11 +90,11 @@ export interface UserStayAction {
 }
 
 export interface StayTools {
-  createChild: (props: createChildProps) => StayChild
-  appendChild: (props: createChildProps) => StayChild
-  updateChild: (props: updateChildProps) => StayChild
+  createChild: (props: CreateChildProps) => StayChild
+  appendChild: (props: CreateChildProps) => StayChild
+  updateChild: (props: UpdateChildProps) => StayChild
   removeChild: (childId: string) => void
-  getContainPointChildren: (props: getContainPointChildrenProps) => StayChild[]
+  getContainPointChildren: (props: GetContainPointChildrenProps) => StayChild[]
   hasChild: (id: string) => boolean
   fix: () => void
   switchState: (state: string) => void

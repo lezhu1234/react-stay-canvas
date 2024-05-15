@@ -1,7 +1,7 @@
 import { v4 as uuid4 } from "uuid"
 
 import { Shape } from "../shapes/shape"
-import { DrawActions } from "../userConstants"
+import { DRAW_ACTIONS } from "../userConstants"
 import {
   DrawActionsValuesType,
   DrawParentsValuesType,
@@ -96,6 +96,6 @@ export class StayChild {
     this.zIndex = zIndex === undefined ? this.zIndex : zIndex
     this.parent = parent || this.parent
     this.shape = shape || this.shape.copy()
-    this.drawAction = DrawActions.UPDATE
+    this.drawAction = DRAW_ACTIONS.UPDATE
   }
 }

@@ -1,22 +1,22 @@
 import {
   ALLSTATE,
   DEFAULTSTATE,
-  DrawActions,
-  DrawParents,
+  DRAW_ACTIONS,
+  DRAW_PARENTS,
   ROOTNAME,
-  SortChildrenMethods,
+  SORT_CHILDREN_METHODS,
   SUPPORT_OPRATOR,
 } from "../userConstants"
 import {
   ActionCallbackProps,
   ActionEvent,
-  createChildProps,
+  CreateChildProps,
   Dict,
-  getContainPointChildrenProps,
+  GetContainPointChildrenProps,
   SimplePoint,
   SortChildrenMethodsValues,
   StayTools,
-  updateChildProps,
+  UpdateChildProps,
 } from "../userTypes"
 import { infixExpressionParser } from "../utils"
 import Stay from "./stay"
@@ -37,15 +37,15 @@ Stay.prototype.getTools = function (): StayTools {
       zIndex,
       className,
       individual = false,
-    }: createChildProps) => {
+    }: CreateChildProps) => {
       this.checkName(className, [ROOTNAME])
       const child = new StayChild({
         id,
         zIndex: zIndex === undefined ? 1 : zIndex,
         className,
-        parent: individual ? DrawParents.DRAW : DrawParents.MAIN,
+        parent: individual ? DRAW_PARENTS.DRAW : DRAW_PARENTS.MAIN,
         shape,
-        drawAction: DrawActions.APPEND,
+        drawAction: DRAW_ACTIONS.APPEND,
       })
       return child
     },
@@ -55,7 +55,7 @@ Stay.prototype.getTools = function (): StayTools {
       zIndex,
       id = undefined,
       individual = false,
-    }: createChildProps) => {
+    }: CreateChildProps) => {
       const child = this.tools.createChild({
         id,
         shape,
@@ -74,7 +74,7 @@ Stay.prototype.getTools = function (): StayTools {
       shape,
       className,
       individual = true,
-    }: updateChildProps) => {
+    }: UpdateChildProps) => {
       if (className === "") {
         throw new Error("className cannot be empty")
       }
@@ -87,7 +87,7 @@ Stay.prototype.getTools = function (): StayTools {
       child.update({
         shape,
         zIndex: zIndex,
-        parent: individual ? DrawParents.DRAW : DrawParents.MAIN,
+        parent: individual ? DRAW_PARENTS.DRAW : DRAW_PARENTS.MAIN,
         className,
       })
       this.unLogedChildrenIds.add(child.id)
@@ -102,7 +102,7 @@ Stay.prototype.getTools = function (): StayTools {
     },
     getChildrenBySelector: (
       selector: string,
-      sortBy: SortChildrenMethodsValues = SortChildrenMethods.AREA_ASC
+      sortBy: SortChildrenMethodsValues = SORT_CHILDREN_METHODS.AREA_ASC
     ): StayChild[] => {
       const children = infixExpressionParser<StayChild>({
         selector,
@@ -112,16 +112,16 @@ Stay.prototype.getTools = function (): StayTools {
       })
 
       const sortMap = new Map<SortChildrenMethodsValues, [string, 1 | -1]>([
-        [SortChildrenMethods.AREA_ASC, ["area", 1]],
-        [SortChildrenMethods.AREA_DESC, ["area", -1]],
-        [SortChildrenMethods.X_ASC, ["x", 1]],
-        [SortChildrenMethods.X_DESC, ["x", -1]],
-        [SortChildrenMethods.Y_ASC, ["y", 1]],
-        [SortChildrenMethods.Y_DESC, ["y", -1]],
-        [SortChildrenMethods.WIDTH_ASC, ["width", 1]],
-        [SortChildrenMethods.WIDTH_DESC, ["width", -1]],
-        [SortChildrenMethods.HEIGHT_ASC, ["height", 1]],
-        [SortChildrenMethods.HEIGHT_DESC, ["height", -1]],
+        [SORT_CHILDREN_METHODS.AREA_ASC, ["area", 1]],
+        [SORT_CHILDREN_METHODS.AREA_DESC, ["area", -1]],
+        [SORT_CHILDREN_METHODS.X_ASC, ["x", 1]],
+        [SORT_CHILDREN_METHODS.X_DESC, ["x", -1]],
+        [SORT_CHILDREN_METHODS.Y_ASC, ["y", 1]],
+        [SORT_CHILDREN_METHODS.Y_DESC, ["y", -1]],
+        [SORT_CHILDREN_METHODS.WIDTH_ASC, ["width", 1]],
+        [SORT_CHILDREN_METHODS.WIDTH_DESC, ["width", -1]],
+        [SORT_CHILDREN_METHODS.HEIGHT_ASC, ["height", 1]],
+        [SORT_CHILDREN_METHODS.HEIGHT_DESC, ["height", -1]],
       ])
 
       if (sortBy) {
@@ -168,7 +168,7 @@ Stay.prototype.getTools = function (): StayTools {
       selector,
       sortBy,
       returnFirst = false,
-    }: getContainPointChildrenProps): StayChild[] => {
+    }: GetContainPointChildrenProps): StayChild[] => {
       let _selector = selector
 
       if (selector && Array.isArray(selector)) {
@@ -196,10 +196,10 @@ Stay.prototype.getTools = function (): StayTools {
     },
     fix: () => {
       this.getChildren().forEach((child) => {
-        if (child.parent === DrawParents.DRAW) {
-          child.beforeParent = DrawParents.DRAW
-          child.parent = DrawParents.MAIN
-          child.drawAction = DrawActions.UPDATE
+        if (child.parent === DRAW_PARENTS.DRAW) {
+          child.beforeParent = DRAW_PARENTS.DRAW
+          child.parent = DRAW_PARENTS.MAIN
+          child.drawAction = DRAW_ACTIONS.UPDATE
         }
       })
     },

@@ -1,4 +1,4 @@
-import { ShapeDrawTypes } from "../userConstants"
+import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { Line } from "./line"
 import { Point } from "./point"
 import { Shape, ShapeProps } from "./shape"
@@ -86,10 +86,10 @@ export class Rectangle extends Shape {
   draw(ctx: CanvasRenderingContext2D) {
     ctx.lineWidth = this.lineWidth
 
-    if (this.type === ShapeDrawTypes.STROKE) {
+    if (this.type === SHAPE_DRAW_TYPES.STROKE) {
       ctx.strokeStyle = this.color
       ctx.strokeRect(this.x, this.y, this.width, this.height)
-    } else if (this.type === ShapeDrawTypes.FILL) {
+    } else if (this.type === SHAPE_DRAW_TYPES.FILL) {
       ctx.fillStyle = this.color
       ctx.fillRect(this.x, this.y, this.width, this.height)
     }

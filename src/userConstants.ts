@@ -1,4 +1,4 @@
-export const MouseEvents = {
+export const MOUSE_EVENTS = {
   MOUSE_DOWN: "mousedown", // 鼠标按下事件类型常量，用于鼠标按下事件监听器中使用。
   MOUSE_UP: "mouseup", // 鼠标松开事件类型常量，用于鼠标松开事件监听器中使用。
   MOUSE_MOVE: "mousemove", // 鼠标移动事件类型常量，用于鼠标移动事件监听器中使用。
@@ -8,22 +8,22 @@ export const MouseEvents = {
   CONTEXT_MENU: "contextmenu", // 鼠标右键事件类型常量，用于鼠标右键事件监听器中使用。
 }
 
-export const KeyboardEvents = {
+export const KEYBOARRD_EVENTS = {
   KEY_DOWN: "keydown", // 键盘按下事件类型常量，用于键盘按下事件监听器中使用。
   KEY_UP: "keyup", // 键盘松开事件类型常量，用于键盘松开事件监听器中使用。
 }
 
-export const DrawActions = {
+export const DRAW_ACTIONS = {
   APPEND: "append", // 追加绘制操作的常量，用于追加绘制操作的函数中使用。
   UPDATE: "update", // 更新绘制操作的常量，用于更新绘制操作的函数中使用。
 }
 
-export const DrawParents = {
+export const DRAW_PARENTS = {
   MAIN: "main",
   DRAW: "draw",
 }
 
-export const SortChildrenMethods = {
+export const SORT_CHILDREN_METHODS = {
   X_ASC: "x-asc", // 按X轴升序排序的常量，用于按X轴升序排序的函数中使用。
   X_DESC: "x-desc", // 按X轴降序排序的常量，用于按X轴降序排序的函数中使用。
   Y_ASC: "y-asc", // 按Y轴升序排序的常量，用于按Y轴升序排序的函数中使用。
@@ -36,7 +36,7 @@ export const SortChildrenMethods = {
   AREA_DESC: "area-desc", // 按面积降序排序的常量，用于按面积降序排序的函数中使用。
 }
 
-export const ShapeDrawTypes = {
+export const SHAPE_DRAW_TYPES = {
   STROKE: "stroke",
   FILL: "fill",
 } as const

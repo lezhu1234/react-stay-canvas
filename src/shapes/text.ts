@@ -1,4 +1,4 @@
-import { ShapeDrawTypes } from "../userConstants"
+import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { Point } from "./point"
 import { Rectangle } from "./rectangle"
 import { Shape, ShapeProps } from "./shape"
@@ -22,7 +22,7 @@ export class Text extends Shape {
   y: number
 
   constructor({ x, y, text, font, props }: TextAttr) {
-    super(props || { type: ShapeDrawTypes.FILL })
+    super(props || { type: SHAPE_DRAW_TYPES.FILL })
     this.text = text
     this.font = font || ""
     this.x = x
@@ -51,10 +51,10 @@ export class Text extends Shape {
     ctx.font = this.font
     this.init(ctx)
 
-    if (this.type === ShapeDrawTypes.FILL) {
+    if (this.type === SHAPE_DRAW_TYPES.FILL) {
       ctx.fillStyle = this.color
       ctx.fillText(this.text, this.leftBottom.x, this.leftBottom.y)
-    } else if (this.type === ShapeDrawTypes.STROKE) {
+    } else if (this.type === SHAPE_DRAW_TYPES.STROKE) {
       ctx.strokeStyle = this.color
       ctx.strokeText(this.text, this.leftBottom.x, this.leftBottom.y)
     }

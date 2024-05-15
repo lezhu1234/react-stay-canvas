@@ -3,7 +3,6 @@ import {
   ALLSTATE,
   DEFAULTSTATE,
   DRAW_ACTIONS,
-  DRAW_PARENTS,
   ROOTNAME,
   SORT_CHILDREN_METHODS,
   SUPPORT_OPRATOR,
@@ -37,14 +36,17 @@ Stay.prototype.getTools = function (): StayTools {
       shape,
       zIndex,
       className,
-      individual = false,
+      layer = -1,
     }: createChildProps<T>) => {
+      if (layer === -1) {
+        layer = this.root.layers.length - 1
+      }
       this.checkName(className, [ROOTNAME])
       const child = new StayChild({
         id,
         zIndex: zIndex === undefined ? 1 : zIndex,
         className,
-        parent: individual ? DRAW_PARENTS.DRAW : DRAW_PARENTS.MAIN,
+        layer,
         shape,
         drawAction: DRAW_ACTIONS.APPEND,
       })
@@ -55,14 +57,17 @@ Stay.prototype.getTools = function (): StayTools {
       className,
       zIndex,
       id = undefined,
-      individual = false,
+      layer = -1,
     }: createChildProps<T>) => {
+      if (layer === -1) {
+        layer = this.root.layers.length - 1
+      }
       const child = this.tools.createChild({
         id,
         shape,
         zIndex,
         className,
-        individual,
+        layer,
       })
       this.zIndexUpdated = true
       this.pushToChildren(child)
@@ -74,7 +79,7 @@ Stay.prototype.getTools = function (): StayTools {
       zIndex,
       shape,
       className,
-      individual = true,
+      layer = 0,
     }: updateChildProps) => {
       if (className === "") {
         throw new Error("className cannot be empty")
@@ -85,19 +90,22 @@ Stay.prototype.getTools = function (): StayTools {
       if (zIndex !== child.zIndex) {
         this.zIndexUpdated = true
       }
+      if (layer === -1) {
+        layer = this.root.layers.length - 1
+      }
       child.update({
         shape,
         zIndex: zIndex,
-        parent: individual ? DRAW_PARENTS.DRAW : DRAW_PARENTS.MAIN,
+        layer,
         className,
       })
       this.unLogedChildrenIds.add(child.id)
       return child
     },
-    removeChild: (childId: string, log = false) => {
+    removeChild: (childId: string) => {
       const child = this.getChildById(childId)
       if (!child) return false
-      this.drawParents[child.parent].forceUpdate = true
+      this.drawLayers[child.layer].forceUpdate = true
       this.removeChildById(child.id)
       this.unLogedChildrenIds.add(child.id)
     },
@@ -190,13 +198,13 @@ Stay.prototype.getTools = function (): StayTools {
         : hitChildren
     },
     changeCursor: (cursor: string) => {
-      this.root.drawCanvas.style.cursor = cursor
+      this.root.layers[this.root.layers.length - 1].style.cursor = cursor
     },
     fix: () => {
       this.getChildren().forEach((child) => {
-        if (child.parent === DRAW_PARENTS.DRAW) {
-          child.beforeParent = DRAW_PARENTS.DRAW
-          child.parent = DRAW_PARENTS.MAIN
+        if (child.layer !== 0) {
+          child.beforeLayer = child.layer
+          child.layer = 0
           child.drawAction = DRAW_ACTIONS.UPDATE
         }
       })
@@ -231,15 +239,17 @@ Stay.prototype.getTools = function (): StayTools {
       this.getChildren().forEach((child) => {
         child.shape.move(...child.shape._move(offsetX, offsetY))
       })
-      this.forceUpdateCanvas("DRAW")
-      this.forceUpdateCanvas("MAIN")
+      Array(this.root.layers.length).forEach((_, i) => {
+        this.forceUpdateLayer(i)
+      })
     },
     zoom: (deltaY: number, center: SimplePoint) => {
       this.getChildren().forEach((child) => {
         child.shape.zoom(child.shape._zoom(deltaY, center))
       })
-      this.forceUpdateCanvas("DRAW")
-      this.forceUpdateCanvas("MAIN")
+      Array(this.root.layers.length).forEach((_, i) => {
+        this.forceUpdateLayer(i)
+      })
     },
     forward: () => {
       console.log("forward")
@@ -248,8 +258,9 @@ Stay.prototype.getTools = function (): StayTools {
         return
       }
       const stepItem = this.stack[this.stackIndex]
-      this.forceUpdateCanvas("DRAW")
-      this.forceUpdateCanvas("MAIN")
+      Array(this.root.layers.length).forEach((_, i) => {
+        this.forceUpdateLayer(i)
+      })
 
       stepItem.steps.forEach((step) => {
         const stepChild = step.child
@@ -267,7 +278,6 @@ Stay.prototype.getTools = function (): StayTools {
           this.tools.updateChild({
             child,
             shape: stepChild.shape.copy(),
-            individual: false,
           })
         }
       })
@@ -284,8 +294,9 @@ Stay.prototype.getTools = function (): StayTools {
         return
       }
       this.stackIndex--
-      this.forceUpdateCanvas("DRAW")
-      this.forceUpdateCanvas("MAIN")
+      Array(this.root.layers.length).forEach((_, i) => {
+        this.forceUpdateLayer(i)
+      })
       const stepItem = this.stack[this.stackIndex]
 
       stepItem.steps.forEach((step) => {
@@ -306,7 +317,6 @@ Stay.prototype.getTools = function (): StayTools {
             child: this.getChildById(stepChild.id)!,
             className: stepChild.beforeName || stepChild.className,
             shape: stepChild.beforeShape!.copy(),
-            individual: false,
           })
         }
       })

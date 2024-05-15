@@ -2,35 +2,41 @@ import { v4 as uuid4 } from "uuid"
 
 import { Shape } from "../shapes/shape"
 import { DRAW_ACTIONS } from "../userConstants"
-import {
-  DrawParentsValuesType,
-  StayChildProps,
-  UpdateStayChildProps,
-} from "../userTypes"
+import { DrawActionsValuesType, UpdateStayChildProps } from "../userTypes"
 import { StepProps } from "./types"
 
-export class StayChild<T extends Shape = Shape> {
-  beforeParent: string | null
+export interface StayChildProps<T> {
+  id?: string
+  zIndex?: number
   className: string
-  drawAction: DrawParentsValuesType | null
+  layer: number
+  beforeLayer?: number | null
+  shape: T
+  drawAction?: DrawActionsValuesType | null
+}
+
+export class StayChild<T extends Shape = Shape> {
+  beforeLayer: number | null
+  className: string
+  drawAction: DrawActionsValuesType | null
   id: string
-  parent: string
+  layer: number
   shape: T
   zIndex: number
   constructor({
     id,
     zIndex,
     className,
-    parent,
-    beforeParent,
+    layer: parent,
+    beforeLayer: beforeParent,
     shape,
     drawAction,
   }: StayChildProps<T>) {
     this.id = id || uuid4()
     this.zIndex = zIndex === undefined ? 1 : zIndex
     this.className = className
-    this.parent = parent
-    this.beforeParent = beforeParent || null
+    this.layer = parent
+    this.beforeLayer = beforeParent || null
     this.shape = shape
     this.drawAction = drawAction || null
   }
@@ -80,11 +86,11 @@ export class StayChild<T extends Shape = Shape> {
     return new StayChild({ ...this, shape: this.shape.copy() })
   }
 
-  update({ className, parent, shape, zIndex }: UpdateStayChildProps<T>) {
+  update({ className, layer, shape, zIndex }: UpdateStayChildProps<T>) {
     this.className = className || this.className
-    this.beforeParent = this.parent
+    this.beforeLayer = this.layer
     this.zIndex = zIndex === undefined ? this.zIndex : zIndex
-    this.parent = parent || this.parent
+    this.layer = layer === undefined ? this.layer : layer
     this.shape = shape || (this.shape.copy() as T)
     this.drawAction = DRAW_ACTIONS.UPDATE
   }

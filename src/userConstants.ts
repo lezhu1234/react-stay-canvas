@@ -18,11 +18,6 @@ export const DRAW_ACTIONS = {
   UPDATE: "update", // 更新绘制操作的常量，用于更新绘制操作的函数中使用。
 }
 
-export const DRAW_PARENTS = {
-  MAIN: "main",
-  DRAW: "draw",
-}
-
 export const SORT_CHILDREN_METHODS = {
   X_ASC: "x-asc", // 按X轴升序排序的常量，用于按X轴升序排序的函数中使用。
   X_DESC: "x-desc", // 按X轴降序排序的常量，用于按X轴降序排序的函数中使用。

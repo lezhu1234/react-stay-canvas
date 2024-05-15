@@ -60,13 +60,21 @@ export default function StayCanvas({
     if (!stay.current) {
       return
     }
-    ;[...eventList, ...Object.values(PredefinedEventList)].forEach((event) => {
+    stay.current.clearEvents()
+    ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
       stay.current!.registerEvent(event)
     })
+  }, [eventList])
+
+  useEffect(() => {
+    if (!stay.current) {
+      return
+    }
+    stay.current.clearEventListeners()
     listenerList.forEach((listener) => {
       stay.current!.addEventListener(listener)
     })
-  }, [eventList, listenerList])
+  }, [listenerList])
 
   return (
     <>

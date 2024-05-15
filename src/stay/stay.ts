@@ -23,7 +23,6 @@ import {
 import {
   DEFAULTSTATE,
   DRAW_ACTIONS,
-  DRAW_PARENTS,
   MOUSE_EVENTS,
   ROOTNAME,
   SORT_CHILDREN_METHODS,
@@ -33,6 +32,10 @@ import { ActionEvent, StayTools, UserStayAction } from "../userTypes"
 import { StayChild } from "./stayChild"
 import { StackItem } from "./types"
 
+interface drawLayer {
+  forceUpdate: boolean
+}
+
 class Stay {
   #children: Map<string, StayChild>
   actions: Map<string, StayAction>
@@ -40,7 +43,7 @@ class Stay {
   currentPressedKeys: {
     [key: string]: boolean
   }
-  drawParents: { [x: string]: { forceUpdate: boolean } }
+  drawLayers: drawLayer[]
   // children: StayChildren
   events: StayEventMap
   getTools!: () => StayTools
@@ -79,7 +82,7 @@ class Stay {
       }),
 
       className: ROOTNAME,
-      parent: DRAW_PARENTS.MAIN,
+      layer: 0,
     })
     this.#children.set(rootChild.id, rootChild)
     this.events = {}
@@ -100,10 +103,9 @@ class Stay {
 
     this.tools = this.getTools.bind(this)()
 
-    this.drawParents = {
-      [DRAW_PARENTS.DRAW]: { forceUpdate: false },
-      [DRAW_PARENTS.MAIN]: { forceUpdate: false },
-    }
+    this.drawLayers = this.root.layers.map((layer) => ({
+      forceUpdate: false,
+    }))
 
     this.initEvents()
   }
@@ -170,45 +172,46 @@ class Stay {
   }
 
   draw(forceUpdate = false) {
-    type Children = Record<string, { update: boolean; members: StayChild[] }>
-    const children: Children = {
-      [DRAW_PARENTS.DRAW]: {
-        update:
-          false ||
-          this.drawParents[DRAW_PARENTS.DRAW].forceUpdate ||
-          forceUpdate,
-        members: [],
-      },
-      [DRAW_PARENTS.MAIN]: {
-        update:
-          false ||
-          this.drawParents[DRAW_PARENTS.MAIN].forceUpdate ||
-          forceUpdate,
-        members: [],
-      },
+    interface ChildLayer {
+      update: boolean
+      members: StayChild[]
     }
+    // type Children = Record<string, { update: boolean; members: StayChild[] }>
+    // const children: Children = {
+    //   [DRAW_LAYERS.TOP]: {
+    //     update:
+    //       false || this.drawLayers[DRAW_LAYERS.TOP].forceUpdate || forceUpdate,
+    //     members: [],
+    //   },
+    //   [DRAW_LAYERS.BOTTOM]: {
+    //     update:
+    //       false ||
+    //       this.drawLayers[DRAW_LAYERS.BOTTOM].forceUpdate ||
+    //       forceUpdate,
+    //     members: [],
+    //   },
+    // }
+    const childrenInlayer: ChildLayer[] = this.drawLayers.map((layer) => ({
+      update: layer.forceUpdate || forceUpdate,
+      members: [],
+    }))
 
     this.getChildren().forEach((child) => {
-      children[child.parent].members.push(child)
-      if (child.beforeParent && child.beforeParent !== child.parent) {
-        children[child.beforeParent].update ||= true
+      childrenInlayer[child.layer].members.push(child)
+      if (child.beforeLayer && child.beforeLayer !== child.layer) {
+        childrenInlayer[child.beforeLayer].update = true
       } else {
-        children[child.parent].update ||=
+        childrenInlayer[child.layer].update ||=
           child.drawAction === DRAW_ACTIONS.UPDATE
       }
     })
 
-    for (const drawParent in children) {
-      const particalChildren = children[drawParent]
+    for (const layerIndex in childrenInlayer) {
+      const particalChildren = childrenInlayer[layerIndex]
 
-      const context =
-        drawParent === DRAW_PARENTS.MAIN
-          ? this.root.mainContext
-          : this.root.drawContext
-      const canvasData =
-        drawParent === DRAW_PARENTS.MAIN
-          ? this.root.mainData
-          : this.root.drawData
+      const canvas = this.root.layers[layerIndex]
+      const context = this.root.contexts[layerIndex]
+
       if (particalChildren.update) {
         this.root.clear(context)
       }
@@ -221,7 +224,7 @@ class Stay {
         if (!particalChildren.update && !child.drawAction) {
           return
         }
-        child.shape.draw(context, canvasData)
+        child.shape.draw(context, canvas)
         child.drawAction = null
       })
     }
@@ -310,8 +313,8 @@ class Stay {
     this.tools.triggerAction(e, triggerEvents, {})
   }
 
-  forceUpdateCanvas(canvasName: keyof typeof DRAW_PARENTS) {
-    this.drawParents[DRAW_PARENTS[canvasName]].forceUpdate = true
+  forceUpdateLayer(layerIndex: number) {
+    this.drawLayers[layerIndex].forceUpdate = true
   }
   getChildById(id: string) {
     return this.#children.get(id)
@@ -322,23 +325,22 @@ class Stay {
   }
 
   initEvents() {
-    this.root.drawCanvas.onkeyup = (e: KeyboardEvent) =>
+    const topLayer = this.root.layers[this.root.layers.length - 1]
+    topLayer.onkeyup = (e: KeyboardEvent) =>
       keyup(this.fireEvent.bind(this), this.releaseKey.bind(this), e)
-    this.root.drawCanvas.onkeydown = (e: KeyboardEvent) =>
+    topLayer.onkeydown = (e: KeyboardEvent) =>
       keydown(this.fireEvent.bind(this), this.pressKey.bind(this), e)
-    this.root.drawCanvas.onmouseup = (e: MouseEvent) =>
+    topLayer.onmouseup = (e: MouseEvent) =>
       mouseup(this.fireEvent.bind(this), this.releaseKey.bind(this), e)
-    this.root.drawCanvas.onmousedown = (e: MouseEvent) =>
+    topLayer.onmousedown = (e: MouseEvent) =>
       mousedown(this.fireEvent.bind(this), this.pressKey.bind(this), e)
-    this.root.drawCanvas.onmousemove = (e: MouseEvent) =>
+    topLayer.onmousemove = (e: MouseEvent) =>
       mousemove(this.fireEvent.bind(this), e)
-    this.root.drawCanvas.onwheel = (e: WheelEvent) =>
-      wheel(this.fireEvent.bind(this), e)
-    this.root.drawCanvas.onclick = (e: MouseEvent) =>
-      click(this.fireEvent.bind(this), e)
-    this.root.drawCanvas.ondblclick = (e: MouseEvent) =>
+    topLayer.onwheel = (e: WheelEvent) => wheel(this.fireEvent.bind(this), e)
+    topLayer.onclick = (e: MouseEvent) => click(this.fireEvent.bind(this), e)
+    topLayer.ondblclick = (e: MouseEvent) =>
       dblclick(this.fireEvent.bind(this), e)
-    this.root.drawCanvas.oncontextmenu = (e: MouseEvent) =>
+    topLayer.oncontextmenu = (e: MouseEvent) =>
       contextmenu(this.fireEvent.bind(this), e)
   }
 

@@ -1,15 +1,11 @@
 import { Point } from "./shapes/point"
 import { Shape } from "./shapes/shape"
-import { StepProps, valueof } from "./stay/types"
-import {
-  DRAW_ACTIONS,
-  DRAW_PARENTS,
-  SORT_CHILDREN_METHODS,
-} from "./userConstants"
+import { StayChild } from "./stay/stayChild"
+import { valueof } from "./stay/types"
+import { DRAW_ACTIONS, SORT_CHILDREN_METHODS } from "./userConstants"
 
 type SortChildrenMethodsKeys = keyof typeof SORT_CHILDREN_METHODS
 export type StayChildren = Record<string, StayChild>
-export type DrawParentsValuesType = valueof<typeof DRAW_PARENTS>
 export type DrawActionsValuesType = valueof<typeof DRAW_ACTIONS>
 
 export type storeType = Map<string, any>
@@ -40,7 +36,7 @@ export interface createChildProps<T> {
   zIndex?: number
   shape: T
   className: string
-  individual?: boolean
+  layer?: number
 }
 
 export interface updateChildProps {
@@ -48,12 +44,12 @@ export interface updateChildProps {
   zIndex?: number
   className?: string
   shape: Shape
-  individual?: boolean
+  layer?: number
 }
 
 export interface UpdateStayChildProps<T> {
   className?: string
-  parent?: DrawParentsValuesType | undefined
+  layer?: number | undefined
   shape?: T | undefined
   zIndex?: number
 }
@@ -116,39 +112,4 @@ export interface StayTools {
   ) => void
   deleteListener: (name: string) => void
   forceUpdateCanvas: () => void
-}
-
-export interface StayChildProps<T> {
-  id?: string
-  zIndex?: number
-  className: string
-  parent: DrawParentsValuesType
-  beforeParent?: DrawParentsValuesType | null
-  shape: T
-  drawAction?: DrawActionsValuesType | null
-}
-
-export declare class StayChild<T extends Shape = Shape> {
-  beforeParent: string | null
-  className: string
-  drawAction: DrawParentsValuesType | null
-  id: string
-  parent: string
-  shape: T
-  zIndex: number
-  constructor({
-    id,
-    zIndex,
-    className,
-    parent,
-    beforeParent,
-    shape,
-    drawAction,
-  }: StayChildProps<T>)
-  static diff<T extends Shape>(
-    history: StayChild<T> | undefined,
-    now: StayChild<T> | undefined
-  ): StepProps | undefined
-  copy(): StayChild<T>
-  update({ className, parent, shape, zIndex }: UpdateStayChildProps<T>): void
 }

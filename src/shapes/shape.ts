@@ -124,7 +124,7 @@ export abstract class Shape {
 
   abstract copy(): Shape
 
-  abstract draw(ctx: CanvasRenderingContext2D, canvasData?: ImageData): void
+  abstract draw(ctx: CanvasRenderingContext2D, canvas?: HTMLCanvasElement): void
 
   abstract move(offsetX: number, offsetY: number): void
 

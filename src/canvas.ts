@@ -1,37 +1,24 @@
 class Canvas {
-  drawCanvas: HTMLCanvasElement
-  drawContext: CanvasRenderingContext2D
-  drawData: ImageData
+  contexts: CanvasRenderingContext2D[]
   height: number
-  mainCanvas: HTMLCanvasElement
-  mainContext: CanvasRenderingContext2D
-  mainData: ImageData
+  layers: HTMLCanvasElement[]
   status: string
   width: number
   x: number
   y: number
-  constructor(
-    drawCanvas: HTMLCanvasElement,
-    mainCanvas: HTMLCanvasElement,
-    width: number,
-    height: number
-  ) {
-    this.drawCanvas = drawCanvas
-    this.mainCanvas = mainCanvas
+  constructor(layers: HTMLCanvasElement[], width: number, height: number) {
+    if (layers.length < 1) {
+      throw new Error("Canvas must have at least one layer")
+    }
+    this.layers = layers
     this.width = width
     this.height = height
     this.status = "default"
-    this.drawContext = this.drawCanvas.getContext(
-      "2d"
-    ) as CanvasRenderingContext2D
-    this.mainContext = this.mainCanvas.getContext(
-      "2d"
-    ) as CanvasRenderingContext2D
+    this.contexts = layers.map(
+      (layer) => layer.getContext("2d") as CanvasRenderingContext2D
+    )
 
-    this.drawData = this.drawContext.getImageData(0, 0, width, height)
-    this.mainData = this.mainContext.getImageData(0, 0, width, height)
-
-    const { x, y } = this.drawCanvas.getBoundingClientRect()
+    const { x, y } = this.layers[0].getBoundingClientRect()
     // this.drawCanvas.getClientRects
     this.x = x
     this.y = y

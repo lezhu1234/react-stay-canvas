@@ -3,6 +3,8 @@ import StayCanvas from "../../stayCanvas"
 import { StayTools } from "../../userTypes"
 import { translation } from "./utils"
 
+import React from "react"
+
 export function Carousel() {
   const width = 600
   const height = 600

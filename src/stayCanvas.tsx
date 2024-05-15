@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react"
+import React, { useCallback, useRef } from "react"
 
 import * as PredefinedEventList from "./predefinedEvents"
 import StayStage from "./stay/stayStage"

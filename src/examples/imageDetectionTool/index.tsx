@@ -1,4 +1,4 @@
-import { useState } from "react"
+import React, { useState } from "react"
 
 import * as PredefinedListenerList from "../../predefinedListeners"
 import { StayImage } from "../../shapes/image"

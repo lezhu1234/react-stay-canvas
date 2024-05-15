@@ -3,21 +3,11 @@ import { v4 as uuid4 } from "uuid"
 import { Shape } from "../shapes/shape"
 import { DRAW_ACTIONS } from "../userConstants"
 import {
-  DrawActionsValuesType,
   DrawParentsValuesType,
+  StayChildProps,
   UpdateStayChildProps,
 } from "../userTypes"
 import { StepProps } from "./types"
-
-export interface StayChildProps<T> {
-  id?: string
-  zIndex?: number
-  className: string
-  parent: DrawParentsValuesType
-  beforeParent?: DrawParentsValuesType | null
-  shape: T
-  drawAction?: DrawActionsValuesType | null
-}
 
 export class StayChild<T extends Shape = Shape> {
   beforeParent: string | null

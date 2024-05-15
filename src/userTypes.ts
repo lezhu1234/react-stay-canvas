@@ -1,7 +1,6 @@
 import { Point } from "./shapes/point"
 import { Shape } from "./shapes/shape"
-import { StayChild } from "./stay/stayChild"
-import { valueof } from "./stay/types"
+import { StepProps, valueof } from "./stay/types"
 import {
   DRAW_ACTIONS,
   DRAW_PARENTS,
@@ -117,4 +116,39 @@ export interface StayTools {
   ) => void
   deleteListener: (name: string) => void
   forceUpdateCanvas: () => void
+}
+
+export interface StayChildProps<T> {
+  id?: string
+  zIndex?: number
+  className: string
+  parent: DrawParentsValuesType
+  beforeParent?: DrawParentsValuesType | null
+  shape: T
+  drawAction?: DrawActionsValuesType | null
+}
+
+declare class StayChild<T extends Shape = Shape> {
+  beforeParent: string | null
+  className: string
+  drawAction: DrawParentsValuesType | null
+  id: string
+  parent: string
+  shape: T
+  zIndex: number
+  constructor({
+    id,
+    zIndex,
+    className,
+    parent,
+    beforeParent,
+    shape,
+    drawAction,
+  }: StayChildProps<T>)
+  static diff<T extends Shape>(
+    history: StayChild<T> | undefined,
+    now: StayChild<T> | undefined
+  ): StepProps | undefined
+  copy(): StayChild<T>
+  update({ className, parent, shape, zIndex }: UpdateStayChildProps<T>): void
 }

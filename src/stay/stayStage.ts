@@ -7,12 +7,11 @@ export default class StayStage {
   #stay: Stay
   tools: StayTools
   constructor(
-    drawCanvas: HTMLCanvasElement,
-    mainCanvas: HTMLCanvasElement,
+    canvasLayers: HTMLCanvasElement[],
     width: number,
     height: number
   ) {
-    this.#stay = new Stay(new Canvas(drawCanvas, mainCanvas, width, height))
+    this.#stay = new Stay(new Canvas(canvasLayers, width, height))
     this.tools = this.#stay.getTools()
   }
 

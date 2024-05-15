@@ -47,7 +47,7 @@ export class Text extends Shape {
     })
   }
 
-  draw(ctx: CanvasRenderingContext2D, canvasData?: ImageData): void {
+  draw(ctx: CanvasRenderingContext2D): void {
     ctx.font = this.font
     this.init(ctx)
 

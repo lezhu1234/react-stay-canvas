@@ -19,11 +19,18 @@ export default function StayCanvas({
   eventList = [],
   listenerList = [],
   mounted,
+  layers = 2,
   className = "",
 }: StayCanvasProps) {
-  const drawCanvas = useRef<HTMLCanvasElement | null>(null)
-  const mainCanvas = useRef<HTMLCanvasElement | null>(null)
+  if (layers < 1) {
+    throw new Error("layers must be greater than 0")
+  }
+  const canvasLayers = useRef<HTMLCanvasElement[]>([])
   const stay = useRef<StayStage>()
+
+  useEffect(() => {
+    canvasLayers.current = canvasLayers.current.slice(0, layers)
+  }, [layers])
 
   const customTrigger = (stay: StayStage, name: string, payload: Dict) => {
     const customEvent = new Event(name)
@@ -31,13 +38,11 @@ export default function StayCanvas({
   }
 
   const container = useCallback((node: HTMLDivElement) => {
-    if (drawCanvas.current === null || mainCanvas.current === null) return
-    stay.current = new StayStage(
-      drawCanvas.current,
-      mainCanvas.current,
-      600,
-      600
-    )
+    if (!node) {
+      return
+    }
+    console.log(canvasLayers)
+    stay.current = new StayStage(canvasLayers.current, 600, 600)
     ;[...eventList, ...Object.values(PredefinedEventList)].forEach((event) => {
       stay.current!.registerEvent(event)
     })
@@ -90,27 +95,25 @@ export default function StayCanvas({
           height: `${height}px`,
         }}
       >
-        <canvas
-          ref={mainCanvas}
-          width={width}
-          height={height}
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-          }}
-        ></canvas>
-        <canvas
-          ref={drawCanvas}
-          width={width}
-          height={height}
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-          }}
-          tabIndex={1}
-        ></canvas>
+        {Array(layers)
+          .fill(0)
+          .map((_, index) => (
+            <canvas
+              key={index}
+              ref={(el) => {
+                if (el) {
+                  canvasLayers.current[index] = el
+                }
+              }}
+              width={width}
+              height={height}
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+              }}
+            ></canvas>
+          ))}
       </div>
     </>
   )

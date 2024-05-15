@@ -239,7 +239,7 @@ Stay.prototype.getTools = function (): StayTools {
       this.getChildren().forEach((child) => {
         child.shape.move(...child.shape._move(offsetX, offsetY))
       })
-      Array(this.root.layers.length).forEach((_, i) => {
+      this.root.layers.forEach((_, i) => {
         this.forceUpdateLayer(i)
       })
     },
@@ -247,7 +247,7 @@ Stay.prototype.getTools = function (): StayTools {
       this.getChildren().forEach((child) => {
         child.shape.zoom(child.shape._zoom(deltaY, center))
       })
-      Array(this.root.layers.length).forEach((_, i) => {
+      this.root.layers.forEach((_, i) => {
         this.forceUpdateLayer(i)
       })
     },
@@ -258,7 +258,7 @@ Stay.prototype.getTools = function (): StayTools {
         return
       }
       const stepItem = this.stack[this.stackIndex]
-      Array(this.root.layers.length).forEach((_, i) => {
+      this.root.layers.forEach((_, i) => {
         this.forceUpdateLayer(i)
       })
 
@@ -294,7 +294,7 @@ Stay.prototype.getTools = function (): StayTools {
         return
       }
       this.stackIndex--
-      Array(this.root.layers.length).forEach((_, i) => {
+      this.root.layers.forEach((_, i) => {
         this.forceUpdateLayer(i)
       })
       const stepItem = this.stack[this.stackIndex]

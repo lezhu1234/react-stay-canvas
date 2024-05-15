@@ -79,6 +79,7 @@ export interface StayCanvasProps {
   className?: string
   width?: number
   height?: number
+  layers?: number
   eventList?: UserStayEventProps[]
   listenerList?: UserStayAction[]
   mounted?: (tools: StayTools) => void

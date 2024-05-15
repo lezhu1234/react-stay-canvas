@@ -1,0 +1,41 @@
+{
+  "name": "react-stay-canvas",
+  "version": "1.0.1",
+  "description": "stay-canvas for react",
+  "scripts": {
+    "rollup": "rollup -c",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lezhu1234/react-stay-canvas.git"
+  },
+  "keywords": [
+    "react",
+    "canvas"
+  ],
+  "author": "lezhu <lezhu1234@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/lezhu1234/react-stay-canvas/issues"
+  },
+  "homepage": "https://github.com/lezhu1234/react-stay-canvas#readme",
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@types/react": "^18.3.2",
+    "react": "^18.3.1",
+    "rollup": "^4.17.2",
+    "rollup-plugin-dts": "^6.1.0",
+    "tslib": "^2.6.2",
+    "typescript": "^5.4.5",
+    "uuid": "^9.0.1"
+  },
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "files": [
+    "dist"
+  ],
+  "types": "dist/index.d.ts"
+}

@@ -41,6 +41,7 @@
   ],
   "types": "dist/index.d.ts",
   "dependencies": {
+    "@rollup/plugin-terser": "^0.4.4",
     "rollup-plugin-peer-deps-external": "^2.2.4"
   }
 }

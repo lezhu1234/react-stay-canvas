@@ -7,6 +7,10 @@ export interface ImageProps {
   y: number
   width: number
   height: number
+  sx?: number
+  sy?: number
+  swidth?: number
+  sheight?: number
   imageLoaded?: () => void
   props?: ShapeProps
 }
@@ -17,16 +21,47 @@ export class StayImage extends Rectangle {
   image: HTMLImageElement
   imageLoaded?: () => void
   loadState: ImageLoadState
+  naturalHeight?: number
+  naturalWidth?: number
+  sheight?: number
   src: string
-  constructor({ src, x, y, width, height, imageLoaded, props }: ImageProps) {
+  swidth?: number
+  sx: number
+  sy: number
+  constructor({
+    src,
+    x,
+    y,
+    width,
+    height,
+    sx = 0,
+    sy = 0,
+    swidth,
+    sheight,
+    imageLoaded,
+    props,
+  }: ImageProps) {
     super({ x, y, width, height, props })
+    this.sx = sx || 0
+    this.sy = sy || 0
+    this.swidth = swidth
+    this.sheight = sheight
     this.src = src
     this.image = new Image()
     this.loadState = "loading"
     this.ctx = null
     this.imageLoaded = imageLoaded
+
     this.image.onload = () => {
       this.loadState = "loaded"
+      this.naturalWidth = this.image.naturalWidth
+      this.naturalHeight = this.image.naturalHeight
+      if (this.swidth === undefined) {
+        this.swidth = this.image.naturalWidth
+      }
+      if (this.sheight === undefined) {
+        this.sheight = this.image.naturalHeight
+      }
       if (this.ctx) {
         this.draw(this.ctx)
       }
@@ -41,23 +76,74 @@ export class StayImage extends Rectangle {
       src: this.src,
       x: this.x,
       y: this.y,
+      sx: this.sx,
+      sy: this.sy,
+      swidth: this.swidth,
+      sheight: this.sheight,
       imageLoaded: this.imageLoaded,
       width: this.width,
       height: this.height,
       props: this._copy(),
     })
   }
+
+  /**
+   * 在画布上绘制图像。
+   *
+   * @param ctx - CanvasRenderingContext2D，用于在HTML5 canvas元素上绘图的2D渲染上下文对象。
+   * @param this.image - Image对象，要绘制的图像源。
+   * @param this.sx - number，图像源的起始x坐标，相对于图像的左上角。
+   * @param this.sy - number，图像源的起始y坐标，相对于图像的左上角。
+   * @param this.swidth - number，图像源的宽度，用于裁剪图像。
+   * @param this.sheight - number，图像源的高度，用于裁剪图像。
+   * @param this.x - number，目标绘制的起始x坐标，相对于canvas的左上角。
+   * @param this.y - number，目标绘制的起始y坐标，相对于canvas的左上角。
+   * @param this.width - number，目标绘制的宽度，可以大于或小于源图像的宽度来缩放图像。
+   * @param this.height - number，目标绘制的高度，可以大于或小于源图像的高度来缩放图像。
+   *
+   * @returns void
+   */
   draw(ctx: CanvasRenderingContext2D): void {
     if (this.loadState === "loading") {
       this.ctx = ctx
       return
     }
-    ctx.drawImage(this.image, this.x, this.y, this.width, this.height)
+    ctx.drawImage(
+      this.image,
+      this.sx,
+      this.sy,
+      this.swidth as number,
+      this.sheight as number,
+      this.x,
+      this.y,
+      this.width,
+      this.height
+    )
   }
 
-  update({ src, x, y, width, height, props }: Partial<ImageProps>) {
-    this.src = src || this.src
+  update({
+    src,
+    x,
+    y,
+    width,
+    sx,
+    sy,
+    swidth,
+    sheight,
+    height,
+    props,
+  }: Partial<ImageProps>) {
+    this.src = src === undefined ? this.src : src
+    this.sx = sx === undefined ? this.sx : sx
+    this.sy = sy === undefined ? this.sy : sy
+    this.swidth = swidth === undefined ? this.swidth : swidth
+    this.sheight = sheight === undefined ? this.sheight : sheight
     super.update({ x, y, width, height, props })
+
+    if (src !== undefined) {
+      this.loadState = "loading"
+      this.image.src = src
+    }
     return this
   }
 }

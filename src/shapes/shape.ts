@@ -49,11 +49,12 @@ export abstract class Shape {
     return [ox, oy]
   }
 
-  _update({ color, lineWidth, zoomY, zoomCenter }: ShapeProps) {
+  _update({ color, lineWidth, zoomY, zoomCenter, type }: ShapeProps) {
     this.color = color || this.color
     this.lineWidth = lineWidth || this.lineWidth
     this.zoomY = zoomY || this.zoomY
     this.zoomCenter = zoomCenter || this.zoomCenter
+    this.type = type || this.type
     return this
   }
 

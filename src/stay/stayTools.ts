@@ -1,3 +1,4 @@
+import { Shape } from "../shapes/shape"
 import {
   ALLSTATE,
   DEFAULTSTATE,
@@ -10,15 +11,15 @@ import {
 import {
   ActionCallbackProps,
   ActionEvent,
-  CreateChildProps,
+  createChildProps,
   Dict,
-  GetContainPointChildrenProps,
+  getContainPointChildrenProps,
   SimplePoint,
   SortChildrenMethodsValues,
   StayTools,
-  UpdateChildProps,
+  updateChildProps,
 } from "../userTypes"
-import { infixExpressionParser } from "../utils"
+import { assert, infixExpressionParser } from "../utils"
 import Stay from "./stay"
 import { StayChild } from "./stayChild"
 import { StepProps } from "./types"
@@ -31,13 +32,13 @@ Stay.prototype.getTools = function (): StayTools {
     hasChild: (id: string) => {
       return this.getChildren().has(id)
     },
-    createChild: ({
+    createChild: <T extends Shape>({
       id,
       shape,
       zIndex,
       className,
       individual = false,
-    }: CreateChildProps) => {
+    }: createChildProps<T>) => {
       this.checkName(className, [ROOTNAME])
       const child = new StayChild({
         id,
@@ -49,13 +50,13 @@ Stay.prototype.getTools = function (): StayTools {
       })
       return child
     },
-    appendChild: ({
+    appendChild: <T extends Shape>({
       shape,
       className,
       zIndex,
       id = undefined,
       individual = false,
-    }: CreateChildProps) => {
+    }: createChildProps<T>) => {
       const child = this.tools.createChild({
         id,
         shape,
@@ -74,7 +75,7 @@ Stay.prototype.getTools = function (): StayTools {
       shape,
       className,
       individual = true,
-    }: UpdateChildProps) => {
+    }: updateChildProps) => {
       if (className === "") {
         throw new Error("className cannot be empty")
       }
@@ -154,7 +155,6 @@ Stay.prototype.getTools = function (): StayTools {
           selectorConvertFunc: (s: string) => [s],
         })
       } catch (e) {
-        console.log(stateSelectors)
         throw new Error(
           "please check your selector, support oprators: " +
             Object.values(SUPPORT_OPRATOR).join(",") +
@@ -168,16 +168,14 @@ Stay.prototype.getTools = function (): StayTools {
       selector,
       sortBy,
       returnFirst = false,
-    }: GetContainPointChildrenProps): StayChild[] => {
+    }: getContainPointChildrenProps): StayChild[] => {
       let _selector = selector
 
       if (selector && Array.isArray(selector)) {
         _selector = selector.join("|")
       }
 
-      if (!_selector) {
-        throw new Error("no className or id")
-      }
+      assert(_selector, "no className or id")
       const selectorChildren = this.tools.getChildrenBySelector(
         _selector as string,
         sortBy
@@ -264,9 +262,7 @@ Stay.prototype.getTools = function (): StayTools {
         } else if (step.action === "remove") {
           this.tools.removeChild(stepChild.id)
         } else if (step.action === "update") {
-          if (!stepChild.beforeShape) {
-            throw new Error("beforeShape is not defined")
-          }
+          assert(stepChild.beforeShape)
           const child = this.findChildById(stepChild.id)!
           this.tools.updateChild({
             child,
@@ -304,14 +300,12 @@ Stay.prototype.getTools = function (): StayTools {
             className: stepChild.className,
           })
         } else if (step.action === "update") {
-          if (!stepChild.beforeShape) {
-            throw new Error("beforeShape is not defined")
-          }
+          assert(stepChild.beforeShape)
 
           this.tools.updateChild({
             child: this.getChildById(stepChild.id)!,
             className: stepChild.beforeName || stepChild.className,
-            shape: stepChild.beforeShape.copy(),
+            shape: stepChild.beforeShape!.copy(),
             individual: false,
           })
         }

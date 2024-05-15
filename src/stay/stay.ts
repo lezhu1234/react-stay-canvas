@@ -149,6 +149,14 @@ class Stay {
     }
   }
 
+  clearEventListeners() {
+    this.actions.clear()
+  }
+
+  clearEvents() {
+    this.events = {}
+  }
+
   cloneChildren(): Map<string, StayChild> {
     const newChildren = new Map<string, StayChild>()
     this.getChildren().forEach((child, id) => {
@@ -241,7 +249,6 @@ class Stay {
     }
     throw new Error("selector must start with . or #")
   }
-
   findChildById(id: string): StayChild | undefined {
     return this.getChildById(id)
   }
@@ -302,13 +309,14 @@ class Stay {
 
     this.tools.triggerAction(e, triggerEvents, {})
   }
+
   forceUpdateCanvas(canvasName: keyof typeof DRAW_PARENTS) {
     this.drawParents[DRAW_PARENTS[canvasName]].forceUpdate = true
   }
-
   getChildById(id: string) {
     return this.#children.get(id)
   }
+
   getChildren() {
     return this.#children
   }

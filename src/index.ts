@@ -1,3 +1,4 @@
+export * as predefinedListeners from "./predefinedListeners"
 export * from "./shapes"
 export { default as StayCanvas, trigger } from "./stayCanvas"
 export * from "./userConstants"

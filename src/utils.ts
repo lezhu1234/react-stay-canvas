@@ -7,6 +7,11 @@ export type InfixExpressionParserProps<T> = {
   selectorConvertFunc: (selector: string) => T[]
 }
 
+export function assert(condition: any, message: string = "") {
+  if (!condition) {
+    throw new Error(message)
+  }
+}
 export function infixExpressionParser<T>({
   selector,
   fullSet,
@@ -107,9 +112,7 @@ export function infixExpressionParser<T>({
 
       doOpration(opratorNeedPop)
       if (char === ")") {
-        if (opratorStack.pop()! !== "(") {
-          throw new Error("invalidate expression")
-        }
+        assert(opratorStack.pop()! === "(")
       } else {
         opratorStack.push(char as opratorWithBracket)
       }

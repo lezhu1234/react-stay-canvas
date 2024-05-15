@@ -2,7 +2,6 @@ import { SimplePoint } from "../userTypes"
 import { Shape } from "./shape"
 
 export class Circle extends Shape {
-  //   constructor(props: any) {}
   contains(point: SimplePoint): boolean {
     throw new Error("Method not implemented.")
   }

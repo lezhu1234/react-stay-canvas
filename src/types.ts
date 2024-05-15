@@ -4,7 +4,7 @@ import {
   ActionEvent,
   SortChildrenMethodsValues,
   StayTools,
-  StoreType,
+  storeType,
   UserStayAction,
 } from "./userTypes"
 
@@ -29,15 +29,15 @@ export interface UserCallbackTools {
 
 export interface UserSuccessCallbackProps {
   e: ActionEvent
-  store: StoreType
-  stateStore: StoreType
+  store: storeType
+  stateStore: storeType
   deleteEvent: (name: string) => void
 }
 
 export interface UserConditionCallbackProps {
   e: ActionEvent
-  store: StoreType
-  stateStore: StoreType
+  store: storeType
+  stateStore: storeType
 }
 
 export interface UserConditionCallbackFunction {
@@ -76,6 +76,7 @@ export type UserStayEventProps = StayEventRequiredProps &
   Partial<StayEventChooseProps>
 
 export interface StayCanvasProps {
+  className?: string
   width?: number
   height?: number
   eventList?: UserStayEventProps[]

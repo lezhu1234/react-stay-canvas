@@ -1,8 +1,7 @@
-import React, { useCallback, useRef } from "react"
+import React, { useCallback, useEffect, useRef } from "react"
 
 import * as PredefinedEventList from "./predefinedEvents"
 import StayStage from "./stay/stayStage"
-
 import { StayCanvasProps } from "./types"
 import { Dict } from "./userTypes"
 
@@ -20,9 +19,11 @@ export default function StayCanvas({
   eventList = [],
   listenerList = [],
   mounted,
+  className = "",
 }: StayCanvasProps) {
   const drawCanvas = useRef<HTMLCanvasElement | null>(null)
   const mainCanvas = useRef<HTMLCanvasElement | null>(null)
+  const stay = useRef<StayStage>()
 
   const customTrigger = (stay: StayStage, name: string, payload: Dict) => {
     const customEvent = new Event(name)
@@ -31,26 +32,47 @@ export default function StayCanvas({
 
   const container = useCallback((node: HTMLDivElement) => {
     if (drawCanvas.current === null || mainCanvas.current === null) return
-    const stay = new StayStage(drawCanvas.current, mainCanvas.current, 600, 600)
-
+    stay.current = new StayStage(
+      drawCanvas.current,
+      mainCanvas.current,
+      600,
+      600
+    )
     ;[...eventList, ...Object.values(PredefinedEventList)].forEach((event) => {
-      stay.registerEvent(event)
+      stay.current!.registerEvent(event)
     })
     listenerList.forEach((listener) => {
-      stay.addEventListener(listener)
+      stay.current!.addEventListener(listener)
     })
-    userTrigger = (name: string, payload: Dict) =>
-      customTrigger(stay, name, payload)
+    userTrigger = (name: string, payload: Dict) => {
+      if (stay.current) {
+        customTrigger(stay.current, name, payload)
+      }
+    }
+
     if (mounted) {
-      mounted(stay.tools)
-      stay.draw()
+      mounted(stay.current.tools)
+      stay.current.draw()
     }
   }, [])
+
+  useEffect(() => {
+    if (!stay.current) {
+      return
+    }
+    ;[...eventList, ...Object.values(PredefinedEventList)].forEach((event) => {
+      stay.current!.registerEvent(event)
+    })
+    listenerList.forEach((listener) => {
+      stay.current!.addEventListener(listener)
+    })
+  }, [eventList, listenerList])
 
   return (
     <>
       <div
         ref={container}
+        className={className}
         style={{
           display: "flex",
           position: "relative",

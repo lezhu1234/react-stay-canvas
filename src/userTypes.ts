@@ -13,7 +13,7 @@ export type StayChildren = Record<string, StayChild>
 export type DrawParentsValuesType = valueof<typeof DRAW_PARENTS>
 export type DrawActionsValuesType = valueof<typeof DRAW_ACTIONS>
 
-export type StoreType = Map<string, any>
+export type storeType = Map<string, any>
 export type Dict = Record<string, any>
 
 export interface SimplePoint {
@@ -36,15 +36,15 @@ export interface ActionEvent {
   deltaZ: number
 }
 
-export interface CreateChildProps {
+export interface createChildProps<T> {
   id?: string
   zIndex?: number
-  shape: Shape
+  shape: T
   className: string
   individual?: boolean
 }
 
-export interface UpdateChildProps {
+export interface updateChildProps {
   child: StayChild
   zIndex?: number
   className?: string
@@ -52,14 +52,14 @@ export interface UpdateChildProps {
   individual?: boolean
 }
 
-export interface UpdateStayChildProps {
+export interface UpdateStayChildProps<T> {
   className?: string
   parent?: DrawParentsValuesType | undefined
-  shape?: Shape | undefined
+  shape?: T | undefined
   zIndex?: number
 }
 
-export interface GetContainPointChildrenProps {
+export interface getContainPointChildrenProps {
   selector: string | string[]
   point: SimplePoint
   returnFirst?: boolean | undefined
@@ -72,8 +72,8 @@ export type SortChildrenMethodsValues =
 export interface ActionCallbackProps {
   originEvent: Event
   e: ActionEvent
-  store: StoreType
-  stateStore: StoreType
+  store: storeType
+  stateStore: storeType
   composeStore: { [key: string]: any }
   tools: StayTools
   payload: Dict
@@ -90,11 +90,11 @@ export interface UserStayAction {
 }
 
 export interface StayTools {
-  createChild: (props: CreateChildProps) => StayChild
-  appendChild: (props: CreateChildProps) => StayChild
-  updateChild: (props: UpdateChildProps) => StayChild
+  createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
+  appendChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
+  updateChild: (props: updateChildProps) => StayChild
   removeChild: (childId: string) => void
-  getContainPointChildren: (props: GetContainPointChildrenProps) => StayChild[]
+  getContainPointChildren: (props: getContainPointChildrenProps) => StayChild[]
   hasChild: (id: string) => boolean
   fix: () => void
   switchState: (state: string) => void

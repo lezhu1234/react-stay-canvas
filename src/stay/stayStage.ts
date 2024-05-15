@@ -24,6 +24,16 @@ export default class StayStage {
     return this.#stay.tools.backward()
   }
 
+  clearEventListeners(
+    ...args: Args<typeof Stay.prototype.clearEventListeners>
+  ) {
+    return this.#stay.clearEventListeners(...args)
+  }
+
+  clearEvents(...args: Args<typeof Stay.prototype.clearEvents>) {
+    return this.#stay.clearEvents(...args)
+  }
+
   deleteEvent(...args: Args<typeof Stay.prototype.deleteEvent>) {
     return this.#stay.deleteEvent(...args)
   }

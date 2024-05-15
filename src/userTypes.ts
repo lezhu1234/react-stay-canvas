@@ -128,7 +128,7 @@ export interface StayChildProps<T> {
   drawAction?: DrawActionsValuesType | null
 }
 
-declare class StayChild<T extends Shape = Shape> {
+export declare class StayChild<T extends Shape = Shape> {
   beforeParent: string | null
   className: string
   drawAction: DrawParentsValuesType | null

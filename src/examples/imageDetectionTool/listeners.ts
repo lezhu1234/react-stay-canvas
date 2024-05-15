@@ -2,9 +2,14 @@ import { Dispatch, SetStateAction } from "react"
 
 import { Point } from "../../shapes/point"
 import { Rectangle, RectangleAttr } from "../../shapes/rectangle"
-import { StayChild, StayChildProps } from "../../stay/stayChild"
+import { StayChild } from "../../stay/stayChild"
 import { ALLSTATE, DEFAULTSTATE } from "../../userConstants"
-import { ActionEvent, Dict, UserStayAction } from "../../userTypes"
+import {
+  ActionEvent,
+  Dict,
+  StayChildProps,
+  UserStayAction,
+} from "../../userTypes"
 import { RectLike } from "./utils"
 
 type UserStayActionFunc = (

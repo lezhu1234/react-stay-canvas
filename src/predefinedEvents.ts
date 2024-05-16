@@ -141,13 +141,25 @@ export const MouseUpEvent: UserStayEventProps = {
 }
 
 export const ZoomInEvent: UserStayEventProps = {
-  name: "zoomIn",
+  name: "zoomin",
   trigger: MOUSE_EVENTS.WHEEL,
   conditionCallback: ({ e }) => e.deltaY < 0,
 }
 
 export const ZoomOutEvent: UserStayEventProps = {
-  name: "zoomOut",
+  name: "zoomout",
   trigger: MOUSE_EVENTS.WHEEL,
   conditionCallback: ({ e }) => e.deltaY > 0,
+}
+
+export const KeyUpEvent: UserStayEventProps = {
+  name: "keyup",
+  trigger: KEYBOARRD_EVENTS.KEY_UP,
+  conditionCallback: () => true,
+}
+
+export const KeyDownEvent: UserStayEventProps = {
+  name: "keydown",
+  trigger: KEYBOARRD_EVENTS.KEY_DOWN,
+  conditionCallback: () => true,
 }

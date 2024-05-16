@@ -1,23 +1,65 @@
-import { SimplePoint } from "../userTypes"
-import { Shape } from "./shape"
+import { SHAPE_DRAW_TYPES } from "../userConstants"
+import { Point } from "./point"
+import { Shape, ShapeProps } from "./shape"
+
+export interface CircleAttr {
+  x: number
+  y: number
+  radius: number
+  props?: ShapeProps
+}
 
 export class Circle extends Shape {
-  contains(point: SimplePoint): boolean {
-    throw new Error("Method not implemented.")
+  center!: Point
+  radius: number
+  x: number
+  y: number
+  constructor({ x, y, radius, props }: CircleAttr) {
+    super(props || {})
+    this.x = x
+    this.y = y
+    this.radius = radius
   }
-  copy(): Shape {
-    throw new Error("Method not implemented.")
+  contains(point: Point): boolean {
+    return point.distance(this.center) < this.radius
   }
-  draw(ctx: CanvasRenderingContext2D, canvasData?: ImageData): void {
-    throw new Error("Method not implemented.")
+
+  copy(): Circle {
+    return new Circle({ ...this, props: this._copy() })
+  }
+
+  draw(ctx: CanvasRenderingContext2D): void {
+    ctx.beginPath()
+    ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI)
+    if (this.type === SHAPE_DRAW_TYPES.FILL) {
+      ctx.fill()
+    } else {
+      ctx.stroke()
+    }
+  }
+  init() {
+    this.center = new Point(this.x, this.y)
   }
   move(offsetX: number, offsetY: number): void {
-    throw new Error("Method not implemented.")
+    this.update({
+      x: this.x + offsetX,
+      y: this.y + offsetY,
+    })
   }
-  update(props: any) {
-    throw new Error("Method not implemented.")
+  update({ x, y, radius, props }: Partial<CircleAttr>) {
+    this.x = x === undefined ? this.x : x
+    this.y = y === undefined ? this.y : y
+    this.radius = radius === undefined ? this.radius : radius
+    this._update(props || {})
+    this.init()
+    return this
   }
   zoom(zoomScale: number): void {
-    throw new Error("Method not implemented.")
+    const center = this.getZoomPoint(zoomScale, this.center)
+    this.update({
+      x: center.x,
+      y: center.y,
+      radius: this.radius * zoomScale,
+    })
   }
 }

@@ -11,7 +11,7 @@ export interface ImageProps {
   sy?: number
   swidth?: number
   sheight?: number
-  imageLoaded?: () => void
+  imageLoaded?: (image: StayImage) => void
   props?: ShapeProps
 }
 type ImageLoadState = "wait" | "loading" | "loaded"
@@ -19,7 +19,7 @@ type ImageLoadState = "wait" | "loading" | "loaded"
 export class StayImage extends Rectangle {
   ctx: null | CanvasRenderingContext2D
   image: HTMLImageElement
-  imageLoaded?: () => void
+  imageLoaded?: (image: StayImage) => void
   loadState: ImageLoadState
   naturalHeight?: number
   naturalWidth?: number
@@ -66,7 +66,7 @@ export class StayImage extends Rectangle {
         this.draw(this.ctx)
       }
       if (imageLoaded) {
-        imageLoaded()
+        imageLoaded(this)
       }
     }
     this.image.src = src

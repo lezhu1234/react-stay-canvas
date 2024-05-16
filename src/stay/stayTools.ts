@@ -79,7 +79,7 @@ Stay.prototype.getTools = function (): StayTools {
       zIndex,
       shape,
       className,
-      layer = 0,
+      layer,
     }: updateChildProps) => {
       if (className === "") {
         throw new Error("className cannot be empty")
@@ -190,7 +190,7 @@ Stay.prototype.getTools = function (): StayTools {
       )
 
       const hitChildren: StayChild[] = selectorChildren.filter((c) =>
-        c.shape.contains(point)
+        c.shape.contains(point, this.root.contexts[c.layer])
       )
 
       return returnFirst && hitChildren.length > 0
@@ -337,7 +337,7 @@ Stay.prototype.getTools = function (): StayTools {
       }
       let needUpdate = false
       const callbackList: CallBackType[] = []
-      this.actions.forEach(
+      this.listeners.forEach(
         ({ name, event, state, selector, sortBy, log, callback }) => {
           if (!(name in this.composeStore)) {
             this.composeStore[name] = {}
@@ -400,8 +400,8 @@ Stay.prototype.getTools = function (): StayTools {
       }
     },
     deleteListener: (name: string) => {
-      if (this.actions.has(name)) {
-        this.actions.delete(name)
+      if (this.listeners.has(name)) {
+        this.listeners.delete(name)
       }
     },
   }

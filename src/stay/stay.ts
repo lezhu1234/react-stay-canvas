@@ -38,17 +38,16 @@ interface drawLayer {
 
 class Stay {
   #children: Map<string, StayChild>
-  actions: Map<string, StayAction>
   composeStore: Record<string, any>
   currentPressedKeys: {
     [key: string]: boolean
   }
   drawLayers: drawLayer[]
-  // children: StayChildren
   events: StayEventMap
   getTools!: () => StayTools
   height: number
   historyChildren: Map<string, StayChild>
+  listeners: Map<string, StayAction>
   root: Canvas
   stack: StackItem[]
   stackIndex: number
@@ -57,7 +56,6 @@ class Stay {
   stateStore: Map<string, any>
   store: Map<string, any>
   tools: StayTools
-  trigger: string
   unLogedChildrenIds: Set<string>
   width: number
   x: number
@@ -90,8 +88,7 @@ class Stay {
     this.stateStore = new Map<string, any>()
     this.composeStore = {}
     this.currentPressedKeys = {}
-    this.trigger = ""
-    this.actions = new Map()
+    this.listeners = new Map()
     this.state = DEFAULTSTATE
     this.stateSet = new Set([DEFAULTSTATE])
 
@@ -124,7 +121,7 @@ class Stay {
       eventList = [event]
     }
 
-    this.actions.set(name, {
+    this.listeners.set(name, {
       name,
       state,
       selector,
@@ -152,7 +149,7 @@ class Stay {
   }
 
   clearEventListeners() {
-    this.actions.clear()
+    this.listeners.clear()
   }
 
   clearEvents() {
@@ -176,21 +173,7 @@ class Stay {
       update: boolean
       members: StayChild[]
     }
-    // type Children = Record<string, { update: boolean; members: StayChild[] }>
-    // const children: Children = {
-    //   [DRAW_LAYERS.TOP]: {
-    //     update:
-    //       false || this.drawLayers[DRAW_LAYERS.TOP].forceUpdate || forceUpdate,
-    //     members: [],
-    //   },
-    //   [DRAW_LAYERS.BOTTOM]: {
-    //     update:
-    //       false ||
-    //       this.drawLayers[DRAW_LAYERS.BOTTOM].forceUpdate ||
-    //       forceUpdate,
-    //     members: [],
-    //   },
-    // }
+
     const childrenInlayer: ChildLayer[] = this.drawLayers.map((layer) => ({
       update: layer.forceUpdate || forceUpdate,
       members: [],
@@ -215,16 +198,18 @@ class Stay {
       if (particalChildren.update) {
         this.root.clear(context)
       }
+
       if (this.zIndexUpdated) {
         particalChildren.members.sort((a, b) => {
           return a.zIndex - b.zIndex
         })
       }
+
       particalChildren.members.forEach((child: StayChild) => {
         if (!particalChildren.update && !child.drawAction) {
           return
         }
-        child.shape.draw(context, canvas)
+        child.shape._draw(context, canvas)
         child.drawAction = null
       })
     }

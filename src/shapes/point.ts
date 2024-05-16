@@ -49,6 +49,7 @@ export class Point extends Shape {
     this.x = x || this.x
     this.y = y || this.y
     this._update(props || {})
+    return this
   }
 
   zoom(zoomScale: number): void {

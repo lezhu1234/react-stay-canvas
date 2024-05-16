@@ -2,18 +2,12 @@ import { v4 as uuid4 } from "uuid"
 
 import { Shape } from "../shapes/shape"
 import { DRAW_ACTIONS } from "../userConstants"
-import { DrawActionsValuesType, UpdateStayChildProps } from "../userTypes"
+import {
+  DrawActionsValuesType,
+  StayChildProps,
+  UpdateStayChildProps,
+} from "../userTypes"
 import { StepProps } from "./types"
-
-export interface StayChildProps<T> {
-  id?: string
-  zIndex?: number
-  className: string
-  layer: number
-  beforeLayer?: number | null
-  shape: T
-  drawAction?: DrawActionsValuesType | null
-}
 
 export class StayChild<T extends Shape = Shape> {
   beforeLayer: number | null
@@ -27,16 +21,16 @@ export class StayChild<T extends Shape = Shape> {
     id,
     zIndex,
     className,
-    layer: parent,
-    beforeLayer: beforeParent,
+    layer,
+    beforeLayer,
     shape,
     drawAction,
   }: StayChildProps<T>) {
     this.id = id || uuid4()
     this.zIndex = zIndex === undefined ? 1 : zIndex
     this.className = className
-    this.layer = parent
-    this.beforeLayer = beforeParent || null
+    this.layer = layer
+    this.beforeLayer = beforeLayer || null
     this.shape = shape
     this.drawAction = drawAction || null
   }

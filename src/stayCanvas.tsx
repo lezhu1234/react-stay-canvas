@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from "react"
+import React, { useCallback, useEffect, useMemo, useRef } from "react"
 
 import * as PredefinedEventList from "./predefinedEvents"
 import StayStage from "./stay/stayStage"
@@ -16,8 +16,8 @@ export const trigger = (name: string, payload?: Dict) => {
 export default function StayCanvas({
   width = 500,
   height = 500,
-  eventList = [],
-  listenerList = [],
+  eventList,
+  listenerList,
   mounted,
   layers = 2,
   className = "",
@@ -27,6 +27,9 @@ export default function StayCanvas({
   }
   const canvasLayers = useRef<HTMLCanvasElement[]>([])
   const stay = useRef<StayStage>()
+
+  eventList = useMemo(() => eventList || [], [])
+  listenerList = useMemo(() => listenerList || [], [])
 
   useEffect(() => {
     canvasLayers.current = canvasLayers.current.slice(0, layers)
@@ -41,7 +44,6 @@ export default function StayCanvas({
     if (!node) {
       return
     }
-    console.log(canvasLayers)
     stay.current = new StayStage(canvasLayers.current, 600, 600)
     ;[...eventList, ...Object.values(PredefinedEventList)].forEach((event) => {
       stay.current!.registerEvent(event)
@@ -105,6 +107,7 @@ export default function StayCanvas({
                   canvasLayers.current[index] = el
                 }
               }}
+              tabIndex={1}
               width={width}
               height={height}
               style={{

@@ -8,11 +8,13 @@ export interface ShapeProps {
   zoomY?: number
   zoomCenter?: SimplePoint
   type?: valueof<typeof SHAPE_DRAW_TYPES>
+  gco?: GlobalCompositeOperation
 }
 
 export abstract class Shape {
   area: number
   color: string | CanvasGradient
+  gco: GlobalCompositeOperation
   lineWidth: number
   offsetX: number
   offsetY: number
@@ -21,14 +23,14 @@ export abstract class Shape {
   zeroPointCopy: SimplePoint
   zoomCenter: SimplePoint
   zoomY: number
-  constructor({ color, lineWidth, type }: ShapeProps) {
+  constructor({ color, lineWidth, type, gco }: ShapeProps) {
     this.color = color || "white"
     this.lineWidth = lineWidth || 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
     this.type = type || SHAPE_DRAW_TYPES.STROKE // this is a placeholder for the type property that will be implemented in the subclasses
     this.zoomY = 1
     this.zoomCenter = { x: 0, y: 0 }
-
+    this.gco = gco || "source-over"
     this.offsetX = 0
     this.offsetY = 0
     this.zeroPoint = { x: 0, y: 0 }
@@ -37,6 +39,17 @@ export abstract class Shape {
 
   _copy() {
     return { ...this }
+  }
+
+  _draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
+    ctx.lineWidth = this.lineWidth
+    ctx.globalCompositeOperation = this.gco
+    if (this.type === SHAPE_DRAW_TYPES.STROKE) {
+      ctx.strokeStyle = this.color
+    } else if (this.type === SHAPE_DRAW_TYPES.FILL) {
+      ctx.fillStyle = this.color
+    }
+    this.draw(ctx, canvas)
   }
 
   _move(offsetX: number, offsetY: number): [number, number] {
@@ -49,12 +62,13 @@ export abstract class Shape {
     return [ox, oy]
   }
 
-  _update({ color, lineWidth, zoomY, zoomCenter, type }: ShapeProps) {
+  _update({ color, lineWidth, zoomY, zoomCenter, type, gco }: ShapeProps) {
     this.color = color || this.color
     this.lineWidth = lineWidth || this.lineWidth
     this.zoomY = zoomY || this.zoomY
     this.zoomCenter = zoomCenter || this.zoomCenter
     this.type = type || this.type
+    this.gco = gco || this.gco
     return this
   }
 
@@ -120,7 +134,7 @@ export abstract class Shape {
     }
   }
 
-  abstract contains(point: SimplePoint): boolean
+  abstract contains(point: SimplePoint, cxt?: CanvasRenderingContext2D): boolean
 
   abstract copy(): Shape
 
@@ -128,7 +142,7 @@ export abstract class Shape {
 
   abstract move(offsetX: number, offsetY: number): void
 
-  abstract update(props: any): any
+  abstract update(props: any): Shape
 
   abstract zoom(zoomScale: number): void
 }

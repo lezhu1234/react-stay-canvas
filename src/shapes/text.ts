@@ -52,10 +52,8 @@ export class Text extends Shape {
     this.init(ctx)
 
     if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      ctx.fillStyle = this.color
       ctx.fillText(this.text, this.leftBottom.x, this.leftBottom.y)
     } else if (this.type === SHAPE_DRAW_TYPES.STROKE) {
-      ctx.strokeStyle = this.color
       ctx.strokeText(this.text, this.leftBottom.x, this.leftBottom.y)
     }
     // this.rect.update({ props: { color: "red" } })
@@ -102,6 +100,7 @@ export class Text extends Shape {
     this.text = text
     this._update(props || {})
     this.init()
+    return this
   }
 
   zoom(zoomScale: number): void {

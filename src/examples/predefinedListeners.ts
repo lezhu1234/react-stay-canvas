@@ -1,10 +1,10 @@
-// import { ALLSTATE, Point, UserStayAction } from "react-stay-canvas"
+// import { ALLSTATE, Point, ListenerProps } from "react-stay-canvas"
 
 import { Point } from "../shapes/point"
 import { ALLSTATE } from "../userConstants"
-import { UserStayAction } from "../userTypes"
+import { ListenerProps } from "../userTypes"
 
-export const MoveListener: UserStayAction = {
+export const MoveListener: ListenerProps = {
   name: "moveListener",
   event: ["startmove", "move"],
   state: ALLSTATE,
@@ -31,7 +31,7 @@ export const MoveListener: UserStayAction = {
   },
 }
 
-export const ZoomListener: UserStayAction = {
+export const ZoomListener: ListenerProps = {
   name: "zoomListener",
   event: ["zoomin", "zoomout"], //放大 鼠标滚轮上滑
   state: ALLSTATE,
@@ -40,7 +40,7 @@ export const ZoomListener: UserStayAction = {
   },
 }
 
-export const BackwardListener: UserStayAction = {
+export const BackwardListener: ListenerProps = {
   name: "backwardListener",
   event: "backward",
   state: ALLSTATE,
@@ -49,7 +49,7 @@ export const BackwardListener: UserStayAction = {
   },
 }
 
-export const ForwardListener: UserStayAction = {
+export const ForwardListener: ListenerProps = {
   name: "forwardListener",
   event: "forward",
   state: ALLSTATE,

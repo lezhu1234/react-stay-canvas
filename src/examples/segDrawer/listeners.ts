@@ -6,10 +6,10 @@ import { Rectangle } from "../../shapes/rectangle"
 import { ALLSTATE } from "../../userConstants"
 import { ActionCallbackProps, ListenerProps, StayChild } from "../../userTypes"
 
-type UserStayActionCallback = (
+type ListenerPropsCallback = (
   p: ActionCallbackProps
 ) => { [key: string]: any } | any
-function drawPath(gco: GlobalCompositeOperation): UserStayActionCallback {
+function drawPath(gco: GlobalCompositeOperation): ListenerPropsCallback {
   return ({ e, store, composeStore, tools: { appendChild, updateChild } }) => {
     const brushSize = store.get("brushSize") || 1
     const eventMap = {

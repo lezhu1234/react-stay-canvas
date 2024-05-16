@@ -2,13 +2,13 @@
 //   Rectangle,
 //   StayChild,
 //   StayImage,
-//   UserStayAction,
+//   ListenerProps,
 // } from "react-stay-canvas"
 
 import { StayImage } from "../../shapes/image"
 import { Rectangle } from "../../shapes/rectangle"
 import { StayChild } from "../../stay/stayChild"
-import { UserStayAction } from "../../userTypes"
+import { ListenerProps } from "../../userTypes"
 
 export const DragListener = (
   leftImage: StayChild<StayImage>,
@@ -16,7 +16,7 @@ export const DragListener = (
   scaleRatio: number,
   offsetX: number,
   offsetY: number
-): UserStayAction => {
+): ListenerProps => {
   return {
     name: "drag",
     event: "drag",

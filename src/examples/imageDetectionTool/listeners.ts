@@ -7,7 +7,7 @@ import { Dispatch, SetStateAction } from "react"
 //   Point,
 //   Rectangle,
 //   RectangleAttr,
-//   UserStayAction,
+//   ListenerProps,
 // } from "react-stay-canvas"
 
 import { Point } from "../../shapes/point"
@@ -16,17 +16,17 @@ import { ALLSTATE, DEFAULTSTATE } from "../../userConstants"
 import {
   ActionEvent,
   Dict,
+  ListenerProps,
   StayChild,
   StayChildProps,
-  UserStayAction,
 } from "../../userTypes"
 import { RectLike } from "./utils"
 
-type UserStayActionFunc = (
+type ListenerPropsFunc = (
   payload: Dict,
   setStateFunc: Dispatch<SetStateAction<RectLike | undefined>>
-) => UserStayAction
-export const DragListener: UserStayAction = {
+) => ListenerProps
+export const DragListener: ListenerProps = {
   name: "dragListener",
   event: ["dragstart", "drag", "dragend"],
   state: ALLSTATE,
@@ -93,7 +93,7 @@ export const DragListener: UserStayAction = {
   },
 }
 
-export const SelectListener: UserStayActionFunc = (
+export const SelectListener: ListenerPropsFunc = (
   payload,
   setCurrentSelectLabel
 ) => ({
@@ -143,7 +143,7 @@ export const SelectListener: UserStayActionFunc = (
   },
 })
 
-export const DetectListener: UserStayAction = {
+export const DetectListener: ListenerProps = {
   name: "detectListener",
   event: "mousemove",
   state: "annotationSelected",
@@ -270,7 +270,7 @@ export const DetectListener: UserStayAction = {
   },
 }
 
-export const ResizeListener: UserStayActionFunc = (
+export const ResizeListener: ListenerPropsFunc = (
   payload,
   setCurrentSelectLabel
 ) => ({
@@ -349,7 +349,7 @@ export const ResizeListener: UserStayActionFunc = (
   },
 })
 
-export const saveListener: UserStayAction = {
+export const saveListener: ListenerProps = {
   name: "save",
   event: "save",
   state: ALLSTATE,

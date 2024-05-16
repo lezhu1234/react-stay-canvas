@@ -73,7 +73,7 @@ export interface ActionCallbackProps {
   payload: Dict
 }
 
-export interface UserStayAction {
+export interface ListenerProps {
   name: string
   state?: string
   selector?: string

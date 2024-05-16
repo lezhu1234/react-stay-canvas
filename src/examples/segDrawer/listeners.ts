@@ -4,7 +4,7 @@ import { Path } from "../../shapes/path"
 import { Point } from "../../shapes/point"
 import { Rectangle } from "../../shapes/rectangle"
 import { ALLSTATE } from "../../userConstants"
-import { ActionCallbackProps, StayChild, UserStayAction } from "../../userTypes"
+import { ActionCallbackProps, ListenerProps, StayChild } from "../../userTypes"
 
 type UserStayActionCallback = (
   p: ActionCallbackProps
@@ -56,7 +56,7 @@ function drawPath(gco: GlobalCompositeOperation): UserStayActionCallback {
   }
 }
 
-export const FileChangeListener: UserStayAction = {
+export const FileChangeListener: ListenerProps = {
   name: "fileChange",
   event: "changeFile",
   state: ALLSTATE,
@@ -100,7 +100,7 @@ export const FileChangeListener: UserStayAction = {
     })
   },
 }
-export const StateChangeListener: UserStayAction = {
+export const StateChangeListener: ListenerProps = {
   name: "stateChange",
   event: "changeState",
   state: ALLSTATE,
@@ -109,7 +109,7 @@ export const StateChangeListener: UserStayAction = {
   },
 }
 
-export const BrushSizeChangeListener: UserStayAction = {
+export const BrushSizeChangeListener: ListenerProps = {
   name: "brushSizeChange",
   event: "keydown",
   state: ALLSTATE,
@@ -138,21 +138,21 @@ export const BrushSizeChangeListener: UserStayAction = {
   },
 }
 
-export const DrawListener: UserStayAction = {
+export const DrawListener: ListenerProps = {
   name: "draw",
   event: ["dragstart", "drag"],
   state: "draw",
   callback: drawPath("source-over"),
 }
 
-export const EraserListener: UserStayAction = {
+export const EraserListener: ListenerProps = {
   name: "eraser",
   event: ["dragstart", "drag"],
   state: "eraser",
   callback: drawPath("destination-out"),
 }
 
-export const MoveListener: UserStayAction = {
+export const MoveListener: ListenerProps = {
   name: "movelistener",
   event: "mousemove",
   state: "draw|eraser",

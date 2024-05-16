@@ -1,16 +1,16 @@
-import React, { useState } from "react"
+import { useState } from "react"
 // import {
 //   Rectangle,
 //   StayCanvas,
 //   StayImage,
 //   StayTools,
-//   UserStayAction,
+//   ListenerProps,
 // } from "react-stay-canvas"
 
 import { StayImage } from "../../shapes/image"
 import { Rectangle } from "../../shapes/rectangle"
 import StayCanvas from "../../stayCanvas"
-import { StayTools, UserStayAction } from "../../userTypes"
+import { ListenerProps, StayTools } from "../../userTypes"
 import { DragListener } from "./listeners"
 export function ImageDiffer() {
   const width = 600
@@ -22,7 +22,7 @@ export function ImageDiffer() {
     height,
   })
 
-  const [listeners, setListeners] = useState<UserStayAction[]>()
+  const [listeners, setListeners] = useState<ListenerProps[]>()
 
   const imagewidth = 200
   const imageheight = 300

@@ -2,10 +2,10 @@ import { Rectangle } from "./shapes/rectangle"
 import {
   ActionCallbackProps,
   ActionEvent,
+  ListenerProps,
   SortChildrenMethodsValues,
   StayTools,
   storeType,
-  UserStayAction,
 } from "./userTypes"
 
 export interface composeProps {
@@ -81,6 +81,6 @@ export interface StayCanvasProps {
   height?: number
   layers?: number
   eventList?: UserStayEventProps[]
-  listenerList?: UserStayAction[]
+  listenerList?: ListenerProps[]
   mounted?: (tools: StayTools) => void
 }

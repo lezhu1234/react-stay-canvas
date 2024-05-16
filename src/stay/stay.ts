@@ -28,7 +28,7 @@ import {
   SORT_CHILDREN_METHODS,
   SUPPORT_OPRATOR,
 } from "../userConstants"
-import { ActionEvent, StayTools, UserStayAction } from "../userTypes"
+import { ActionEvent, ListenerProps, StayTools } from "../userTypes"
 import { StayChild } from "./stayChild"
 import { StackItem } from "./types"
 
@@ -115,7 +115,7 @@ class Stay {
     selector = `.${ROOTNAME}`,
     sortBy = SORT_CHILDREN_METHODS.AREA_ASC,
     log = false,
-  }: UserStayAction) {
+  }: ListenerProps) {
     let eventList = event
     if (!Array.isArray(event)) {
       eventList = [event]

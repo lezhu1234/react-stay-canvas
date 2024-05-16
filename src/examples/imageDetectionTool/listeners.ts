@@ -1,12 +1,22 @@
 import { Dispatch, SetStateAction } from "react"
+// import {
+//   ActionEvent,
+//   ALLSTATE,
+//   DEFAULTSTATE,
+//   Dict,
+//   Point,
+//   Rectangle,
+//   RectangleAttr,
+//   UserStayAction,
+// } from "react-stay-canvas"
 
 import { Point } from "../../shapes/point"
 import { Rectangle, RectangleAttr } from "../../shapes/rectangle"
-import { StayChild } from "../../stay/stayChild"
 import { ALLSTATE, DEFAULTSTATE } from "../../userConstants"
 import {
   ActionEvent,
   Dict,
+  StayChild,
   StayChildProps,
   UserStayAction,
 } from "../../userTypes"
@@ -101,7 +111,7 @@ export const SelectListener: UserStayActionFunc = (
     annotations.forEach((annotation) => {
       let className = "annotation"
       let color = "white"
-      let individual = false
+      let layer = 0
       if (
         !selectedAnnotation &&
         annotation.shape.contains(new Point(e.x, e.y))
@@ -109,13 +119,13 @@ export const SelectListener: UserStayActionFunc = (
         selectedAnnotation = annotation
         className = "annotation:selected"
         color = "red"
-        individual = true
+        layer = -1
       }
       updateChild({
         child: annotation,
         shape: (annotation.shape as Rectangle).update({ props: { color } }),
         className,
-        individual,
+        layer,
       })
     })
 
@@ -303,10 +313,8 @@ export const ResizeListener: UserStayActionFunc = (
       drag: () => {
         const { selectedAnnotationShape, dragStartPosition, updateFunc } =
           composeStore
-        console.log("drag")
         if (!selectedAnnotationShape || !dragStartPosition || !updateFunc)
           return
-        console.log("dragupdate")
         const offsetX = e.x - dragStartPosition.x
         const offsetY = e.y - dragStartPosition.y
         const annotation = stateStore.get("selectedAnnotation")

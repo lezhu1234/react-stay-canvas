@@ -1,11 +1,20 @@
 import React, { useState } from "react"
+// import {
+//   Dict,
+//   Rectangle,
+//   StayCanvas,
+//   StayImage,
+//   StayTools,
+//   Text,
+//   trigger,
+// } from "react-stay-canvas"
 
-import * as PredefinedListenerList from "../../predefinedListeners"
 import { StayImage } from "../../shapes/image"
 import { Rectangle } from "../../shapes/rectangle"
 import { Text } from "../../shapes/text"
 import StayCanvas, { trigger } from "../../stayCanvas"
 import { Dict, StayTools } from "../../userTypes"
+import * as PredefinedListenerList from "../predefinedListeners"
 import * as DetectionToolListeners from "./listeners"
 import { parseCoco, RectLike } from "./utils"
 
@@ -38,7 +47,7 @@ export function ImageDetectionTool() {
   const initFunc = ({ appendChild, forceUpdateCanvas }: StayTools) => {
     appendChild({
       className: "image",
-      zIndex: 0,
+      layer: 0,
       shape: new StayImage({
         src: imageUrl,
         x: initRectangle.x,
@@ -60,7 +69,6 @@ export function ImageDetectionTool() {
           payload.scaleRatio
         ),
       })
-      console.log(child.id, x, y, width, height)
       const label = new Text({
         x:
           x * payload.scaleRatio +
@@ -91,7 +99,7 @@ export function ImageDetectionTool() {
 
   listenerList = [...listenerList]
   return (
-    <div className="flex ">
+    <div className="flex">
       <StayCanvas
         width={width}
         height={height}

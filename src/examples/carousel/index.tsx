@@ -1,9 +1,10 @@
-import { Rectangle } from "../../shapes/rectangle"
-import StayCanvas from "../../stayCanvas"
-import { StayTools } from "../../userTypes"
-import { translation } from "./utils"
-
 import React from "react"
+import { Rectangle } from "../../shapes"
+import { StayTools } from "../../userTypes"
+// import { Rectangle, StayCanvas, StayTools } from "react-stay-canvas"
+
+import StayCanvas from "../../stayCanvas"
+import { translation } from "./utils"
 
 export function Carousel() {
   const width = 600

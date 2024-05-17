@@ -1,7 +1,10 @@
 import { Rectangle } from "./shapes/rectangle"
+import { valueof } from "./stay/types"
+import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
 import {
   ActionCallbackProps,
   ActionEvent,
+  ChildSortFunction,
   ListenerProps,
   SortChildrenMethodsValues,
   StayTools,
@@ -49,9 +52,8 @@ export interface StayAction {
   state: string
   selector: string
   event: string[]
-  sortBy: SortChildrenMethodsValues
+  sortBy: SortChildrenMethodsValues | ChildSortFunction
   callback: (p: ActionCallbackProps) => { [key: string]: any } | any
-  log: boolean
 }
 
 export interface StayEventMap {
@@ -60,27 +62,24 @@ export interface StayEventMap {
 
 export interface StayEventRequiredProps {
   name: string
-  trigger: string
+  trigger: valueof<typeof MOUSE_EVENTS> | valueof<typeof KEYBOARRD_EVENTS>
 }
 
 export interface StayEventChooseProps {
   conditionCallback: UserConditionCallbackFunction
-  successCallback: (
-    props: UserSuccessCallbackProps
-  ) => void | UserStayEventProps
+  successCallback: (props: UserSuccessCallbackProps) => void | EventProps
 }
 
 export type StayEventProps = StayEventRequiredProps & StayEventChooseProps
 
-export type UserStayEventProps = StayEventRequiredProps &
-  Partial<StayEventChooseProps>
+export type EventProps = StayEventRequiredProps & Partial<StayEventChooseProps>
 
 export interface StayCanvasProps {
   className?: string
   width?: number
   height?: number
   layers?: number
-  eventList?: UserStayEventProps[]
+  eventList?: EventProps[]
   listenerList?: ListenerProps[]
   mounted?: (tools: StayTools) => void
 }

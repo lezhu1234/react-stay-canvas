@@ -7,6 +7,11 @@ export type InfixExpressionParserProps<T> = {
   selectorConvertFunc: (selector: string) => T[]
 }
 
+export function uuid4() {
+  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
+    (+c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (+c / 4)))).toString(16)
+  )
+}
 export function assert(condition: any, message: string = "") {
   if (!condition) {
     throw new Error(message)
@@ -32,9 +37,7 @@ export function infixExpressionParser<T>({
       priority: 1,
       number: 2,
       func: (...args: T[][]) => {
-        return args[0].filter((v1) =>
-          args[1].find((v2) => elemntEqualFunc(v1, v2))
-        )
+        return args[0].filter((v1) => args[1].find((v2) => elemntEqualFunc(v1, v2)))
       },
     },
     [SUPPORT_OPRATOR.OR]: {
@@ -48,9 +51,7 @@ export function infixExpressionParser<T>({
       priority: 3,
       number: 1,
       func: (...args: T[][]) => {
-        return fullSet.filter(
-          (v1) => !args[0].find((v2) => elemntEqualFunc(v1, v2))
-        )
+        return fullSet.filter((v1) => !args[0].find((v2) => elemntEqualFunc(v1, v2)))
       },
     },
     [SUPPORT_OPRATOR.RIGHT_BRACKET]: {
@@ -68,23 +69,18 @@ export function infixExpressionParser<T>({
   type OprateConditionCallbackProps = () => boolean
   type BreakCallbackProps = (opratorChar: string) => boolean
 
-  const doOpration = (
-    oprateConditionCallback: OprateConditionCallbackProps
-  ) => {
+  const doOpration = (oprateConditionCallback: OprateConditionCallbackProps) => {
     while (oprateConditionCallback()) {
       const opratorChar = opratorStack.pop()
       const selectorChildList: T[][] = []
       while (
-        selectorChildList.length <
-        (opratorInfo[opratorChar as oprator] as OpratorInfoType).number
+        selectorChildList.length < (opratorInfo[opratorChar as oprator] as OpratorInfoType).number
       ) {
         selectorChildList.push(selectedChildrenStack.pop()!)
       }
 
       selectedChildrenStack.push(
-        (opratorInfo[opratorChar as oprator] as OpratorInfoType).func(
-          ...selectorChildList
-        )
+        (opratorInfo[opratorChar as oprator] as OpratorInfoType).func(...selectorChildList)
       )
     }
   }
@@ -97,9 +93,7 @@ export function infixExpressionParser<T>({
     const char = selector[index]
     if (char in opratorInfo) {
       if (lastIndex < index) {
-        selectedChildrenStack.push(
-          selectorConvertFunc(selector.slice(lastIndex, index))
-        )
+        selectedChildrenStack.push(selectorConvertFunc(selector.slice(lastIndex, index)))
       }
       lastIndex = index
       const opratorNeedPop = () => {
@@ -122,9 +116,7 @@ export function infixExpressionParser<T>({
   }
 
   if (lastIndex < index) {
-    selectedChildrenStack.push(
-      selectorConvertFunc(selector.slice(lastIndex, index))
-    )
+    selectedChildrenStack.push(selectorConvertFunc(selector.slice(lastIndex, index)))
   }
 
   doOpration(() => opratorStack.length > 0)

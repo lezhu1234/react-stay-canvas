@@ -1,5 +1,3 @@
-import { v4 as uuid4 } from "uuid"
-
 import Canvas from "../canvas"
 import {
   click,
@@ -14,12 +12,7 @@ import {
 } from "../rawEvents"
 import { Point } from "../shapes/point"
 import { Root } from "../shapes/root"
-import {
-  StayAction,
-  StayEventMap,
-  StayEventProps,
-  UserStayEventProps,
-} from "../types"
+import { EventProps, StayAction, StayEventMap, StayEventProps } from "../types"
 import {
   DEFAULTSTATE,
   DRAW_ACTIONS,
@@ -29,6 +22,7 @@ import {
   SUPPORT_OPRATOR,
 } from "../userConstants"
 import { ActionEvent, ListenerProps, StayTools } from "../userTypes"
+import { uuid4 } from "../utils"
 import { StayChild } from "./stayChild"
 import { StackItem } from "./types"
 
@@ -114,7 +108,6 @@ class Stay {
     state = DEFAULTSTATE,
     selector = `.${ROOTNAME}`,
     sortBy = SORT_CHILDREN_METHODS.AREA_ASC,
-    log = false,
   }: ListenerProps) {
     let eventList = event
     if (!Array.isArray(event)) {
@@ -128,7 +121,6 @@ class Stay {
       event: eventList as string[],
       sortBy,
       callback,
-      log,
     })
   }
 
@@ -137,9 +129,7 @@ class Stay {
       throw new Error("name cannot be empty")
     }
     const allOprators = Object.values(SUPPORT_OPRATOR).join("") + ".#"
-    const regStr = `[${allOprators}]|${preserveNames
-      .map((name) => `^${name}$`)
-      .join("|")}`
+    const regStr = `[${allOprators}]|${preserveNames.map((name) => `^${name}$`).join("|")}`
     const forbiden = new RegExp(regStr)
     if (forbiden.test(name)) {
       throw new Error(
@@ -184,8 +174,7 @@ class Stay {
       if (child.beforeLayer && child.beforeLayer !== child.layer) {
         childrenInlayer[child.beforeLayer].update = true
       } else {
-        childrenInlayer[child.layer].update ||=
-          child.drawAction === DRAW_ACTIONS.UPDATE
+        childrenInlayer[child.layer].update ||= child.drawAction === DRAW_ACTIONS.UPDATE
       }
     })
 
@@ -222,9 +211,7 @@ class Stay {
 
   findByClassName(className: string): StayChild[] {
     return this.filterChildren(
-      (child) =>
-        child.className.split(":")[0] === className ||
-        child.className === className
+      (child) => child.className.split(":")[0] === className || child.className === className
     )
   }
 
@@ -251,9 +238,7 @@ class Stay {
         state: this.state,
         name: eventName,
         pressedKeys: new Set(
-          Object.keys(this.currentPressedKeys).filter(
-            (key) => this.currentPressedKeys[key]
-          )
+          Object.keys(this.currentPressedKeys).filter((key) => this.currentPressedKeys[key])
         ),
       } as ActionEvent
 
@@ -319,14 +304,11 @@ class Stay {
       mouseup(this.fireEvent.bind(this), this.releaseKey.bind(this), e)
     topLayer.onmousedown = (e: MouseEvent) =>
       mousedown(this.fireEvent.bind(this), this.pressKey.bind(this), e)
-    topLayer.onmousemove = (e: MouseEvent) =>
-      mousemove(this.fireEvent.bind(this), e)
+    topLayer.onmousemove = (e: MouseEvent) => mousemove(this.fireEvent.bind(this), e)
     topLayer.onwheel = (e: WheelEvent) => wheel(this.fireEvent.bind(this), e)
     topLayer.onclick = (e: MouseEvent) => click(this.fireEvent.bind(this), e)
-    topLayer.ondblclick = (e: MouseEvent) =>
-      dblclick(this.fireEvent.bind(this), e)
-    topLayer.oncontextmenu = (e: MouseEvent) =>
-      contextmenu(this.fireEvent.bind(this), e)
+    topLayer.ondblclick = (e: MouseEvent) => dblclick(this.fireEvent.bind(this), e)
+    topLayer.oncontextmenu = (e: MouseEvent) => contextmenu(this.fireEvent.bind(this), e)
   }
 
   pressKey(key: string) {
@@ -343,12 +325,7 @@ class Stay {
     this.stackIndex++
   }
 
-  registerEvent({
-    name,
-    trigger,
-    conditionCallback,
-    successCallback,
-  }: UserStayEventProps) {
+  registerEvent({ name, trigger, conditionCallback, successCallback }: EventProps) {
     const defaultConditionCallback = () => true
     const defaultSuccessCallback = () => void 0
     this.events[name] = {

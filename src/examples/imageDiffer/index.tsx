@@ -38,10 +38,7 @@ export function ImageDiffer() {
       offsetX,
       offsetY,
     } = container.computeFitInfo(imagewidth, imageheight)
-    const { rectangle: splitBarRectangle } = container.computeFitInfo(
-      splitbarWidth,
-      splitbarHeight
-    )
+    const { rectangle: splitBarRectangle } = container.computeFitInfo(splitbarWidth, splitbarHeight)
     const leftImage = appendChild({
       className: "leftImage",
       shape: new StayImage({
@@ -76,9 +73,7 @@ export function ImageDiffer() {
         props: { color: "black", type: "fill" },
       }),
     })
-    setListeners([
-      DragListener(leftImage, rightImage, scaleRatio, offsetX, offsetY),
-    ])
+    setListeners([DragListener(leftImage, rightImage, scaleRatio, offsetX, offsetY)])
   }
 
   return (

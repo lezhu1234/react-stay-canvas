@@ -23,6 +23,19 @@ import Stay from "./stay"
 import { StayChild } from "./stayChild"
 import { StepProps } from "./types"
 
+function parseLayer(layers: any[], layer: number | undefined) {
+  if (layer === undefined) {
+    layer = layers.length - 1
+  }
+  if (layer < 0) {
+    layer = layers.length + layer
+  }
+  if (layer < 0 || layer >= layers.length) {
+    throw new Error("layer is out of range")
+  }
+  return layer
+}
+
 Stay.prototype.getTools = function (): StayTools {
   return {
     forceUpdateCanvas: () => {
@@ -38,9 +51,10 @@ Stay.prototype.getTools = function (): StayTools {
       className,
       layer = -1,
     }: createChildProps<T>) => {
-      if (layer === -1) {
-        layer = this.root.layers.length - 1
-      }
+      // if (layer === -1) {
+      //   layer = this.root.layers.length - 1
+      // }
+      layer = parseLayer(this.root.layers, layer)
       this.checkName(className, [ROOTNAME])
       const child = new StayChild({
         id,
@@ -59,9 +73,7 @@ Stay.prototype.getTools = function (): StayTools {
       id = undefined,
       layer = -1,
     }: createChildProps<T>) => {
-      if (layer === -1) {
-        layer = this.root.layers.length - 1
-      }
+      layer = parseLayer(this.root.layers, layer)
       const child = this.tools.createChild({
         id,
         shape,
@@ -74,25 +86,18 @@ Stay.prototype.getTools = function (): StayTools {
       this.unLogedChildrenIds.add(child.id)
       return child
     },
-    updateChild: ({
-      child,
-      zIndex,
-      shape,
-      className,
-      layer,
-    }: updateChildProps) => {
+    updateChild: ({ child, zIndex, shape, className, layer }: updateChildProps) => {
       if (className === "") {
         throw new Error("className cannot be empty")
       }
+
       if (zIndex === undefined) {
         zIndex = child.zIndex
       }
       if (zIndex !== child.zIndex) {
         this.zIndexUpdated = true
       }
-      if (layer === -1) {
-        layer = this.root.layers.length - 1
-      }
+      layer = parseLayer(this.root.layers, layer)
       child.update({
         shape,
         zIndex: zIndex,
@@ -111,7 +116,7 @@ Stay.prototype.getTools = function (): StayTools {
     },
     getChildrenBySelector: (
       selector: string,
-      sortBy: SortChildrenMethodsValues = SORT_CHILDREN_METHODS.AREA_ASC
+      sortBy = SORT_CHILDREN_METHODS.AREA_ASC
     ): StayChild[] => {
       const children = infixExpressionParser<StayChild>({
         selector,
@@ -134,13 +139,17 @@ Stay.prototype.getTools = function (): StayTools {
       ])
 
       if (sortBy) {
-        const [sortKey, sortOrder] = sortMap.get(sortBy) || []
-        if (sortKey && sortOrder) {
-          children.sort((a, b) => {
-            const sortValue1 = (a.shape as any)[sortKey]
-            const sortValue2 = (b.shape as any)[sortKey]
-            return (sortValue1 - sortValue2) * sortOrder
-          })
+        if (typeof sortBy === "function") {
+          children.sort(sortBy)
+        } else {
+          const [sortKey, sortOrder] = sortMap.get(sortBy) || []
+          if (sortKey && sortOrder) {
+            children.sort((a, b) => {
+              const sortValue1 = (a.shape as any)[sortKey]
+              const sortValue2 = (b.shape as any)[sortKey]
+              return (sortValue1 - sortValue2) * sortOrder
+            })
+          }
         }
       }
 
@@ -149,11 +158,7 @@ Stay.prototype.getTools = function (): StayTools {
     getAvailiableStates: (selector: string): string[] => {
       const stateSelectors = selector
         .split(new RegExp(`([${Object.values(SUPPORT_OPRATOR).join("")}])`))
-        .map((s) =>
-          s === ALLSTATE
-            ? `(${[...this.stateSet].join(SUPPORT_OPRATOR.OR)})`
-            : s
-        )
+        .map((s) => (s === ALLSTATE ? `(${[...this.stateSet].join(SUPPORT_OPRATOR.OR)})` : s))
         .join("")
       try {
         return infixExpressionParser<string>({
@@ -184,18 +189,13 @@ Stay.prototype.getTools = function (): StayTools {
       }
 
       assert(_selector, "no className or id")
-      const selectorChildren = this.tools.getChildrenBySelector(
-        _selector as string,
-        sortBy
-      )
+      const selectorChildren = this.tools.getChildrenBySelector(_selector as string, sortBy)
 
       const hitChildren: StayChild[] = selectorChildren.filter((c) =>
         c.shape.contains(point, this.root.contexts[c.layer])
       )
 
-      return returnFirst && hitChildren.length > 0
-        ? [hitChildren[0]]
-        : hitChildren
+      return returnFirst && hitChildren.length > 0 ? [hitChildren[0]] : hitChildren
     },
     changeCursor: (cursor: string) => {
       this.root.layers[this.root.layers.length - 1].style.cursor = cursor
@@ -219,9 +219,7 @@ Stay.prototype.getTools = function (): StayTools {
     },
     log: () => {
       const steps = [...this.unLogedChildrenIds]
-        .map((id) =>
-          StayChild.diff(this.historyChildren.get(id), this.getChildById(id))
-        )
+        .map((id) => StayChild.diff(this.historyChildren.get(id), this.getChildById(id)))
         .filter((o) => o) as StepProps[]
       this.pushToStack({
         state: this.state,
@@ -332,68 +330,56 @@ Stay.prototype.getTools = function (): StayTools {
       interface CallBackType {
         callback: (p: ActionCallbackProps) => any
         e: ActionEvent
-        log: boolean
         name: string
       }
       let needUpdate = false
       const callbackList: CallBackType[] = []
-      this.listeners.forEach(
-        ({ name, event, state, selector, sortBy, log, callback }) => {
-          if (!(name in this.composeStore)) {
-            this.composeStore[name] = {}
-          }
-          event.forEach((actionEventName) => {
-            const avaliableSet = this.tools.getAvailiableStates(
-              state || DEFAULTSTATE
-            )
-            if (
-              !avaliableSet.includes(this.state) ||
-              !(actionEventName in triggerEvents)
-            ) {
-              return false
-            }
-
-            const actionEvent = triggerEvents[actionEventName]
-
-            if (isMouseEvent) {
-              const child = this.tools.getContainPointChildren({
-                point: actionEvent.point,
-                selector: selector,
-                sortBy: sortBy,
-              })
-
-              if (child.length === 0) return false
-              actionEvent.target = child[0] as StayChild
-            }
-
-            needUpdate = true
-            callbackList.push({
-              callback,
-              e: actionEvent,
-              name,
-              log,
-            })
-            if (callback) {
-              const linkArgs = callback({
-                originEvent,
-                e: actionEvent,
-                store: this.store,
-                stateStore: this.stateStore,
-                composeStore: this.composeStore[name],
-                tools: this.getTools(),
-                payload,
-              })
-              this.composeStore[name] = {
-                ...this.composeStore[name],
-                ...(linkArgs || {}),
-              }
-            }
-            if (log) {
-              this.tools.log()
-            }
-          })
+      this.listeners.forEach(({ name, event, state, selector, sortBy, callback }) => {
+        if (!(name in this.composeStore)) {
+          this.composeStore[name] = {}
         }
-      )
+        event.forEach((actionEventName) => {
+          const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
+          if (!avaliableSet.includes(this.state) || !(actionEventName in triggerEvents)) {
+            return false
+          }
+
+          const actionEvent = triggerEvents[actionEventName]
+
+          if (isMouseEvent) {
+            const child = this.tools.getContainPointChildren({
+              point: actionEvent.point,
+              selector: selector,
+              sortBy: sortBy,
+            })
+
+            if (child.length === 0) return false
+            actionEvent.target = child[0] as StayChild
+          }
+
+          needUpdate = true
+          callbackList.push({
+            callback,
+            e: actionEvent,
+            name,
+          })
+          if (callback) {
+            const linkArgs = callback({
+              originEvent,
+              e: actionEvent,
+              store: this.store,
+              stateStore: this.stateStore,
+              composeStore: this.composeStore[name],
+              tools: this.getTools(),
+              payload,
+            })
+            this.composeStore[name] = {
+              ...this.composeStore[name],
+              ...(linkArgs || {}),
+            }
+          }
+        })
+      })
 
       if (needUpdate) {
         this.draw()

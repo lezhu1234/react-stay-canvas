@@ -6,12 +6,12 @@ export const MOUSE_EVENTS = {
   CLICK: "click", // 鼠标点击事件类型常量，用于鼠标点击事件监听器中使用。
   DB_CLICK: "dblclick", // 鼠标双击事件类型常量，用于鼠标双击事件监听器中使用。
   CONTEXT_MENU: "contextmenu", // 鼠标右键事件类型常量，用于鼠标右键事件监听器中使用。
-}
+} as const
 
 export const KEYBOARRD_EVENTS = {
   KEY_DOWN: "keydown", // 键盘按下事件类型常量，用于键盘按下事件监听器中使用。
   KEY_UP: "keyup", // 键盘松开事件类型常量，用于键盘松开事件监听器中使用。
-}
+} as const
 
 export const DRAW_ACTIONS = {
   APPEND: "append", // 追加绘制操作的常量，用于追加绘制操作的函数中使用。

@@ -103,7 +103,7 @@ export const SelectListener: ListenerPropsFunc = (
   callback: ({
     stateStore,
     e,
-    tools: { updateChild, getChildrenBySelector, switchState, appendChild },
+    tools: { updateChild, getChildrenBySelector, switchState, appendChild,  },
   }) => {
     const annotations = getChildrenBySelector(".annotation") as StayChild[]
     let selectedAnnotation: StayChild | undefined = undefined

@@ -16,19 +16,51 @@ stay-canvas for react
 - [核心概念](#核心概念)
     - [Shape](#shape)
     - [Listener](#listener)
-    - [Event](#event-事件)
+    - [Event](#event)
 - [API 文档](#api-文档)
-    - [StayCanvas 组件](#staycanvas-组件)
+    - [StayCanvas 组件](#staycanvas-组件-api)
+    - [Shape API](#shape-api)
+      - [Image: 图片](#image-图片)
+      - [Point：点](#point-点)
+      - [Line: 线段](#line-线段)
+      - [Rectangle: 矩形](#rectangle-矩形)
+      - [Circle: 圆形](#circle-圆形)
+      - [Text: 文本](#text-文本)
+      - [Path: 路径](#path-路径)
+      - [自定义 Shape](#自定义-shape)
     - [Listener API](#listener-api)
-        - [Listener Callback 函数](#listener-callback-函数)
+        - [selector 选择器](#selector-选择器)
+        - [state 状态](#state-状态)
+        - [简单的逻辑运算](#简单的逻辑运算)
+        - [event](#event)
+        - [Listener callback 函数](#listener-callback-函数)
         - [StayTools 工具函数](#staytools-工具函数)
+          - [createChild](#createchild)
+          - [updateChild](#updatechild)
+          - [removeChild](#removechild)
+          - [getContainPointChildren](#getcontainpointchildren)
+          - [hasChild](#hasChild)
+          - [fix](#fix)
+          - [switchState](#switchstate)
+          - [getChildrenBySelector](#getchildrenbyselector)
+          - [getAvailiableStates](#getavailiablestates)
+          - [changeCursor](#changecursor)
+          - [moveStart](#movestart)
+          - [move](#move)
+          - [zoom](#zoom)
+          - [log](#log)
+          - [forward](#forward)
+          - [backward](#backward)
+          - [triggerAction](#triggeraction)
+          - [deleteListener](#deletelistener)
+          - [forceUpdateCanvas](#forceupdatecanvas)
     - [Event API](#event-api)
-    - [StayChild 对象](#staychild-对象)
-        - [内置 Shape 子类](#内置-shape-子类)
-        - [自定义 Shape](#自定义-shape)
-    - [trigger 函数](#trigger-函数)
-- [常见问题](#常见问题)
-- [结语](#结语)
+      - [name](#name)
+      - [trigger](#trigger)
+      - [conditionCallback](#conditioncallback)
+      - [successCallback](#successcallback)
+    - [trigger 函数 API](#trigger-函数-api)
+
 
 ## 介绍
 
@@ -119,22 +151,29 @@ Shape 是创建或者更新 `StayChild` 对象时非常重要的一个属性，�
   }
   ```
 
+
+
+
 ### Listener
 在 react-stay-canvas 中，你可以通过 listenerList 属性来注册监听器， 该属性是一个数组，数组中的每个元素都是一个监听器，监听器是一个对象， 该对象需要满足 ListenerProps 类型约束
 
-## Event 事件
+### Event
 在 react-stay-canvas 中，你可以通过 eventList 来注册事件，该事件列表是一个数组，数组中的每个元素都是一个事件对象，该对象需要满足 EventProps 的类型约束
 
 
 ## API 文档
-### StayCanvas 组件
+### StayCanvas 组件 API
 ```typescript
+export interface ContextLayerSetFunction {
+  (layer: HTMLCanvasElement): CanvasRenderingContext2D | null
+}
+
 // StayCanvas 组件接受一个 StayCanvasProps 类型的 props
 export interface StayCanvasProps {
   className?: string // 容器的 class,设置类样式
   width?: number // 容器的宽度，默认为 500px 你必须要在这里设置容器的宽高，而不是在 style 中进行设置
   height?: number // 容器的高度，默认为 500px
-  layers?: number  // 容器的层数，每一层会生成一个 canvas 容器，默认为 2
+  layers?: number | ContextLayerSetFunction[]  // 容器的层数，每一层会生成一个 canvas 容器，默认为 2, 你也可以传递一个 ContextLayerSetFunction[] 类型的数组，该数组中的每个元素都是一个函数， 该函数会接收一个 HTMLCanvasElement 类型的参数，该参数表示该层对应的 canvas 元素，你需要返回该层对应的 context2d 对象
   eventList?: EventProps[] // 容器的事件列表，该列表是一个数组，数组中的每个元素都是一个事件对象，在 react-stay-canvas 中，预定义了一些事件，你可以通过新建一个相同名称的事件来覆盖默认事件
   listenerList?: ListenerProps[] // 容器的监听器列表，该列表是一个数组，数组中的每个元素都是一个监听器对象
   mounted?: (tools: StayTools) => void // 容器的挂载函数，该函数会在容器挂载完成后执行
@@ -159,9 +198,24 @@ export default function StayCanvas({
   layers={4}
   className="border border-solid border-red-50"
 />
+
+<StayCanvas
+  mounted={init}
+  width={width}
+  height={height}
+  listenerList={listeners}
+  layers={[
+    (canvas) => canvas.getContext("2d"),
+    (canvas) =>
+      canvas.getContext("2d", {
+        willReadFrequently: true,
+      }),
+  ]}
+  className="border border-solid border-red-50"
+/>
 ```
 
-### 内置 Shape 子类
+### Shape API
 - Image: 图片
   - 该对象在canvas上绘制一张图片，其构造函数的定义如下
   ```typescript
@@ -199,7 +253,7 @@ export default function StayCanvas({
   }: Partial<ImageProps>): this
   ```
 
-- Point： 点
+- Point：点
   - 该对象在canvas上绘制一个点，其构造函数的定义如下
   ```typescript
   // x:number 点的x坐标
@@ -224,7 +278,7 @@ export default function StayCanvas({
   declare nearLine(line: Line, offset: number = 10): boolean
   ```
 
-- Line： 线段
+- Line: 线段
   - 该对象在canvas上绘制一个线段，其构造函数的定义如下
   ```typescript
   // x1:number 线段的起点x坐标
@@ -255,7 +309,7 @@ export default function StayCanvas({
   
   ```
 
-- Rectangle： 矩形
+- Rectangle: 矩形
   - 该对象在canvas上绘制一个矩形，其构造函数的定义如下
     ```typescript
     // x:number 矩形左上角的x坐标
@@ -483,7 +537,7 @@ export type ChildSortFunction = (a: StayChild, b: StayChild) => number
 
 
 
-### selector 选择器
+#### selector 选择器
 在 react-stay-canvas 中实现了一个非常简单的选择器功能，主要用来筛选元素的名称和id,在我们使用appendChild、updateChild等函数时，需要提供一个 <code>className</code> 属性，而这些工具函数返回的对象中会包含一个 <code>id</code> 属性。在定义selector时，你可以通过在 <code>className</code> 属性前添加一个符号 <code>.</code>，在 <code>id</code> 属性前添加一个符号 <code>#</code>来选中对应的元素
 ```typescript
 const child1 = appendChild({
@@ -500,7 +554,7 @@ getChildrenBySelector("#" + child1.id) //返回 child1
 getChildrenBySelector("!.label") //返回 []
 ```
 
-### state 状态
+#### state 状态
 在 react-stay-canvas 中，你可以通过 state 属性来控制当前的状态，该属性是一个字符串， 默认状态为 DEFAULTSTATE  = "default-state"
 状态的概念来源于自动状态机，通过设置状态，你可以灵活的控制监听器应该在什么时候触发，
 设想我们希望实现下面这个功能
@@ -514,7 +568,7 @@ getChildrenBySelector("!.label") //返回 []
 
 你可以对状态字段进行一些简单的逻辑运算
 
-### 简单的逻辑运算
+#### 简单的逻辑运算
 你可以对某些属性使用一些非常简单的逻辑运算。目前受支持的属性包括 state 和 selector 两种。
 ```typescript
 export const SUPPORT_LOGIC_OPRATOR = {
@@ -531,7 +585,7 @@ const state = "!selected" //当状态不为selected时
 const state = "default-state|selected"  //当状态为default-state或者selected时
 ```
 
-### event
+#### event
 event 属性接受一个字符串, 你可以在 StayCanvas 的 eventList 中传入一个事件数组来对事件进行自定义或者字节覆盖预定义的事件，相同名称的事件会被覆盖，如何自定义事件将在之后介绍
 
 在 react-stay-canvas 中,预定义了以下几种事件
@@ -551,7 +605,7 @@ event 属性接受一个字符串, 你可以在 StayCanvas 的 eventList 中传�
 - forward: ctrl + shift + z
 - backward: ctrl + z
 
-### Listener callback 函数
+#### Listener callback 函数
 callback 函数是用来控制用户在 canvas 上交互的核心函数，该函数的定义如下
 ```typescript
 type ListenerCallback = (p: ActionCallbackProps) => Record<string, any> | void
@@ -581,160 +635,7 @@ export interface ActionEvent {
   deltaZ: number // 鼠标滚轮滑动时的 z 轴偏移
 }
 ```
-
-
-
-### Event API
-```typescript
-type EventProps = {
-  name: string
-  trigger: valueof<typeof MOUSE_EVENTS> | valueof<typeof KEYBOARRD_EVENTS>
-  conditionCallback?: (props: UserConditionCallbackProps): boolean
-  successCallback?: (props: UserSuccessCallbackProps) => void | EventProps
-}
-
-export const MOUSE_EVENTS = {
-  MOUSE_DOWN: "mousedown", // 鼠标按下事件类型常量，用于鼠标按下事件监听器中使用。
-  MOUSE_UP: "mouseup", // 鼠标松开事件类型常量，用于鼠标松开事件监听器中使用。
-  MOUSE_MOVE: "mousemove", // 鼠标移动事件类型常量，用于鼠标移动事件监听器中使用。
-  WHEEL: "wheel", // 鼠标滚轮事件类型常量，用于鼠标滚轮事件监听器中使用。
-  CLICK: "click", // 鼠标点击事件类型常量，用于鼠标点击事件监听器中使用。
-  DB_CLICK: "dblclick", // 鼠标双击事件类型常量，用于鼠标双击事件监听器中使用。
-  CONTEXT_MENU: "contextmenu", // 鼠标右键事件类型常量，用于鼠标右键事件监听器中使用。
-} as const
-
-export const KEYBOARRD_EVENTS = {
-  KEY_DOWN: "keydown", // 键盘按下事件类型常量，用于键盘按下事件监听器中使用。
-  KEY_UP: "keyup", // 键盘松开事件类型常量，用于键盘松开事件监听器中使用。
-} as const
-```
-
-接下来我们将对 EventProps 中的各个属性进行介绍
-
-### name 
-name 属性用来标识事件，该属性是一个字符串，当存在两个相同名称的事件时，后者会覆盖前者
-
-### trigger
-trigger 表示的是触发该事件的触发器, 目前支持 MOUSE_EVENTS 和 KEYBOARRD_EVENTS 中的一些值，详见上方的常量定义
-  #### 说明
-  - 如果我们想要自定义一个移动整个画布的事件 move，该事件的触发条件是用户需要按住键盘的 ctrl 键，同时鼠标左键按下进行拖拽，那么这个 trigger 的值应该为 "mousemove", 因为我们在触发这个事件的时候需要知道鼠标移动的位置，需要实时的根据鼠标位置来更新画布， 使用 "keydown" 和 "mousedown" 是不合适的，因为这两个事件只会触发一次，我们需要的是一个持续触发的事件，因此我们需要使用 "mousemove"
-  ```typescript
-  const MoveEvent: EventProps = {
-    name: "move",
-    trigger: MOUSE_EVENTS.MOUSE_MOVE,
-    conditionCallback: ({ e, store }) => {
-      return e.pressedKeys.has("Control") && e.pressedKeys.has("mouse0")
-    }
-  }
-  ```
-
-### conditionCallback
-conditionCallback 属性接受一个函数，该函数的参数满足 UserConditionCallbackProps 类型约束, 参数中的 e/store/stateStore 与在 listener callback 中传入的 e/store/stateStore 相同: [Listener-callback-函数](#listener-callback-函数) 该函数需要返回一个布尔值，如果返回 true，则表示该事件触发条件成立，如果返回 false，则表示该事件触发条件不成立
-```typescript
-export interface UserConditionCallbackFunction {
-  (props: UserConditionCallbackProps): boolean
-}
-
-export interface UserConditionCallbackProps {
-  e: ActionEvent
-  store: storeType
-  stateStore: storeType
-}
-```
-conditionCallback 是一个可选参数，当我们不传递这个参数是，表示当 trigger 条件满足就触发事件，比如如果我们需要定义一个鼠标按下事件，那么我们可以这样定义:
-
-```typescript
-const MouseDownEvent: EventProps = {
-  name: "mousedown",
-  trigger: MOUSE_EVENTS.MOUSE_DOWN
-}
-```
-
-### successCallback
-successCallback 属性接受一个函数，该函数的参数满足 UserSuccessCallbackProps 类型约束, 参数中的 e/store/stateStore 与在 listener callback 中传入的 e/store/stateStore 相同: [Listener-callback-函数](#listener-callback-函数) 同时，参数中还有一个额外的 deleteEvent 函数，用来对事件 进行删除，该函数还接受一个可选的返回值，当返回值为 EventProps 类型的时候，会在本事件触发之后注册返回的事件
-
-这个函数在某些情况下会非常有用，一个场景是，当我们需要定义一组拖拽事件时，一个做法是我们可以定义开始拖拽，拖拽中，结束拖拽三个事件，但是我们希望拖拽中的事件仅仅在开始拖拽事件触发之后才会生效，这样我们可以避免鼠标从canvas外按下，然后移动到canvas内直接触发拖拽事件的情况，这样我们是无法得到开始拖拽时的鼠标位置的。我们也希望仅仅在拖拽事件触发之后，才触发结束拖拽事件，
-想象一下如果用户直接在canvas中进行点击，那么我们将先触发开始拖拽事件，然后跳过拖拽事件的触发，然后直接触发结束拖拽事件，这样在某些情况下可能会得到无法预料的结果。
-
-以下是一种拖拽事件的注册方法:
-```typescript
-// 定义结束拖拽的事件
-const DragEndEvent: EventProps = {
-  name: "dragend", // 事件名称
-  trigger: MOUSE_EVENTS.MOUSE_UP, // 触发事件的条件，此处为鼠标释放
-  successCallback: ({ store, deleteEvent }) => {
-    deleteEvent("drag") // 在成功回调中删除进行中的拖拽事件
-    deleteEvent("dragend") // 删除自身事件
-    store.set("dragging", false) // 更新状态，表示拖拽结束
-  },
-}
-
-// 定义进行中的拖拽事件
-const DragEvent: EventProps = {
-  name: "drag", // 事件名称
-  trigger: MOUSE_EVENTS.MOUSE_MOVE, // 触发条件，鼠标移动
-  conditionCallback: ({ e, store }) => {
-    const dragStartPosition: Point = store.get("dragStartPosition")
-    return (
-      e.pressedKeys.has("mouse0") && // 检查鼠标左键是否按下
-      (dragStartPosition.distance(e.point) >= 10 || store.get("dragging")) // 检查鼠标移动距离是否足够或已处于拖拽状态
-    )
-  },
-  successCallback: ({ store }) => {
-    store.set("dragging", true) // 设置状态为正在拖拽
-    return DragEndEvent // 返回结束拖拽事件，以便其可以被注册
-  },
-}
-
-// 定义开始拖拽的事件
-export const DragStartEvent: EventProps = {
-  name: "dragstart", // 事件名称
-  trigger: MOUSE_EVENTS.MOUSE_DOWN, // 触发事件的条件，鼠标按下
-  conditionCallback: ({ e }) => {
-    return e.pressedKeys.has("mouse0")// 鼠标左键按下
-  },
-  successCallback: ({ e, store }) => {
-    store.set("dragStartPosition", e.point) // 存储开始拖拽时的鼠标位置
-    return DragEvent // 返回进行中的拖拽事件，以便其可以被注册
-  },
-}
-
-// 事件注册列表只包含开始拖拽事件，其他事件通过回调动态注册
-const eventList = [DragStartEvent]
-
-```
-
-`DragStartEvent`：定义了一个开始拖拽的事件。当鼠标左键被按下时触发。在成功回调中，它设置了拖拽开始的位置，并返回 DragEvent 对象以注册此事件，开始跟踪拖拽的移动。
-
-`DragEvent`：定义了拖拽进行中的事件。此事件在鼠标移动时触发，但只有在满足一定条件下（鼠标左键被按住，且移动距离超过10像素或已经处于拖拽状态）。它的成功回调设置拖拽状态为进行中，并返回 DragEndEvent 对象以便注册结束拖拽的事件。
-
-`DragEndEvent`：定义了结束拖拽的事件。当鼠标按钮释放时触发。其成功回调中将清除关于拖拽的所有事件（包括进行中和结束自己的事件），并设置拖拽状态为非进行中。
-
-
-## trigger 函数
-你可以使用 trigger 函数来手动触发事件， 有时候你可能需要在canvas外部触发事件，比如更改整个 canvas 的状态， 加载一些数据，保存一些数据等等，你可能希望用户在点击 canvas 外面的按钮或者自动的触发，那么使用 trigger 函数就可以实现
-
-该函数接受两个参数，第一个参数是事件名称，第二个参数是事件携带的参数，这个参数会被传递到 [Listener-callback-函数](#listener-callback-函数)的 payload 参数中
-```typescript
-export type Dict = Record<string, any>
-export type TriggerFunction = (name: string, payload: Dict) => void
-
-// example:
-export const StateChangeListener: ListenerProps = {
-  name: "changeState",
-  event: "changeState",
-  state: ALLSTATE,
-  callback: ({ tools: { switchState }, payload }) => {
-    switchState(payload.state)
-  },
-}
-
-trigger("changeState", { state: "draw" })
-```
-
-
-
-### StayTools 工具函数
+#### StayTools 工具函数
 StayTools 对象包含了一些工具函数，定义如下
 ```typescript
 export interface StayTools {
@@ -761,21 +662,21 @@ export interface StayTools {
 }
 ```
 
-### 元素创建和更新
+##### 元素创建和更新
 
 - [`createChild`](#createchild) - 创建一个新元素
 - [`appendChild`](#appendchild) - 创建一个新元素并将其添加到画布上
 - [`updateChild`](#updatechild) - 更新一个已有元素的属性
 - [`removeChild`](#removechild) - 从画布上移除一个元素
 
-### 元素查询和判断 
+##### 元素查询和判断 
 
 - [`getContainPointChildren`](#getcontainpointchildren) - 获取包含某一点的所有元素
 - [`hasChild`](#haschild) - 判断一个元素是否存在于画布上
 - [`getChildrenBySelector`](#getchildrenbyselector) - 根据选择器获取元素
 - [`getAvailableStates`](#getavailablestates) - 获取所有可用的状态
 
-### 状态和视图控制
+##### 状态和视图控制
 
 - [`fix`](#fix) - 将所有元素的层级调整到最下层
 - [`switchState`](#switchstate) - 切换当前状态
@@ -784,18 +685,18 @@ export interface StayTools {
 - [`move`](#move) - 移动所有元素
 - [`zoom`](#zoom) - 缩放所有元素
 
-### 快照控制
+##### 快照控制
 - [`log`](#log) - 保存当前画布快照
 - [`forward`](#forward) - 前进到下一个快照
 - [`backward`](#backward) - 后退到上一个快照  
 
-### 事件触发
+##### 事件触发
 
 - [`triggerAction`](#triggeraction) - 手动触发事件
 - [`deleteListener`](#deletelistener) - 删除监听器
 - [`forceUpdateCanvas`](#forceupdatecanvas) - 强制重新渲染画布
 
-### createChild
+##### createChild
 createChild函数用来创建一个元素，该函数接受一个对象作为参数，参数定义如下
 
 ```typescript
@@ -822,7 +723,7 @@ createChild({
 })
 ```
 
-#### appendChild
+##### appendChild
 appendChild 函数用来创建一个元素并直接添加到canvas 上，该函数接受一个对象作为参数，参数定义和 createChild 函数相同
 ```typescript
 //example 
@@ -838,7 +739,7 @@ appendChild({
 })
 ```
 
-#### updateChild
+##### updateChild
 updateChild 函数用来更新一个元素，该函数接受一个对象作为参数，该函数接收的参数和 createChild 函数不同的是，它需要一个 child 对象，该对象可以通过 appendChild 函数或者 createChild 函数返回的值来获取， 除此之外，其他的参数均为可选项。参数定义如下
 ```typescript
 export type updateChildProps<T = Shape> = {
@@ -857,14 +758,14 @@ updateChild({
 })
 ```
 
-#### removeChild
+##### removeChild
 removeChild 函数用来删除一个元素，该函数接受一个字符串参数 childId，该参数为元素的id，无返回值
 ```typescript
 //example
 removeChild(image.id)
 ```
 
-#### getContainPointChildren
+##### getContainPointChildren
 getContainPointChildren 函数用来获取包含某一个点的所有元素，使用该函数时，你需要指定 选择器来划定查找的范围，参数定义如下
 ```typescript
 export interface getContainPointChildrenProps {
@@ -897,28 +798,28 @@ getContainPointChildren({
 })
 ```
 
-#### hasChild
+##### hasChild
 hasChild 函数用来判断一个元素是否存在于canvas上，该函数接受一个字符串参数 childId，该参数为元素的id，返回值为布尔值，true 表示存在，false 表示不存在
 ```typescript
 //example
 hasChild(image.id)
 ```
 
-#### fix
+##### fix
 fix 函数用来将 canvas 上的所有元素的 layer 全部调整到最下层，即相当于将所有元素的 layer 设置为 0
 ```typescript
 //example
 fix()
 ```
 
-#### switchState
+##### switchState
 switchState 函数用来当前的状态，该函数接受一个字符串参数 state，切换状态后, stateStore 中的值会被清空
 ```typescript
 //example
 switchState("state1")
 ```
 
-#### getChildrenBySelector
+##### getChildrenBySelector
 getChildrenBySelector 函数用来获取选择器查找到的元素，其 selector 和 sortBy 参数与 getContainPointChildren 函数相同，返回值为 StayChild 数组
 ```typescript
 //example
@@ -928,7 +829,7 @@ getChildrenBySelector({
 })
 ```
 
-#### getAvailiableStates
+##### getAvailiableStates
 getAvailiableStates 函数是一个工具函数，该函数接受一个字符串，返回目前出现过的状态中所有符合该选择器的状态
 ```typescript
 // 假设目前所有注册的 listener 中包含的状态中有 state1, state2, state3, state4, state5, state6, state7, state8, state9, state10，其中，被触发过的状态有 state1, state2, state3, state4, state5
@@ -938,17 +839,17 @@ getAvailiableStates("!state1") // 返回值为 ["state2", "state3", "state4", "s
 getAvailiableStates("all-state&!(state1|state2)") // 返回值为 ["state3", "state4", "state5"]
 ```
 
-#### changeCursor
+##### changeCursor
 changeCursor 函数用来改变鼠标指针的样式，该函数接受一个字符串参数 cursor，该参数为鼠标指针的样式,具体值可参考 https://developer.mozilla.org/zh-CN/docs/Web/CSS/cursor
 ```typescript
 //example
 changeCursor("pointer")
 ```
 
-#### moveStart
+##### moveStart
 moveStart 函数用来开始移动canvas上面的所有元素，在调用 move 函数前，需要调用该函数以保存移动前的位置
 
-#### move
+##### move
 move 函数用来移动canvas上面的所有元素, offsetX 和 offsetY 分别表示移动相对于开始时的横纵坐标的偏移量
 
 ```typescript
@@ -979,7 +880,7 @@ export const MoveListener: ListenerProps = {
 }
 ```
 
-#### zoom
+##### zoom
 zoom 函数用来缩放canvas上面的所有元素，该函数接受两个参数，第一个参数为缩放比例，通常是 e.deltaY，第二个参数为缩放中心点，当我们实现以鼠标为中心缩放功能的时，这个参数为鼠标所在位置
 ```typescript
 //example
@@ -994,13 +895,13 @@ export const ZoomListener: ListenerProps = {
 }
 ```
 
-#### log
+##### log
 log 函数保存当前 canvas 快照，将当前canvas快照存入栈中，当我们执行完该函数之后，可以通过调用 forward 和 backward 函数来恢复之前的 快照
 
-#### forward
+##### forward
 前进到下一个快照
 
-#### backward
+##### backward
 后退到下一个快照
 
 forward 函数 和 backward 函数用来将当前 canvas 改变为栈中的快照
@@ -1095,16 +996,170 @@ export function Demo() {
 </video>
 
 
-#### triggerAction
+##### triggerAction
 triggerAction 函数用来手动触发事件，其效果与调用 trigger 一致，但是需要手动构造 Event 对象， 同时需要传入 triggerEvents 对象
 ```typescript
 type triggerEventsProps = { [key: string]: ActionEvent },
 ```
 
-#### deleteListener
+##### deleteListener
 deleteListener 函数用来删除监听器，该函数接受一个字符串参数 listenerName，该参数为监听器的名称，该函数会删除该监听器，如果监听器不存在，则不会进行任何操作
 
-#### forceUpdateCanvas
+##### forceUpdateCanvas
 forceUpdateCanvas 函数用来强制更新 canvas，该函数会强制更新 canvas，包括重新渲染 canvas 上的所有元素，该函数会触发一次重绘，但是不会触发任何监听器，该函数可以用于在某些情况下，比如在监听器中触发了某些事件，但是希望在触发事件之后，重新渲染 canvas，此时可以使用该函数来实现该功能
+
+
+
+
+
+
+### Event API
+```typescript
+type EventProps = {
+  name: string
+  trigger: valueof<typeof MOUSE_EVENTS> | valueof<typeof KEYBOARRD_EVENTS>
+  conditionCallback?: (props: UserConditionCallbackProps): boolean
+  successCallback?: (props: UserSuccessCallbackProps) => void | EventProps
+}
+
+export const MOUSE_EVENTS = {
+  MOUSE_DOWN: "mousedown", // 鼠标按下事件类型常量，用于鼠标按下事件监听器中使用。
+  MOUSE_UP: "mouseup", // 鼠标松开事件类型常量，用于鼠标松开事件监听器中使用。
+  MOUSE_MOVE: "mousemove", // 鼠标移动事件类型常量，用于鼠标移动事件监听器中使用。
+  WHEEL: "wheel", // 鼠标滚轮事件类型常量，用于鼠标滚轮事件监听器中使用。
+  CLICK: "click", // 鼠标点击事件类型常量，用于鼠标点击事件监听器中使用。
+  DB_CLICK: "dblclick", // 鼠标双击事件类型常量，用于鼠标双击事件监听器中使用。
+  CONTEXT_MENU: "contextmenu", // 鼠标右键事件类型常量，用于鼠标右键事件监听器中使用。
+} as const
+
+export const KEYBOARRD_EVENTS = {
+  KEY_DOWN: "keydown", // 键盘按下事件类型常量，用于键盘按下事件监听器中使用。
+  KEY_UP: "keyup", // 键盘松开事件类型常量，用于键盘松开事件监听器中使用。
+} as const
+```
+
+接下来我们将对 EventProps 中的各个属性进行介绍
+
+#### name 
+name 属性用来标识事件，该属性是一个字符串，当存在两个相同名称的事件时，后者会覆盖前者
+
+#### trigger
+trigger 表示的是触发该事件的触发器, 目前支持 MOUSE_EVENTS 和 KEYBOARRD_EVENTS 中的一些值，详见上方的常量定义
+  ##### 说明
+  - 如果我们想要自定义一个移动整个画布的事件 move，该事件的触发条件是用户需要按住键盘的 ctrl 键，同时鼠标左键按下进行拖拽，那么这个 trigger 的值应该为 "mousemove", 因为我们在触发这个事件的时候需要知道鼠标移动的位置，需要实时的根据鼠标位置来更新画布， 使用 "keydown" 和 "mousedown" 是不合适的，因为这两个事件只会触发一次，我们需要的是一个持续触发的事件，因此我们需要使用 "mousemove"
+  ```typescript
+  const MoveEvent: EventProps = {
+    name: "move",
+    trigger: MOUSE_EVENTS.MOUSE_MOVE,
+    conditionCallback: ({ e, store }) => {
+      return e.pressedKeys.has("Control") && e.pressedKeys.has("mouse0")
+    }
+  }
+  ```
+
+#### conditionCallback
+conditionCallback 属性接受一个函数，该函数的参数满足 UserConditionCallbackProps 类型约束, 参数中的 e/store/stateStore 与在 listener callback 中传入的 e/store/stateStore 相同: [Listener-callback-函数](#listener-callback-函数) 该函数需要返回一个布尔值，如果返回 true，则表示该事件触发条件成立，如果返回 false，则表示该事件触发条件不成立
+```typescript
+export interface UserConditionCallbackFunction {
+  (props: UserConditionCallbackProps): boolean
+}
+
+export interface UserConditionCallbackProps {
+  e: ActionEvent
+  store: storeType
+  stateStore: storeType
+}
+```
+conditionCallback 是一个可选参数，当我们不传递这个参数是，表示当 trigger 条件满足就触发事件，比如如果我们需要定义一个鼠标按下事件，那么我们可以这样定义:
+
+```typescript
+const MouseDownEvent: EventProps = {
+  name: "mousedown",
+  trigger: MOUSE_EVENTS.MOUSE_DOWN
+}
+```
+
+#### successCallback
+successCallback 属性接受一个函数，该函数的参数满足 UserSuccessCallbackProps 类型约束, 参数中的 e/store/stateStore 与在 listener callback 中传入的 e/store/stateStore 相同: [Listener-callback-函数](#listener-callback-函数) 同时，参数中还有一个额外的 deleteEvent 函数，用来对事件 进行删除，该函数还接受一个可选的返回值，当返回值为 EventProps 类型的时候，会在本事件触发之后注册返回的事件
+
+这个函数在某些情况下会非常有用，一个场景是，当我们需要定义一组拖拽事件时，一个做法是我们可以定义开始拖拽，拖拽中，结束拖拽三个事件，但是我们希望拖拽中的事件仅仅在开始拖拽事件触发之后才会生效，这样我们可以避免鼠标从canvas外按下，然后移动到canvas内直接触发拖拽事件的情况，这样我们是无法得到开始拖拽时的鼠标位置的。我们也希望仅仅在拖拽事件触发之后，才触发结束拖拽事件，
+想象一下如果用户直接在canvas中进行点击，那么我们将先触发开始拖拽事件，然后跳过拖拽事件的触发，然后直接触发结束拖拽事件，这样在某些情况下可能会得到无法预料的结果。
+
+以下是一种拖拽事件的注册方法:
+```typescript
+// 定义结束拖拽的事件
+const DragEndEvent: EventProps = {
+  name: "dragend", // 事件名称
+  trigger: MOUSE_EVENTS.MOUSE_UP, // 触发事件的条件，此处为鼠标释放
+  successCallback: ({ store, deleteEvent }) => {
+    deleteEvent("drag") // 在成功回调中删除进行中的拖拽事件
+    deleteEvent("dragend") // 删除自身事件
+    store.set("dragging", false) // 更新状态，表示拖拽结束
+  },
+}
+
+// 定义进行中的拖拽事件
+const DragEvent: EventProps = {
+  name: "drag", // 事件名称
+  trigger: MOUSE_EVENTS.MOUSE_MOVE, // 触发条件，鼠标移动
+  conditionCallback: ({ e, store }) => {
+    const dragStartPosition: Point = store.get("dragStartPosition")
+    return (
+      e.pressedKeys.has("mouse0") && // 检查鼠标左键是否按下
+      (dragStartPosition.distance(e.point) >= 10 || store.get("dragging")) // 检查鼠标移动距离是否足够或已处于拖拽状态
+    )
+  },
+  successCallback: ({ store }) => {
+    store.set("dragging", true) // 设置状态为正在拖拽
+    return DragEndEvent // 返回结束拖拽事件，以便其可以被注册
+  },
+}
+
+// 定义开始拖拽的事件
+export const DragStartEvent: EventProps = {
+  name: "dragstart", // 事件名称
+  trigger: MOUSE_EVENTS.MOUSE_DOWN, // 触发事件的条件，鼠标按下
+  conditionCallback: ({ e }) => {
+    return e.pressedKeys.has("mouse0")// 鼠标左键按下
+  },
+  successCallback: ({ e, store }) => {
+    store.set("dragStartPosition", e.point) // 存储开始拖拽时的鼠标位置
+    return DragEvent // 返回进行中的拖拽事件，以便其可以被注册
+  },
+}
+
+// 事件注册列表只包含开始拖拽事件，其他事件通过回调动态注册
+const eventList = [DragStartEvent]
+
+```
+
+`DragStartEvent`：定义了一个开始拖拽的事件。当鼠标左键被按下时触发。在成功回调中，它设置了拖拽开始的位置，并返回 DragEvent 对象以注册此事件，开始跟踪拖拽的移动。
+
+`DragEvent`：定义了拖拽进行中的事件。此事件在鼠标移动时触发，但只有在满足一定条件下（鼠标左键被按住，且移动距离超过10像素或已经处于拖拽状态）。它的成功回调设置拖拽状态为进行中，并返回 DragEndEvent 对象以便注册结束拖拽的事件。
+
+`DragEndEvent`：定义了结束拖拽的事件。当鼠标按钮释放时触发。其成功回调中将清除关于拖拽的所有事件（包括进行中和结束自己的事件），并设置拖拽状态为非进行中。
+
+
+### trigger 函数 API
+你可以使用 trigger 函数来手动触发事件， 有时候你可能需要在canvas外部触发事件，比如更改整个 canvas 的状态， 加载一些数据，保存一些数据等等，你可能希望用户在点击 canvas 外面的按钮或者自动的触发，那么使用 trigger 函数就可以实现
+
+该函数接受两个参数，第一个参数是事件名称，第二个参数是事件携带的参数，这个参数会被传递到 [Listener-callback-函数](#listener-callback-函数)的 payload 参数中
+```typescript
+export type Dict = Record<string, any>
+export type TriggerFunction = (name: string, payload: Dict) => void
+
+// example:
+export const StateChangeListener: ListenerProps = {
+  name: "changeState",
+  event: "changeState",
+  state: ALLSTATE,
+  callback: ({ tools: { switchState }, payload }) => {
+    switchState(payload.state)
+  },
+}
+
+trigger("changeState", { state: "draw" })
+```
+
 
 

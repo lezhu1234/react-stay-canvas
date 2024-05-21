@@ -1,4 +1,5 @@
 import Canvas from "../canvas"
+import { ContextLayerSetFunction } from "../types"
 import { StayTools } from "../userTypes"
 import Stay from "./stayTools"
 
@@ -8,10 +9,11 @@ export default class StayStage {
   tools: StayTools
   constructor(
     canvasLayers: HTMLCanvasElement[],
+    contextLayerSetFunctionList: ContextLayerSetFunction[],
     width: number,
     height: number
   ) {
-    this.#stay = new Stay(new Canvas(canvasLayers, width, height))
+    this.#stay = new Stay(new Canvas(canvasLayers, contextLayerSetFunctionList, width, height))
     this.tools = this.#stay.getTools()
   }
 
@@ -23,9 +25,7 @@ export default class StayStage {
     return this.#stay.tools.backward()
   }
 
-  clearEventListeners(
-    ...args: Args<typeof Stay.prototype.clearEventListeners>
-  ) {
+  clearEventListeners(...args: Args<typeof Stay.prototype.clearEventListeners>) {
     return this.#stay.clearEventListeners(...args)
   }
 

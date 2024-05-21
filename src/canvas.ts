@@ -1,3 +1,5 @@
+import { ContextLayerSetFunction } from "./types"
+
 class Canvas {
   contexts: CanvasRenderingContext2D[]
   height: number
@@ -6,7 +8,12 @@ class Canvas {
   width: number
   x: number
   y: number
-  constructor(layers: HTMLCanvasElement[], width: number, height: number) {
+  constructor(
+    layers: HTMLCanvasElement[],
+    contextLayerSetFunctionList: ContextLayerSetFunction[],
+    width: number,
+    height: number
+  ) {
     if (layers.length < 1) {
       throw new Error("Canvas must have at least one layer")
     }
@@ -14,12 +21,11 @@ class Canvas {
     this.width = width
     this.height = height
     this.status = "default"
-    this.contexts = layers.map(
-      (layer) => layer.getContext("2d") as CanvasRenderingContext2D
-    )
+    this.contexts = layers.map((layer, i) => {
+      return contextLayerSetFunctionList[i](layer) as CanvasRenderingContext2D
+    })
 
     const { x, y } = this.layers[0].getBoundingClientRect()
-    // this.drawCanvas.getClientRects
     this.x = x
     this.y = y
     this.init()

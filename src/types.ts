@@ -74,11 +74,14 @@ export type StayEventProps = StayEventRequiredProps & StayEventChooseProps
 
 export type EventProps = StayEventRequiredProps & Partial<StayEventChooseProps>
 
+export interface ContextLayerSetFunction {
+  (layer: HTMLCanvasElement): CanvasRenderingContext2D | null
+}
 export interface StayCanvasProps {
   className?: string
   width?: number
   height?: number
-  layers?: number
+  layers?: number | ContextLayerSetFunction[]
   eventList?: EventProps[]
   listenerList?: ListenerProps[]
   mounted?: (tools: StayTools) => void

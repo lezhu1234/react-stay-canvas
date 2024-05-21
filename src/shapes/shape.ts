@@ -105,12 +105,7 @@ export abstract class Shape {
     return len / scaleRatio / this.zoomY
   }
 
-  screenToWorldPoint(
-    point: SimplePoint,
-    offsetX: number,
-    offsetY: number,
-    scaleRatio: number
-  ) {
+  screenToWorldPoint(point: SimplePoint, offsetX: number, offsetY: number, scaleRatio: number) {
     const originPoint = this.getInitPoint({ x: point.x, y: point.y })
     return {
       x: (originPoint.x - offsetX) / scaleRatio,
@@ -122,12 +117,7 @@ export abstract class Shape {
     return len * scaleRatio
   }
 
-  worldToScreenPoint(
-    point: SimplePoint,
-    offsetX: number,
-    offsetY: number,
-    scaleRatio: number
-  ) {
+  worldToScreenPoint(point: SimplePoint, offsetX: number, offsetY: number, scaleRatio: number) {
     return {
       x: point.x * scaleRatio + offsetX,
       y: point.y * scaleRatio + offsetY,

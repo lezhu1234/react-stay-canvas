@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react"
 
 import * as PredefinedEventList from "./predefinedEvents"
 import StayStage from "./stay/stayStage"
-import { StayCanvasProps } from "./types"
+import { ContextLayerSetFunction, StayCanvasProps } from "./types"
 import { Dict } from "./userTypes"
 
 let userTrigger: (name: string, payload: Dict) => void | undefined
@@ -22,18 +22,32 @@ export default function StayCanvas({
   layers = 2,
   className = "",
 }: StayCanvasProps) {
-  if (layers < 1) {
+  let contextLayerSetFunctionList: ContextLayerSetFunction[] = []
+
+  if (typeof layers === "number") {
+    Array(layers)
+      .fill(0)
+      .forEach((_, i) => {
+        contextLayerSetFunctionList.push((canvas: HTMLCanvasElement) => {
+          return canvas.getContext("2d")
+        })
+      })
+  } else {
+    contextLayerSetFunctionList = layers
+  }
+  if (contextLayerSetFunctionList.length < 1) {
     throw new Error("layers must be greater than 0")
   }
+
   const canvasLayers = useRef<HTMLCanvasElement[]>([])
   const stay = useRef<StayStage>()
 
-  eventList = useMemo(() => eventList || [], [])
-  listenerList = useMemo(() => listenerList || [], [])
+  eventList = useMemo(() => eventList || [], [eventList])
+  listenerList = useMemo(() => listenerList || [], [listenerList])
 
-  useEffect(() => {
-    canvasLayers.current = canvasLayers.current.slice(0, layers)
-  }, [layers])
+  // useEffect(() => {
+  //   canvasLayers.current = canvasLayers.current.slice(0, layers)
+  // }, [layers])
 
   const customTrigger = (stay: StayStage, name: string, payload: Dict) => {
     const customEvent = new Event(name)
@@ -44,7 +58,7 @@ export default function StayCanvas({
     if (!node) {
       return
     }
-    stay.current = new StayStage(canvasLayers.current, 600, 600)
+    stay.current = new StayStage(canvasLayers.current, contextLayerSetFunctionList, 600, 600)
     ;[...eventList, ...Object.values(PredefinedEventList)].forEach((event) => {
       stay.current!.registerEvent(event)
     })
@@ -81,6 +95,7 @@ export default function StayCanvas({
     listenerList.forEach((listener) => {
       stay.current!.addEventListener(listener)
     })
+    console.log(listenerList)
   }, [listenerList])
 
   return (

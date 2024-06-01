@@ -1,4 +1,9 @@
+import * as TWEEN from "@tweenjs/tween.js"
+
+import { Rectangle, RectangleAttr, ShapeDrawProps } from "../../shapes"
+import { Dict } from "../../userTypes"
 import coco from "./coco.json"
+
 interface annotationProps {
   id: number
   imageId: number
@@ -54,4 +59,55 @@ export function parseCoco(): [
   })
 
   return [annotationMap, imageMap, categoryMap]
+}
+
+export class SelectRectangle extends Rectangle {
+  a: number
+  constructor({ x, y, width, height, props = {} }: RectangleAttr) {
+    const angle = { value: 0 }
+    const tween = new TWEEN.Tween(angle)
+      .dynamic(true)
+      .repeat(Infinity)
+      .to({ value: 2 * Math.PI }, 1000)
+      .start()
+
+    const stateDrawFuncMap: Dict<(props: ShapeDrawProps) => void> = {
+      default: ({ canvas, context, now }) => {
+        this.setColor(context, "white")
+        this.draw({ context, canvas, now })
+      },
+      selected: ({ canvas, context, now }) => {
+        tween.update()
+        const centerX = this.x + this.width / 2
+        const centerY = this.y + this.height / 2
+        const gradient = context.createConicGradient(angle.value, centerX, centerY)
+        gradient.addColorStop(0, "red")
+        gradient.addColorStop(0.25, "orange")
+        gradient.addColorStop(0.5, "yellow")
+        gradient.addColorStop(0.75, "green")
+        gradient.addColorStop(1, "blue")
+        this.setColor(context, gradient)
+        this.draw({ context, canvas, now })
+      },
+    }
+    super({ x, y, width, height, props: { ...props, stateDrawFuncMap } })
+    this.a = 1
+  }
+
+  copy(): SelectRectangle {
+    return new SelectRectangle({
+      ...this,
+      props: this._copy(),
+    })
+  }
+
+  worldToScreen(offsetX: number, offsetY: number, scaleRatio: number) {
+    const rect = super.worldToScreen(offsetX, offsetY, scaleRatio)
+    return new SelectRectangle({
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    })
+  }
 }

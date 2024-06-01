@@ -1,7 +1,7 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { Point } from "./point"
 import { Rectangle } from "./rectangle"
-import { Shape, ShapeProps } from "./shape"
+import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
 
 interface TextAttr {
   x: number
@@ -13,9 +13,9 @@ interface TextAttr {
 export class Text extends Shape {
   font: string
   height: number
-  leftBottom!: Point
-  leftTop!: Point
-  rect!: Rectangle
+  leftBottom: Point
+  leftTop: Point
+  rect: Rectangle
   text: string
   width: number
   x: number
@@ -29,6 +29,9 @@ export class Text extends Shape {
     this.y = y
     this.width = 0
     this.height = 0
+    this.rect = new Rectangle({ x: 0, y: 0, width: 0, height: 0 })
+    this.leftBottom = new Point(0, 0)
+    this.leftTop = new Point(0, 0)
 
     this.init()
   }
@@ -47,14 +50,14 @@ export class Text extends Shape {
     })
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
-    ctx.font = this.font
-    this.init(ctx)
+  draw({ context }: ShapeDrawProps): void {
+    context.font = this.font
+    this.init(context)
 
     if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      ctx.fillText(this.text, this.leftBottom.x, this.leftBottom.y)
+      context.fillText(this.text, this.leftBottom.x, this.leftBottom.y)
     } else if (this.type === SHAPE_DRAW_TYPES.STROKE) {
-      ctx.strokeText(this.text, this.leftBottom.x, this.leftBottom.y)
+      context.strokeText(this.text, this.leftBottom.x, this.leftBottom.y)
     }
     // this.rect.update({ props: { color: "red" } })
     // this.rect.draw(ctx)
@@ -70,12 +73,9 @@ export class Text extends Shape {
     this.width = text.width
     this.height = text.actualBoundingBoxAscent + text.actualBoundingBoxDescent
 
-    this.leftTop = new Point(this.x - this.width / 2, this.y - this.height / 2)
-    this.leftBottom = new Point(
-      this.x - this.width / 2,
-      this.y + this.height / 2
-    )
-    this.rect = new Rectangle({
+    this.leftTop.update({ x: this.x - this.width / 2, y: this.y - this.height / 2 })
+    this.leftBottom.update({ x: this.x - this.width / 2, y: this.y + this.height / 2 })
+    this.rect.update({
       x: this.leftTop.x,
       y: this.leftTop.y,
       width: this.width,
@@ -87,13 +87,7 @@ export class Text extends Shape {
     this.update({ x: this.x + offsetX, y: this.y + offsetY })
   }
 
-  update({
-    x = this.x,
-    y = this.y,
-    font = this.font,
-    text = this.text,
-    props,
-  }: Partial<TextAttr>) {
+  update({ x = this.x, y = this.y, font = this.font, text = this.text, props }: Partial<TextAttr>) {
     this.x = x
     this.y = y
     this.font = font

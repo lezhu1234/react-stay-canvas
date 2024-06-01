@@ -95,7 +95,6 @@ export default function StayCanvas({
     listenerList.forEach((listener) => {
       stay.current!.addEventListener(listener)
     })
-    console.log(listenerList)
   }, [listenerList])
 
   return (

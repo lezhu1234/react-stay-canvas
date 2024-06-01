@@ -1,7 +1,7 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { Line } from "./line"
 import { Point } from "./point"
-import { Shape, ShapeProps } from "./shape"
+import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
 
 export interface RectShapeAttr {
   x: number
@@ -15,17 +15,17 @@ export interface RectangleAttr extends RectShapeAttr {
 }
 
 export class Rectangle extends Shape {
-  area!: number
-  bottomBorder!: Line
+  area: number
+  bottomBorder: Line
   height: number
-  leftBorder!: Line
-  leftBottom!: Point
-  leftTop!: Point
-  rightBorder!: Line
-  rightBottom!: Point
-  rightTop!: Point
+  leftBorder: Line
+  leftBottom: Point
+  leftTop: Point
+  rightBorder: Line
+  rightBottom: Point
+  rightTop: Point
   stepZoomY: number
-  topBorder!: Line
+  topBorder: Line
   width: number
   x: number
   y: number
@@ -36,7 +36,38 @@ export class Rectangle extends Shape {
     this.width = width
     this.height = height
     this.stepZoomY = 1
-    this.init()
+
+    this.leftTop = new Point(this.x, this.y)
+    this.rightTop = new Point(this.x + this.width, this.y)
+    this.rightBottom = new Point(this.x + this.width, this.y + this.height)
+    this.leftBottom = new Point(this.x, this.y + this.height)
+    this.leftBorder = new Line({
+      x1: this.x,
+      y1: this.y,
+      x2: this.x,
+      y2: this.y + this.height,
+    })
+    this.rightBorder = new Line({
+      x1: this.x + this.width,
+      y1: this.y,
+      x2: this.x + this.width,
+      y2: this.y + this.height,
+    })
+    this.topBorder = new Line({
+      x1: this.x,
+      y1: this.y,
+      x2: this.x + this.width,
+      y2: this.y,
+    })
+    this.bottomBorder = new Line({
+      x1: this.x,
+      y1: this.y + this.height,
+      x2: this.x + this.width,
+      y2: this.y + this.height,
+    })
+    this.area = this.width * this.height
+
+    this.updateRelatedValue()
   }
 
   computeFitInfo(width: number, height: number) {
@@ -83,48 +114,12 @@ export class Rectangle extends Shape {
     })
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
-    ctx.lineWidth = this.lineWidth
-
+  draw({ context }: ShapeDrawProps) {
     if (this.type === SHAPE_DRAW_TYPES.STROKE) {
-      ctx.strokeStyle = this.color
-      ctx.strokeRect(this.x, this.y, this.width, this.height)
+      context.strokeRect(this.x, this.y, this.width, this.height)
     } else if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      ctx.fillStyle = this.color
-      ctx.fillRect(this.x, this.y, this.width, this.height)
+      context.fillRect(this.x, this.y, this.width, this.height)
     }
-  }
-
-  init() {
-    this.leftTop = new Point(this.x, this.y)
-    this.rightTop = new Point(this.x + this.width, this.y)
-    this.rightBottom = new Point(this.x + this.width, this.y + this.height)
-    this.leftBottom = new Point(this.x, this.y + this.height)
-    this.leftBorder = new Line({
-      x1: this.x,
-      y1: this.y,
-      x2: this.x,
-      y2: this.y + this.height,
-    })
-    this.rightBorder = new Line({
-      x1: this.x + this.width,
-      y1: this.y,
-      x2: this.x + this.width,
-      y2: this.y + this.height,
-    })
-    this.topBorder = new Line({
-      x1: this.x,
-      y1: this.y,
-      x2: this.x + this.width,
-      y2: this.y,
-    })
-    this.bottomBorder = new Line({
-      x1: this.x,
-      y1: this.y + this.height,
-      x2: this.x + this.width,
-      y2: this.y + this.height,
-    })
-    this.area = this.width * this.height
   }
 
   move(offsetX: number, offsetY: number) {
@@ -161,15 +156,37 @@ export class Rectangle extends Shape {
     width = this.width,
     height = this.height,
     props,
-  }: Partial<RectangleAttr>) {
+  }: Partial<RectangleAttr>): this {
     this.x = x
     this.y = y
     this.width = width
     this.height = height
     this._update(props || {})
-    this.init()
+    this.updateRelatedValue()
 
     return this
+  }
+
+  updateRelatedValue() {
+    this.leftTop.update({ x: this.x, y: this.y })
+    this.rightTop.update({ x: this.x + this.width, y: this.y })
+    this.rightBottom.update({ x: this.x + this.width, y: this.y + this.height })
+    this.leftBottom.update({ x: this.x, y: this.y + this.height })
+    this.leftBorder.update({ x1: this.x, y1: this.y, x2: this.x, y2: this.y + this.height })
+    this.rightBorder.update({
+      x1: this.x + this.width,
+      y1: this.y,
+      x2: this.x + this.width,
+      y2: this.y + this.height,
+    })
+    this.topBorder.update({ x1: this.x, y1: this.y, x2: this.x + this.width, y2: this.y })
+    this.bottomBorder.update({
+      x1: this.x,
+      y1: this.y + this.height,
+      x2: this.x + this.width,
+      y2: this.y + this.height,
+    })
+    this.area = this.width * this.height
   }
 
   worldToScreen(offsetX: number, offsetY: number, scaleRatio: number) {

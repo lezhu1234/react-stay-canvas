@@ -8,7 +8,7 @@ export type StayChildren = Record<string, StayChild>
 export type DrawActionsValuesType = valueof<typeof DRAW_ACTIONS>
 
 export type storeType = Map<string, any>
-export type Dict = Record<string, any>
+export type Dict<T = any> = Record<string, T>
 
 export interface SimplePoint {
   x: number

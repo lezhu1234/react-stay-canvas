@@ -4,7 +4,7 @@ export class Root extends Rectangle {
   copy() {
     return this
   }
-  draw(ctx: CanvasRenderingContext2D) {}
+  draw() {}
   move() {
     return this
   }

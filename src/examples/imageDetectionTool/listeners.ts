@@ -5,22 +5,16 @@ import { Dispatch, SetStateAction } from "react"
 //   DEFAULTSTATE,
 //   Dict,
 //   Point,
-//   Rectangle,
+//   SelectRectangle,
 //   RectangleAttr,
 //   ListenerProps,
 // } from "react-stay-canvas"
 
+import { RectangleAttr } from "../../shapes"
 import { Point } from "../../shapes/point"
-import { Rectangle, RectangleAttr } from "../../shapes/rectangle"
 import { ALLSTATE, DEFAULTSTATE } from "../../userConstants"
-import {
-  ActionEvent,
-  Dict,
-  ListenerProps,
-  StayChild,
-  StayChildProps,
-} from "../../userTypes"
-import { RectLike } from "./utils"
+import { ActionEvent, Dict, ListenerProps, StayChild, StayChildProps } from "../../userTypes"
+import { RectLike, SelectRectangle } from "./utils"
 
 type ListenerPropsFunc = (
   payload: Dict,
@@ -30,17 +24,13 @@ export const DragListener: ListenerProps = {
   name: "dragListener",
   event: ["dragstart", "drag", "dragend"],
   state: ALLSTATE,
-  callback: ({
-    e,
-    composeStore,
-    tools: { createChild, appendChild, updateChild, fix, log },
-  }) => {
+  callback: ({ e, composeStore, tools: { createChild, appendChild, updateChild, fix, log } }) => {
     const eventMap = {
       dragstart: () => ({
         childAppend: false,
         dragStartPosition: new Point(e.x, e.y),
         dragChild: createChild({
-          shape: new Rectangle({
+          shape: new SelectRectangle({
             x: e.x,
             y: e.y,
             width: 0,
@@ -70,7 +60,7 @@ export const DragListener: ListenerProps = {
         } else {
           updateChild({
             child: dragChild,
-            shape: (dragChild.shape as Rectangle).update({
+            shape: (dragChild.shape as SelectRectangle).update({
               x,
               y,
               width,
@@ -93,44 +83,38 @@ export const DragListener: ListenerProps = {
   },
 }
 
-export const SelectListener: ListenerPropsFunc = (
-  payload,
-  setCurrentSelectLabel
-) => ({
+export const SelectListener: ListenerPropsFunc = (payload, setCurrentSelectLabel) => ({
   name: "selectListener",
   event: "click",
   state: `${DEFAULTSTATE}|annotationSelected`,
   callback: ({
     stateStore,
     e,
-    tools: { updateChild, getChildrenBySelector, switchState, appendChild,  },
+    tools: { updateChild, getChildrenBySelector, switchState, appendChild },
   }) => {
     const annotations = getChildrenBySelector(".annotation") as StayChild[]
     let selectedAnnotation: StayChild | undefined = undefined
 
     annotations.forEach((annotation) => {
       let className = "annotation"
-      let color = "white"
       let layer = 0
-      if (
-        !selectedAnnotation &&
-        annotation.shape.contains(new Point(e.x, e.y))
-      ) {
+      let rectState = "default"
+      if (!selectedAnnotation && annotation.shape.contains(new Point(e.x, e.y))) {
         selectedAnnotation = annotation
         className = "annotation:selected"
-        color = "red"
         layer = -1
+        rectState = "selected"
       }
       updateChild({
         child: annotation,
-        shape: (annotation.shape as Rectangle).update({ props: { color } }),
+        shape: annotation.shape.update({ props: { state: rectState } }),
         className,
         layer,
       })
     })
 
     if (selectedAnnotation) {
-      const rect = (selectedAnnotation as StayChild).shape as Rectangle
+      const rect = (selectedAnnotation as StayChild).shape as SelectRectangle
       setCurrentSelectLabel(
         rect.screenToWorld(payload.offsetX, payload.offsetY, payload.scaleRatio)
       )
@@ -148,25 +132,24 @@ export const DetectListener: ListenerProps = {
   event: "mousemove",
   state: "annotationSelected",
   callback: ({ e, stateStore, tools: { changeCursor } }) => {
-    const selectedAnnotation: StayChildProps<Rectangle> =
-      stateStore.get("selectedAnnotation")
+    const selectedAnnotation: StayChildProps<SelectRectangle> = stateStore.get("selectedAnnotation")
 
     if (!selectedAnnotation) {
       return
     }
     const nearOffset = 5
     const rect = selectedAnnotation.shape
-    interface updateRectangleConditionProp {
+    interface updateSelectRectangleConditionProp {
       cursor: string
       name: string
       condition: () => boolean
       updateOffset: (props: {
         offset: Point
-        rect: Rectangle
+        rect: SelectRectangle
         e: ActionEvent
       }) => Partial<RectangleAttr>
     }
-    const updateRectangleInfos: updateRectangleConditionProp[] = [
+    const updateSelectRectangleInfos: updateSelectRectangleConditionProp[] = [
       {
         cursor: "nwse-resize",
         name: "leftTop",
@@ -258,10 +241,10 @@ export const DetectListener: ListenerProps = {
       },
     ]
 
-    stateStore.set("updateRectangleInfos", updateRectangleInfos)
+    stateStore.set("updateSelectRectangleInfos", updateSelectRectangleInfos)
 
-    for (let cursor in updateRectangleInfos) {
-      const info = updateRectangleInfos[cursor]
+    for (let cursor in updateSelectRectangleInfos) {
+      const info = updateSelectRectangleInfos[cursor]
       const coditionSatisfied = info.condition()
       if (coditionSatisfied) {
         return changeCursor(info.cursor)
@@ -270,27 +253,19 @@ export const DetectListener: ListenerProps = {
   },
 }
 
-export const ResizeListener: ListenerPropsFunc = (
-  payload,
-  setCurrentSelectLabel
-) => ({
+export const ResizeListener: ListenerPropsFunc = (payload, setCurrentSelectLabel) => ({
   name: "resizeListener",
   event: ["dragstart", "drag", "dragend"],
   state: "annotationSelected",
-  callback: ({
-    e,
-    stateStore,
-    composeStore,
-    tools: { updateChild, log, switchState },
-  }) => {
+  callback: ({ e, stateStore, composeStore, tools: { updateChild, log, switchState } }) => {
     const eventMap = {
       dragstart: () => {
         console.log("dragstart")
-        const updateRectangleInfos = stateStore.get("updateRectangleInfos")
+        const updateSelectRectangleInfos = stateStore.get("updateSelectRectangleInfos")
         let updateFunc = null
         let updateName = ""
-        for (let cursor in updateRectangleInfos) {
-          const info = updateRectangleInfos[cursor]
+        for (let cursor in updateSelectRectangleInfos) {
+          const info = updateSelectRectangleInfos[cursor]
           const coditionSatisfied = info.condition()
           if (coditionSatisfied) {
             updateFunc = info.updateOffset
@@ -303,22 +278,18 @@ export const ResizeListener: ListenerPropsFunc = (
         }
 
         return {
-          selectedAnnotationShape: stateStore
-            .get("selectedAnnotation")
-            .shape.copy(),
+          selectedAnnotationShape: stateStore.get("selectedAnnotation").shape.copy(),
           dragStartPosition: new Point(e.x, e.y),
           updateFunc,
         }
       },
       drag: () => {
-        const { selectedAnnotationShape, dragStartPosition, updateFunc } =
-          composeStore
-        if (!selectedAnnotationShape || !dragStartPosition || !updateFunc)
-          return
+        const { selectedAnnotationShape, dragStartPosition, updateFunc } = composeStore
+        if (!selectedAnnotationShape || !dragStartPosition || !updateFunc) return
         const offsetX = e.x - dragStartPosition.x
         const offsetY = e.y - dragStartPosition.y
         const annotation = stateStore.get("selectedAnnotation")
-        const rect = annotation.shape as Rectangle
+        const rect = annotation.shape as SelectRectangle
 
         const updatedRect = rect.update({
           ...updateFunc({
@@ -331,13 +302,9 @@ export const ResizeListener: ListenerPropsFunc = (
           child: annotation,
           shape: updatedRect,
         })
-        const _rect = child.shape as Rectangle
+        const _rect = child.shape as SelectRectangle
         setCurrentSelectLabel(
-          _rect.screenToWorld(
-            payload.offsetX,
-            payload.offsetY,
-            payload.scaleRatio
-          )
+          _rect.screenToWorld(payload.offsetX, payload.offsetY, payload.scaleRatio)
         )
       },
       dragend: () => {
@@ -357,15 +324,13 @@ export const saveListener: ListenerProps = {
     const annotations = getChildrenBySelector(".annotation")
     annotations.forEach((annotation) => {
       const { id, shape } = annotation
-      const rect = shape as Rectangle
+      const rect = shape as SelectRectangle
 
-      const worldRectangle = rect.screenToWorld(
+      const worldSelectRectangle = rect.screenToWorld(
         payload.offsetX,
         payload.offsetY,
         payload.scaleRatio
       )
-
-      console.log(id, worldRectangle)
     })
   },
 }

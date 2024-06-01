@@ -1,6 +1,6 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { Point } from "./point"
-import { Shape, ShapeProps } from "./shape"
+import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
 
 export interface PathAttr {
   points: Point[]
@@ -27,11 +27,11 @@ export class Path extends Shape {
       props: this._copy(),
     })
   }
-  draw(ctx: CanvasRenderingContext2D, canvas?: HTMLCanvasElement): void {
+  draw({ context }: ShapeDrawProps): void {
     if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      ctx.fill(this.path)
+      context.fill(this.path)
     } else {
-      ctx.stroke(this.path)
+      context.stroke(this.path)
     }
   }
 

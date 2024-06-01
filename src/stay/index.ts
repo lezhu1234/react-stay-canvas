@@ -1,3 +1,3 @@
-import Stay from "./stayTools"
+import Stay from "./stay"
 
 export default Stay

@@ -1,6 +1,6 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { Point } from "./point"
-import { Shape, ShapeProps } from "./shape"
+import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
 
 export interface CircleAttr {
   x: number
@@ -28,13 +28,13 @@ export class Circle extends Shape {
     return new Circle({ ...this, props: this._copy() })
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
-    ctx.beginPath()
-    ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI)
+  draw({ context }: ShapeDrawProps): void {
+    context.beginPath()
+    context.arc(this.x, this.y, this.radius, 0, 2 * Math.PI)
     if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      ctx.fill()
+      context.fill()
     } else {
-      ctx.stroke()
+      context.stroke()
     }
   }
   init() {

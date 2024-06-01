@@ -1,5 +1,5 @@
 import { Point } from "./point"
-import { Shape, ShapeProps } from "./shape"
+import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
 import { Vector } from "./vector"
 export interface UpdateLineProps {
   x1?: number
@@ -16,9 +16,9 @@ export interface LineProps {
   props?: ShapeProps
 }
 export class Line extends Shape {
-  endPoint!: Point
-  startPoint!: Point
-  vector!: Vector
+  endPoint: Point
+  startPoint: Point
+  vector: Vector
   x1: number
   x2: number
   y1: number
@@ -31,7 +31,11 @@ export class Line extends Shape {
     this.x2 = x2
     this.y2 = y2
 
-    this.init()
+    this.vector = new Vector(this.x2 - this.x1, this.y2 - this.y1)
+    this.startPoint = new Point(this.x1, this.y1)
+    this.endPoint = new Point(this.x2, this.y2)
+
+    this.updateRelatedValue()
   }
 
   contains(point: Point): boolean {
@@ -57,22 +61,16 @@ export class Line extends Shape {
     return Math.abs(Math.sin(angle) * pointVector.norm())
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
-    ctx.beginPath()
-    ctx.moveTo(this.x1, this.y1)
-    ctx.lineTo(this.x2, this.y2)
-    ctx.stroke()
+  draw({ context }: ShapeDrawProps) {
+    context.beginPath()
+    context.moveTo(this.x1, this.y1)
+    context.lineTo(this.x2, this.y2)
+    context.stroke()
   }
 
-  init() {
-    this.vector = new Vector(this.x2 - this.x1, this.y2 - this.y1)
-    this.startPoint = new Point(this.x1, this.y1)
-    this.endPoint = new Point(this.x2, this.y2)
-  }
   len() {
     return this.vector.norm()
   }
-
   move(offsetX: number, offsetY: number) {
     this.update({
       x1: this.x1 + offsetX,
@@ -92,10 +90,7 @@ export class Line extends Shape {
     const pointVector = new Vector(point.x - this.x1, point.y - this.y1)
     const projectLen = pointVector.project(this.vector)
     if (projectLen < 0 || projectLen > this.len()) {
-      return Math.min(
-        point.distance(this.startPoint),
-        point.distance(this.endPoint)
-      )
+      return Math.min(point.distance(this.startPoint), point.distance(this.endPoint))
     }
     return this.distanceToPoint(point)
   }
@@ -106,8 +101,14 @@ export class Line extends Shape {
     this.x2 = x2 || this.x2
     this.y2 = y2 || this.y2
     this._update(props || {})
-    this.init()
+    this.updateRelatedValue()
     return this
+  }
+
+  updateRelatedValue() {
+    this.vector = new Vector(this.x2 - this.x1, this.y2 - this.y1)
+    this.startPoint.update({ x: this.x1, y: this.y1 })
+    this.endPoint.update({ x: this.x2, y: this.y2 })
   }
 
   zoom(zoomScale: number): void {

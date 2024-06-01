@@ -1,7 +1,7 @@
 import Canvas from "../canvas"
 import { ContextLayerSetFunction } from "../types"
 import { StayTools } from "../userTypes"
-import Stay from "./stayTools"
+import Stay from "./stay"
 
 type Args<T> = T extends (...args: infer R) => any ? R : never
 export default class StayStage {

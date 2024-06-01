@@ -1,5 +1,5 @@
 import { Rectangle } from "./rectangle"
-import { ShapeProps } from "./shape"
+import { ShapeDrawProps, ShapeProps } from "./shape"
 
 export interface ImageProps {
   src: string
@@ -62,9 +62,6 @@ export class StayImage extends Rectangle {
       if (this.sheight === undefined) {
         this.sheight = this.image.naturalHeight
       }
-      if (this.ctx) {
-        this.draw(this.ctx)
-      }
       if (imageLoaded) {
         imageLoaded(this)
       }
@@ -103,12 +100,12 @@ export class StayImage extends Rectangle {
    *
    * @returns void
    */
-  draw(ctx: CanvasRenderingContext2D): void {
+  draw({ context }: ShapeDrawProps): void {
     if (this.loadState === "loading") {
-      this.ctx = ctx
+      this.ctx = context
       return
     }
-    ctx.drawImage(
+    context.drawImage(
       this.image,
       this.sx,
       this.sy,
@@ -121,18 +118,7 @@ export class StayImage extends Rectangle {
     )
   }
 
-  update({
-    src,
-    x,
-    y,
-    width,
-    sx,
-    sy,
-    swidth,
-    sheight,
-    height,
-    props,
-  }: Partial<ImageProps>) {
+  update({ src, x, y, width, sx, sy, swidth, sheight, height, props }: Partial<ImageProps>) {
     this.src = src === undefined ? this.src : src
     this.sx = sx === undefined ? this.sx : sx
     this.sy = sy === undefined ? this.sy : sy

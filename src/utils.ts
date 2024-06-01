@@ -122,3 +122,16 @@ export function infixExpressionParser<T>({
   doOpration(() => opratorStack.length > 0)
   return selectedChildrenStack.length > 0 ? selectedChildrenStack[0] : []
 }
+
+export function parseLayer(layers: any[], layer: number | undefined) {
+  if (layer === undefined) {
+    layer = layers.length - 1
+  }
+  if (layer < 0) {
+    layer = layers.length + layer
+  }
+  if (layer < 0 || layer >= layers.length) {
+    throw new Error("layer is out of range")
+  }
+  return layer
+}

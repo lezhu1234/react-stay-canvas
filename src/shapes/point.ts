@@ -1,5 +1,5 @@
 import { Line } from "./line"
-import { Shape, ShapeProps } from "./shape"
+import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
 export interface PointProps {
   x: number
   y: number
@@ -30,10 +30,10 @@ export class Point extends Shape {
     const dy = point.y - this.y
     return Math.sqrt(dx * dx + dy * dy)
   }
-  draw(ctx: CanvasRenderingContext2D): void {
-    ctx.lineWidth = this.lineWidth
-    ctx.fillStyle = this.color
-    ctx.fillRect(this.x, this.y, 1, 1)
+  draw({ context }: ShapeDrawProps): void {
+    context.lineWidth = this.lineWidth
+    context.fillStyle = this.color
+    context.fillRect(this.x, this.y, 1, 1)
   }
   move(offsetX: number, offsetY: number): void {
     this.update({ x: this.x + offsetX, y: this.y + offsetY })

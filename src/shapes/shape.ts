@@ -1,6 +1,6 @@
 import { valueof } from "../stay/types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { SimplePoint } from "../userTypes"
+import { Dict, SimplePoint } from "../userTypes"
 
 export interface ShapeProps {
   color?: string | CanvasGradient
@@ -9,6 +9,24 @@ export interface ShapeProps {
   zoomCenter?: SimplePoint
   type?: valueof<typeof SHAPE_DRAW_TYPES>
   gco?: GlobalCompositeOperation
+  stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void>
+  state?: string
+}
+
+export interface ShapeDrawProps {
+  context: CanvasRenderingContext2D
+  canvas: HTMLCanvasElement
+  now: number
+}
+
+export interface GetCurrentArgumentsProps {
+  startArguments: Dict
+  endArguments: Dict
+  duration: number
+  now: number
+  ease?: boolean
+  easeIn?: boolean
+  easeOut?: boolean
 }
 
 export abstract class Shape {
@@ -18,12 +36,22 @@ export abstract class Shape {
   lineWidth: number
   offsetX: number
   offsetY: number
+  startTime: number
+  state: string
+  stateDrawFuncMap: Dict<(props: ShapeDrawProps) => void>
   type: valueof<typeof SHAPE_DRAW_TYPES>
   zeroPoint: SimplePoint
   zeroPointCopy: SimplePoint
   zoomCenter: SimplePoint
   zoomY: number
-  constructor({ color, lineWidth, type, gco }: ShapeProps) {
+  constructor({
+    color,
+    lineWidth,
+    type,
+    gco,
+    state = "default",
+    stateDrawFuncMap = {},
+  }: ShapeProps) {
     this.color = color || "white"
     this.lineWidth = lineWidth || 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
@@ -35,21 +63,25 @@ export abstract class Shape {
     this.offsetY = 0
     this.zeroPoint = { x: 0, y: 0 }
     this.zeroPointCopy = { x: 0, y: 0 }
+    this.state = state
+    this.stateDrawFuncMap = {
+      default: this.draw,
+      ...stateDrawFuncMap,
+    }
+    this.startTime = 0
   }
 
   _copy() {
     return { ...this }
   }
 
-  _draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
-    ctx.lineWidth = this.lineWidth
-    ctx.globalCompositeOperation = this.gco
-    if (this.type === SHAPE_DRAW_TYPES.STROKE) {
-      ctx.strokeStyle = this.color
-    } else if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      ctx.fillStyle = this.color
-    }
-    this.draw(ctx, canvas)
+  _draw({ context, canvas, now }: ShapeDrawProps) {
+    // console.log("draw")
+    context.lineWidth = this.lineWidth
+    context.globalCompositeOperation = this.gco
+    this.setColor(context, this.color)
+    // this.draw({ context, canvas, now })
+    this.stateDrawFuncMap[this.state].bind(this)({ context, canvas, now })
   }
 
   _move(offsetX: number, offsetY: number): [number, number] {
@@ -62,13 +94,19 @@ export abstract class Shape {
     return [ox, oy]
   }
 
-  _update({ color, lineWidth, zoomY, zoomCenter, type, gco }: ShapeProps) {
+  _update({ color, lineWidth, zoomY, zoomCenter, type, gco, state, stateDrawFuncMap }: ShapeProps) {
     this.color = color || this.color
-    this.lineWidth = lineWidth || this.lineWidth
+    this.lineWidth = lineWidth === undefined ? this.lineWidth : lineWidth
     this.zoomY = zoomY || this.zoomY
     this.zoomCenter = zoomCenter || this.zoomCenter
     this.type = type || this.type
     this.gco = gco || this.gco
+
+    this.stateDrawFuncMap = stateDrawFuncMap || this.stateDrawFuncMap
+
+    if (state) {
+      this.switchState(state)
+    }
     return this
   }
 
@@ -84,19 +122,47 @@ export abstract class Shape {
     return this[key] // this will return the value of the property with the given key (e.g., this.get('color') will return the color of the shape)
   }
 
+  getCurrentArguments({
+    now,
+    startArguments,
+    endArguments,
+    duration,
+    ease = false,
+    easeOut = false,
+    easeIn = false,
+  }: GetCurrentArgumentsProps) {
+    if (easeOut) {
+      duration = duration * 2
+    }
+    const elapsed = (now - this.startTime) % duration
+    const progress = ease ? 1 - Math.pow(elapsed / duration, 2) : elapsed / duration
+    const currentArguments: Dict = {}
+    function getCurrentValue(startValue: number, endValue: number, progress: number) {
+      return startValue + (endValue - startValue) * progress
+    }
+
+    Object.keys(startArguments).forEach((key) => {
+      if (key in endArguments) {
+        currentArguments[key] = getCurrentValue(startArguments[key], endArguments[key], progress)
+      }
+    })
+
+    return currentArguments
+  }
+
   getInitPoint(point: SimplePoint) {
     return {
       x: (point.x - this.zeroPoint.x) / this.zoomY,
       y: (point.y - this.zeroPoint.y) / this.zoomY,
     }
   }
+
   getZoomPoint(zoomScale: number, point: SimplePoint) {
     return {
       x: (point.x - this.zoomCenter.x) * zoomScale + this.zoomCenter.x,
       y: (point.y - this.zoomCenter.y) * zoomScale + this.zoomCenter.y,
     }
   }
-
   moveInit() {
     this.zeroPointCopy = { ...this.zeroPoint }
   }
@@ -111,6 +177,22 @@ export abstract class Shape {
       x: (originPoint.x - offsetX) / scaleRatio,
       y: (originPoint.y - offsetY) / scaleRatio,
     }
+  }
+
+  setColor(context: CanvasRenderingContext2D, color: string | CanvasGradient) {
+    this.color = color
+    if (this.type === SHAPE_DRAW_TYPES.STROKE) {
+      context.strokeStyle = this.color
+    } else if (this.type === SHAPE_DRAW_TYPES.FILL) {
+      context.fillStyle = this.color
+    }
+  }
+
+  switchState(state: string) {
+    if (!(state in this.stateDrawFuncMap)) {
+      throw new Error(`state ${state} not found`)
+    }
+    this.state = state
   }
 
   worldToScreenLength(len: number, scaleRatio: number) {
@@ -128,11 +210,11 @@ export abstract class Shape {
 
   abstract copy(): Shape
 
-  abstract draw(ctx: CanvasRenderingContext2D, canvas?: HTMLCanvasElement): void
+  abstract draw(props: ShapeDrawProps): void
 
   abstract move(offsetX: number, offsetY: number): void
 
-  abstract update(props: any): Shape
+  abstract update(props: any): this
 
   abstract zoom(zoomScale: number): void
 }

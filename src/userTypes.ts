@@ -1,3 +1,4 @@
+import Canvas from "./canvas"
 import { Point } from "./shapes/point"
 import { Shape } from "./shapes/shape"
 import { StepProps, valueof } from "./stay/types"
@@ -65,6 +66,7 @@ export interface ActionCallbackProps {
   store: storeType
   stateStore: storeType
   composeStore: Record<string, any>
+  canvas: Canvas
   tools: StayTools
   payload: Dict
 }

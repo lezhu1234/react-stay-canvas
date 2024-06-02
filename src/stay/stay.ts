@@ -643,6 +643,7 @@ class Stay {
                 stateStore: this.stateStore,
                 composeStore: this.composeStore[name],
                 tools: this.getTools(),
+                canvas: this.root,
                 payload,
               })
               this.composeStore[name] = {

@@ -370,6 +370,7 @@ Stay.prototype.getTools = function (): StayTools {
               store: this.store,
               stateStore: this.stateStore,
               composeStore: this.composeStore[name],
+              canvas: this.root,
               tools: this.getTools(),
               payload,
             })

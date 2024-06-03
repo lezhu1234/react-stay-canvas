@@ -1,27 +1,29 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react"
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+} from "react"
 
 import * as PredefinedEventList from "./predefinedEvents"
 import StayStage from "./stay/stayStage"
 import { ContextLayerSetFunction, StayCanvasProps } from "./types"
 import { Dict } from "./userTypes"
 
-let userTrigger: (name: string, payload: Dict) => void | undefined
-
-export const trigger = (name: string, payload?: Dict) => {
-  if (userTrigger) {
-    userTrigger(name, payload || {})
-  }
-}
-
-export default function StayCanvas({
-  width = 500,
-  height = 500,
-  eventList,
-  listenerList,
-  mounted,
-  layers = 2,
-  className = "",
-}: StayCanvasProps) {
+const StayCanvas = forwardRef(function StayCanvas(
+  {
+    width = 500,
+    height = 500,
+    eventList,
+    listenerList,
+    mounted,
+    layers = 2,
+    className = "",
+  }: StayCanvasProps,
+  ref
+) {
   let contextLayerSetFunctionList: ContextLayerSetFunction[] = []
 
   if (typeof layers === "number") {
@@ -45,15 +47,6 @@ export default function StayCanvas({
   eventList = useMemo(() => eventList || [], [eventList])
   listenerList = useMemo(() => listenerList || [], [listenerList])
 
-  // useEffect(() => {
-  //   canvasLayers.current = canvasLayers.current.slice(0, layers)
-  // }, [layers])
-
-  const customTrigger = (stay: StayStage, name: string, payload: Dict) => {
-    const customEvent = new Event(name)
-    stay.triggerAction(customEvent, { [name]: customEvent }, payload)
-  }
-
   const container = useCallback((node: HTMLDivElement) => {
     if (!node) {
       return
@@ -65,17 +58,27 @@ export default function StayCanvas({
     listenerList.forEach((listener) => {
       stay.current!.addEventListener(listener)
     })
-    userTrigger = (name: string, payload: Dict) => {
-      if (stay.current) {
-        customTrigger(stay.current, name, payload)
-      }
-    }
 
     if (mounted) {
       mounted(stay.current.tools)
       stay.current.draw()
     }
   }, [])
+
+  useImperativeHandle(
+    ref,
+    () => {
+      return {
+        trigger(name: string, payload: Dict) {
+          const customEvent = new Event(name)
+          if (stay.current) {
+            stay.current.triggerAction(customEvent, { [name]: customEvent }, payload)
+          }
+        },
+      }
+    },
+    []
+  )
 
   useEffect(() => {
     if (!stay.current) {
@@ -134,4 +137,6 @@ export default function StayCanvas({
       </div>
     </>
   )
-}
+})
+
+export default StayCanvas

@@ -12,7 +12,11 @@ import StayStage from "./stay/stayStage"
 import { ContextLayerSetFunction, StayCanvasProps } from "./types"
 import { Dict } from "./userTypes"
 
-const StayCanvas = forwardRef(function StayCanvas(
+export type StayCanvasTriggerType = {
+  trigger: (name: string, payload: Dict) => void
+}
+
+const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function StayCanvas(
   {
     width = 500,
     height = 500,

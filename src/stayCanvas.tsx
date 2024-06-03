@@ -10,11 +10,7 @@ import React, {
 import * as PredefinedEventList from "./predefinedEvents"
 import StayStage from "./stay/stayStage"
 import { ContextLayerSetFunction, StayCanvasProps } from "./types"
-import { Dict } from "./userTypes"
-
-export type StayCanvasTriggerType = {
-  trigger: (name: string, payload: Dict) => void
-}
+import { Dict, StayCanvasTriggerType } from "./userTypes"
 
 const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function StayCanvas(
   {

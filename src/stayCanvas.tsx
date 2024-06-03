@@ -69,10 +69,10 @@ const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function S
     ref,
     () => {
       return {
-        trigger(name: string, payload: Dict) {
+        trigger(name: string, payload?: Dict) {
           const customEvent = new Event(name)
           if (stay.current) {
-            stay.current.triggerAction(customEvent, { [name]: customEvent }, payload)
+            stay.current.triggerAction(customEvent, { [name]: customEvent }, payload || {})
           }
         },
       }

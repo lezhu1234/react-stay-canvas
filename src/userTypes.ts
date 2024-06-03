@@ -17,7 +17,7 @@ export interface SimplePoint {
 }
 
 export type StayCanvasTriggerType = {
-  trigger: (name: string, payload: Dict) => void
+  trigger: (name: string, payload?: Dict) => void
 }
 
 export interface ActionEvent {

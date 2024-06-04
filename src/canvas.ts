@@ -6,8 +6,6 @@ class Canvas {
   layers: HTMLCanvasElement[]
   status: string
   width: number
-  x: number
-  y: number
   constructor(
     layers: HTMLCanvasElement[],
     contextLayerSetFunctionList: ContextLayerSetFunction[],
@@ -25,10 +23,14 @@ class Canvas {
       return contextLayerSetFunctionList[i](layer) as CanvasRenderingContext2D
     })
 
-    const { x, y } = this.layers[0].getBoundingClientRect()
-    this.x = x
-    this.y = y
     this.init()
+  }
+
+  get x(): number {
+    return this.layers[0].getBoundingClientRect().x
+  }
+  get y(): number {
+    return this.layers[0].getBoundingClientRect().y
   }
 
   public clear(context: CanvasRenderingContext2D) {

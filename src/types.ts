@@ -48,7 +48,7 @@ export interface UserConditionCallbackFunction {
 }
 
 export type CallbackFuncMap<T extends ActionCallbackProps> = {
-  [key in T["e"]["name"]]: () => { [key: string]: any }
+  [key in T["e"]["name"]]: () => { [key: string]: any } | void | undefined
 }
 
 export type UserCallback = (p: ActionCallbackProps) => CallbackFuncMap<typeof p> | void

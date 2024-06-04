@@ -47,13 +47,19 @@ export interface UserConditionCallbackFunction {
   (props: UserConditionCallbackProps): boolean
 }
 
+export type CallbackFuncMap<T extends ActionCallbackProps> = {
+  [key in T["e"]["name"]]: () => { [key: string]: any }
+}
+
+export type UserCallback = (p: ActionCallbackProps) => CallbackFuncMap<typeof p> | void
+
 export interface StayAction {
   name: string
   state: string
   selector: string
   event: string[]
   sortBy: SortChildrenMethodsValues | ChildSortFunction
-  callback: (p: ActionCallbackProps) => { [key: string]: any } | any
+  callback: UserCallback
 }
 
 export interface StayEventMap {

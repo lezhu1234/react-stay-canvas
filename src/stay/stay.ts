@@ -328,7 +328,7 @@ class Stay {
         // }
         layer = parseLayer(this.root.layers, layer)
         this.checkName(className, [ROOTNAME])
-        const child = new StayChild({
+        const child = new StayChild<typeof shape>({
           id,
           zIndex: zIndex === undefined ? 1 : zIndex,
           className,
@@ -636,7 +636,7 @@ class Stay {
               name,
             })
             if (callback) {
-              const linkArgs = callback({
+              const eventFuncMap = callback({
                 originEvent,
                 e: actionEvent,
                 store: this.store,
@@ -646,9 +646,12 @@ class Stay {
                 canvas: this.root,
                 payload,
               })
-              this.composeStore[name] = {
-                ...this.composeStore[name],
-                ...(linkArgs || {}),
+              if (eventFuncMap !== undefined && actionEvent.name in eventFuncMap) {
+                const particalComposeStore = eventFuncMap[actionEvent.name]()
+                this.composeStore[name] = {
+                  ...this.composeStore[name],
+                  ...particalComposeStore,
+                }
               }
             }
           })

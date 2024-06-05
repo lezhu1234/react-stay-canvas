@@ -370,7 +370,7 @@ class Stay {
           this.zIndexUpdated = true
         }
         layer = parseLayer(this.root.layers, layer)
-        child.update({
+        child._update({
           shape,
           zIndex: zIndex,
           layer,
@@ -522,7 +522,6 @@ class Stay {
         })
       },
       redo: () => {
-        console.log("redo")
         if (this.stackIndex >= this.stack.length) {
           console.log("no more operations")
           return
@@ -558,7 +557,6 @@ class Stay {
       },
 
       undo: () => {
-        console.log("backward")
         if (this.stackIndex <= 0) {
           console.log("no more operations")
           return

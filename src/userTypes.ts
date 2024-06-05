@@ -137,5 +137,5 @@ export declare class StayChild<T extends Shape = Shape> {
     now: StayChild<T> | undefined
   ): StepProps | undefined
   copy(): StayChild<T>
-  update({ className, layer, shape, zIndex }: UpdateStayChildProps<T>): void
+  _update({ className, layer, shape, zIndex }: UpdateStayChildProps<T>): void
 }

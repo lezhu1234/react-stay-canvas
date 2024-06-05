@@ -106,8 +106,8 @@ export interface StayTools {
   move: (offsetX: number, offsetY: number) => void
   zoom: (deltaY: number, center: SimplePoint) => void
   log: () => void
-  forward: () => void
-  backward: () => void
+  redo: () => void
+  undo: () => void
   triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
   deleteListener: (name: string) => void
   forceUpdateCanvas: () => void

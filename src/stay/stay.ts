@@ -521,8 +521,8 @@ class Stay {
           this.forceUpdateLayer(i)
         })
       },
-      forward: () => {
-        console.log("forward")
+      redo: () => {
+        console.log("redo")
         if (this.stackIndex >= this.stack.length) {
           console.log("no more operations")
           return
@@ -557,7 +557,7 @@ class Stay {
         this.stackIndex++
       },
 
-      backward: () => {
+      undo: () => {
         console.log("backward")
         if (this.stackIndex <= 0) {
           console.log("no more operations")

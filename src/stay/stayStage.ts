@@ -22,7 +22,7 @@ export default class StayStage {
   }
 
   backward() {
-    return this.#stay.tools.backward()
+    return this.#stay.tools.undo()
   }
 
   clearEventListeners(...args: Args<typeof Stay.prototype.clearEventListeners>) {
@@ -41,8 +41,8 @@ export default class StayStage {
     return this.#stay.draw(...args)
   }
 
-  forward() {
-    return this.#stay.tools.forward()
+  redo() {
+    return this.#stay.tools.redo()
   }
 
   move(...args: Args<typeof Stay.prototype.tools.move>) {

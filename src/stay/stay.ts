@@ -678,10 +678,12 @@ class Stay {
     topLayer.onmousedown = (e: MouseEvent) =>
       mousedown(this.fireEvent.bind(this), this.pressKey.bind(this), e)
     topLayer.onmousemove = (e: MouseEvent) => mousemove(this.fireEvent.bind(this), e)
-    topLayer.onwheel = (e: WheelEvent) => wheel(this.fireEvent.bind(this), e)
     topLayer.onclick = (e: MouseEvent) => click(this.fireEvent.bind(this), e)
     topLayer.ondblclick = (e: MouseEvent) => dblclick(this.fireEvent.bind(this), e)
     topLayer.oncontextmenu = (e: MouseEvent) => contextmenu(this.fireEvent.bind(this), e)
+    topLayer.addEventListener("wheel", (e: WheelEvent) => wheel(this.fireEvent.bind(this), e), {
+      passive: true,
+    })
   }
 
   pressKey(key: string) {

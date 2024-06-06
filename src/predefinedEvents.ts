@@ -36,6 +36,9 @@ export const ClickEvent: EventProps = {
   name: "click",
   trigger: MOUSE_EVENTS.MOUSE_UP,
   conditionCallback: ({ e, store }) => {
+    if (!store.get("lastMouseDownPosition")) {
+      return false
+    }
     const { x, y } = store.get("lastMouseDownPosition")
     const now = Date.now()
     const timeDiff = now - store.get("laseMouseDownTime")

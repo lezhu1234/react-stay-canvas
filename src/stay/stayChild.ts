@@ -67,7 +67,7 @@ export class StayChild<T extends Shape = Shape> {
     return new StayChild({ ...this, shape: this.shape.copy() })
   }
 
-  update({ className, layer, shape, zIndex }: UpdateStayChildProps<T>) {
+  _update({ className, layer, shape, zIndex }: UpdateStayChildProps<T>) {
     this.className = className || this.className
     this.beforeLayer = this.layer
     this.zIndex = zIndex === undefined ? this.zIndex : zIndex

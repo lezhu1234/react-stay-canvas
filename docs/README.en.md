@@ -15,6 +15,7 @@
  - [Key Features](#key-features)
  - [Installation](#installation)
  - [Getting Started Example](#getting-started-example)
+ - [More Examples](#more-examples)
  - [Core Concepts](#core-concepts)
 
    - [Shape](#shape)
@@ -136,10 +137,12 @@
  }
  ``` 
 
- <!-- ![alt text](videos/demo.mp4 "Title") --> 
 
  <video src="videos/demo.mp4" controls="">
  </video>
+
+ ## More Examples
+ https://github.com/lezhu1234/demo-react-stay-canvas
 
  ## Core Concepts
 

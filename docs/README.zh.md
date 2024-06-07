@@ -14,6 +14,7 @@ stay-canvas for react
 - [主要特征](#主要特征)
 - [安装](#安装)
 - [入门示例](#入门示例)
+- [更多示例](#更多示例)
 - [核心概念](#核心概念)
 
   - [Shape](#shape)
@@ -135,10 +136,11 @@ export function Demo() {
 }
 ``` 
 
-<!-- ![alt text](videos/demo.mp4 "Title") --> 
-
 <video src="videos/demo.mp4" controls="">
 </video>
+
+## 更多示例
+https://github.com/lezhu1234/demo-react-stay-canvas
 
 ## 核心概念
 

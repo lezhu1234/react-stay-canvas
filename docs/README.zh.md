@@ -148,7 +148,7 @@ https://github.com/lezhu1234/demo-react-stay-canvas
 
 在 react-stay-canvas 中，canvas 上的所有元素都是一个 `StayChild` 对象，在使用 `createChild`、`appendChild`、`updateChild` 函数时会返回该对象 Shape 是创建或者更新 `StayChild` 对象时非常重要的一个属性，该属性接受一个 Shape 子类的对象，定义了该对象在 canvas 上的所有绘制行为， 目前 react-stay-canvas 中有以下几种内置的 Shape, 你也可以直接继承 Shape 类来轻松的创建自定义的 Shape
 
-- Shape： 基础类 `StayChild`对象中的`Shape`应继承该类， 其构造函数定义如下
+- Shape： 基础类 `StayChild` 对象中的`Shape`应继承该类， 其构造函数定义如下
 
   ```typescript
   constructor({ color, lineWidth, type, gco, state = "default", stateDrawFuncMap = {} }: ShapeProps)

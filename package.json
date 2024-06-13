@@ -40,5 +40,9 @@
   "files": [
     "dist"
   ],
-  "types": "dist/index.d.ts"
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "github-readme-to-html": "^1.0.10",
+    "highlightjs-code-diff": "^1.0.0"
+  }
 }

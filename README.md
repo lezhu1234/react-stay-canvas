@@ -137,7 +137,7 @@ stay-canvas for react
 
  <!-- ![alt text](videos/demo.mp4 "Title") --> 
 
- <video src="videos/demo.mp4" controls="">
+ <video src="docs/videos/demo.mp4" controls="">
  </video>
 
  ## Core Concepts
@@ -600,7 +600,7 @@ stay-canvas for react
      },
    }
    ```
-   <video src="videos/state-map.mp4" controls="">
+   <video src="docs/videos/state-map.mp4" controls="">
    </video>
 
  ##### Animation
@@ -620,7 +620,7 @@ stay-canvas for react
    ...
    ```
 
-   <video src="videos/shape-anim.mp4" controls="">
+   <video src="docs/videos/shape-anim.mp4" controls="">
    </video>
   
    You can combine [gsap](https://gsap.com/), [tween](https://github.com/tweenjs/tween.js), and other animation libraries to achieve more rich animation effects
@@ -1217,7 +1217,7 @@ stay-canvas for react
  }
  ```
 
- <video src="videos/redo-undo.mp4" controls="">
+ <video src="docs/videos/redo-undo.mp4" controls="">
  </video>
 
  ##### triggerAction

@@ -135,10 +135,9 @@ stay-canvas for react
  }
  ``` 
 
- <!-- ![alt text](videos/demo.mp4 "Title") --> 
 
- <video src="videos/demo.mp4" controls="">
- </video>
+https://github.com/lezhu1234/react-stay-canvas/assets/11953013/106cd2c2-2e62-4d43-b34e-ad3633f5fd07
+
 
  ## Core Concepts
 
@@ -600,8 +599,10 @@ stay-canvas for react
      },
    }
    ```
-   <video src="videos/state-map.mp4" controls="">
-   </video>
+
+
+https://github.com/lezhu1234/react-stay-canvas/assets/11953013/1b0589d3-27f9-4faa-ac9d-906477faee6e
+
 
  ##### Animation
 
@@ -620,9 +621,11 @@ stay-canvas for react
    ...
    ```
 
-   <video src="videos/shape-anim.mp4" controls="">
-   </video>
   
+
+https://github.com/lezhu1234/react-stay-canvas/assets/11953013/78f383b9-86f8-470d-90fb-024ad95334a0
+
+
    You can combine [gsap](https://gsap.com/), [tween](https://github.com/tweenjs/tween.js), and other animation libraries to achieve more rich animation effects
 
 
@@ -1217,8 +1220,9 @@ stay-canvas for react
  }
  ```
 
- <video src="videos/redo-undo.mp4" controls="">
- </video>
+
+https://github.com/lezhu1234/react-stay-canvas/assets/11953013/ad8b6f82-117a-474b-93be-40b56f9accf1
+
 
  ##### triggerAction
 

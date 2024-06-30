@@ -168,14 +168,14 @@ class Stay {
     delete this.events[name]
   }
 
-  draw(forceUpdate = false, now = Date.now()) {
+  draw(forceDraw = false, now = Date.now()) {
     interface ChildLayer {
       update: boolean
       members: StayChild[]
     }
 
     const childrenInlayer: ChildLayer[] = this.drawLayers.map((layer) => ({
-      update: layer.forceUpdate || forceUpdate,
+      update: layer.forceUpdate,
       members: [],
     }))
 
@@ -205,7 +205,7 @@ class Stay {
       }
 
       particalChildren.members.forEach((child: StayChild) => {
-        if (!particalChildren.update && !child.drawAction) {
+        if (!particalChildren.update && !child.drawAction && !forceDraw) {
           return
         }
         child.shape._draw({

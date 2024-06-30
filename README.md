@@ -1,1411 +1,1411 @@
 # react-stay-canvas
+
 stay-canvas for react
 
-<div align="center">
+<div align="center"><a href="./README.en.md">
+  <strong>English</strong>
+</a> | <a href="./README.zh.md">
+  <strong>中文简体</strong>
+</a></div>
 
-[**English**](./docs/README.en.md) | [**中文简体**](./docs/README.zh.md)
+## 目录
 
-</div>
+- [介绍](#介绍)
+- [主要特征](#主要特征)
+- [安装](#安装)
+- [入门示例](#入门示例)
+- [更多示例](#更多示例)
+- [核心概念](#核心概念)
 
- ## Translated by [ChatGPT4](https://chatgpt.com/)
- ## Table of Contents
+  - [Shape](#shape)
+  - [Listener](#listener)
+  - [Event](#event)
 
- - [Introduction](#introduction)
- - [Key Features](#key-features)
- - [Installation](#installation)
- - [Getting Started Example](#getting-started-example)
- - [Core Concepts](#core-concepts)
+- [API 文档](#api-文档)
 
-   - [Shape](#shape)
-   - [Listener](#listener)
-   - [Event](#event)
+  - [StayCanvas 组件](#staycanvas-组件-api)
+  - [Shape API](#shape-api)
 
- - [API Documentation](#api-documentation)
+    - [Image: 图片](#image-图片)
+    - [Point：点](#point-点)
+    - [Line: 线段](#line-线段)
+    - [Rectangle: 矩形](#rectangle-矩形)
+    - [Circle: 圆形](#circle-圆形)
+    - [Text: 文本](#text-文本)
+    - [Path: 路径](#path-路径)
+    - [自定义 Shape](#自定义-shape)
+    - [Shape 状态](#shape-状态)
+    - [动画](#动画)
 
-   - [StayCanvas Component](#staycanvas-component-api)
-   - [Shape API](#shape-api)
+  - [Listener API](#listener-api)
 
-     - [Image](#image)
-     - [Point](#point)
-     - [Line](#line)
-     - [Rectangle](#rectangle)
-     - [Circle](#circle)
-     - [Text](#text)
-     - [Path](#path)
-     - [Custom Shape](#custom-shape)
-     - [Shape State](#shape-state)
-     - [Animation](#animation)
+    - [selector 选择器](#selector-选择器)
+    - [state 状态](#state-状态)
+    - [简单的逻辑运算](#简单的逻辑运算)
+    - [event](#event)
+    - [Listener callback 函数](#listener-callback-函数)
+    - [StayTools 工具函数](#staytools-工具函数)
 
-   - [Listener API](#listener-api)
+      - [createChild](#createchild)
+      - [updateChild](#updatechild)
+      - [removeChild](#removechild)
+      - [getContainPointChildren](#getcontainpointchildren)
+      - [hasChild](#hasChild)
+      - [fix](#fix)
+      - [switchState](#switchstate)
+      - [getChildrenBySelector](#getchildrenbyselector)
+      - [getAvailiableStates](#getavailiablestates)
+      - [changeCursor](#changecursor)
+      - [moveStart](#movestart)
+      - [move](#move)
+      - [zoom](#zoom)
+      - [log](#log)
+      - [redo](#redo)
+      - [undo](#undo)
+      - [triggerAction](#triggeraction)
+      - [deleteListener](#deletelistener)
 
-     - [Selector](#selector)
-     - [State](#state)
-     - [Simple Logical Operations](#simple-logical-operations)
-     - [Event](#event)
-     - [Listener Callback Function](#listener-callback-function)
-     - [StayTools Utility Functions](#staytools-utility-functions)
+  - [Event API](#event-api)
 
-       - [createChild](#createchild)
-       - [updateChild](#updatechild)
-       - [removeChild](#removechild)
-       - [getContainPointChildren](#getcontainpointchildren)
-       - [hasChild](#haschild)
-       - [fix](#fix)
-       - [switchState](#switchstate)
-       - [getChildrenBySelector](#getchildrenbyselector)
-       - [getAvailableStates](#getavailablestates)
-       - [changeCursor](#changecursor)
-       - [moveStart](#movestart)
-       - [move](#move)
-       - [zoom](#zoom)
-       - [log](#log)
-       - [redo](#redo)
-       - [undo](#undo)
-       - [triggerAction](#triggeraction)
-       - [deleteListener](#deletelistener)
+    - [name](#name)
+    - [trigger](#trigger)
+    - [conditionCallback](#conditioncallback)
+    - [successCallback](#successcallback)
 
-   - [Event API](#event-api)
+  - [trigger 函数 API](#trigger-函数-api)
 
-     - [name](#name)
-     - [trigger](#trigger)
-     - [conditionCallback](#conditioncallback)
-     - [successCallback](#successcallback)
+## 介绍
 
-   - [Trigger Function API](#trigger-function-api)
+`react-stay-canvas` 提供了一组易于使用的 API，帮助开发者在 React 项目中集成画布功能。无论是拖拽操作、图形绘制，还是复杂的事件处理，这个组件都能满足您的需求。
 
- ## Introduction
+## 主要特征
 
- `react-stay-canvas` provides a set of easy-to-use APIs to help developers integrate canvas functionality into React projects. Whether it is drag-and-drop operations, shape drawing, or complex event handling, this component can meet your needs.
+- **快速上手**：开发者可以快速上手，轻松实现各种图形和交互效果。
+- **灵活强大的可配置性**：支持自定义事件、自定义监听器以及自定义绘制的组件等等，使得开发者能够根据具体需求进行高度定制。
+- **丰富的图形支持**：支持多种基本图形如矩形、圆形，路径，图像等
+- **易于集成**：简洁的 API 设计使其能够快速集成到现有的 React 项目中。
+- **零依赖**：无任何第三方依赖，当然，需要安装 React。
 
- ## Key Features
+`react-stay-canvas` 让您无需深入了解复杂的 Canvas API，即可在 React 中轻松实现各种图形和交互效果。
 
- - **Quick Start**: Developers can quickly get started and easily implement various graphics and interactive effects.
- - **Flexible and Powerful Configurability**: Supports custom events, custom listeners, and custom drawing components, allowing developers to highly customize according to specific needs.
- - **Rich Graphics Support**: Supports multiple basic shapes such as rectangles, circles, paths, images, etc.
- - **Easy Integration**: The concise API design allows it to be quickly integrated into existing React projects.
- - **Zero Dependencies**: No third-party dependencies required, except for React.
+## 安装
 
- `react-stay-canvas` allows you to easily implement various graphics and interactive effects in React without deep understanding of complex Canvas APIs.
+```bash
+npm install react-stay-canvas
+```
 
- ## Installation
+## 入门示例
 
- ```bash
- npm install react-stay-canvas
- ```
+```typescript
+import { ListenerProps, Point, Rectangle, StayCanvas } from "react-stay-canvas"
 
- ## Getting Started Example
+export function Demo() {
+  const DragListener: ListenerProps = {
+    name: "dragListener",
+    event: ["dragstart", "drag", "dragend"],
+    callback: ({ e, composeStore, tools: { appendChild, updateChild, log } }) => {
+      return {
+        dragstart: () => ({
+          dragStartPosition: e.point,
+          dragChild: appendChild({
+            shape: new Rectangle({
+              x: e.x,
+              y: e.y,
+              width: 0,
+              height: 0,
+              props: { color: "white" },
+            }),
+            className: "label",
+          }),
+        }),
+        drag: () => {
+          const { dragStartPosition, dragChild } = composeStore
+          const x = Math.min(dragStartPosition.x, e.x)
+          const y = Math.min(dragStartPosition.y, e.y)
+          const width = Math.abs(dragStartPosition.x - e.x)
+          const height = Math.abs(dragStartPosition.y - e.y)
+          updateChild({
+            child: dragChild,
+            shape: dragChild.shape.update({ x, y, width, height }),
+          })
+        }
+      }
+    },
+  }
+  return <StayCanvas className="border" width={500} height={500} listenerList={[DragListener]} />
+}
+``` 
 
- ```typescript
- import { ListenerProps, Point, Rectangle, StayCanvas } from "react-stay-canvas"
+<video src="videos/demo.mp4" controls="">
+</video>
 
- export function Demo() {
-   const DragListener: ListenerProps = {
-     name: "dragListener",
-     event: ["dragstart", "drag", "dragend"],
-     callback: ({ e, composeStore, tools: { appendChild, updateChild, log } }) => {
-       return {
-         dragstart: () => ({
-           dragStartPosition: e.point,
-           dragChild: appendChild({
-             shape: new Rectangle({
-               x: e.x,
-               y: e.y,
-               width: 0,
-               height: 0,
-               props: { color: "white" },
-             }),
-             className: "label",
-           }),
-         }),
-         drag: () => {
-           const { dragStartPosition, dragChild } = composeStore
-           const x = Math.min(dragStartPosition.x, e.x)
-           const y = Math.min(dragStartPosition.y, e.y)
-           const width = Math.abs(dragStartPosition.x - e.x)
-           const height = Math.abs(dragStartPosition.y - e.y)
-           updateChild({
-             child: dragChild,
-             shape: dragChild.shape.update({ x, y, width, height }),
-           })
-         }
-       }
-     },
-   }
-   return <StayCanvas className="border" width={500} height={500} listenerList={[DragListener]} />
- }
- ``` 
+## 更多示例
+https://github.com/lezhu1234/demo-react-stay-canvas
 
+## 核心概念
 
-https://github.com/lezhu1234/react-stay-canvas/assets/11953013/106cd2c2-2e62-4d43-b34e-ad3633f5fd07
+### Shape
 
+在 react-stay-canvas 中，canvas 上的所有元素都是一个 `StayChild` 对象，在使用 `createChild`、`appendChild`、`updateChild` 函数时会返回该对象 Shape 是创建或者更新 `StayChild` 对象时非常重要的一个属性，该属性接受一个 Shape 子类的对象，定义了该对象在 canvas 上的所有绘制行为， 目前 react-stay-canvas 中有以下几种内置的 Shape, 你也可以直接继承 Shape 类来轻松的创建自定义的 Shape
 
- ## Core Concepts
+- Shape： 基础类 `StayChild` 对象中的`Shape`应继承该类， 其构造函数定义如下
 
- ### Shape
+  ```typescript
+  constructor({ color, lineWidth, type, gco, state = "default", stateDrawFuncMap = {} }: ShapeProps)
 
- In react-stay-canvas, all elements on the canvas are `StayChild` objects. When using the `createChild`, `appendChild`, and `updateChild` functions, this object is returned. Shape is a very important property when creating or updating `StayChild` objects. This property accepts an object of the Shape subclass, defining all the drawing behaviors of the object on the canvas. Currently, the following built-in Shapes are available in react-stay-canvas, and you can easily create custom Shapes by directly inheriting the Shape class.
+  export interface ShapeProps {
+    color?: string | CanvasGradient // 绘制对象的颜色, 该属性会被传递给 strokeStyle/fillStyle
+    lineWidth?: number // 绘制对象的线宽, 该属性会被传递给 lineWidth
+    type?: valueof<typeof SHAPE_DRAW_TYPES> // "fill" | "stroke", 绘制对象的绘制类型
+    gco?: GlobalCompositeOperation // 绘制对象的全局混合模式, 该属性会被传递给 globalCompositeOperation
+    state?: string // 绘制对象的状态, 通过结合 stateDrawFuncMap 使用，实现图形在不同状态下的绘制效果
+    stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void | boolean> // 绘制对象的状态绘制函数集合
+  }
+  ```
 
- - Shape: The basic class. The `Shape` in the `StayChild` object should inherit this class. Its constructor is defined as follows
+### Listener
 
-   ```typescript
-   constructor({ color, lineWidth, type, gco, state = "default", stateDrawFuncMap = {} }: ShapeProps)
+在 react-stay-canvas 中，你可以通过 listenerList 属性来注册监听器， 该属性是一个数组，数组中的每个元素都是一个监听器，监听器是一个对象， 该对象需要满足 ListenerProps 类型约束，具体请参考 [Listener API](#listener-api)
 
-   export interface ShapeProps {
-     color?: string | CanvasGradient // The color of the drawing object, this property will be passed to strokeStyle/fillStyle
-     lineWidth?: number // The line width of the drawing object, this property will be passed to lineWidth
-     type?: valueof<typeof SHAPE_DRAW_TYPES> // "fill" | "stroke", the drawing type of the drawing object
-     gco?: GlobalCompositeOperation // The global composite operation of the drawing object, this property will be passed to globalCompositeOperation
-     state?: string // The state of the drawing object, used in conjunction with stateDrawFuncMap to achieve different drawing effects for the shape in different states
-     stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void> // A collection of state drawing functions for the drawing object
-   }
-   ```
+### Event
 
- ### Listener
+在 react-stay-canvas 中，你可以通过 eventList 来注册事件，该事件列表是一个数组，数组中的每个元素都是一个事件对象，该对象需要满足 EventProps 的类型约束，具体请参考 [Event API](#event-api)
 
- In react-stay-canvas, you can register listeners through the listenerList property. This property is an array where each element is a listener. A listener is an object that needs to meet the ListenerProps type constraints. For details, please refer to [Listener API](#listener-api).
+## API 文档
 
- ### Event
+### StayCanvas 组件 API
 
- In react-stay-canvas, you can register events through the eventList. This event list is an array where each element is an event object that needs to meet the type constraints of EventProps. For details, please refer to [Event API](#event-api).
+```typescript
+export interface ContextLayerSetFunction {
+  (layer: HTMLCanvasElement): CanvasRenderingContext2D | null
+}
 
- ## API Documentation
+// StayCanvas 组件接受一个 StayCanvasProps 类型的 props
+export interface StayCanvasProps {
+  className?: string // 容器的 class,设置类样式
+  width?: number // 容器的宽度，默认为 500px 你必须要在这里设置容器的宽高，而不是在 style 中进行设置
+  height?: number // 容器的高度，默认为 500px
+  layers?: number | ContextLayerSetFunction[]  // 容器的层数，每一层会生成一个 canvas 容器，默认为 2, 你也可以传递一个 ContextLayerSetFunction[] 类型的数组，该数组中的每个元素都是一个函数， 该函数会接收一个 HTMLCanvasElement 类型的参数，该参数表示该层对应的 canvas 元素，你需要返回该层对应的 context2d 对象
+  eventList?: EventProps[] // 容器的事件列表，该列表是一个数组，数组中的每个元素都是一个事件对象，在 react-stay-canvas 中，预定义了一些事件，你可以通过新建一个相同名称的事件来覆盖默认事件
+  listenerList?: ListenerProps[] // 容器的监听器列表，该列表是一个数组，数组中的每个元素都是一个监听器对象
+  mounted?: (tools: StayTools) => void // 容器的挂载函数，该函数会在容器挂载完成后执行
+}
 
- ### StayCanvas Component API
+export default function StayCanvas({
+  width = 500,
+  height = 500,
+  eventList,
+  listenerList,
+  mounted,
+  layers = 2,
+  className = "",
+}: StayCanvasProps)
 
- ```typescript
- export interface ContextLayerSetFunction {
-   (layer: HTMLCanvasElement): CanvasRenderingContext2D | null
- }
-
- // The StayCanvas component accepts props of the StayCanvasProps type
- export interface StayCanvasProps {
-   className?: string // The class of the container, sets the class style
-   width?: number // The width of the container, defaults to 500px. You must set the container width and height here, not in the style
-   height?: number // The height of the container, defaults to 500px
-   layers?: number | ContextLayerSetFunction[]  // The number of layers of the container, each layer will generate a canvas container, defaults to 2. You can also pass an array of ContextLayerSetFunction[] types, where each element in the array is a function that receives an HTMLCanvasElement type parameter representing the canvas element of the layer. You need to return the context2d object of the layer
-   eventList?: EventProps[] // The list of events for the container. This list is an array where each element is an event object. Some events are predefined in react-stay-canvas, and you can override the default events by creating a new event with the same name
-   listenerList?: ListenerProps[] // The list of listeners for the container. This list is an array where each element is a listener object
-   mounted?: (tools: StayTools) => void // The mount function of the container, which will be executed after the container is mounted
- }
-
- export default function StayCanvas({
-   width = 500,
-   height = 500,
-   eventList,
-   listenerList,
-   mounted,
-   layers = 2,
-   className = "",
- }: StayCanvasProps)
-
- // example
- <StayCanvas
-   mounted={init}
-   width={width}
-   height={height}
-   listenerList={listeners}
-   layers={4}
-   className="border border-solid border-red-50"
+// example
+<StayCanvas
+  mounted={init}
+  width={width}
+  height={height}
+  listenerList={listeners}
+  layers={4}
+  className="border border-solid border-red-50"
 />
 
- <StayCanvas
-   mounted={init}
-   width={width}
-   height={height}
-   listenerList={listeners}
-   layers={[
-     (canvas) => canvas.getContext("2d"),
-     (canvas) =>
-       canvas.getContext("2d", {
-         willReadFrequently: true,
-       }),
-   ]}
-   className="border border-solid border-red-50"
+<StayCanvas
+  mounted={init}
+  width={width}
+  height={height}
+  listenerList={listeners}
+  layers={[
+    (canvas) => canvas.getContext("2d"),
+    (canvas) =>
+      canvas.getContext("2d", {
+        willReadFrequently: true,
+      }),
+  ]}
+  className="border border-solid border-red-50"
 />
- ```
-
- ### Shape API
-
- #### There are some simple built-in shapes in react-stay-canvas, and you can easily create custom shapes by inheriting the Shape class
-
- - Image
-
-   - This object draws an image on the canvas. Its constructor is defined as follows
-
-   ```typescript
-   // x, y, width,  height are equivalent to dx, dy, dWidth, dHeight in the documentation
-   // https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
-   export interface ImageProps {
-     src: string // The src of the image
-     x: number // The x-coordinate of the upper left corner of the image when drawing, relative to screen pixels
-     y: number // The y-coordinate of the upper left corner of the image when drawing, relative to screen pixels
-     width: number // The width of the image when drawing, relative to screen pixels
-     height: number  // The height of the image when drawing, relative to screen pixels
-     sx?: number  // The x-coordinate of the starting point on the image when drawing, relative to the original pixels of the image
-     sy?: number  // The y-coordinate of the starting point on the image when drawing, relative to the original pixels of the image
-     swidth?: number // The width of the image when drawing, relative to the original pixels of the image
-     sheight?: number // The height of the image when drawing, relative to the original pixels of the image
-     imageLoaded?: (image: StayImage) => void // Callback when the image is loaded
-     props?: ShapeProps // This object inherits from Shape
-   }
-   constructor(imageProps: ImageProps)
-   ```
-
-   - The following methods of this object may be useful in some cases
-
-   ```typescript
-   // This method is used to update the attributes of the point
-   declare update({
-     src,
-     x,
-     y,
-     width,
-     sx,
-     sy,
-     swidth,
-     sheight,
-     height,
-     props,
-   }: Partial<ImageProps>): this
-   ```
-
- - Point
-
-   - This object draws a point on the canvas. Its constructor is defined as follows
-
-   ```typescript
-   // x: number The x-coordinate of the point
-   // y: number The y-coordinate of the point
-   // props Will be passed to the Shape constructor
-   constructor(x: number, y: number, props: ShapeProps = {})
-   ```
-
-   - The following methods of this object may be useful in some cases
-
-   ```typescript
-   // This method is used to update the attributes of the point
-   declare update({ x, y, props }: PointProps) this
-
-   // This method can calculate the distance between two points
-   declare distance(point: Point): number
-
-   // This method can determine whether two points are within a certain distance. In fact, it calls the distance method and compares it with the offset
-   declare near(point: Point, offset: number = 10): boolean
-
-   // This method can determine whether the minimum distance between a point and a line segment is within a specified distance
-   // When the projection of the line connecting the point and the endpoint of the line segment is on the line segment, the minimum distance is the vertical distance from the point to the line. Otherwise, it is the smaller of the distances from the point to the two endpoints of the line segment
-   // https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
-   declare nearLine(line: Line, offset: number = 10): boolean
-   ```
-
- - Line
-
-   - This object draws a line segment on the canvas. Its constructor is defined as follows
-
-   ```typescript
-   // x1: number The x-coordinate of the starting point of the line segment
-   // y1: number The y-coordinate of the starting point of the line segment
-   // x2: number The x-coordinate of the ending point of the line segment
-   // y2: number The y-coordinate of the ending point of the line segment
-   // props Will be passed to the Shape constructor
-   constructor({ x1, y1, x2, y2, props }: LineProps)
-   ```
-
-   - The following methods of this object may be useful in some cases
-
-   ```typescript
-
-   // This method is used to update the attributes of the line segment
-   declare update({ x1, y1, x2, y2, props }: UpdateLineProps)this
-
-   // This method is used to calculate the vertical distance from a point to a straight line
-   declare distanceToPoint(point: Point): number
-
-   // This method is used to calculate the length of the line segment
-   declare len(): number
-
-   // The calculation method of the nearLine of the Point object is the same
-   declare segmentDistanceToPoint(point: Point): number
-
-   // This method can determine whether the minimum distance between a point and the line segment is within the specified distance, and calls the segmentDistanceToPoint method
-   declare nearPoint(point: Point, offset: number = 10): boolean
-   ```
-
- - Rectangle
-
-   - This object draws a rectangle on the canvas. Its constructor is defined as follows
-
-   ```typescript
-   // x: number The x-coordinate of the upper left corner of the rectangle
-   // y: number The y-coordinate of the upper left corner of the rectangle
-   // width: number The width of the rectangle
-   // height: number The height of the rectangle
-   // props Will be passed to the Shape constructor
-   constructor({ x, y, width, height, props = {} }: RectangleAttr)
-   ```
-
-   - After creation, the following properties will be added to this object
-
-   ```typescript
-   // leftTop: Point The coordinates of the upper left corner of the rectangle
-   // rightTop: Point The coordinates of the upper right corner of the rectangle
-   // leftBottom: Point The coordinates of the lower left corner of the rectangle
-   // rightBottom: Point The coordinates of the lower right corner of the rectangle
-   // leftBorder: Line The line on the left side of the rectangle
-   // rightBorder: Line The line on the right side of the rectangle
-   // topBorder: Line The line on the top side of the rectangle
-   // bottomBorder: Line The line on the bottom side of the rectangle
-   // area: number The area of the rectangle
-   ```
-
- - The following methods of this object may be useful in some cases
-
-   ```typescript
-   // This method is used to update the attributes of the object
-   declare update(Partial<RectangleAttr>): this
-
-   // This method is used to conveniently calculate the scaling ratio and offset required to proportionally scale another rectangle and center it in the current rectangle
-   // When calling this method, you need to pass in width and height values, and it will return a new Rectangle object and three attributes
-   type FitInfoAttr = {
-     rectangle: Rectangle
-     scaleRatio: number
-     offsetX: number
-     offsetY: number
-   }
-   declare computeFitInfo(width: number, height: number): FitInfoAttr
-
-   // example:
-   // Create a rectangle with a width and height of 200*300, and then calculate the scaling ratio and offset required to proportionally scale and center this rectangle in a container rectangle with a width and height of 600*600
-   // rectangle is the newly created proportionally scaled and centered rectangle, scaleRatio is the scaling ratio, and offsetX and offsetY are the offsets
-   const containerRect = new Rectangle({ x: 0, y: 0, width:600, height:600 })
-   const { rectangle, scaleRatio, offsetX, offsetY } = containerRect.computeFitInfo(200, 300)
-
-   // This method is used to determine whether a point is inside the rectangle
-   declare (point: Point): boolean
-
-   // This method is used to copy a rectangle. The copied rectangle will have the same attributes as the current rectangle but will not share the same object
-   declare copy(): Rectangle
-
-   // These two methods are used to convert the rectangle coordinates in the world coordinate system to the rectangle coordinates in the screen coordinate system, and vice versa
-   declare worldToScreen(offsetX: number, offsetY: number, scaleRatio: number): Rectangle
-   declare screenToWorld(offsetX: number, offsetY: number, scaleRatio: number): { x: number, y: number, width: number, height: number }
-   ```
-
- - Circle
-
-   - This object draws a circle on the canvas. Its constructor is defined as follows
-
-   ```typescript
-   export interface CircleAttr {
-     x: number // The x-coordinate of the center of the circle
-     y: number // The y-coordinate of the center of the circle
-     radius: number // The radius of the circle
-     props?: ShapeProps
-   }
-   declare constructor({ x, y, radius, props }: CircleAttr)
-   ```
-
-   - The following methods of this object may be useful in some cases
-
-   ```typescript
-   // This method is used to update the attributes of the circle
-   declare update({ x, y, radius, props }: Partial<CircleAttr>): this
-
-   // This method can determine whether a point is inside the circle
-   declare (point: Point): boolean
-   ```
-
- - Text
-
-   - This object draws text on the canvas. Its constructor is defined as follows
-
-   ```typescript
-   // x: number The x-coordinate of the text, which is the x-coordinate of the center point of the rectangle containing the text
-   // y: number The y-coordinate of the text, which is the y-coordinate of the center point of the rectangle containing the text
-   // font: string The font of the text https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/font
-   constructor({ x, y, text, font, props }: TextAttr)
-   ```
-
-   - The following methods of this object may be useful in some cases
-
-   ```typescript
-   // This method is used to update the attributes of the text
-   declare update({
-     x,
-     y,
-     font,
-     text,
-     props,
-   }: Partial<TextAttr>)
-
-   // This method can determine whether a point is inside the rectangle where the Text is located
-   declare (point: Point): boolean
-   ```
-
- - Path
-
- - This object draws a path on the canvas. Its constructor is defined as follows
-
-   ```typescript
-   // points: Point[] The points on the path
-   // radius: number The radius of the path
-   constructor({ points, radius, props }: PathAttr)
-     ```
-
- #### Custom Shape
-
- - Custom Shape
-
-   - We will take Rectangle as an example to introduce how to customize a Shape in detail (Note that this is not the complete Rectangle code, only the necessary parts are extracted to introduce the process of customizing Shape)
-
-   ```typescript
-   // The class you define must inherit Shape and implement the following abstract methods
-
-   // abstract contains(point: SimplePoint, cxt?: CanvasRenderingContext2D): boolean
-   // abstract copy(): Shape
-   // abstract draw(ctx: CanvasRenderingContext2D, canvas?: HTMLCanvasElement): void
-   // abstract move(offsetX: number, offsetY: number): void
-   // abstract update(props: any): Shape
-   // abstract zoom(zoomScale: number): void
-   export class Rectangle extends Shape {
-     constructor({ x, y, width, height, props = {} }: RectangleAttr) {
-       // You can pass props to Shape here. The properties in props have been introduced in previous modules
-       super(props)
-       this.x = x
-       this.y = y
-       this.width = width
-       this.height = height
-       ...
-     }
-
-     ...
-
-     // This function determines whether a point is in your custom Shape. When we define a listener, this function will be called to determine whether the object meets the area condition triggered by the current selector. The parameter of this function is the coordinates of the mouse position
-     contains(point: Point): boolean {
-       return (
-         point.x > this.x &&
-         point.x < this.x + this.width &&
-         point.y > this.y &&
-         point.y < this.y + this.height
-       )
-     }
-
-     // This function copies the current object. The return result needs to be a new object. You can call the _copy() method of Shape to copy props
-     copy(): Rectangle {
-       return new Rectangle({
-         ...this,
-         props: this._copy(),
-       })
-     }
-
-     // Core drawing function. This function draws your Shape. The parameter of this function is the ShapeDrawProps object. You can call the methods of context to draw your Shape
-
-     // export interface ShapeDrawProps {
-     //  context: CanvasRenderingContext2D
-     //  canvas: HTMLCanvasElement
-     //  now: number // The current timestamp, this value can be used to achieve animation effects
-     //}
-     draw({ context }: ShapeDrawProps) {
-       context.lineWidth = this.lineWidth
-
-       if (this.type === SHAPE_DRAW_TYPES.STROKE) {
-         context.strokeStyle = this.color
-         context.strokeRect(this.x, this.y, this.width, this.height)
-       } else if (this.type === SHAPE_DRAW_TYPES.FILL) {
-         context.fillStyle = this.color
-         context.fillRect(this.x, this.y, this.width, this.height)
-       }
-     }
-
-     // This function will be called when you need to move elements on the canvas. If your application does not need this feature, you can leave this method empty
-     // This function will be called when the entire canvas is moved. You can update the position of your Shape here. The parameter of this function is the offset of the movement
-     move(offsetX: number, offsetY: number) {
-       this.update({
-         x: this.x + offsetX,
-         y: this.y + offsetY,
-       })
-     }
-
-     // Update function used to update the attributes of the Shape
-     update({
-       x = this.x,
-       y = this.y,
-       width = this.width,
-       height = this.height,
-       props,
-     }: Partial<RectangleAttr>) {
-       this.x = x
-       this.y = y
-       this.width = width
-       this.height = height
-       this._update(props || {})
-       this.init()
-
-       return this
-     }
-
-     // This function will be called when you need to zoom elements on the canvas. If your application does not need this feature, you can leave this method empty
-     // This function will be called when the entire canvas is zoomed. You can update the position of your Shape here. The parameter of this function is the zoom ratio. You can use the getZoomPoint method of Shape to calculate the position of a coordinate after zooming
-     // In this example, Rectangle calls the getZoomPoint method and passes the zoomScale and the coordinates of the upper left corner as parameters to get the coordinates of the upper left corner after zooming
-     // For width and height, just multiply the original width and height by the zoomScale
-     zoom(zoomScale: number) {
-       const leftTop = this.getZoomPoint(zoomScale, this.leftTop)
-       this.update({
-         x: leftTop.x,
-         y: leftTop.y,
-         width: this.width * zoomScale,
-         height: this.height * zoomScale,
-       })
-     }
-   }
-   ```
-
- ##### Shape State
-
-   - Different from the state of react-stay-canvas, Shape itself also has a state field. When your Shape needs different drawing effects in different states, you can use the state field to control it. For example, we need to achieve a Rectangle. By default, the state is default, and the Rectangle draws a hollow rectangle. When the user moves the mouse over the Rectangle, we change the state of the Rectangle to hover and set the color of the Rectangle to red when drawing. When the user moves the mouse out of the Rectangle, we change the state of the Rectangle back to default and restore its color
-
-   ```typescript
-   // Define a custom Rectangle and control the drawing effect in different states through a custom stateDrawFuncMap
-   export class CustomRectangle extends Rectangle {
-     constructor({ x, y, width, height, props = {} }: RectangleAttr) {
-       super({ x, y, width, height, props })
-       this.initStateDrawFuncMap()
-     }
-
-     initStateDrawFuncMap() {
-       this.stateDrawFuncMap = {
-         default: ({ context }) => {
-           this.setColor(context, "white")
-           context.strokeRect(this.x, this.y, this.width, this.height)
-         },
-         hover: ({ context }) => {
-           this.setColor(context, "red")
-           context.strokeRect(this.x, this.y, this.width, this.height)
-         },
-       }
-     }
-   }
-
-   // Create a hover listener. When the mouse moves over the Rectangle, we change its state to hover. When the mouse moves out of the Rectangle, we change its state to default
-   export const HoverListener: ListenerProps = {
-     name: "hoverListener",
-     event: "mousemove",
-     callback: ({ e, tools: { getChildrenBySelector } }) => {
-       const labels = getChildrenBySelector(".label")
-       labels.forEach((label) => {
-         let rectState = label.shape.contains(e.point) ? "hover" : "default"
-         label.shape.switchState(rectState)
-       })
-     },
-   }
-   ```
-
-
-https://github.com/lezhu1234/react-stay-canvas/assets/11953013/1b0589d3-27f9-4faa-ac9d-906477faee6e
-
-
- ##### Animation
-
-   When creating a custom Shape, you need to implement the draw method. This method has a now timestamp parameter. You can use this parameter to create animation effects
-   In the example above, when hovering over the CustomRectangle, we hope that the rectangle has a border that transitions from white to red to white within 2 seconds instead of directly turning red. We can modify the hover drawing function in stateDrawFuncMap like this
-
-   ```typescript
-   ...
-   hover: ({ context, now }) => {
-     const c = Math.abs(
-       Math.ceil((now % 1000) / 4) - 255 * (Math.floor((now % 10000) / 1000) % 2)
-     )
-     this.setColor(context, `rgb(255, ${c}, ${c})`)
-     context.strokeRect(this.x, this.y, this.width, this.height)
-   },
-   ...
-   ```
+```
+
+### Shape API
 
+#### 在react-stay-canvas中内置了一些简单的Shape，你可以通过继承Shape类来轻松的创建自定义的Shape
+
+- Image: 图片
+
+  - 该对象在 canvas 上绘制一张图片，其构造函数的定义如下
+
+  ```typescript
+  // x, y, width,  height 相当于文档中的 dx, dy, dWidth, dHeight
+  // https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
+  export interface ImageProps {
+    src: string // 图片的src
+    x: number // 绘制图片时,图片左上角在canvas上的x坐标，该值是相对于屏幕像素来说的
+    y: number // 绘制图片时,图片左上角在canvas上的y坐标，该值是相对于屏幕像素来说的
+    width: number // 绘制图片时的宽度，该值是相对于屏幕像素来说的
+    height: number  // 绘制图片时的高度，该值是相对于屏幕像素来说的
+    sx?: number  // 绘制图片时,起始点在图片上的x坐标，该值是相对于图片原始像素来说的
+    sy?: number  // 绘制图片时,起始点在图片上的y坐标，该值是相对于图片原始像素来说的
+    swidth?: number // 绘制图片时,图片的宽度，该值是相对于图片原始像素来说的
+    sheight?: number // 绘制图片时,图片的高度，该值是相对于图片原始像素来说的
+    imageLoaded?: (image: StayImage) => void // 图片加载完成后的回调
+    props?: ShapeProps // 该对象继承自Shape
+  }
+  constructor(imageProps: ImageProps)
+  ```
+
+  - 该对象的以下方法在某些时候可能会比较有用
+
+  ```typescript
+  //该方法用来更新点的属性
+  declare update({
+    src,
+    x,
+    y,
+    width,
+    sx,
+    sy,
+    swidth,
+    sheight,
+    height,
+    props,
+  }: Partial<ImageProps>): this
+  ```
+
+- Point：点
+
+  - 该对象在 canvas 上绘制一个点，其构造函数的定义如下
+
+  ```typescript
+  // x:number 点的x坐标
+  // y:number 点的y坐标
+  // props 将会被传递给Shape的构造函数
+  constructor(x: number, y: number, props: ShapeProps = {})
+  ```
+
+  - 该对象的以下几个方法在某些时候可能会比较有用
+
+  ```typescript
+  //该方法用来更新点的属性
+  declare update({ x, y, props }: PointProps) this
+
+  // 该方法可以计算两个点之间的距离
+  declare distance(point: Point): number
+
+  // 该方法可以判断两个点是否在某个距离内,其实就是调用了 distance 方法和 offset 作比较
+  declare near(point: Point, offset: number = 10): boolean
+
+  // 该方法可以判断一个点与线段的最小距离是否在指定距离内
+  // 当点与线段某端点的连线在线段上的投影在线段上时，最小距离为点到直线的垂直距离，否则为点到线段两个端点距离中较小的一个
+  // https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
+  declare nearLine(line: Line, offset: number = 10): boolean
+  ```
+
+- Line: 线段
+
+  - 该对象在 canvas 上绘制一个线段，其构造函数的定义如下
+
+  ```typescript
+  // x1:number 线段的起点x坐标
+  // y1:number 线段的起点y坐标
+  // x2:number 线段的终点x坐标
+  // x2:number 线段的终点y坐标
+  // props 将会被传递给Shape的构造函数
+  constructor({ x1, y1, x2, y2, props }: LineProps)
+  ```
+
+  - 该对象的以下几个方法在某些时候可能会比较有用
+
+  ```typescript
+
+  //该方法用来更新线段的属性 declare update({ x1, y1, x2, y2, props }: UpdateLineProps)this
+
+  // 该方法用来计算点到直线的垂直距离 declare distanceToPoint(point: Point): number
+
+  // 该方法用来计算线段的长度 declare len(): number
+
+  // 与 Point 对象的 nearLine 计算方法相同 declare segmentDistanceToPoint(point: Point): number
+
+  // 该方法可以判断一个点与线段的最小距离是否在指定距离内，调用 segmentDistanceToPoint 方法 declare nearPoint(point: Point, offset: number = 10): boolean
+
+  ```
+
+- Rectangle: 矩形
+
+  - 该对象在 canvas 上绘制一个矩形，其构造函数的定义如下
+
+  ```typescript
+  // x:number 矩形左上角的x坐标
+  // y:number 矩形左上角的y坐标
+  // width:number 矩形的宽度
+  // height:number 矩形的高度
+  // props 将会被传递给Shape的构造函数
+  constructor({ x, y, width, height, props = {} }: RectangleAttr)
+  ```
+
+  - 在创建完成之后，该对象中会新增以下属性
+
+  ```typescript
+  // leftTop: Point 矩形左上角的坐标
+  // rightTop: Point 矩形右上角的坐标
+  // leftBottom: Point 矩形左下角的坐标
+  // rightBottom: Point 矩形右下角的坐标
+  // leftBorder: Line 矩形左边的线
+  // rightBorder: Line 矩形右边的线
+  // topBorder: Line 矩形上边的线
+  // bottomBorder: Line 矩形下边的线
+  // area: number 矩形的面积
+  ```
+
+- 该对象的以下几个方法在某些时候可能会比较有用
+
+  ```typescript
+  //该方法用来更新对象的属性
+  declare update(Partial<RectangleAttr>): this
+
+  //该方法用来方便的为你计算将另外一个矩形等比例缩放并居中放置在当前矩形中所需要的缩放比例和偏移量
+  //调用该方法时，你需要传入宽高值，会返回一个新的 Rectangle 对象和三个属性
+  type FitInfoAttr = {
+    rectangle: Rectangle
+    scaleRatio: number
+    offsetX:number
+    offsetY:number
+  }
+  declare computeFitInfo(width: number, height: number): FitInfoAttr
+
+  //example:
+  //创建一个宽高为200*300的矩形，然后计算将这个矩形等比例缩放并居中放置在宽高为600*600的容器矩形中，需要缩放的比例和偏移量。
+  // rectangle 为新创建的等比例缩放并居中的矩形，scaleRatio 为缩放比例，offsetX 和 offsetY 为偏移量
+  const containerRect = new Rectangle({ x: 0, y: 0, width:600, height:600 })
+  const { rectangle, scaleRatio, offsetX, offsetY } = containerRect.computeFitInfo(200, 300)
+
+  //该方法用来判断一个点是否在矩形内
+  declare (point: Point): boolean
+
+  //该方法用来复制一个矩形，复制后的矩形会拥有和当前矩形一样的属性，但是不会共享同一个对象
+  declare copy(): Rectangle
+
+  //这两个方法用来将世界坐标系下的矩形坐标转换为屏幕坐标系下的矩形坐标，反之亦然
+  declare worldToScreen(offsetX: number, offsetY: number, scaleRatio: number): Rectangle
+  declare screenToWorld(offsetX: number, offsetY: number, scaleRatio: number):{ x: number, y: number, width: number, height: number }
+  ```
+
+- Circle: 圆形
+
+  - 该对象在 canvas 上绘制一个圆形，其构造函数的定义如下
+
+  ```typescript
+  export interface CircleAttr {
+    x: number // 圆心的x坐标
+    y: number // 圆心的y坐标
+    radius: number // 圆的半径
+    props?: ShapeProps
+  }
+  declare constructor({ x, y, radius, props }: CircleAttr)
+  ```
+
+  - 该对象的以下几个方法在某些时候可能会比较有用
+
+  ```typescript
+  // 该方法用来更新圆的属性
+  declare update({ x, y, radius, props }: Partial<CircleAttr>): this
+
+  // 该方法可以判断一个点是否在圆内
+  declare (point: Point): boolean
+  ```
+
+- Text: 文本
+
+  - 该对象在 canvas 上绘制一个文本，其构造函数的定义如下
+
+  ```typescript
+  // x:number 文本的x坐标， 该坐标为包含文本的矩形的中心点 x 坐标
+  // y:number 文本的y坐标， 该坐标为包含文本的矩形的中心点 y 坐标
+  // font:string 文本的字体 https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/font
+  constructor({ x, y, text, font, props }: TextAttr)
+  ```
+
+  - 该对象的以下几个方法在某些时候可能会比较有用
+
+  ```typescript
+  // 该方法用来更新文本的属性
+  declare update({
+    x,
+    y,
+    font,
+    text,
+    props,
+  }: Partial<TextAttr>)
+
+  // 该方法可以判断一个点是否在Text所在的矩形内
+  declare (point: Point): boolean
+  ```
+
+- Path: 路径
+
+- 该对象在 canvas 上绘制一个路径，其构造函数的定义如下
+
+  ```typescript
+  // points: Point[] 路径上的点
+  // radius: number 路径的半径
+  constructor({ points, radius, props }: PathAttr)
+    ```
+
+#### 自定义 Shape
+
+- 自定义 Shape
+
+  - 我们将以 Rectangle 为例，详细的介绍如何自定义一个 Shape (注意，这不是完整的 Rectangle 代码，只是提取出其中必要的部分，以用来介绍自定义 Shape 的流程)
+
+  ```typescript
+  // 你定义的类必须要继承 Shape 并实现以下几个抽象方法
+
+  // abstract contains(point: SimplePoint, cxt?: CanvasRenderingContext2D): boolean
+  // abstract copy(): Shape
+  // abstract draw(ctx: CanvasRenderingContext2D, canvas?: HTMLCanvasElement): void
+  // abstract move(offsetX: number, offsetY: number): void
+  // abstract update(props: any): Shape
+  // abstract zoom(zoomScale: number): void
+  export class Rectangle extends Shape {
+    constructor({ x, y, width, height, props = {} }: RectangleAttr) {
+      // 你可以在这里将props传递给Shape， props 中的属性在之前的模块中有过介绍，
+      super(props)
+      this.x = x
+      this.y = y
+      this.width = width
+      this.height = height
+      ...
+    }
+
+    ...
+
+    // 这个函数判断一个点是否在你自定义的Shape中，当我们定义 listener 时，会调用这个函数来判断该对象是否符合当前 selector 触发的区域条件，该函数的参数是鼠标所在位置的坐标
+    contains(point: Point): boolean {
+      return (
+        point.x > this.x &&
+        point.x < this.x + this.width &&
+        point.y > this.y &&
+        point.y < this.y + this.height
+      )
+    }
+
+    // 这个函数复制一个当前对象，返回结果需要是一个新的对象，其中，你可以调用 Shape 的 _copy() 方法来复制 props
+    copy(): Rectangle {
+      return new Rectangle({
+        ...this,
+        props: this._copy(),
+      })
+    }
+
+    // 核心绘制函数，这个函数绘制你的Shape，该函数的参数是 ShapeDrawProps 对象，你可以调用 context 的方法来绘制你的 Shape
+
+    //export interface ShapeDrawProps {
+    //  context: CanvasRenderingContext2D
+    //  canvas: HTMLCanvasElement
+    //  now: number // 当前时间戳，该值可以用来实现动画效果
+    //}
+    draw({ context }: ShapeDrawProps) {
+      context.lineWidth = this.lineWidth
+
+      if (this.type === SHAPE_DRAW_TYPES.STROKE) {
+        context.strokeStyle = this.color
+        context.strokeRect(this.x, this.y, this.width, this.height)
+      } else if (this.type === SHAPE_DRAW_TYPES.FILL) {
+        context.fillStyle = this.color
+        context.fillRect(this.x, this.y, this.width, this.height)
+      }
+    }
+
+    //当你的应用需要对画布上的元素进行移动时调用，如果你的应用不需要这个功能，你可以将这个方法置空
+    // 这个函数会在移动整个画布的时候被调用，你可以在这里更新你的Shape的位置，该函数的参数是移动的偏移量
+    move(offsetX: number, offsetY: number) {
+      this.update({
+        x: this.x + offsetX,
+        y: this.y + offsetY,
+      })
+    }
+
+    // 更新函数，用来更新Shape的属性
+    update({
+      x = this.x,
+      y = this.y,
+      width = this.width,
+      height = this.height,
+      props,
+    }: Partial<RectangleAttr>) {
+      this.x = x
+      this.y = y
+      this.width = width
+      this.height = height
+      this._update(props || {})
+      this.init()
+
+      return this
+    }
+
+    //当你的应用需要对画布上的元素进行缩放时调用，如果你的应用不需要这个功能，你可以将这个方法置空
+    // 这个函数会在缩放整个画布的时候被调用，你可以在这里更新你的Shape的位置，该函数的参数是缩放的比例，你可以使用 Shape 的 getZoomPoint 方法来计算某个坐标缩放后的位置
+    // 在本例中，Rectangle 调用了 getZoomPoint 方法，并将 zoomScale 和 左上角的坐标作为参数传入，可以得到缩放后的左上角坐标
+    // 而对于宽高，则直接使用原来的宽高和 zoomScale 相乘来得到
+    zoom(zoomScale: number) {
+      const leftTop = this.getZoomPoint(zoomScale, this.leftTop)
+      this.update({
+        x: leftTop.x,
+        y: leftTop.y,
+        width: this.width * zoomScale,
+        height: this.height * zoomScale,
+      })
+    }
+  }
+  ```
+
+##### Shape 状态
+
+  - 区别于 react-stay-canvas 的状态，shape 本身也有一个状态字段，当你的Shape在不同状态下需要不同的绘制效果时，你可以使用 state 字段来控制，比如我们需要实现一个 Rectangle，默认情况下，状态为 default, Rectangle 为绘制一个空心矩形，当用户将鼠标移动到 Rectangle 上时，我们将 Rectangle 的状态改为 hover，并在绘制时，将 Rectangle 的颜色设置为红色，当用户将鼠标移出 Rectangle 时，我们将 Rectangle 的状态改为 default，并恢复其颜色
+
+  ```typescript
+  //定义一个自定义的 Rectangle，通过自定义 stateDrawFuncMap，用来控制不同状态下的绘制效果
+  export class CustomRectangle extends Rectangle {
+    constructor({ x, y, width, height, props = {} }: RectangleAttr) {
+      super({ x, y, width, height, props })
+      this.initStateDrawFuncMap()
+    }
+
+    initStateDrawFuncMap() {
+      this.stateDrawFuncMap = {
+        default: ({ context }) => {
+          this.setColor(context, "white")
+          context.strokeRect(this.x, this.y, this.width, this.height)
+        },
+        hover: ({ context }) => {
+          this.setColor(context, "red")
+          context.strokeRect(this.x, this.y, this.width, this.height)
+          return true // 注意， 当你需要实现动画效果时，你必须返回 true，否则动画不会生效
+        },
+      }
+    }
+  }
+
+  // 创建一个hover监听器，当鼠标移动到 Rectangle 上时，我们将其状态改为 hover，当鼠标移出 Rectangle 时，我们将其状态改为 default
+  export const HoverListener: ListenerProps = {
+    name: "hoverListener",
+    event: "mousemove",
+    callback: ({ e, tools: { getChildrenBySelector } }) => {
+      const labels = getChildrenBySelector(".label")
+      labels.forEach((label) => {
+        let rectState = label.shape.contains(e.point) ? "hover" : "default"
+        label.shape.switchState(rectState)
+      })
+    },
+  }
+  ```
+  <video src="videos/state-map.mp4" controls="">
+  </video>
+
+##### 动画
+
+  在创建自定义Shape时，需要实现 draw 方法，该方法中存在 now 时间戳参数，利用该参数可以创建动画效果
+  在上面的例子中，当 hover CustomRectangle 时，我们希望矩形拥有一个边框在 2s 内从白到红再到白的呼吸效果而不是直接变成红色，那么我们可以这么修改 stateDrawFuncMap 中的 hover 绘制函数
+
+
+  ```typescript
+  ...
+  hover: ({ context, now }) => {
+    const c = Math.abs(
+      Math.ceil((now % 1000) / 4) - 255 * (Math.floor((now % 10000) / 1000) % 2)
+    )
+    this.setColor(context, `rgb(255, ${c}, ${c})`)
+    context.strokeRect(this.x, this.y, this.width, this.height)
+    return true // 注意，当你需要实现动画效果时，你必须返回 true，否则，将不会执行下一次绘制
+  },
+  ...
+  ```
+
+  <video src="videos/shape-anim.mp4" controls="">
+    </video>
   
+  你可以结合 [gsap](https://gsap.com/), [tween](https://github.com/tweenjs/tween.js) 等动画库来实现更多丰富的动画效果
 
-https://github.com/lezhu1234/react-stay-canvas/assets/11953013/78f383b9-86f8-470d-90fb-024ad95334a0
 
+### Listener API
 
-   You can combine [gsap](https://gsap.com/), [tween](https://github.com/tweenjs/tween.js), and other animation libraries to achieve more rich animation effects
+```typescript
+declare const DEFAULTSTATE = "default-state"
 
-
- ### Listener API
-
- ```typescript
- declare const DEFAULTSTATE = "default-state"
-
- interface ListenerProps {
-   name: string // The name of the listener, you can use any string as the name, but it needs to be unique
-   state?: string // The state of the listener, which we will introduce later. The default value is DEFAULTSTATE
-   selector?: string // The selector of the listener, which we will introduce later
-   event: string | string[] // The event of the listener. When this event is triggered, the callback function of the listener will be executed. When the event is an array, any one event triggers, and the callback function will be executed. At the same time, the event name will be returned in e.name in the callback function
-   sortBy?: SortChildrenMethodsValues | ChildSortFunction // The method for sorting the selected elements after the selector selects them. We will introduce this later. The default value is SORT_CHILDREN_METHODS.AREA_ASC = area-asc, which means sorting by area in ascending order. You can also customize the sorting function
-   callback: (p: ActionCallbackProps) => {
-     [key: string]: any
-   } | void
- }
-
- // Custom element sorting method
- export type ChildSortFunction = (a: StayChild, b: StayChild) => number
- ```
-
- #### Selector
-
- A very simple selector function is implemented in react-stay-canvas, mainly used to filter elements by name and id. When we use appendChild, updateChild, and other functions, we need to provide a `className` property, and the returned object of these tool functions will contain an `id` property. When defining a selector, you can select the corresponding elements by adding a symbol `.` before the `className` property and a symbol `#` before the `id` property.
-
- ```typescript
- const child1 = appendChild({
-   className: "label",
-   ...
- })
- const child2 = appendChild({
-   className: "label",
-   ...
- })
-
- getChildrenBySelector(".label") // returns [child1, child2]
- getChildrenBySelector("#" + child1.id) // returns child1
- getChildrenBySelector("!.label") // returns []
- ```
-
- #### State
-
- In react-stay-canvas, you can control the current state through the state property. This property is a string, and the default state is DEFAULTSTATE = "default-state". The concept of state comes from the finite state machine. By setting the state, you can flexibly control when the listener should be triggered. Imagine we want to implement the following functions:
-
- - By default, a rectangle is drawn according to the mouse drag on the canvas
- - After we select this rectangle, dragging on this rectangle will move the rectangle
-
- We can set up three listeners to achieve this functionality:
-
- - The first listener has a state property of DEFAULTSTATE, listens for drag events, and implements the shape drawing function in the callback function
- - The second listener has a state property of DEFAULTSTATE, listens for click events, and in the callback function, if we detect that the user clicked on the drawn element, change the current state to "selected". Otherwise, change the state back to DEFAULTSTATE
- - The third listener has a state property of "selected", listens for drag events, and implements the functionality of moving the selected rectangle in the callback function
-
- You can perform some simple logical operations on the state field
-
- #### Simple Logical Operations
-
- You can use some very simple logical operations on certain properties. Currently supported properties include state and selector.
-
- ```typescript
- export const SUPPORT_LOGIC_OPRATOR = {
-   AND: "&",
-   OR: "|",
-   NOT: "!",
- }
-
- const selector = ".A&#B" // Select elements with a class name of A and an id of B
- const selector = ".A&!#B" // Select elements with a class name of A and an id not equal to B
- const selector = "!.A" // Select elements with a class name not equal to A
-
- const state = "!selected" // When the state is not selected
- const state = "default-state|selected" // When the state is default-state or selected
- ```
-
- #### Event
-
- The event property accepts a string. You can pass an array of events to the eventList of StayCanvas to customize the events or directly override the predefined events. The same name event will be overridden.
-
- In react-stay-canvas, the following types of events are predefined:
-
- - mousedown: Mouse down
- - mousemove: Mouse move
- - mouseup: Mouse up
- - keydown: Key down
- - keyup: Key up
- - zoomin: Mouse wheel scroll up
- - zoomout: Mouse wheel scroll down
- - dragstart: When the left mouse button is pressed
- - drag: When the left mouse button is pressed and moved, and the mouse is more than 10 pixels away from the initial position
- - dragend: Dragging ends
- - startmove: When the ctrl key is pressed and the left mouse button is pressed
- - move: When the ctrl key is pressed and the left mouse button is pressed and moved
- - click: Click
- - redo: ctrl + shift + z
- - undo: ctrl + z
-
- #### Listener Callback Function
-
- The callback function is the core function that controls user interactions on the canvas. The definition of this function is as follows:
-
- ```typescript
- // The parameter of this function is of the ActionCallbackProps type. You can return a CallbackFuncMap object or return nothing
- export type UserCallback = (p: ActionCallbackProps) => CallbackFuncMap<typeof p> | void
-
- export type CallbackFuncMap<T extends ActionCallbackProps> = {
-   [key in T["e"]["name"]]: () => { [key: string]: any } | void | undefined
- }
-
- // Among them, ActionCallbackProps is defined as follows
- export interface ActionCallbackProps {
-   originEvent: Event // The native event, this parameter is the event parameter passed when addEventListener is called
-   e: ActionEvent // The event object defined in react-stay-canvas. For details, please refer to the ActionEvent type
-   store: storeType // A global storage object of type Map
-   stateStore: storeType // A storage object of type Map. The difference from store is that this object will be cleared when the state changes
-   composeStore: Record<string, any> // When we define a listener, if we pass an array as the event parameter, the composeStore will be the same object for each event trigger
-   tools: StayTools // The StayTools object, which contains some utility functions. For details, please refer to StayTools
-   payload: Dict // The parameters passed when we manually call the trigger function
- }
-
- export interface ActionEvent {
-   state: string // The state when the event is triggered
-   name: string // The name of the event
-   x: number // The x-coordinate of the mouse relative to the canvas
-   y: number // The y-coordinate of the mouse relative to the canvas
-   point: Point // The coordinates of the mouse relative to the canvas
-   target: StayChild // The element that triggered the event
-   pressedKeys: Set<string> // The keys and mouse buttons currently pressed. The left mouse button is mouse0, the right mouse button is mouse1, and the mouse wheel is mouse2
-   key: string | null // The keyboard key that triggered the event. When we trigger the mouseup event, the pressedKeys will not have this key, but key will have this key
-   isMouseEvent: boolean // Whether it is a mouse event
-   deltaX: number // The x-axis offset when the mouse wheel is scrolled
-   deltaY: number // The y-axis offset when the mouse wheel is scrolled
-   deltaZ: number // The z-axis offset when the mouse wheel is scrolled
- }
-
- // example 1
- // In this example, the callback function does not return any value. This listener switches the state of the rectangle based on whether the mouse is inside the rectangle when the mouse moves
- export const HoverListener: ListenerProps = {
-   name: "hoverListener",
-   event: "mousemove",
-   callback: ({ e, tools: { getChildrenBySelector } }) => {
-     const labels = getChildrenBySelector(".label")
-     labels.forEach((label) => {
-       let rectState = label.shape.contains(e.point) ? "hover" : "default"
-       label.shape.switchState(rectState)
-     })
-   },
- }
-
- // example 2
- // In this example, the callback function returns a CallbackFuncMap object. Note that the event of this listener is an array, corresponding to the three keys in the returned callback function object. Each key corresponds to a function, which will be executed when the dragstart, drag, and dragend events are triggered. The returned value will be merged into composeStore
-
- // In the dragstart listener, we recorded dragStartPosition and dragChild and returned them. In this way, we can get dragStartPosition and dragChild through composeStore in the drag listener to achieve the drag function
-
- // In the dragend listener, we called the log function, which will take a snapshot of the current react-stay-canvas. Later, we can use the undo/redo function to perform undo/redo functions
-
- const DragListener: ListenerProps = {
-   name: "dragListener",
-   event: ["dragstart", "drag", "dragend"],
-   callback: ({ e, composeStore, tools: { appendChild, updateChild, log } }) => {
-     return {
-       dragstart: () => ({
-         dragStartPosition: new Point(e.x, e.y),
-         dragChild: appendChild({
-           shape: new CustomRectangle({
-             x: e.x,
-             y: e.y,
-             width: 0,
-             height: 0,
-             props: { color: "white" },
-           }),
-           className: "label",
-         }),
-       }),
-       drag: () => {
-         const { dragStartPosition, dragChild } = composeStore
-         const x = Math.min(dragStartPosition.x, e.x)
-         const y = Math.min(dragStartPosition.y, e.y)
-         const width = Math.abs(dragStartPosition.x - e.x)
-         const height = Math.abs(dragStartPosition.y - e.y)
-         updateChild({
-           child: dragChild,
-           shape: dragChild.shape.update({ x, y, width, height }),
-         })
-       },
-       dragend: () => {
-         log()
-       },
-     }
-   },
- }
- ```
-
- #### StayTools Utility Functions
-
- The StayTools object contains some utility functions, defined as follows:
-
- ```typescript
- export interface StayTools {
-   createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
-   appendChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
-   updateChild: (props: updateChildProps) => StayChild
-   removeChild: (childId: string) => void
-   getContainPointChildren: (props: getContainPointChildrenProps) => StayChild[]
-   hasChild: (id: string) => boolean
-   fix: () => void
-   switchState: (state: string) => void
-   getChildrenBySelector: (
-     selector: string,
-     sortBy?: SortChildrenMethodsValues | ChildSortFunction
-   ) => StayChild[]
-   getAvailableStates: (selector: string) => string[]
-   changeCursor: (cursor: string) => void
-   moveStart: () => void
-   move: (offsetX: number, offsetY: number) => void
-   zoom: (deltaY: number, center: SimplePoint) => void
-   log: () => void
-   redo: () => void
-   undo: () => void
-   triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
-   deleteListener: (name: string) => void
- }
- ```
-
- ##### Element Creation and Update
-
- - [`createChild`](#createchild) - Create a new element
- - [`appendChild`](#appendchild) - Create a new element and add it to the canvas
- - [`updateChild`](#updatechild) - Update the attributes of an existing element
- - [`removeChild`](#removechild) - Remove an element from the canvas
-
- ##### Element Query and Judgment
-
- - [`getContainPointChildren`](#getcontainpointchildren) - Get all elements that contain a certain point
- - [`hasChild`](#haschild) - Determine whether an element exists on the canvas
- - [`getChildrenBySelector`](#getchildrenbyselector) - Get elements by selector
- - [`getAvailableStates`](#getavailablestates) - Get all available states
-
- ##### State and View Control
-
- - [`fix`](#fix) - Adjust the layer of all elements to the bottom layer
- - [`switchState`](#switchstate) - Switch the current state
- - [`changeCursor`](#changecursor) - Change the mouse pointer style
- - [`moveStart`](#movestart) - Start moving all elements
- - [`move`](#move) - Move all elements
- - [`zoom`](#zoom) - Zoom all elements
-
- ##### Snapshot Control
-
- - [`log`](#log) - Save the current canvas snapshot
- - [`redo`](#redo) - Move forward to the next snapshot
- - [`undo`](#undo) - Move backward to the previous snapshot
-
- ##### Event Trigger
-
- - [`triggerAction`](#triggeraction) - Manually trigger an event
- - [`deleteListener`](#deletelistener) - Delete a listener
-
- ##### createChild
-
- The createChild function is used to create an element. This function accepts an object as a parameter. The parameter is defined as follows:
-
- ```typescript
- createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
-
- export interface createChildProps<T> {
-   id?: string // The id of the element. If not specified, it will be automatically generated
-   zIndex?: number // The zIndex of the element. This value affects the drawing order of the element on the canvas. The smaller the zIndex value, the more it is drawn to the front. The default value is 1
-   shape: T // The shape of the element. This value must be an object that inherits from Shape. Some subclasses of Shape are built into react-stay-canvas, and you can also customize your own Shape subclass, which will be introduced later
-   className: string // The className of the element
-   layer?: number // The layer where the element is located. This value is the index of the canvas layer where the element is located. 0 means the bottom layer. The larger the value, the closer to the upper layer. You can also use negative numbers to indicate the layer. -1 means the top layer. -2 means the next layer below the top layer, and so on. The default value is -1
- }
-
- // example:
- createChild({
-   shape: new Rectangle({
-     x: e.x,
-     y: e.y,
-     width: 0,
-     height: 0,
-     props: { color: "white" },
-   }),
-   className: "annotation",
- })
- ```
-
- ##### appendChild
-
- The appendChild function is used to create an element and directly add it to the canvas. This function accepts an object as a parameter. The parameter definition is the same as the createChild function.
-
- ```typescript
- // example
- appendChild({
-   shape: new Rectangle({
-     x: e.x,
-     y: e.y,
-     width: 0,
-     height: 0,
-     props: { color: "white" },
-   }),
-   className: "annotation",
- })
- ```
-
- ##### updateChild
-
- The updateChild function is used to update an element. This function accepts an object as a parameter. This function accepts parameters that are different from the createChild function in that it requires a child object. This object can be obtained from the return value of the appendChild function or the createChild function. In addition, other parameters are optional. The parameter is defined as follows:
-
- ```typescript
- export type updateChildProps<T = Shape> = {
-   child: StayChild
- } & Partial<createChildProps<T>>
-
- // example
- updateChild({
-   child,
-   shape: child.shape.update({
-     x,
-     y,
-     width,
-     height,
-   }),
- })
- ```
-
- ##### removeChild
-
- The removeChild function is used to delete an element. This function accepts a string parameter childId, which is the id of the element. There is no return value.
-
- ```typescript
- // example
- removeChild(image.id)
- ```
-
- ##### getContainPointChildren
-
- The getContainPointChildren function is used to get all elements that contain a certain point. When using this function, you need to specify a selector to define the search range. The parameter is defined as follows:
-
- ```typescript
- export interface getContainPointChildrenProps {
-   selector: string | string[] // The selector. This value can be a string or an array of strings. When it is an array of strings, it will return the union of all selector search results
-   point: SimplePoint // The coordinates of the mouse relative to the canvas || interface SimplePoint {x: number y: number}
-   returnFirst?: boolean | undefined // Whether to return only the first element. The default value is false
-   sortBy?: SortChildrenMethodsValues | ChildSortFunction // The sorting method. The default value is SORT_CHILDREN_METHODS.AREA_ASC = area-asc. You can also pass a function to customize the element sorting method
- }
-
- // Here are some built-in sorting methods
- export type SortChildrenMethodsValues = valueof<typeof SORT_CHILDREN_METHODS>
- export const SORT_CHILDREN_METHODS = {
-   X_ASC: "x-asc", // Sort by X-axis in ascending order
-   X_DESC: "x-desc", // Sort by X-axis in descending order
-   Y_ASC: "y-asc", // Sort by Y-axis in ascending order
-   Y_DESC: "y-desc", // Sort by Y-axis in descending order
-   WIDTH_ASC: "width-asc", // Sort by width in ascending order
-   WIDTH_DESC: "width-desc", // Sort by width in descending order
-   HEIGHT_ASC: "height-asc", // Sort by height in ascending order
-   HEIGHT_DESC: "height-desc", // Sort by height in descending order
-   AREA_ASC: "area-asc", // Sort by area in ascending order
-   AREA_DESC: "area-desc", // Sort by area in descending order
- }
-
- // example
- getContainPointChildren({
-   point: new Point(100, 100),
-   selector: ".annotation",
-   sortBy: "area-asc",
- })
- ```
-
- ##### hasChild
-
- The hasChild function is used to determine whether an element exists on the canvas. This function accepts a string parameter childId, which is the id of the element. The return value is a boolean value. true means it exists, and false means it does not exist.
-
- ```typescript
- // example
- hasChild(image.id)
- ```
-
- ##### fix
-
- The fix function is used to adjust all elements on the canvas to the bottom layer, which is equivalent to setting the layer of all elements to 0.
-
- ```typescript
- // example
- fix()
- ```
-
- ##### switchState
-
- The switchState function is used to switch the current state. This function accepts a string parameter state. After switching the state, the value in stateStore will be cleared.
-
- ```typescript
- // example
- switchState("state1")
- ```
-
- ##### getChildrenBySelector
-
- The getChildrenBySelector function is used to get elements selected by the selector. Its selector and sortBy parameters are the same as the getContainPointChildren function. The return value is a StayChild array.
-
- ```typescript
- // example
- getChildrenBySelector({
-   selector: ".annotation",
-   sortBy: (a, b) => a.shape.area - b.shape.area,
- })
- ```
-
- ##### getAvailableStates
-
- The getAvailableStates function is a utility function. This function accepts a string and returns all states that meet the selector among the currently appearing states.
-
- ```typescript
- // Assume that among all the registered listeners, the states contained are state1, state2, state3, state4, state5, state6, state7, state8, state9, and state10. Among them, the triggered states are state1, state2, state3, state4, and state5
- // Specifically, when the selector is "all-state", all states are returned
- getAvailableStates("all-state") // The return value is ["state1", "state2", "state3", "state4", "state5"]
- getAvailableStates("!state1") // The return value is ["state2", "state3", "state4", "state5"]
- getAvailableStates("all-state&!(state1|state2)") // The return value is ["state3", "state4", "state5"]
- ```
-
- ##### changeCursor
-
- The changeCursor function is used to change the mouse pointer style. This function accepts a string parameter cursor, which is the style of the mouse pointer. For specific values, refer to <https://developer.mozilla.org/zh-CN/docs/Web/CSS/cursor>
-
- ```typescript
- // example
- changeCursor("pointer")
- ```
-
- ##### moveStart
-
- The moveStart function is used to start moving all elements on the canvas. Before calling the move function, you need to call this function to save the position before the move.
-
- ##### move
-
- The move function is used to move all elements on the canvas. offsetX and offsetY respectively represent the offset of the horizontal and vertical coordinates relative to the start time.
-
- ```typescript
- // example
- // Suppose we need to implement a function where the entire canvas moves during drag. The listener can be written like this:
- export const MoveListener: ListenerProps = {
-   name: "moveListener",
-   event: ["startmove", "move"],
-   state: ALLSTATE,
-   callback: ({ e, composeStore, tools: { moveStart, move } }) => {
-     const eventMap = {
-       startmove: () => {
-         moveStart()
-         return {
-           startMovePoint: new Point(e.x, e.y),
-         }
-       },
-       move: () => {
-         const { startMovePoint } = composeStore
-         if (!startMovePoint) {
-           return
-         }
-         move(e.x - startMovePoint.x, e.y - startMovePoint.y)
-       },
-     }
-     return eventMap[e.name as keyof typeof eventMap]()
-   },
- }
- ```
-
- ##### zoom
-
- The zoom function is used to zoom all elements on the canvas. This function accepts two parameters. The first parameter is the zoom ratio, usually e.deltaY. The second parameter is the zoom center point. When we implement the function of zooming centered on the mouse, this parameter is the mouse position.
-
- ```typescript
- // example
- // Suppose we need to implement a function where the entire canvas is zoomed when the mouse wheel is scrolled. The listener can be written like this:
- export const ZoomListener: ListenerProps = {
-   name: "zoomListener",
-   event: ["zoomin", "zoomout"],
-   state: ALLSTATE,
-   callback: ({ e, tools: { zoom } }) => {
-     zoom(e.deltaY, new Point(e.x, e.y))
-   },
- }
- ```
-
- ##### log
-
- The log function saves the current canvas snapshot, puts the current canvas snapshot into the stack. After we execute this function, we can use the redo and undo functions to restore the previous snapshot.
-
- ##### redo
-
- Move forward to the next snapshot.
-
- ##### undo
-
- Move backward to the next snapshot.
-
- The redo function and undo function are used to change the current canvas to the snapshot in the stack.
-
- We can modify some code in the initial example to simply understand this function:
-
- ```diff
- - import { ListenerProps, Point, Rectangle, StayCanvas } from "react-stay-canvas"
- + import { useRef } from "react"
- + import { ALLSTATE, ListenerProps, Point, Rectangle, StayCanvas, StayCanvasTriggerType } from "react-stay-canvas"
-
- export function Demo() {
- + const stayCanvasRef = useRef<StayCanvasTriggerType>(null)
- + const getTrigger = () => stayCanvasRef.current?.trigger!
-
-   const DragListener: ListenerProps = {
-     name: "dragListener",
- -    event: ["dragstart", "drag"],
- -    callback: ({ e, composeStore, tools: { appendChild, updateChild } }) => {
- +    event: ["dragstart", "drag", "dragend"],
- +    callback: ({ e, composeStore, tools: { appendChild, updateChild, log } }) => {
-       return {
-         dragstart: () => ({
-           dragStartPosition: e.point,
-           dragChild: appendChild({
-             shape: new Rectangle({
-               x: e.x,
-               y: e.y,
-               width: 0,
-               height: 0,
-               props: { color: "red" },
-             }),
-             className: "annotation",
-           }),
-         }),
-         drag: () => {
-           const { dragStartPosition, dragChild } = composeStore
-           const x = Math.min(dragStartPosition.x, e.x)
-           const y = Math.min(dragStartPosition.y, e.y)
-           const width = Math.abs(dragStartPosition.x - e.x)
-           const height = Math.abs(dragStartPosition.y - e.y)
-           updateChild({
-             child: dragChild,
-             shape: dragChild.shape.update({ x, y, width, height }),
-           })
-         },
- +        // Add dragend event. After the drag ends, we save the current canvas snapshot
- +        dragend: () => {
- +          log()
- +        },
-       }
-     },
-   }
-
- +  // Add redo and undo listeners
- +  const undoListener: ListenerProps = {
- +    name: "undoListener",
- +    event: "undo",
- +    callback: ({ tools: { undo } }) => {
- +      undo()
- +    },
- +  }
- +
- +  const redoListener: ListenerProps = {
- +    name: "redoListener",
- +    event: "redo",
- +    callback: ({ tools: { redo } }) => {
- +      redo()
- +    },
- +  }
-
- +  // Call the trigger method of react-stay-canvas to trigger the listener
- +  function trigger(name: string) {
- +    if (!stayCanvasRef.current) {
- +      return
- +    }
- +    stayCanvasRef.current.trigger(name)
- +  }
-
-   return (
-     <>
- +     Add two buttons to trigger the redo and undo events respectively
- +     <button className="border border-red-50 r-5" onClick={() => trigger("redo")}>
- +       redo
- +     </button>
- +     <button className="border border-red-50" onClick={() => trigger("undo")}>
- +       undo
- +     </button>
- -      return <StayCanvas className="border" width={500} height={500} listenerList={[DragListener]} />
- +      <StayCanvas
- +        className="border"
- +        width={500}
- +        height={500}
- +        // Add our new two listeners to the listenerList
- +        listenerList={[DragListener, redoListener, undoListener]}
- +      />
-     </>
-   )
- }
- ```
-
-
-https://github.com/lezhu1234/react-stay-canvas/assets/11953013/ad8b6f82-117a-474b-93be-40b56f9accf1
-
-
- ##### triggerAction
-
- The triggerAction function is used to manually trigger an event. Its effect is the same as calling trigger, but you need to manually construct the Event object and pass in the triggerEvents object at the same time.
-
- ```typescript
- type triggerEventsProps = { [key: string]: ActionEvent },
- ```
-
- ##### deleteListener
-
- The deleteListener function is used to delete a listener. This function accepts a string parameter listenerName, which is the name of the listener. This function will delete the listener. If the listener does not exist, no operation will be performed.
-
- ### Event API
-
- ```typescript
- type EventProps = {
-   name: string
-   trigger: valueof<typeof MOUSE_EVENTS> | valueof<typeof KEYBOARRD_EVENTS>
-   conditionCallback?: (props: UserConditionCallbackProps): boolean
-   successCallback?: (props: UserSuccessCallbackProps) => void | EventProps
- }
-
- export const MOUSE_EVENTS = {
-   MOUSE_DOWN: "mousedown", // The mouse down event type constant is used in the mouse down event listener.
-   MOUSE_UP: "mouseup", // The mouse up event type constant is used in the mouse up event listener.
-   MOUSE_MOVE: "mousemove", // The mouse move event type constant is used in the mouse move event listener.
-   WHEEL: "wheel", // The mouse wheel event type constant is used in the mouse wheel event listener.
-   CLICK: "click", // The mouse click event type constant is used in the mouse click event listener.
-   DB_CLICK: "dblclick", // The mouse double-click event type constant is used in the mouse double-click event listener.
-   CONTEXT_MENU: "contextmenu", // The mouse right-click event type constant is used in the mouse right-click event listener.
- } as const
-
- export const KEYBOARRD_EVENTS = {
-   KEY_DOWN: "keydown", // The key down event type constant is used in the key down event listener.
-   KEY_UP: "keyup", // The key up event type constant is used in the key up event listener.
- } as const
- ```
-
- Next, we will introduce the attributes of EventProps one by one.
-
- #### name
-
- The name attribute is used to identify the event. This attribute is a string. When there are two events with the same name, the latter will override the former.
-
- #### trigger
-
- The trigger represents the trigger of the event. Currently, some values in MOUSE_EVENTS and KEYBOARRD_EVENTS are supported. For details, see the constant definition above.
-
- ##### Description
-
- - If we want to customize an event to move the entire canvas, the trigger condition of this event is that the user needs to press the ctrl key on the keyboard and then press and drag the left mouse button. Then the value of this trigger should be "mousemove" because we need to know the position of the mouse when triggering this event. It is necessary to update the canvas position in real time based on the mouse position. Using "keydown" and "mousedown" is not suitable because these two events are only triggered once. What we need is a continuously triggered event, so we need to use "mousemove".
-
- ```typescript
- const MoveEvent: EventProps = {
-   name: "move",
-   trigger: MOUSE_EVENTS.MOUSE_MOVE,
-   conditionCallback: ({ e, store }) => {
-     return e.pressedKeys.has("Control") && e.pressedKeys.has("mouse0")
-   },
- }
- ```
-
- #### conditionCallback
-
- The conditionCallback attribute accepts a function. The parameter of this function satisfies the UserConditionCallbackProps type constraint. The parameters e/store/stateStore are the same as those passed in the listener callback: [Listener-callback-function](#listener-callback-function). This function needs to return a boolean value. If it returns true, it means that the trigger condition of the event is established. If it returns false, it means that the trigger condition of the event is not established.
-
- ```typescript
- export interface UserConditionCallbackFunction {
-   (props: UserConditionCallbackProps): boolean
- }
-
- export interface UserConditionCallbackProps {
-   e: ActionEvent
-   store: storeType
-   stateStore: storeType
- }
- ```
-
- The conditionCallback is an optional parameter. When we do not pass this parameter, it means that when the trigger condition is met, the event is triggered. For example, if we need to define a mouse down event, we can define it like this:
-
- ```typescript
- const MouseDownEvent: EventProps = {
-   name: "mousedown",
-   trigger: MOUSE_EVENTS.MOUSE_DOWN,
- }
- ```
-
- #### successCallback
-
- The successCallback attribute accepts a function. The parameter of this function satisfies the UserSuccessCallbackProps type constraint. The parameters e/store/stateStore are the same as those passed in the listener callback: [Listener-callback-function](#listener-callback-function). At the same time, there is an additional deleteEvent function in the parameter, which is used to delete the event. This function also accepts an optional return value. When the return value is of the EventProps type, the returned event will be registered after this event is triggered.
-
- This function will be very useful in some cases. One scenario is when we need to define a set of drag events. One approach is to define three events: start dragging, dragging, and end dragging. However, we hope that the dragging event is only effective after the start dragging event is triggered. This way, we can avoid the situation where the mouse is pressed outside the canvas and then moved inside the canvas, directly triggering the dragging event. In this case, we cannot get the mouse position at the start of dragging. We also hope that the end dragging event is only triggered after the dragging event is triggered. Imagine if the user clicks directly in the canvas, we will first trigger the start dragging event, then skip the dragging event trigger, and then directly trigger the end dragging event. This may lead to unpredictable results in some cases.
-
- Here is a way to register drag events:
-
- ```typescript
- // Define the end dragging event
- const DragEndEvent: EventProps = {
-   name: "dragend", // Event name
-   trigger: MOUSE_EVENTS.MOUSE_UP, // The trigger condition of the event, here is the mouse release
-   successCallback: ({ store, deleteEvent }) => {
-     deleteEvent("drag") // Delete the ongoing drag event in the success callback
-     deleteEvent("dragend") // Delete the end dragging event itself
-     store.set("dragging", false) // Update the status to indicate that the drag is over
-   },
- }
-
- // Define the ongoing drag event
- const DragEvent: EventProps = {
-   name: "drag", // Event name
-   trigger: MOUSE_EVENTS.MOUSE_MOVE, // Trigger condition, mouse movement
-   conditionCallback: ({ e, store }) => {
-     const dragStartPosition: Point = store.get("dragStartPosition")
-     return (
-       e.pressedKeys.has("mouse0") && // Check if the left mouse button is pressed
-       (dragStartPosition.distance(e.point) >= 10 || store.get("dragging")) // Check if the mouse movement distance is sufficient or the drag state is already ongoing
-     )
-   },
-   successCallback: ({ store }) => {
-     store.set("dragging", true) // Set the status to dragging
-     return DragEndEvent // Return the end dragging event so that it can be registered
-   },
- }
-
- // Define the start dragging event
- export const DragStartEvent: EventProps = {
-   name: "dragstart", // Event name
-   trigger: MOUSE_EVENTS.MOUSE_DOWN, // The trigger condition of the event, mouse down
-   conditionCallback: ({ e }) => {
-     return e.pressedKeys.has("mouse0") // Left mouse button pressed
-   },
-   successCallback: ({ e, store }) => {
-     store.set("dragStartPosition", e.point) // Store the mouse position at the start of dragging
-     return DragEvent // Return the ongoing drag event so that it can be registered
-   },
- }
-
- // The event registration list only contains the start dragging event, other events are dynamically registered through callbacks
- const eventList = [DragStartEvent]
- ```
-
- `DragStartEvent`: Defines an event that starts dragging. It is triggered when the left mouse button is pressed. In the success callback, it sets the start position of the drag and returns the DragEvent object to register this event, starting to track the movement of the drag.
-
- `DragEvent`: Defines an event that is ongoing. This event is triggered when the mouse moves, but only if certain conditions are met (the left mouse button is pressed, and the movement distance exceeds 10 pixels or is already in the dragging state). Its success callback sets the dragging state to ongoing and returns the DragEndEvent object to register the end dragging event.
-
- `DragEndEvent`: Defines an event that ends dragging. It is triggered when the mouse button is released. In its success callback, it will clear all events related to dragging (including ongoing and end events) and set the dragging state to non-ongoing.
-
- ### Trigger Function API
-
- Before using the trigger function, you need to use useRef to get the reference of react-tay-canvas.
-
- You can use the trigger function to manually trigger events. Sometimes you may need to trigger events outside the canvas, such as changing the state of the entire canvas, loading some data, saving some data, etc. You may want users to trigger events by clicking buttons outside the canvas or automatically triggering events. Then using the trigger function can achieve this.
-
- This function accepts two parameters. The first parameter is the event name, and the second parameter is the parameters carried by the event. This parameter will be passed to the payload parameter in the [Listener-callback-function](#listener-callback-function).
-
- ```typescript
- export type Dict = Record<string, any>
- export type TriggerFunction = (name: string, payload?: Dict) => void
-
- // example:
- const stayCanvasRef = useRef<StayCanvasTriggerType>(null)
- <StayCanvas
-   ref={stayCanvasRef}
-   ...
- />
-
- export const StateChangeListener: ListenerProps = {
-   name: "changeState",
-   event: "changeState",
-   state: ALLSTATE,
-   callback: ({ tools: { switchState }, payload }) => {
-     switchState(payload.state)
-   },
- }
-
- function trigger(name: string, payload?: Dict) {
-   if (!stayCanvasRef.current) {
-     return
-   }
-   stayCanvasRef.current.trigger(name, payload)
- }
-
- // Call trigger externally to trigger the changeState event, thereby executing the callback function corresponding to the StateChangeListener
- trigger("changeState", { state: "draw" })
- ```
+interface ListenerProps {
+  name: string // 监听器名称，你可以使用任意字符串作为名称，但是需要唯一
+  state?: string // 监听器状态，我们将在后续中介绍， 默认值为 DEFAULTSTATE
+  selector?: string // 监听器选择器，我们将在后续中介绍
+  event: string | string[] // 监听器事件, 当该事件触发时，将执行监听器的回调函数，当event为数组时，任意一个事件触发时，将执行监听器的回调函数，同时，会在回调函数中的e.name中返回该事件的名称
+  sortBy?: SortChildrenMethodsValues | ChildSortFunction // 选择器选中元素后，对选中的元素进行排序的方法，我们将在后续中介绍，默认值为 SORT_CHILDREN_METHODS.AREA_ASC = area-asc， 即按面积从小到大排序, 你也可以自定义排序函数
+  callback: (p: ActionCallbackProps) => {
+    [key: string]: any
+  } | void
+}
+
+// 自定义元素排序方法
+export type ChildSortFunction = (a: StayChild, b: StayChild) => number
+```
+
+#### selector 选择器
+
+在 react-stay-canvas 中实现了一个非常简单的选择器功能，主要用来筛选元素的名称和 id,在我们使用 appendChild、updateChild 等函数时，需要提供一个 `className` 属性，而这些工具函数返回的对象中会包含一个 `id` 属性。在定义 selector 时，你可以通过在 `className` 属性前添加一个符号 `.`，在 `id` 属性前添加一个符号 `#`来选中对应的元素
+
+```typescript
+const child1 = appendChild({
+  className: "label",
+  ...
+})
+const child2 = appendChild({
+  className: "label",
+  ...
+})
+
+getChildrenBySelector(".label") //返回 [child1, child2]
+getChildrenBySelector("#" + child1.id) //返回 child1
+getChildrenBySelector("!.label") //返回 []
+```
+
+#### state 状态
+
+在 react-stay-canvas 中，你可以通过 state 属性来控制当前的状态，该属性是一个字符串， 默认状态为 DEFAULTSTATE = "default-state" 状态的概念来源于自动状态机，通过设置状态，你可以灵活的控制监听器应该在什么时候触发， 设想我们希望实现下面这个功能
+
+- 默认情况下在 canvas 上拖拽会根据鼠标画一个矩形
+- 我们选中这个矩形之后，在这个矩形上面进行拖拽会移动这个矩形
+
+我们可以设置三个监听器来实现这个功能
+
+- 第一个监听器的 state 属性为 DEFAULTSTATE，监听拖拽事件，并在 callback 函数中实现队形的绘制功能
+- 第二个监听器的 state 属性为 DEFAULTSTATE， 监听点击事件，在 callback 函数中我们如果监听到用户点击了这个绘制的元素，那改变当前的状态为 "selected"， 否则将状态更改为 DEFAULTSTATE
+- 第三个监听器的 state 属性为 "selected"，监听拖拽事件，并在 callback 函数中实现对选中的矩形的移动功能
+
+你可以对状态字段进行一些简单的逻辑运算
+
+#### 简单的逻辑运算
+
+你可以对某些属性使用一些非常简单的逻辑运算。目前受支持的属性包括 state 和 selector 两种。
+
+```typescript
+export const SUPPORT_LOGIC_OPRATOR = {
+  AND: "&",
+  OR: "|",
+  NOT: "!",
+}
+
+const selector = ".A&#B" //选中名称为A并且id为B的元素
+const selector = ".A&!#B" //选中名称为A并且id不为B的元素
+const selector = "!.A" //选中名称不为A的元素
+
+const state = "!selected" //当状态不为selected时
+const state = "default-state|selected" //当状态为default-state或者selected时
+```
+
+#### event
+
+event 属性接受一个字符串, 你可以在 StayCanvas 的 eventList 中传入一个事件数组来对事件进行自定义或者字节覆盖预定义的事件，相同名称的事件会被覆盖，如何自定义事件将在之后介绍
+
+在 react-stay-canvas 中,预定义了以下几种事件
+
+- mousedown: 鼠标按下
+- mousemove: 鼠标移动
+- mouseup: 鼠标松开
+- keydown: 键盘按下
+- keyup: 键盘松开
+- zoomin: 鼠标滚轮向上滚动
+- zoomout: 鼠标滚轮向下滚动
+- dragstart: 鼠标左键按下时
+- drag: 鼠标左键按下移动并且鼠标距离鼠标按下位置大于 10 时
+- dragend: 拖拽结束
+- startmove: ctrl 键按下并且鼠标左键按下时
+- move: ctrl 键按下并且鼠标左键按下移动时
+- click: 点击
+- redo: ctrl + shift + z
+- undo: ctrl + z
+
+#### Listener callback 函数
+
+callback 函数是用来控制用户在 canvas 上交互的核心函数，该函数的定义如下
+
+```typescript
+// 该函数的参数为 ActionCallbackProps 类型，你可以返回一个 CallbackFuncMap 对象或者不返回任何值
+export type UserCallback = (p: ActionCallbackProps) => CallbackFuncMap<typeof p> | void
+
+export type CallbackFuncMap<T extends ActionCallbackProps> = {
+  [key in T["e"]["name"]]: () => { [key: string]: any } | void | undefined
+}
+
+// 其中  ActionCallbackProps 为
+export interface ActionCallbackProps {
+  originEvent: Event // 原生事件，该参数为 addEventListener 回调时传递的 event 参数
+  e: ActionEvent // react-stay-canvas 中定义的事件对象，具体信息可以参考下面的 ActionEvent 类型
+  store: storeType // 一个类型为Map的全局的存储对象
+  stateStore: storeType // 一个类型为Map的存储对象，跟 store 的区别在于，当状态改变时，该对象对被清空
+  composeStore: Record<string, any> // 当我们在定义 listener 时，如果 event 参数我们传递的是数组，那么每一个事件触发时 composeStore 都将是同一个对象
+  tools: StayTools // StayTools 对象，该对象包含了一些工具函数，具体信息将在 StayTools中进行介绍
+  payload: Dict // 当我们手动调用 trigger 函数时传递的参数
+}
+
+export interface ActionEvent {
+  state: string // 事件触发时的状态
+  name: string // 事件名称
+  x: number // 鼠标相对于 canvas 的 x 坐标
+  y: number // 鼠标相对于 canvas 的 y 坐标
+  point: Point // 鼠标相对于 canvas 的坐标
+  target: StayChild // 触发事件的元素
+  pressedKeys: Set<string> // 当前按下的键盘键和鼠标键, 鼠标左键为 mouse0 ，鼠标右键为 mouse1, 鼠标滚轮为 mouse2
+  key: string | null // 触发事件的键盘键，当我们触发 mouseup 事件时, pressedKeys 中不会有该键，而 key 中有该键
+  isMouseEvent: boolean // 是否为鼠标事件
+  deltaX: number // 鼠标滚轮滑动时的 x 轴偏移
+  deltaY: number // 鼠标滚轮滑动时的 y 轴偏移
+  deltaZ: number // 鼠标滚轮滑动时的 z 轴偏移
+}
+
+
+
+//example 1
+// 在该例中, callback 函数没有返回任何值, 该 listener 实现了鼠标移动时，根据鼠标是否在矩形内切换矩形的状态
+export const HoverListener: ListenerProps = {
+  name: "hoverListener",
+  event: "mousemove",
+  callback: ({ e, tools: { getChildrenBySelector } }) => {
+    const labels = getChildrenBySelector(".label")
+    labels.forEach((label) => {
+      let rectState = label.shape.contains(e.point) ? "hover" : "default"
+      label.shape.switchState(rectState)
+    })
+  },
+}
+
+
+//example 2
+// 在该例中, callback 函数返回了一个 CallbackFuncMap 对象, 注意到该 listener 的 event 是一个数组，分别对应 callback 函数返回的对象中的 三个 key，每个 key 对应的值是一个函数，该函数将在 dragstart, drag, dragend 三个事件触发时分别执行，其返回的值将会被合并到 composeStore 中
+
+// 在 dragstart 监听器中，我们记录了 dragStartPosition 和 dragChild，并将其返回，这样，在 drag 监听器中，我们可以通过 composeStore 获取到 dragStartPosition 和 dragChild，从而实现拖拽功能
+
+// 在 dragend 监听器中，我们调用了 log 函数，该函数会对当前 react-stay-canvas 进行快照，后续我们可以通过 undo/redo 函数进行撤回/恢复功能
+
+const DragListener: ListenerProps = {
+  name: "dragListener",
+  event: ["dragstart", "drag", "dragend"],
+  callback: ({ e, composeStore, tools: { appendChild, updateChild, log } }) => {
+    return {
+      dragstart: () => ({
+        dragStartPosition: new Point(e.x, e.y),
+        dragChild: appendChild({
+          shape: new CustomRectangle({
+            x: e.x,
+            y: e.y,
+            width: 0,
+            height: 0,
+            props: { color: "white" },
+          }),
+          className: "label",
+        }),
+      }),
+      drag: () => {
+        const { dragStartPosition, dragChild } = composeStore
+        const x = Math.min(dragStartPosition.x, e.x)
+        const y = Math.min(dragStartPosition.y, e.y)
+        const width = Math.abs(dragStartPosition.x - e.x)
+        const height = Math.abs(dragStartPosition.y - e.y)
+        updateChild({
+          child: dragChild,
+          shape: dragChild.shape.update({ x, y, width, height }),
+        })
+      },
+      dragend: () => {
+        log()
+      },
+    }
+  },
+}
+```
+
+#### StayTools 工具函数
+
+StayTools 对象包含了一些工具函数，定义如下
+
+```typescript
+export interface StayTools {
+  createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
+  appendChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
+  updateChild: (props: updateChildProps) => StayChild
+  removeChild: (childId: string) => void
+  getContainPointChildren: (props: getContainPointChildrenProps) => StayChild[]
+  hasChild: (id: string) => boolean
+  fix: () => void
+  switchState: (state: string) => void
+  getChildrenBySelector: (
+    selector: string,
+    sortBy?: SortChildrenMethodsValues | ChildSortFunction
+  ) => StayChild[]
+  getAvailiableStates: (selector: string) => string[]
+  changeCursor: (cursor: string) => void
+  moveStart: () => void
+  move: (offsetX: number, offsetY: number) => void
+  zoom: (deltaY: number, center: SimplePoint) => void
+  log: () => void
+  redo: () => void
+  undo: () => void
+  triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
+  deleteListener: (name: string) => void
+}
+```
+
+##### 元素创建和更新
+
+- [`createChild`](#createchild) - 创建一个新元素
+- [`appendChild`](#appendchild) - 创建一个新元素并将其添加到画布上
+- [`updateChild`](#updatechild) - 更新一个已有元素的属性
+- [`removeChild`](#removechild) - 从画布上移除一个元素
+
+##### 元素查询和判断
+
+- [`getContainPointChildren`](#getcontainpointchildren) - 获取包含某一点的所有元素
+- [`hasChild`](#haschild) - 判断一个元素是否存在于画布上
+- [`getChildrenBySelector`](#getchildrenbyselector) - 根据选择器获取元素
+- [`getAvailableStates`](#getavailablestates) - 获取所有可用的状态
+
+##### 状态和视图控制
+
+- [`fix`](#fix) - 将所有元素的层级调整到最下层
+- [`switchState`](#switchstate) - 切换当前状态
+- [`changeCursor`](#changecursor) - 改变鼠标指针样式
+- [`moveStart`](#movestart) - 开始移动所有元素
+- [`move`](#move) - 移动所有元素
+- [`zoom`](#zoom) - 缩放所有元素
+
+##### 快照控制
+
+- [`log`](#log) - 保存当前画布快照
+- [`redo`](#redo) - 前进到下一个快照
+- [`undo`](#undo) - 后退到上一个快照
+
+##### 事件触发
+
+- [`triggerAction`](#triggeraction) - 手动触发事件
+- [`deleteListener`](#deletelistener) - 删除监听器
+
+##### createChild
+
+createChild 函数用来创建一个元素，该函数接受一个对象作为参数，参数定义如下
+
+```typescript
+createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
+
+export interface createChildProps<T> {
+  id?: string // 元素的id，如果未指定，则自动生成
+  zIndex?: number // 元素的zIndex，该值会影响元素的在canvas上面的绘制顺序， zIndex 值越小，绘制越靠前，默认值为 1
+  shape: T // 元素的形状，该值可必须是一个继承 Shape 的对象，react-stay-canvas 中内置了一些 Shape 的子类，你也可以自定义自己的 Shape 子类，具体信息将在后面介绍
+  className: string // 元素的className，
+  layer?: number // 元素所在的层，该值为元素所在 canvas 层的索引，0 表示最下面一层，数值越大，越靠近上层，你也可以使用负数来表示层，-1表示最上面一层，-2 表示最上一层的下一层，以此类推，默认值为 -1
+}
+
+// example:
+createChild({
+  shape: new Rectangle({
+    x: e.x,
+    y: e.y,
+    width: 0,
+    height: 0,
+    props: { color: "white" },
+  }),
+  className: "annotation",
+})
+```
+
+##### appendChild
+
+appendChild 函数用来创建一个元素并直接添加到 canvas 上，该函数接受一个对象作为参数，参数定义和 createChild 函数相同
+
+```typescript
+//example
+appendChild({
+  shape: new Rectangle({
+    x: e.x,
+    y: e.y,
+    width: 0,
+    height: 0,
+    props: { color: "white" },
+  }),
+  className: "annotation",
+})
+```
+
+##### updateChild
+
+updateChild 函数用来更新一个元素，该函数接受一个对象作为参数，该函数接收的参数和 createChild 函数不同的是，它需要一个 child 对象，该对象可以通过 appendChild 函数或者 createChild 函数返回的值来获取， 除此之外，其他的参数均为可选项。参数定义如下
+
+```typescript
+export type updateChildProps<T = Shape> = {
+  child: StayChild
+} & Partial<createChildProps<T>>
+
+//example
+updateChild({
+  child,
+  shape: child.shape.update({
+    x,
+    y,
+    width,
+    height,
+  }),
+})
+```
+
+##### removeChild
+
+removeChild 函数用来删除一个元素，该函数接受一个字符串参数 childId，该参数为元素的 id，无返回值
+
+```typescript
+//example
+removeChild(image.id)
+```
+
+##### getContainPointChildren
+
+getContainPointChildren 函数用来获取包含某一个点的所有元素，使用该函数时，你需要指定 选择器来划定查找的范围，参数定义如下
+
+```typescript
+export interface getContainPointChildrenProps {
+  selector: string | string[] // 选择器，该值可以是一个字符串，也可以是一个字符串数组，当为字符串数组时，会返回所有选择器查找结果的并集
+  point: SimplePoint // 鼠标相对于 canvas 的坐标 || interface SimplePoint {x: number y: number}
+  returnFirst?: boolean | undefined // 是否仅仅返回第一个元素，默认值为 false
+  sortBy?: SortChildrenMethodsValues | ChildSortFunction // 排序方法，默认值为  SORT_CHILDREN_METHODS.AREA_ASC = area-asc， 你也可以传入一个函数来自定义元素排序方法
+}
+
+//下面是内置的几种排序方法
+export type SortChildrenMethodsValues = valueof<typeof SORT_CHILDREN_METHODS>
+export const SORT_CHILDREN_METHODS = {
+  X_ASC: "x-asc", // 按X轴升序排序
+  X_DESC: "x-desc", // 按X轴降序排序
+  Y_ASC: "y-asc", // 按Y轴升序排序
+  Y_DESC: "y-desc", // 按Y轴降序排序
+  WIDTH_ASC: "width-asc", // 按宽度升序排序
+  WIDTH_DESC: "width-desc", // 按宽度降序排序
+  HEIGHT_ASC: "height-asc", // 按高度升序排序
+  HEIGHT_DESC: "height-desc", // 按高度降序排序
+  AREA_ASC: "area-asc", // 按面积升序排序
+  AREA_DESC: "area-desc", // 按面积降序排序
+}
+
+//example
+getContainPointChildren({
+  point: new Point(100, 100),
+  selector: ".annotation",
+  sortBy: "area-asc",
+})
+```
+
+##### hasChild
+
+hasChild 函数用来判断一个元素是否存在于 canvas 上，该函数接受一个字符串参数 childId，该参数为元素的 id，返回值为布尔值，true 表示存在，false 表示不存在
+
+```typescript
+//example
+hasChild(image.id)
+```
+
+##### fix
+
+fix 函数用来将 canvas 上的所有元素的 layer 全部调整到最下层，即相当于将所有元素的 layer 设置为 0
+
+```typescript
+//example
+fix()
+```
+
+##### switchState
+
+switchState 函数用来当前的状态，该函数接受一个字符串参数 state，切换状态后, stateStore 中的值会被清空
+
+```typescript
+//example
+switchState("state1")
+```
+
+##### getChildrenBySelector
+
+getChildrenBySelector 函数用来获取选择器查找到的元素，其 selector 和 sortBy 参数与 getContainPointChildren 函数相同，返回值为 StayChild 数组
+
+```typescript
+//example
+getChildrenBySelector({
+  selector: ".annotation",
+  sortBy: (a, b) => a.shape.area - b.shape.area,
+})
+```
+
+##### getAvailiableStates
+
+getAvailiableStates 函数是一个工具函数，该函数接受一个字符串，返回目前出现过的状态中所有符合该选择器的状态
+
+```typescript
+// 假设目前所有注册的 listener 中包含的状态中有 state1, state2, state3, state4, state5, state6, state7, state8, state9, state10，其中，被触发过的状态有 state1, state2, state3, state4, state5
+// 特别的，当 selector 为 "all-state" 时，返回所有状态
+getAvailiableStates("all-state") // 返回值为 ["state1", "state2", "state3", "state4", "state5"]
+getAvailiableStates("!state1") // 返回值为 ["state2", "state3", "state4", "state5"]
+getAvailiableStates("all-state&!(state1|state2)") // 返回值为 ["state3", "state4", "state5"]
+```
+
+##### changeCursor
+
+changeCursor 函数用来改变鼠标指针的样式，该函数接受一个字符串参数 cursor，该参数为鼠标指针的样式,具体值可参考 <https://developer.mozilla.org/zh-CN/docs/Web/CSS/cursor>
+
+```typescript
+//example
+changeCursor("pointer")
+```
+
+##### moveStart
+
+moveStart 函数用来开始移动 canvas 上面的所有元素，在调用 move 函数前，需要调用该函数以保存移动前的位置
+
+##### move
+
+move 函数用来移动 canvas 上面的所有元素, offsetX 和 offsetY 分别表示移动相对于开始时的横纵坐标的偏移量
+
+```typescript
+//example
+//假设我们需要实现一个拖拽的时候canvas整体移动的功能，listener 可以这么写
+export const MoveListener: ListenerProps = {
+  name: "moveListener",
+  event: ["startmove", "move"],
+  state: ALLSTATE,
+  callback: ({ e, composeStore, tools: { moveStart, move } }) => {
+    const eventMap = {
+      startmove: () => {
+        moveStart()
+        return {
+          startMovePoint: new Point(e.x, e.y),
+        }
+      },
+      move: () => {
+        const { startMovePoint } = composeStore
+        if (!startMovePoint) {
+          return
+        }
+        move(e.x - startMovePoint.x, e.y - startMovePoint.y)
+      },
+    }
+    return eventMap[e.name as keyof typeof eventMap]()
+  },
+}
+```
+
+##### zoom
+
+zoom 函数用来缩放 canvas 上面的所有元素，该函数接受两个参数，第一个参数为缩放比例，通常是 e.deltaY，第二个参数为缩放中心点，当我们实现以鼠标为中心缩放功能的时，这个参数为鼠标所在位置
+
+```typescript
+//example
+// 假设我们需要实现一个鼠标滚轮滑动时整个canvas的缩放功能， listener 可以这么写
+export const ZoomListener: ListenerProps = {
+  name: "zoomListener",
+  event: ["zoomin", "zoomout"],
+  state: ALLSTATE,
+  callback: ({ e, tools: { zoom } }) => {
+    zoom(e.deltaY, new Point(e.x, e.y))
+  },
+}
+```
+
+##### log
+
+log 函数保存当前 canvas 快照，将当前 canvas 快照存入栈中，当我们执行完该函数之后，可以通过调用 redo 和 undo 函数来恢复之前的 快照
+
+##### redo
+
+前进到下一个快照
+
+##### undo
+
+后退到下一个快照
+
+redo 函数 和 undo 函数用来将当前 canvas 改变为栈中的快照
+
+我们可以在最初的示例中修改一些代码来简单理解一下这个功能
+
+```diff
+- import { ListenerProps, Point, Rectangle, StayCanvas } from "react-stay-canvas"
++ import { useRef } from "react"
++ import { ALLSTATE, ListenerProps, Point, Rectangle, StayCanvas, StayCanvasTriggerType } from "react-stay-canvas"
+
+export function Demo() {
++ const stayCanvasRef = useRef<StayCanvasTriggerType>(null)
++ const getTrigger = () => stayCanvasRef.current?.trigger!
+
+  const DragListener: ListenerProps = {
+    name: "dragListener",
+-    event: ["dragstart", "drag"],
+-    callback: ({ e, composeStore, tools: { appendChild, updateChild } }) => {
++    event: ["dragstart", "drag", "dragend"],
++    callback: ({ e, composeStore, tools: { appendChild, updateChild, log } }) => {
+      return {
+        dragstart: () => ({
+          dragStartPosition: e.point,
+          dragChild: appendChild({
+            shape: new Rectangle({
+              x: e.x,
+              y: e.y,
+              width: 0,
+              height: 0,
+              props: { color: "red" },
+            }),
+            className: "annotation",
+          }),
+        }),
+        drag: () => {
+          const { dragStartPosition, dragChild } = composeStore
+          const x = Math.min(dragStartPosition.x, e.x)
+          const y = Math.min(dragStartPosition.y, e.y)
+          const width = Math.abs(dragStartPosition.x - e.x)
+          const height = Math.abs(dragStartPosition.y - e.y)
+          updateChild({
+            child: dragChild,
+            shape: dragChild.shape.update({ x, y, width, height }),
+          })
+        },
++        // 添加 dragend 事件, 在拖拽结束后，我们将当前的canvas 快照保存下来
++        dragend: () => {
++          log()
++        },
+      }
+    },
+  }
+
++  // 添加 redo  和 undo 两个监听器
++  const undoListener: ListenerProps = {
++    name: "undoListener",
++    event: "undo",
++    callback: ({ tools: { undo } }) => {
++      undo()
++    },
++  }
++
++  const redoListener: ListenerProps = {
++    name: "redoListener",
++    event: "redo",
++    callback: ({ tools: { redo } }) => {
++      redo()
++    },
++  }
+
++  // 调用 react-stay-canvas 的 trigger 方法来触发监听器
++  function trigger(name: string) {
++    if (!stayCanvasRef.current) {
++      return
++    }
++    stayCanvasRef.current.trigger(name)
++  }
+
+  return (
+    <>
++     添加两个按钮来分别触发 redo 和 undo 事件
++     <button className="border border-red-50 r-5" onClick={() => trigger("redo")}>
++       redo
++     </button>
++     <button className="border border-red-50" onClick={() => trigger("undo")}>
++       undo
++     </button>
+-      return <StayCanvas className="border" width={500} height={500} listenerList={[DragListener]} />
++      <StayCanvas
++        className="border"
++        width={500}
++        height={500}
++        // 将我们新增的两个监听器添加到 listenerList 中
++        listenerList={[DragListener, redoListener, undoListener]}
++      />
+    </>
+  )
+}
+```
+
+<video src="videos//redo-undo.mp4" controls="">
+</video>
+
+##### triggerAction
+
+triggerAction 函数用来手动触发事件，其效果与调用 trigger 一致，但是需要手动构造 Event 对象， 同时需要传入 triggerEvents 对象
+
+```typescript
+type triggerEventsProps = { [key: string]: ActionEvent },
+```
+
+##### deleteListener
+
+deleteListener 函数用来删除监听器，该函数接受一个字符串参数 listenerName，该参数为监听器的名称，该函数会删除该监听器，如果监听器不存在，则不会进行任何操作
+
+
+### Event API
+
+```typescript
+type EventProps = {
+  name: string
+  trigger: valueof<typeof MOUSE_EVENTS> | valueof<typeof KEYBOARRD_EVENTS>
+  conditionCallback?: (props: UserConditionCallbackProps): boolean
+  successCallback?: (props: UserSuccessCallbackProps) => void | EventProps
+}
+
+export const MOUSE_EVENTS = {
+  MOUSE_DOWN: "mousedown", // 鼠标按下事件类型常量，用于鼠标按下事件监听器中使用。
+  MOUSE_UP: "mouseup", // 鼠标松开事件类型常量，用于鼠标松开事件监听器中使用。
+  MOUSE_MOVE: "mousemove", // 鼠标移动事件类型常量，用于鼠标移动事件监听器中使用。
+  WHEEL: "wheel", // 鼠标滚轮事件类型常量，用于鼠标滚轮事件监听器中使用。
+  CLICK: "click", // 鼠标点击事件类型常量，用于鼠标点击事件监听器中使用。
+  DB_CLICK: "dblclick", // 鼠标双击事件类型常量，用于鼠标双击事件监听器中使用。
+  CONTEXT_MENU: "contextmenu", // 鼠标右键事件类型常量，用于鼠标右键事件监听器中使用。
+} as const
+
+export const KEYBOARRD_EVENTS = {
+  KEY_DOWN: "keydown", // 键盘按下事件类型常量，用于键盘按下事件监听器中使用。
+  KEY_UP: "keyup", // 键盘松开事件类型常量，用于键盘松开事件监听器中使用。
+} as const
+```
+
+接下来我们将对 EventProps 中的各个属性进行介绍
+
+#### name
+
+name 属性用来标识事件，该属性是一个字符串，当存在两个相同名称的事件时，后者会覆盖前者
+
+#### trigger
+
+trigger 表示的是触发该事件的触发器, 目前支持 MOUSE_EVENTS 和 KEYBOARRD_EVENTS 中的一些值，详见上方的常量定义
+
+##### 说明
+
+- 如果我们想要自定义一个移动整个画布的事件 move，该事件的触发条件是用户需要按住键盘的 ctrl 键，同时鼠标左键按下进行拖拽，那么这个 trigger 的值应该为 "mousemove", 因为我们在触发这个事件的时候需要知道鼠标移动的位置，需要实时的根据鼠标位置来更新画布， 使用 "keydown" 和 "mousedown" 是不合适的，因为这两个事件只会触发一次，我们需要的是一个持续触发的事件，因此我们需要使用 "mousemove"
+
+```typescript
+const MoveEvent: EventProps = {
+  name: "move",
+  trigger: MOUSE_EVENTS.MOUSE_MOVE,
+  conditionCallback: ({ e, store }) => {
+    return e.pressedKeys.has("Control") && e.pressedKeys.has("mouse0")
+  },
+}
+```
+
+#### conditionCallback
+
+conditionCallback 属性接受一个函数，该函数的参数满足 UserConditionCallbackProps 类型约束, 参数中的 e/store/stateStore 与在 listener callback 中传入的 e/store/stateStore 相同: [Listener-callback-函数](#listener-callback-函数) 该函数需要返回一个布尔值，如果返回 true，则表示该事件触发条件成立，如果返回 false，则表示该事件触发条件不成立
+
+```typescript
+export interface UserConditionCallbackFunction {
+  (props: UserConditionCallbackProps): boolean
+}
+
+export interface UserConditionCallbackProps {
+  e: ActionEvent
+  store: storeType
+  stateStore: storeType
+}
+```
+
+conditionCallback 是一个可选参数，当我们不传递这个参数是，表示当 trigger 条件满足就触发事件，比如如果我们需要定义一个鼠标按下事件，那么我们可以这样定义:
+
+```typescript
+const MouseDownEvent: EventProps = {
+  name: "mousedown",
+  trigger: MOUSE_EVENTS.MOUSE_DOWN,
+}
+```
+
+#### successCallback
+
+successCallback 属性接受一个函数，该函数的参数满足 UserSuccessCallbackProps 类型约束, 参数中的 e/store/stateStore 与在 listener callback 中传入的 e/store/stateStore 相同: [Listener-callback-函数](#listener-callback-函数) 同时，参数中还有一个额外的 deleteEvent 函数，用来对事件 进行删除，该函数还接受一个可选的返回值，当返回值为 EventProps 类型的时候，会在本事件触发之后注册返回的事件
+
+这个函数在某些情况下会非常有用，一个场景是，当我们需要定义一组拖拽事件时，一个做法是我们可以定义开始拖拽，拖拽中，结束拖拽三个事件，但是我们希望拖拽中的事件仅仅在开始拖拽事件触发之后才会生效，这样我们可以避免鼠标从 canvas 外按下，然后移动到 canvas 内直接触发拖拽事件的情况，这样我们是无法得到开始拖拽时的鼠标位置的。我们也希望仅仅在拖拽事件触发之后，才触发结束拖拽事件， 想象一下如果用户直接在 canvas 中进行点击，那么我们将先触发开始拖拽事件，然后跳过拖拽事件的触发，然后直接触发结束拖拽事件，这样在某些情况下可能会得到无法预料的结果。
+
+以下是一种拖拽事件的注册方法:
+
+```typescript
+// 定义结束拖拽的事件
+const DragEndEvent: EventProps = {
+  name: "dragend", // 事件名称
+  trigger: MOUSE_EVENTS.MOUSE_UP, // 触发事件的条件，此处为鼠标释放
+  successCallback: ({ store, deleteEvent }) => {
+    deleteEvent("drag") // 在成功回调中删除进行中的拖拽事件
+    deleteEvent("dragend") // 删除自身事件
+    store.set("dragging", false) // 更新状态，表示拖拽结束
+  },
+}
+
+// 定义进行中的拖拽事件
+const DragEvent: EventProps = {
+  name: "drag", // 事件名称
+  trigger: MOUSE_EVENTS.MOUSE_MOVE, // 触发条件，鼠标移动
+  conditionCallback: ({ e, store }) => {
+    const dragStartPosition: Point = store.get("dragStartPosition")
+    return (
+      e.pressedKeys.has("mouse0") && // 检查鼠标左键是否按下
+      (dragStartPosition.distance(e.point) >= 10 || store.get("dragging")) // 检查鼠标移动距离是否足够或已处于拖拽状态
+    )
+  },
+  successCallback: ({ store }) => {
+    store.set("dragging", true) // 设置状态为正在拖拽
+    return DragEndEvent // 返回结束拖拽事件，以便其可以被注册
+  },
+}
+
+// 定义开始拖拽的事件
+export const DragStartEvent: EventProps = {
+  name: "dragstart", // 事件名称
+  trigger: MOUSE_EVENTS.MOUSE_DOWN, // 触发事件的条件，鼠标按下
+  conditionCallback: ({ e }) => {
+    return e.pressedKeys.has("mouse0") // 鼠标左键按下
+  },
+  successCallback: ({ e, store }) => {
+    store.set("dragStartPosition", e.point) // 存储开始拖拽时的鼠标位置
+    return DragEvent // 返回进行中的拖拽事件，以便其可以被注册
+  },
+}
+
+// 事件注册列表只包含开始拖拽事件，其他事件通过回调动态注册
+const eventList = [DragStartEvent]
+```
+
+`DragStartEvent`：定义了一个开始拖拽的事件。当鼠标左键被按下时触发。在成功回调中，它设置了拖拽开始的位置，并返回 DragEvent 对象以注册此事件，开始跟踪拖拽的移动。
+
+`DragEvent`：定义了拖拽进行中的事件。此事件在鼠标移动时触发，但只有在满足一定条件下（鼠标左键被按住，且移动距离超过 10 像素或已经处于拖拽状态）。它的成功回调设置拖拽状态为进行中，并返回 DragEndEvent 对象以便注册结束拖拽的事件。
+
+`DragEndEvent`：定义了结束拖拽的事件。当鼠标按钮释放时触发。其成功回调中将清除关于拖拽的所有事件（包括进行中和结束自己的事件），并设置拖拽状态为非进行中。
+
+### trigger 函数 API
+使用 trigger 函数前，你需要使用 useRef 获取 react-tay-canvas 的引用
+
+你可以使用 trigger 函数来手动触发事件， 有时候你可能需要在 canvas 外部触发事件，比如更改整个 canvas 的状态， 加载一些数据，保存一些数据等等，你可能希望用户在点击 canvas 外面的按钮或者自动的触发，那么使用 trigger 函数就可以实现
+
+该函数接受两个参数，第一个参数是事件名称，第二个参数是事件携带的参数，这个参数会被传递到 [Listener-callback-函数](#listener-callback-函数)的 payload 参数中
+
+```typescript
+export type Dict = Record<string, any>
+export type TriggerFunction = (name: string, payload?: Dict) => void
+
+// example:
+const stayCanvasRef = useRef<StayCanvasTriggerType>(null)
+<StayCanvas
+  ref={stayCanvasRef}
+  ...
+/>
+
+export const StateChangeListener: ListenerProps = {
+  name: "changeState",
+  event: "changeState",
+  state: ALLSTATE,
+  callback: ({ tools: { switchState }, payload }) => {
+    switchState(payload.state)
+  },
+}
+
+function trigger(name: string, payload?: Dict) {
+  if (!stayCanvasRef.current) {
+    return
+  }
+  stayCanvasRef.current.trigger(name, payload)
+}
+
+// 外部调用 trigger 来触发 changeState 事件，从而执行 StateChangeListener 对应的 callback 函数
+trigger("changeState", { state: "draw" })
+```

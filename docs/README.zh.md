@@ -159,7 +159,7 @@ https://github.com/lezhu1234/demo-react-stay-canvas
     type?: valueof<typeof SHAPE_DRAW_TYPES> // "fill" | "stroke", 绘制对象的绘制类型
     gco?: GlobalCompositeOperation // 绘制对象的全局混合模式, 该属性会被传递给 globalCompositeOperation
     state?: string // 绘制对象的状态, 通过结合 stateDrawFuncMap 使用，实现图形在不同状态下的绘制效果
-    stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void> // 绘制对象的状态绘制函数集合
+    stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void | boolean> // 绘制对象的状态绘制函数集合
   }
   ```
 
@@ -580,6 +580,7 @@ export default function StayCanvas({
         hover: ({ context }) => {
           this.setColor(context, "red")
           context.strokeRect(this.x, this.y, this.width, this.height)
+          return true // 注意， 当你需要实现动画效果时，你必须返回 true，否则动画不会生效
         },
       }
     }
@@ -615,6 +616,7 @@ export default function StayCanvas({
     )
     this.setColor(context, `rgb(255, ${c}, ${c})`)
     context.strokeRect(this.x, this.y, this.width, this.height)
+    return true // 注意，当你需要实现动画效果时，你必须返回 true，否则，将不会执行下一次绘制
   },
   ...
   ```

@@ -161,7 +161,7 @@
      type?: valueof<typeof SHAPE_DRAW_TYPES> // "fill" | "stroke", the drawing type of the drawing object
      gco?: GlobalCompositeOperation // The global composite operation of the drawing object, this property will be passed to globalCompositeOperation
      state?: string // The state of the drawing object, used in conjunction with stateDrawFuncMap to achieve different drawing effects for the shape in different states
-     stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void> // A collection of state drawing functions for the drawing object
+     stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void | boolean> // A collection of state drawing functions for the drawing object
    }
    ```
 
@@ -586,6 +586,7 @@
          hover: ({ context }) => {
            this.setColor(context, "red")
            context.strokeRect(this.x, this.y, this.width, this.height)
+           return true // Note: When you want to implement animation effects, you must return true; otherwise, the animation will not take effect.
          },
        }
      }
@@ -620,6 +621,7 @@
      )
      this.setColor(context, `rgb(255, ${c}, ${c})`)
      context.strokeRect(this.x, this.y, this.width, this.height)
+     return true // Note: When you want to implement animation effects, you must return true; otherwise, the animation will not take effect.
    },
    ...
    ```

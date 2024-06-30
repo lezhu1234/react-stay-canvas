@@ -85,6 +85,7 @@ export abstract class Shape {
     context.globalCompositeOperation = this.gco
     this.setColor(context, this.color)
     // this.draw({ context, canvas, now })
+    console.log(this.alwaysUpdate, this.contentUpdated)
     if (this.alwaysUpdate || this.contentUpdated) {
       const drawStateResult = this.stateDrawFuncMap[this.state].bind(this)({ context, canvas, now })
       this.alwaysUpdate = drawStateResult || false

@@ -72,7 +72,7 @@ export abstract class Shape {
     }
     this.startTime = 0
     this.alwaysUpdate = false
-    this.contentUpdated = false
+    this.contentUpdated = true
   }
 
   _copy() {

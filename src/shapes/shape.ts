@@ -38,12 +38,14 @@ export abstract class Shape {
   offsetY: number
   startTime: number
   state: string
-  stateDrawFuncMap: Dict<(props: ShapeDrawProps) => void>
+  stateDrawFuncMap: Dict<(props: ShapeDrawProps) => void | boolean>
   type: valueof<typeof SHAPE_DRAW_TYPES>
   zeroPoint: SimplePoint
   zeroPointCopy: SimplePoint
   zoomCenter: SimplePoint
   zoomY: number
+  updateNextFrame: boolean
+  contentUpdated: boolean
   constructor({
     color,
     lineWidth,
@@ -69,6 +71,8 @@ export abstract class Shape {
       ...stateDrawFuncMap,
     }
     this.startTime = 0
+    this.updateNextFrame = false
+    this.contentUpdated = true
   }
 
   _copy() {
@@ -81,7 +85,11 @@ export abstract class Shape {
     context.globalCompositeOperation = this.gco
     this.setColor(context, this.color)
     // this.draw({ context, canvas, now })
-    this.stateDrawFuncMap[this.state].bind(this)({ context, canvas, now })
+    if (this.updateNextFrame || this.contentUpdated) {
+      const drawStateResult = this.stateDrawFuncMap[this.state].bind(this)({ context, canvas, now })
+      this.updateNextFrame = drawStateResult || false
+      this.contentUpdated = false
+    }
   }
 
   _move(offsetX: number, offsetY: number): [number, number] {
@@ -103,6 +111,7 @@ export abstract class Shape {
     this.gco = gco || this.gco
 
     this.stateDrawFuncMap = stateDrawFuncMap || this.stateDrawFuncMap
+    this.contentUpdated = true
 
     if (state) {
       this.switchState(state)

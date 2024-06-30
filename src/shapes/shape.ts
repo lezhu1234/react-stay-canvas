@@ -44,7 +44,7 @@ export abstract class Shape {
   zeroPointCopy: SimplePoint
   zoomCenter: SimplePoint
   zoomY: number
-  alwaysUpdate: boolean
+  updateNextFrame: boolean
   contentUpdated: boolean
   constructor({
     color,
@@ -71,7 +71,7 @@ export abstract class Shape {
       ...stateDrawFuncMap,
     }
     this.startTime = 0
-    this.alwaysUpdate = false
+    this.updateNextFrame = false
     this.contentUpdated = true
   }
 
@@ -85,10 +85,9 @@ export abstract class Shape {
     context.globalCompositeOperation = this.gco
     this.setColor(context, this.color)
     // this.draw({ context, canvas, now })
-    console.log(this.alwaysUpdate, this.contentUpdated)
-    if (this.alwaysUpdate || this.contentUpdated) {
+    if (this.updateNextFrame || this.contentUpdated) {
       const drawStateResult = this.stateDrawFuncMap[this.state].bind(this)({ context, canvas, now })
-      this.alwaysUpdate = drawStateResult || false
+      this.updateNextFrame = drawStateResult || false
       this.contentUpdated = false
     }
   }

@@ -65,6 +65,7 @@ export class StayImage extends Rectangle {
       if (imageLoaded) {
         imageLoaded(this)
       }
+      this.updateNextFrame = true
     }
     this.image.src = src
   }

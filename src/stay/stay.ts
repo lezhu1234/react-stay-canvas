@@ -208,12 +208,16 @@ class Stay {
         if (!particalChildren.update && !child.drawAction && !forceDraw) {
           return
         }
+        if (particalChildren.update) {
+          child.shape.contentUpdated = true
+        }
         child.shape._draw({
           context,
           canvas,
           now,
         })
         child.drawAction = null
+        child.beforeLayer = child.layer
       })
     }
     this.zIndexUpdated = false

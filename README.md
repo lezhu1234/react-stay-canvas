@@ -2,9 +2,9 @@
 
 stay-canvas for react
 
-<div align="center"><a href="./README.en.md">
+<div align="center"><a href="./docs/README.en.md">
   <strong>English</strong>
-</a> | <a href="./README.zh.md">
+</a> | <a href="./docs/README.zh.md">
   <strong>中文简体</strong>
 </a></div>
 

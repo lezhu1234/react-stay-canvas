@@ -70,8 +70,8 @@ export class Path extends Shape {
   zoom(zoomScale: number): void {
     this.update({
       points: this.points.map((point) => {
-        point.zoom(zoomScale)
-        return point
+        const { x, y } = this.getZoomPoint(zoomScale, point)
+        return point.update({ x, y })
       }),
     })
   }

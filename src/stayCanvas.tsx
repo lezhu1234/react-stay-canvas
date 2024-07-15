@@ -21,6 +21,7 @@ const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function S
     mounted,
     layers = 2,
     className = "",
+    passive = true,
   }: StayCanvasProps,
   ref
 ) {
@@ -51,7 +52,13 @@ const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function S
     if (!node) {
       return
     }
-    stay.current = new StayStage(canvasLayers.current, contextLayerSetFunctionList, width, height)
+    stay.current = new StayStage(
+      canvasLayers.current,
+      contextLayerSetFunctionList,
+      width,
+      height,
+      passive
+    )
     ;[...eventList, ...Object.values(PredefinedEventList)].forEach((event) => {
       stay.current!.registerEvent(event)
     })

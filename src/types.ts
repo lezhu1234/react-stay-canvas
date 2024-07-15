@@ -90,5 +90,6 @@ export interface StayCanvasProps {
   layers?: number | ContextLayerSetFunction[]
   eventList?: EventProps[]
   listenerList?: ListenerProps[]
+  passive?: boolean
   mounted?: (tools: StayTools) => void
 }

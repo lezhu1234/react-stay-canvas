@@ -68,9 +68,11 @@ class Stay {
   y: number
   zIndexUpdated: boolean
   rootChild: StayChild<Root>
+  passive: boolean
 
-  constructor(root: Canvas) {
+  constructor(root: Canvas, passive: boolean) {
     this.root = root
+    this.passive = passive
     this.x = 0
     this.y = 0
     this.width = this.root.width
@@ -703,7 +705,7 @@ class Stay {
     topLayer.ondblclick = (e: MouseEvent) => dblclick(this.fireEvent.bind(this), e)
     topLayer.oncontextmenu = (e: MouseEvent) => contextmenu(this.fireEvent.bind(this), e)
     topLayer.addEventListener("wheel", (e: WheelEvent) => wheel(this.fireEvent.bind(this), e), {
-      passive: true,
+      passive: this.passive,
     })
   }
 

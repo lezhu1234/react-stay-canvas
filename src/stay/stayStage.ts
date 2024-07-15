@@ -11,9 +11,13 @@ export default class StayStage {
     canvasLayers: HTMLCanvasElement[],
     contextLayerSetFunctionList: ContextLayerSetFunction[],
     width: number,
-    height: number
+    height: number,
+    passive: boolean
   ) {
-    this.#stay = new Stay(new Canvas(canvasLayers, contextLayerSetFunctionList, width, height))
+    this.#stay = new Stay(
+      new Canvas(canvasLayers, contextLayerSetFunctionList, width, height),
+      passive
+    )
     this.tools = this.#stay.getTools()
   }
 

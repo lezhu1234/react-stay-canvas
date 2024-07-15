@@ -373,11 +373,10 @@ class Stay {
         if (zIndex !== child.zIndex) {
           this.zIndexUpdated = true
         }
-        layer = parseLayer(this.root.layers, layer)
         child._update({
           shape,
           zIndex: zIndex,
-          layer,
+          layer: layer === undefined ? child.layer : layer,
           className,
         })
         this.unLogedChildrenIds.add(child.id)

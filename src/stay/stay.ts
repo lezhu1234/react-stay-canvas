@@ -10,7 +10,7 @@ import {
   mouseup,
   wheel,
 } from "../rawEvents"
-import { Point, Root, Shape } from "../shapes"
+import { Point, Rectangle, Root, Shape } from "../shapes"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
 import { EventProps, StayAction, StayEventMap, StayEventProps } from "../types"
@@ -67,6 +67,7 @@ class Stay {
   x: number
   y: number
   zIndexUpdated: boolean
+  rootChild: StayChild<Root>
 
   constructor(root: Canvas) {
     this.root = root
@@ -75,7 +76,7 @@ class Stay {
     this.width = this.root.width
     this.height = this.root.height
     this.#children = new Map<string, StayChild>()
-    const rootChild = new StayChild({
+    this.rootChild = new StayChild({
       id: `${ROOTNAME}-${uuid4()}`,
       zIndex: -1,
       shape: new Root({
@@ -88,7 +89,7 @@ class Stay {
       className: ROOTNAME,
       layer: 0,
     })
-    this.#children.set(rootChild.id, rootChild)
+    this.#children.set(this.rootChild.id, this.rootChild)
     this.events = {}
     this.store = new Map<string, any>()
     this.stateStore = new Map<string, any>()
@@ -174,10 +175,14 @@ class Stay {
       members: StayChild[]
     }
 
-    const childrenInlayer: ChildLayer[] = this.drawLayers.map((layer) => ({
-      update: layer.forceUpdate,
-      members: [],
-    }))
+    const childrenInlayer: ChildLayer[] = this.drawLayers.map((layer) => {
+      const childInLayer = {
+        update: layer.forceUpdate,
+        members: [],
+      }
+      layer.forceUpdate = false
+      return childInLayer
+    })
 
     this.getChildren().forEach((child) => {
       childrenInlayer[child.layer].members.push(child)
@@ -519,6 +524,19 @@ class Stay {
       zoom: (deltaY: number, center: SimplePoint) => {
         this.getChildren().forEach((child) => {
           child.shape.zoom(child.shape._zoom(deltaY, center))
+        })
+        this.root.layers.forEach((_, i) => {
+          this.forceUpdateLayer(i)
+        })
+      },
+      reset: () => {
+        const rootChildShape = this.rootChild.shape as Rectangle
+        const [offsetX, offsetY] = [-rootChildShape.leftTop.x, -rootChildShape.leftTop.y]
+
+        const scale = this.width / rootChildShape.width
+        this.getChildren().forEach((child) => {
+          child.shape.move(offsetX, offsetY)
+          child.shape.zoom(child.shape._zoom((scale - 1) * -1000, { x: 0, y: 0 }))
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)

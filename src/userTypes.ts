@@ -105,6 +105,7 @@ export interface StayTools {
   moveStart: () => void
   move: (offsetX: number, offsetY: number) => void
   zoom: (deltaY: number, center: SimplePoint) => void
+  reset: () => void
   log: () => void
   redo: () => void
   undo: () => void

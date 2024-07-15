@@ -80,7 +80,6 @@ export abstract class Shape {
   }
 
   _draw({ context, canvas, now }: ShapeDrawProps) {
-    // console.log("draw")
     context.lineWidth = this.lineWidth
     context.globalCompositeOperation = this.gco
     this.setColor(context, this.color)

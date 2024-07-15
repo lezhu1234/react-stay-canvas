@@ -59,7 +59,7 @@ const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function S
       height,
       passive
     )
-    ;[...eventList, ...Object.values(PredefinedEventList)].forEach((event) => {
+    ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
       stay.current!.registerEvent(event)
     })
     listenerList.forEach((listener) => {

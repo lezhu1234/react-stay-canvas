@@ -258,6 +258,10 @@ class Stay {
     const isMouseEvent = e instanceof MouseEvent
     const triggerEvents: { [key: string]: ActionEvent } = {}
     Object.keys(this.events).forEach((eventName) => {
+      // may be deleted by other event
+      if (!this.events[eventName]) {
+        return
+      }
       const event = this.events[eventName] as StayEventProps
       if (event.trigger !== trigger) return false
 

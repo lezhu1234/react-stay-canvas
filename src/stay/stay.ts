@@ -299,14 +299,19 @@ class Stay {
         })
       ) {
         triggerEvents[eventName] = actionEvent
-        const linkEvent = event.successCallback({
+        let linkEvent = event.successCallback({
           e: actionEvent,
           store: this.store,
           stateStore: this.stateStore,
           deleteEvent: this.deleteEvent.bind(this),
         })
         if (linkEvent) {
-          this.registerEvent(linkEvent)
+          if (!(linkEvent instanceof Array)) {
+            linkEvent = [linkEvent]
+          }
+          linkEvent.forEach((le) => {
+            this.registerEvent(le)
+          })
         }
       }
     })

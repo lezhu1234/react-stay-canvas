@@ -1,4 +1,6 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
+import { getCornersByCenterLine } from "../utils"
+import { Line } from "./line"
 import { Point } from "./point"
 import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
 
@@ -37,12 +39,30 @@ export class Path extends Shape {
 
   getPath(): Path2D {
     const path = new Path2D()
-    this.points.forEach((point, index) => {
-      if (index === 0) {
-        path.moveTo(point.x, point.y)
-        // path.arc(point.x, point.y, this.radius, 0, 2 * Math.PI)
-      } else {
-        path.lineTo(point.x, point.y)
+    this.points.forEach((p, i) => {
+      path.moveTo(p.x, p.y)
+      path.arc(p.x, p.y, this.radius, 0, 2 * Math.PI)
+
+      if (i > 0) {
+        const lastPoint = this.points[i - 1]
+
+        const pathRectCorners = getCornersByCenterLine(
+          new Line({
+            x1: p.x,
+            y1: p.y,
+            x2: lastPoint.x,
+            y2: lastPoint.y,
+          }),
+          this.radius * 2
+        )
+
+        pathRectCorners.forEach((p, i) => {
+          if (i === 0) {
+            path.moveTo(p.x, p.y)
+          } else {
+            path.lineTo(p.x, p.y)
+          }
+        })
       }
     })
     return path
@@ -73,6 +93,7 @@ export class Path extends Shape {
         const { x, y } = this.getZoomPoint(zoomScale, point)
         return point.update({ x, y })
       }),
+      radius: this.radius * zoomScale,
     })
   }
 }

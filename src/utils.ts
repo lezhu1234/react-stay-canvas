@@ -159,3 +159,7 @@ export function getCornersByCenterLine(centerLine: Line, width: number) {
 
   return [new Point(x1, y1), new Point(x2, y2), new Point(x3, y3), new Point(x4, y4)]
 }
+
+export function numberAlmostEqual(a: number, b: number, epsilon = 0.0001) {
+  return Math.abs(a - b) < epsilon
+}

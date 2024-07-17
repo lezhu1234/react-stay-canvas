@@ -1,7 +1,8 @@
 import Canvas from "./canvas"
 import { Point } from "./shapes/point"
 import { Shape } from "./shapes/shape"
-import { StepProps, valueof } from "./stay/types"
+import { StayChild } from "./stay/stayChild"
+import { valueof } from "./stay/types"
 import { UserCallback } from "./types"
 import { DRAW_ACTIONS, SORT_CHILDREN_METHODS } from "./userConstants"
 
@@ -105,7 +106,7 @@ export interface StayTools {
   createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
   appendChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
   updateChild: (props: updateChildProps) => StayChild
-  removeChild: (childId: string) => void
+  removeChild: (childId: string) => Promise<void> | void
   getContainPointChildren: (props: getContainPointChildrenProps) => StayChild[]
   hasChild: (id: string) => boolean
   fix: () => void
@@ -117,9 +118,9 @@ export interface StayTools {
   getAvailiableStates: (selector: string) => string[]
   changeCursor: (cursor: string) => void
   moveStart: () => void
-  move: (offsetX: number, offsetY: number) => void
-  zoom: (deltaY: number, center: SimplePoint) => void
-  reset: () => void
+  move: (offsetX: number, offsetY: number) => Promise<void>
+  zoom: (deltaY: number, center: SimplePoint) => Promise<void>
+  reset: () => Promise<void>
   exportChildren: (props: ImportChildrenProps) => ExportChildrenProps
   importChildren: (props: ExportChildrenProps, targetArea?: Area) => void
   log: () => void
@@ -127,7 +128,6 @@ export interface StayTools {
   undo: () => void
   triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
   deleteListener: (name: string) => void
-  forceUpdateCanvas: () => void
 }
 
 export interface StayChildProps<T> {
@@ -138,21 +138,22 @@ export interface StayChildProps<T> {
   beforeLayer?: number | null
   shape: T
   drawAction?: DrawActionsValuesType | null
+  then?: (fn: () => void) => void
 }
 
-export declare class StayChild<T extends Shape = Shape> {
-  beforeLayer: number | null
-  className: string
-  drawAction: DrawActionsValuesType | null
-  id: string
-  layer: number
-  shape: T
-  zIndex: number
-  constructor({ id, zIndex, className, layer, beforeLayer, shape, drawAction }: StayChildProps<T>)
-  static diff<T extends Shape>(
-    history: StayChild<T> | undefined,
-    now: StayChild<T> | undefined
-  ): StepProps | undefined
-  copy(): StayChild<T>
-  _update({ className, layer, shape, zIndex }: UpdateStayChildProps<T>): void
-}
+// export declare class StayChild<T extends Shape = Shape> {
+//   beforeLayer: number | null
+//   className: string
+//   drawAction: DrawActionsValuesType | null
+//   id: string
+//   layer: number
+//   shape: T
+//   zIndex: number
+//   constructor({ id, zIndex, className, layer, beforeLayer, shape, drawAction }: StayChildProps<T>)
+//   static diff<T extends Shape>(
+//     history: StayChild<T> | undefined,
+//     now: StayChild<T> | undefined
+//   ): StepProps | undefined
+//   copy(): StayChild<T>
+//   _update({ className, layer, shape, zIndex }: UpdateStayChildProps<T>): void
+// }

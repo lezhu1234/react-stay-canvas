@@ -12,7 +12,17 @@ export class StayChild<T extends Shape = Shape> {
   layer: number
   shape: T
   zIndex: number
-  constructor({ id, zIndex, className, layer, beforeLayer, shape, drawAction }: StayChildProps<T>) {
+  then: (fn: () => void) => void
+  constructor({
+    id,
+    zIndex,
+    className,
+    layer,
+    beforeLayer,
+    shape,
+    drawAction,
+    then = (fn: () => void) => void 0,
+  }: StayChildProps<T>) {
     this.id = id || uuid4()
     this.zIndex = zIndex === undefined ? 1 : zIndex
     this.className = className
@@ -20,6 +30,7 @@ export class StayChild<T extends Shape = Shape> {
     this.beforeLayer = beforeLayer || null
     this.shape = shape
     this.drawAction = drawAction || null
+    this.then = then
   }
 
   static diff<T extends Shape>(

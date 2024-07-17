@@ -69,6 +69,7 @@ class Stay {
   zIndexUpdated: boolean
   rootChild: StayChild<Root>
   passive: boolean
+  nextTickFunctions: (() => void)[]
 
   constructor(root: Canvas, passive: boolean) {
     this.root = root
@@ -110,6 +111,7 @@ class Stay {
     this.drawLayers = this.root.layers.map(() => ({
       forceUpdate: false,
     }))
+    this.nextTickFunctions = []
 
     this.initEvents()
     this.startRender()
@@ -228,6 +230,17 @@ class Stay {
       })
     }
     this.zIndexUpdated = false
+
+    // run next tick function
+    requestIdleCallback(
+      (idle) => {
+        while (this.nextTickFunctions.length > 0 && (idle.timeRemaining() > 0 || idle.didTimeout)) {
+          const fn = this.nextTickFunctions.shift()
+          if (fn) fn()
+        }
+      },
+      { timeout: 1000 }
+    )
   }
 
   filterChildren(filterCallback: (...args: any) => boolean) {
@@ -328,11 +341,11 @@ class Stay {
   getChildren() {
     return this.#children
   }
+  nextTick(fn: () => void) {
+    this.nextTickFunctions.push(fn)
+  }
   getTools(): StayTools {
     return {
-      forceUpdateCanvas: () => {
-        // this.draw(true)
-      },
       hasChild: (id: string) => {
         return this.getChildren().has(id)
       },
@@ -343,9 +356,6 @@ class Stay {
         className,
         layer = -1,
       }: createChildProps<T>) => {
-        // if (layer === -1) {
-        //   layer = this.root.layers.length - 1
-        // }
         layer = parseLayer(this.root.layers, layer)
         this.checkName(className, [ROOTNAME])
         const child = new StayChild<typeof shape>({
@@ -355,6 +365,7 @@ class Stay {
           layer,
           shape,
           drawAction: DRAW_ACTIONS.APPEND,
+          then: (fn) => this.nextTick(fn),
         })
         return child
       },
@@ -398,12 +409,15 @@ class Stay {
         this.unLogedChildrenIds.add(child.id)
         return child
       },
-      removeChild: (childId: string) => {
+      removeChild: (childId: string): Promise<void> | void => {
         const child = this.getChildById(childId)
-        if (!child) return false
+        if (!child) return
         this.drawLayers[child.layer].forceUpdate = true
         this.removeChildById(child.id)
         this.unLogedChildrenIds.add(child.id)
+        return new Promise<void>((resolve) => {
+          this.nextTick(resolve)
+        })
       },
       getChildrenBySelector: (
         selector: string,
@@ -524,23 +538,29 @@ class Stay {
         })
       },
 
-      move: (offsetX: number, offsetY: number) => {
+      move: (offsetX: number, offsetY: number): Promise<void> => {
         this.getChildren().forEach((child) => {
           child.shape.move(...child.shape._move(offsetX, offsetY))
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)
         })
+        return new Promise<void>((resolve) => {
+          this.nextTick(resolve)
+        })
       },
-      zoom: (deltaY: number, center: SimplePoint) => {
+      zoom: (deltaY: number, center: SimplePoint): Promise<void> => {
         this.getChildren().forEach((child) => {
           child.shape.zoom(child.shape._zoom(deltaY, center))
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)
         })
+        return new Promise<void>((resolve) => {
+          this.nextTick(resolve)
+        })
       },
-      reset: () => {
+      reset: (): Promise<void> => {
         const rootChildShape = this.rootChild.shape as Rectangle
         const [offsetX, offsetY] = [-rootChildShape.leftTop.x, -rootChildShape.leftTop.y]
 
@@ -552,7 +572,11 @@ class Stay {
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)
         })
+        return new Promise<void>((resolve) => {
+          this.nextTick(resolve)
+        })
       },
+
       exportChildren: ({ children, area }) => {
         const rootChildShape = this.rootChild.shape as Rectangle
         area = area ?? { x: 0, y: 0, width: rootChildShape.width, height: rootChildShape.height }

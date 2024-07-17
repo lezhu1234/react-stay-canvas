@@ -76,7 +76,21 @@ export interface ActionCallbackProps {
   payload: Dict
 }
 
-// type ListenerCallback = (p: ActionCallbackProps) => Record<string, any> | void
+export interface Area {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+export interface ImportChildrenProps {
+  children: StayChild[]
+  area?: Area
+}
+
+export interface ExportChildrenProps {
+  children: StayChild[]
+  area: Area
+}
 
 export interface ListenerProps {
   name: string
@@ -106,6 +120,8 @@ export interface StayTools {
   move: (offsetX: number, offsetY: number) => void
   zoom: (deltaY: number, center: SimplePoint) => void
   reset: () => void
+  exportChildren: (props: ImportChildrenProps) => ExportChildrenProps
+  importChildren: (props: ExportChildrenProps, targetArea?: Area) => void
   log: () => void
   redo: () => void
   undo: () => void

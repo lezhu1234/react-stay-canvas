@@ -19,7 +19,7 @@ export class Point extends Shape {
     return false
   }
 
-  copy(): Shape {
+  copy(): Point {
     return new Point(this.x, this.y, {
       color: this.color,
       lineWidth: this.lineWidth,

@@ -11,33 +11,15 @@ export interface PathAttr {
 }
 
 export class Path extends Shape {
-  path!: Path2D
   points: Point[]
   radius: number
   constructor({ points, radius, props }: PathAttr) {
     super(props || {})
     this.points = points
     this.radius = radius
-    this.init()
-  }
-  contains(point: Point, ctx: CanvasRenderingContext2D): boolean {
-    return ctx.isPointInPath(this.path, point.x, point.y)
-  }
-  copy(): Shape {
-    return new Path({
-      ...this,
-      props: this._copy(),
-    })
-  }
-  draw({ context }: ShapeDrawProps): void {
-    if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      context.fill(this.path)
-    } else {
-      context.stroke(this.path)
-    }
   }
 
-  getPath(): Path2D {
+  get path(): Path2D {
     const path = new Path2D()
     this.points.forEach((p, i) => {
       path.moveTo(p.x, p.y)
@@ -67,10 +49,24 @@ export class Path extends Shape {
     })
     return path
   }
-
-  init() {
-    this.path = this.getPath()
+  contains(point: Point, ctx: CanvasRenderingContext2D): boolean {
+    return ctx.isPointInPath(this.path, point.x, point.y)
   }
+  copy(): Shape {
+    return new Path({
+      radius: this.radius,
+      points: this.points.map((point) => point.copy()),
+      props: this._copy(),
+    })
+  }
+  draw({ context }: ShapeDrawProps): void {
+    if (this.type === SHAPE_DRAW_TYPES.FILL) {
+      context.fill(this.path)
+    } else {
+      context.stroke(this.path)
+    }
+  }
+
   move(offsetX: number, offsetY: number): void {
     this.update({
       points: this.points.map((point) => {
@@ -83,7 +79,6 @@ export class Path extends Shape {
     this.points = points || this.points
     this.radius = radius === undefined ? this.radius : radius
     this._update(props || {})
-    this.init()
     return this
   }
 

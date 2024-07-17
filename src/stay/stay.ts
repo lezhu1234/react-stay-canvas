@@ -553,6 +553,58 @@ class Stay {
           this.forceUpdateLayer(i)
         })
       },
+      exportChildren: ({ children, area }) => {
+        const rootChildShape = this.rootChild.shape as Rectangle
+        area = area ?? { x: 0, y: 0, width: rootChildShape.width, height: rootChildShape.height }
+        // const [offsetX, offsetY] = [
+        //   -rootChildShape.leftTop.x - area.x,
+        //   -rootChildShape.leftTop.y - area.y,
+        // ]
+
+        // const scale = this.width / rootChildShape.width
+        // children = children.map((child) => {
+        //   child.shape.move(offsetX, offsetY)
+        //   child.shape.zoom(child.shape._zoom((scale - 1) * -1000, { x: 0, y: 0 }))
+        //   return child.copy()
+        // })
+        children = children.map((child) => child.copy())
+
+        return { children, area }
+      },
+      importChildren: ({ children, area }, targetArea) => {
+        const rootChildShape = this.rootChild.shape as Rectangle
+        targetArea = targetArea ?? {
+          x: 0,
+          y: 0,
+          width: rootChildShape.width,
+          height: rootChildShape.height,
+        }
+
+        assert(targetArea.width / area.width === targetArea.height / area.height, "area not match")
+
+        const [offsetX, offsetY] = [targetArea.x - area.x, targetArea.y - area.y]
+        const scale = targetArea.width / area.width
+        // const rootChildShape = this.rootChild.shape as Rectangle
+        // const [_offsetX, _offsetY] = [rootChildShape.leftTop.x, rootChildShape.leftTop.y]
+
+        // const _scale = rootChildShape.width / this.width
+
+        const needUpdateLayers: number[] = []
+
+        children.forEach((child) => {
+          child.shape.move(offsetX, offsetY)
+          child.shape.zoom(
+            child.shape._zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
+          )
+          this.tools.appendChild({
+            shape: child.shape.copy(),
+            className: child.className,
+            layer: child.layer,
+            zIndex: child.zIndex,
+          })
+          needUpdateLayers.push(child.layer)
+        })
+      },
       redo: () => {
         if (this.stackIndex >= this.stack.length) {
           console.log("no more operations")

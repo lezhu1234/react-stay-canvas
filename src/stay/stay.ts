@@ -576,7 +576,6 @@ class Stay {
           this.nextTick(resolve)
         })
       },
-
       exportChildren: ({ children, area }) => {
         const rootChildShape = this.rootChild.shape as Rectangle
         area = area ?? { x: 0, y: 0, width: rootChildShape.width, height: rootChildShape.height }
@@ -615,6 +614,34 @@ class Stay {
           })
           needUpdateLayers.push(child.layer)
         })
+      },
+      regionToTargetCanvas: ({ area, targetArea, children }) => {
+        targetArea = targetArea ?? {
+          x: 0,
+          y: 0,
+          width: area.width,
+          height: area.height,
+        }
+        const [offsetX, offsetY] = [targetArea.x - area.x, targetArea.y - area.y]
+        const scale = targetArea.width / area.width
+
+        const tempCanvas = document.createElement("canvas")
+        tempCanvas.width = targetArea.width
+        tempCanvas.height = targetArea.height
+        const tempCtx = tempCanvas.getContext("2d")
+        if (!tempCtx) {
+          throw new Error("Unable to get 2D context")
+        }
+
+        children.forEach((c) => {
+          const child = c.copy()
+          child.shape.move(offsetX, offsetY)
+          child.shape.zoom(
+            child.shape._zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
+          )
+          child.shape._draw({ context: tempCtx, canvas: tempCanvas, now: Date.now() })
+        })
+        return tempCanvas
       },
       redo: () => {
         if (this.stackIndex >= this.stack.length) {

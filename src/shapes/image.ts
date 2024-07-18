@@ -21,8 +21,8 @@ export class StayImage extends Rectangle {
   image: HTMLImageElement
   imageLoaded?: (image: StayImage) => void
   loadState: ImageLoadState
-  naturalHeight?: number
-  naturalWidth?: number
+  naturalHeight: number
+  naturalWidth: number
   sheight?: number
   src: string
   swidth?: number
@@ -51,6 +51,8 @@ export class StayImage extends Rectangle {
     this.loadState = "loading"
     this.ctx = null
     this.imageLoaded = imageLoaded
+    this.naturalWidth = 0
+    this.naturalHeight = 0
 
     this.image.onload = () => {
       this.loadState = "loaded"

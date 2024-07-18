@@ -123,6 +123,7 @@ export interface StayTools {
   reset: () => Promise<void>
   exportChildren: (props: ImportChildrenProps) => ExportChildrenProps
   importChildren: (props: ExportChildrenProps, targetArea?: Area) => void
+  regionToTargetCanvas: (props: RegionToTargetCanvasProps) => HTMLCanvasElement
   log: () => void
   redo: () => void
   undo: () => void
@@ -141,19 +142,8 @@ export interface StayChildProps<T> {
   then?: (fn: () => void) => void
 }
 
-// export declare class StayChild<T extends Shape = Shape> {
-//   beforeLayer: number | null
-//   className: string
-//   drawAction: DrawActionsValuesType | null
-//   id: string
-//   layer: number
-//   shape: T
-//   zIndex: number
-//   constructor({ id, zIndex, className, layer, beforeLayer, shape, drawAction }: StayChildProps<T>)
-//   static diff<T extends Shape>(
-//     history: StayChild<T> | undefined,
-//     now: StayChild<T> | undefined
-//   ): StepProps | undefined
-//   copy(): StayChild<T>
-//   _update({ className, layer, shape, zIndex }: UpdateStayChildProps<T>): void
-// }
+export interface RegionToTargetCanvasProps {
+  area: Area
+  targetArea?: Area
+  children: StayChild[]
+}

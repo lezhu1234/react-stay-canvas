@@ -1,3 +1,4 @@
+import { Line, Point } from "./shapes"
 import { SUPPORT_OPRATOR } from "./userConstants"
 
 export type InfixExpressionParserProps<T> = {
@@ -134,4 +135,31 @@ export function parseLayer(layers: any[], layer: number | undefined) {
     throw new Error("layer is out of range")
   }
   return layer
+}
+
+export function getCornersByCenterLine(centerLine: Line, width: number) {
+  const l = centerLine.len()
+  const r = width / 2
+
+  const x1 = centerLine.x1 - (r * (centerLine.y2 - centerLine.y1)) / l
+  const y1 = centerLine.y1 + (r * (centerLine.x2 - centerLine.x1)) / l
+
+  const x2 = 2 * centerLine.x1 - x1
+  const y2 = 2 * centerLine.y1 - y1
+
+  const midllePoint = new Point(
+    (centerLine.x1 + centerLine.x2) / 2,
+    (centerLine.y1 + centerLine.y2) / 2
+  )
+  const x3 = 2 * midllePoint.x - x1
+  const y3 = 2 * midllePoint.y - y1
+
+  const x4 = 2 * midllePoint.x - x2
+  const y4 = 2 * midllePoint.y - y2
+
+  return [new Point(x1, y1), new Point(x2, y2), new Point(x3, y3), new Point(x4, y4)]
+}
+
+export function numberAlmostEqual(a: number, b: number, epsilon = 0.0001) {
+  return Math.abs(a - b) < epsilon
 }

@@ -73,7 +73,7 @@ export interface StayEventRequiredProps {
 
 export interface StayEventChooseProps {
   conditionCallback: UserConditionCallbackFunction
-  successCallback: (props: UserSuccessCallbackProps) => void | EventProps
+  successCallback: (props: UserSuccessCallbackProps) => void | EventProps | EventProps[]
 }
 
 export type StayEventProps = StayEventRequiredProps & StayEventChooseProps
@@ -90,5 +90,6 @@ export interface StayCanvasProps {
   layers?: number | ContextLayerSetFunction[]
   eventList?: EventProps[]
   listenerList?: ListenerProps[]
+  passive?: boolean
   mounted?: (tools: StayTools) => void
 }

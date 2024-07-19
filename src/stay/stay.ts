@@ -10,7 +10,7 @@ import {
   mouseup,
   wheel,
 } from "../rawEvents"
-import { Point, Root, Shape } from "../shapes"
+import { Point, Rectangle, Root, Shape } from "../shapes"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
 import { EventProps, StayAction, StayEventMap, StayEventProps } from "../types"
@@ -35,7 +35,7 @@ import {
   StayTools,
   updateChildProps,
 } from "../userTypes"
-import { assert, infixExpressionParser, parseLayer, uuid4 } from "../utils"
+import { assert, infixExpressionParser, numberAlmostEqual, parseLayer, uuid4 } from "../utils"
 import { StayChild } from "./stayChild"
 import { StackItem, StepProps } from "./types"
 
@@ -67,15 +67,19 @@ class Stay {
   x: number
   y: number
   zIndexUpdated: boolean
+  rootChild: StayChild<Root>
+  passive: boolean
+  nextTickFunctions: (() => void)[]
 
-  constructor(root: Canvas) {
+  constructor(root: Canvas, passive: boolean) {
     this.root = root
+    this.passive = passive
     this.x = 0
     this.y = 0
     this.width = this.root.width
     this.height = this.root.height
     this.#children = new Map<string, StayChild>()
-    const rootChild = new StayChild({
+    this.rootChild = new StayChild({
       id: `${ROOTNAME}-${uuid4()}`,
       zIndex: -1,
       shape: new Root({
@@ -88,7 +92,7 @@ class Stay {
       className: ROOTNAME,
       layer: 0,
     })
-    this.#children.set(rootChild.id, rootChild)
+    this.#children.set(this.rootChild.id, this.rootChild)
     this.events = {}
     this.store = new Map<string, any>()
     this.stateStore = new Map<string, any>()
@@ -107,6 +111,7 @@ class Stay {
     this.drawLayers = this.root.layers.map(() => ({
       forceUpdate: false,
     }))
+    this.nextTickFunctions = []
 
     this.initEvents()
     this.startRender()
@@ -174,10 +179,14 @@ class Stay {
       members: StayChild[]
     }
 
-    const childrenInlayer: ChildLayer[] = this.drawLayers.map((layer) => ({
-      update: layer.forceUpdate,
-      members: [],
-    }))
+    const childrenInlayer: ChildLayer[] = this.drawLayers.map((layer) => {
+      const childInLayer = {
+        update: layer.forceUpdate,
+        members: [],
+      }
+      layer.forceUpdate = false
+      return childInLayer
+    })
 
     this.getChildren().forEach((child) => {
       childrenInlayer[child.layer].members.push(child)
@@ -221,6 +230,17 @@ class Stay {
       })
     }
     this.zIndexUpdated = false
+
+    // run next tick function
+    requestIdleCallback(
+      (idle) => {
+        while (this.nextTickFunctions.length > 0 && (idle.timeRemaining() > 0 || idle.didTimeout)) {
+          const fn = this.nextTickFunctions.shift()
+          if (fn) fn()
+        }
+      },
+      { timeout: 1000 }
+    )
   }
 
   filterChildren(filterCallback: (...args: any) => boolean) {
@@ -251,6 +271,10 @@ class Stay {
     const isMouseEvent = e instanceof MouseEvent
     const triggerEvents: { [key: string]: ActionEvent } = {}
     Object.keys(this.events).forEach((eventName) => {
+      // may be deleted by other event
+      if (!this.events[eventName]) {
+        return
+      }
       const event = this.events[eventName] as StayEventProps
       if (event.trigger !== trigger) return false
 
@@ -288,14 +312,19 @@ class Stay {
         })
       ) {
         triggerEvents[eventName] = actionEvent
-        const linkEvent = event.successCallback({
+        let linkEvent = event.successCallback({
           e: actionEvent,
           store: this.store,
           stateStore: this.stateStore,
           deleteEvent: this.deleteEvent.bind(this),
         })
         if (linkEvent) {
-          this.registerEvent(linkEvent)
+          if (!(linkEvent instanceof Array)) {
+            linkEvent = [linkEvent]
+          }
+          linkEvent.forEach((le) => {
+            this.registerEvent(le)
+          })
         }
       }
     })
@@ -312,11 +341,11 @@ class Stay {
   getChildren() {
     return this.#children
   }
+  nextTick(fn: () => void) {
+    this.nextTickFunctions.push(fn)
+  }
   getTools(): StayTools {
     return {
-      forceUpdateCanvas: () => {
-        // this.draw(true)
-      },
       hasChild: (id: string) => {
         return this.getChildren().has(id)
       },
@@ -327,9 +356,6 @@ class Stay {
         className,
         layer = -1,
       }: createChildProps<T>) => {
-        // if (layer === -1) {
-        //   layer = this.root.layers.length - 1
-        // }
         layer = parseLayer(this.root.layers, layer)
         this.checkName(className, [ROOTNAME])
         const child = new StayChild<typeof shape>({
@@ -339,6 +365,7 @@ class Stay {
           layer,
           shape,
           drawAction: DRAW_ACTIONS.APPEND,
+          then: (fn) => this.nextTick(fn),
         })
         return child
       },
@@ -373,22 +400,24 @@ class Stay {
         if (zIndex !== child.zIndex) {
           this.zIndexUpdated = true
         }
-        layer = parseLayer(this.root.layers, layer)
         child._update({
           shape,
           zIndex: zIndex,
-          layer,
+          layer: layer === undefined ? child.layer : layer,
           className,
         })
         this.unLogedChildrenIds.add(child.id)
         return child
       },
-      removeChild: (childId: string) => {
+      removeChild: (childId: string): Promise<void> | void => {
         const child = this.getChildById(childId)
-        if (!child) return false
+        if (!child) return
         this.drawLayers[child.layer].forceUpdate = true
         this.removeChildById(child.id)
         this.unLogedChildrenIds.add(child.id)
+        return new Promise<void>((resolve) => {
+          this.nextTick(resolve)
+        })
       },
       getChildrenBySelector: (
         selector: string,
@@ -509,21 +538,110 @@ class Stay {
         })
       },
 
-      move: (offsetX: number, offsetY: number) => {
+      move: (offsetX: number, offsetY: number): Promise<void> => {
         this.getChildren().forEach((child) => {
           child.shape.move(...child.shape._move(offsetX, offsetY))
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)
         })
+        return new Promise<void>((resolve) => {
+          this.nextTick(resolve)
+        })
       },
-      zoom: (deltaY: number, center: SimplePoint) => {
+      zoom: (deltaY: number, center: SimplePoint): Promise<void> => {
         this.getChildren().forEach((child) => {
           child.shape.zoom(child.shape._zoom(deltaY, center))
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)
         })
+        return new Promise<void>((resolve) => {
+          this.nextTick(resolve)
+        })
+      },
+      reset: (): Promise<void> => {
+        const rootChildShape = this.rootChild.shape as Rectangle
+        const [offsetX, offsetY] = [-rootChildShape.leftTop.x, -rootChildShape.leftTop.y]
+
+        const scale = this.width / rootChildShape.width
+        this.getChildren().forEach((child) => {
+          child.shape.move(offsetX, offsetY)
+          child.shape.zoom(child.shape._zoom((scale - 1) * -1000, { x: 0, y: 0 }))
+        })
+        this.root.layers.forEach((_, i) => {
+          this.forceUpdateLayer(i)
+        })
+        return new Promise<void>((resolve) => {
+          this.nextTick(resolve)
+        })
+      },
+      exportChildren: ({ children, area }) => {
+        const rootChildShape = this.rootChild.shape as Rectangle
+        area = area ?? { x: 0, y: 0, width: rootChildShape.width, height: rootChildShape.height }
+        children = children.map((child) => child.copy())
+
+        return { children, area }
+      },
+      importChildren: ({ children, area }, targetArea) => {
+        const rootChildShape = this.rootChild.shape as Rectangle
+        targetArea = targetArea ?? {
+          x: 0,
+          y: 0,
+          width: rootChildShape.width,
+          height: rootChildShape.height,
+        }
+
+        assert(
+          numberAlmostEqual(targetArea.width / area.width, targetArea.height / area.height),
+          "area not match"
+        )
+
+        const [offsetX, offsetY] = [targetArea.x - area.x, targetArea.y - area.y]
+        const scale = targetArea.width / area.width
+        const needUpdateLayers: number[] = []
+
+        children.forEach((child) => {
+          child.shape.move(offsetX, offsetY)
+          child.shape.zoom(
+            child.shape._zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
+          )
+          this.tools.appendChild({
+            shape: child.shape.copy(),
+            className: child.className,
+            layer: child.layer,
+            zIndex: child.zIndex,
+          })
+          needUpdateLayers.push(child.layer)
+        })
+      },
+      regionToTargetCanvas: ({ area, targetArea, children }) => {
+        targetArea = targetArea ?? {
+          x: 0,
+          y: 0,
+          width: area.width,
+          height: area.height,
+        }
+        const [offsetX, offsetY] = [targetArea.x - area.x, targetArea.y - area.y]
+        const scale = targetArea.width / area.width
+
+        const tempCanvas = document.createElement("canvas")
+        tempCanvas.width = targetArea.width
+        tempCanvas.height = targetArea.height
+        const tempCtx = tempCanvas.getContext("2d")
+        if (!tempCtx) {
+          throw new Error("Unable to get 2D context")
+        }
+
+        children.forEach((c) => {
+          const child = c.copy()
+          child.shape.move(offsetX, offsetY)
+          child.shape.zoom(
+            child.shape._zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
+          )
+          child.shape._draw({ context: tempCtx, canvas: tempCanvas, now: Date.now() })
+        })
+        return tempCanvas
       },
       redo: () => {
         if (this.stackIndex >= this.stack.length) {
@@ -686,7 +804,7 @@ class Stay {
     topLayer.ondblclick = (e: MouseEvent) => dblclick(this.fireEvent.bind(this), e)
     topLayer.oncontextmenu = (e: MouseEvent) => contextmenu(this.fireEvent.bind(this), e)
     topLayer.addEventListener("wheel", (e: WheelEvent) => wheel(this.fireEvent.bind(this), e), {
-      passive: true,
+      passive: this.passive,
     })
   }
 

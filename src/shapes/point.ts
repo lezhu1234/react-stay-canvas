@@ -19,7 +19,7 @@ export class Point extends Shape {
     return false
   }
 
-  copy(): Shape {
+  copy(): Point {
     return new Point(this.x, this.y, {
       color: this.color,
       lineWidth: this.lineWidth,
@@ -46,8 +46,8 @@ export class Point extends Shape {
   }
 
   update({ x, y, props }: PointProps) {
-    this.x = x || this.x
-    this.y = y || this.y
+    this.x = x === undefined ? this.x : x
+    this.y = y === undefined ? this.y : y
     this._update(props || {})
     return this
   }

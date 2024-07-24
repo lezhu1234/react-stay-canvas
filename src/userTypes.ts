@@ -18,7 +18,7 @@ export interface SimplePoint {
   y: number
 }
 
-export type StayCanvasTriggerType = {
+export type StayCanvasRefType = {
   trigger: (name: string, payload?: Dict) => void
 }
 

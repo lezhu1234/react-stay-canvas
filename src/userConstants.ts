@@ -6,6 +6,9 @@ export const MOUSE_EVENTS = {
   CLICK: "click", // 鼠标点击事件类型常量，用于鼠标点击事件监听器中使用。
   DB_CLICK: "dblclick", // 鼠标双击事件类型常量，用于鼠标双击事件监听器中使用。
   CONTEXT_MENU: "contextmenu", // 鼠标右键事件类型常量，用于鼠标右键事件监听器中使用。
+  MOUSE_ENTER: "mouseenter",
+  MOUSE_LEAVE: "mouseleave",
+  DROP: "drop",
 } as const
 
 export const KEYBOARRD_EVENTS = {

@@ -10,9 +10,9 @@ import React, {
 import * as PredefinedEventList from "./predefinedEvents"
 import StayStage from "./stay/stayStage"
 import { ContextLayerSetFunction, StayCanvasProps } from "./types"
-import { Dict, StayCanvasTriggerType } from "./userTypes"
+import { Dict, StayCanvasRefType } from "./userTypes"
 
-const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function StayCanvas(
+const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayCanvas(
   {
     width = 500,
     height = 500,
@@ -136,6 +136,7 @@ const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function S
               height={height}
               style={{
                 position: "absolute",
+                display: "block",
                 left: 0,
                 top: 0,
               }}

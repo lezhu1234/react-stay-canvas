@@ -3,9 +3,12 @@ import {
   click,
   contextmenu,
   dblclick,
+  drop,
   keydown,
   keyup,
   mousedown,
+  mouseenter,
+  mouseleave,
   mousemove,
   mouseup,
   wheel,
@@ -267,7 +270,7 @@ class Stay {
     return this.getChildById(id)
   }
 
-  fireEvent(e: KeyboardEvent | MouseEvent | WheelEvent, trigger: string) {
+  fireEvent(e: KeyboardEvent | MouseEvent | WheelEvent | DragEvent, trigger: string) {
     const isMouseEvent = e instanceof MouseEvent
     const triggerEvents: { [key: string]: ActionEvent } = {}
     Object.keys(this.events).forEach((eventName) => {
@@ -724,12 +727,13 @@ class Stay {
           e: ActionEvent
           name: string
         }
-        let needUpdate = false
+        // let needUpdate = false
         const callbackList: CallBackType[] = []
         this.listeners.forEach(({ name, event, state, selector, sortBy, callback }) => {
           if (!(name in this.composeStore)) {
             this.composeStore[name] = {}
           }
+
           event.forEach((actionEventName) => {
             const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
             if (!avaliableSet.includes(this.state) || !(actionEventName in triggerEvents)) {
@@ -745,11 +749,18 @@ class Stay {
                 sortBy: sortBy,
               })
 
-              if (child.length === 0) return false
-              actionEvent.target = child[0] as StayChild
+              // 特殊处理 mouseleave 事件
+              if (actionEventName === "mouseleave") {
+                actionEvent.target = this.rootChild
+              } else {
+                if (child.length === 0) {
+                  return false
+                }
+                actionEvent.target = child[0] as StayChild
+              }
             }
 
-            needUpdate = true
+            // needUpdate = true
             callbackList.push({
               callback,
               e: actionEvent,
@@ -803,9 +814,13 @@ class Stay {
     topLayer.onclick = (e: MouseEvent) => click(this.fireEvent.bind(this), e)
     topLayer.ondblclick = (e: MouseEvent) => dblclick(this.fireEvent.bind(this), e)
     topLayer.oncontextmenu = (e: MouseEvent) => contextmenu(this.fireEvent.bind(this), e)
+    topLayer.ondragover = (e) => false
+    topLayer.ondrop = (e: DragEvent) => drop(this.fireEvent.bind(this), e)
     topLayer.addEventListener("wheel", (e: WheelEvent) => wheel(this.fireEvent.bind(this), e), {
       passive: this.passive,
     })
+    topLayer.onmouseenter = (e: MouseEvent) => mouseenter(this.fireEvent.bind(this), e)
+    topLayer.onmouseleave = (e: MouseEvent) => mouseleave(this.fireEvent.bind(this), e)
   }
 
   pressKey(key: string) {

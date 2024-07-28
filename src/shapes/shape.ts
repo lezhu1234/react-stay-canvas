@@ -11,6 +11,7 @@ export interface ShapeProps {
   gco?: GlobalCompositeOperation
   stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void>
   state?: string
+  hidden?: boolean
 }
 
 export interface ShapeDrawProps {
@@ -46,12 +47,14 @@ export abstract class Shape {
   zoomY: number
   updateNextFrame: boolean
   contentUpdated: boolean
+  hidden: boolean
   constructor({
     color,
     lineWidth,
     type,
     gco,
     state = "default",
+    hidden = false,
     stateDrawFuncMap = {},
   }: ShapeProps) {
     this.color = color || "white"
@@ -73,6 +76,7 @@ export abstract class Shape {
     this.startTime = 0
     this.updateNextFrame = false
     this.contentUpdated = true
+    this.hidden = hidden
   }
 
   _copy() {
@@ -85,8 +89,14 @@ export abstract class Shape {
     this.setColor(context, this.color)
     // this.draw({ context, canvas, now })
     if (this.updateNextFrame || this.contentUpdated) {
-      const drawStateResult = this.stateDrawFuncMap[this.state].bind(this)({ context, canvas, now })
-      this.updateNextFrame = drawStateResult || false
+      if (!this.hidden) {
+        const drawStateResult = this.stateDrawFuncMap[this.state].bind(this)({
+          context,
+          canvas,
+          now,
+        })
+        this.updateNextFrame = drawStateResult || false
+      }
       this.contentUpdated = false
     }
   }
@@ -101,15 +111,26 @@ export abstract class Shape {
     return [ox, oy]
   }
 
-  _update({ color, lineWidth, zoomY, zoomCenter, type, gco, state, stateDrawFuncMap }: ShapeProps) {
-    this.color = color || this.color
-    this.lineWidth = lineWidth === undefined ? this.lineWidth : lineWidth
-    this.zoomY = zoomY || this.zoomY
-    this.zoomCenter = zoomCenter || this.zoomCenter
-    this.type = type || this.type
-    this.gco = gco || this.gco
+  _update({
+    color,
+    lineWidth,
+    zoomY,
+    zoomCenter,
+    type,
+    gco,
+    state,
+    hidden,
+    stateDrawFuncMap,
+  }: ShapeProps) {
+    this.color = color ?? this.color
+    this.lineWidth = lineWidth ?? this.lineWidth
+    this.zoomY = zoomY ?? this.zoomY
+    this.zoomCenter = zoomCenter ?? this.zoomCenter
+    this.type = type ?? this.type
+    this.gco = gco ?? this.gco
+    this.hidden = hidden ?? this.hidden
 
-    this.stateDrawFuncMap = stateDrawFuncMap || this.stateDrawFuncMap
+    this.stateDrawFuncMap = stateDrawFuncMap ?? this.stateDrawFuncMap
     this.contentUpdated = true
 
     if (state) {

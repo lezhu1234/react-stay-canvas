@@ -161,7 +161,7 @@ export class Rectangle extends Shape {
     this.y = y
     this.width = width
     this.height = height
-    this._update(props || {})
+    this._update(props ?? {})
     this.updateRelatedValue()
 
     return this

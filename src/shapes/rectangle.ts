@@ -1,4 +1,5 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
+import { EasingFunction } from "../userTypes"
 import { Line } from "./line"
 import { Point } from "./point"
 import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
@@ -218,6 +219,21 @@ export class Rectangle extends Shape {
       y: leftTop.y,
       width: this.width * zoomScale,
       height: this.height * zoomScale,
+    })
+  }
+
+  intermediateState(
+    before: Rectangle,
+    after: Rectangle,
+    ratio: number,
+    transitionType: EasingFunction
+  ) {
+    return new Rectangle({
+      x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
+      y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),
+      width: this.getNumberIntermediateState(before.width, after.width, ratio, transitionType),
+      height: this.getNumberIntermediateState(before.height, after.height, ratio, transitionType),
+      props: this._copy(),
     })
   }
 }

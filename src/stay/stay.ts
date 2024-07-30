@@ -3,6 +3,7 @@ import {
   click,
   contextmenu,
   dblclick,
+  dragover,
   drop,
   keydown,
   keyup,
@@ -16,7 +17,7 @@ import {
 import { Point, Rectangle, Root, Shape } from "../shapes"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
-import { EventProps, StayAction, StayEventMap, StayEventProps } from "../types"
+import { EventProps, StayEventMap, StayEventProps } from "../types"
 import {
   ALLSTATE,
   DEFAULTSTATE,
@@ -56,7 +57,7 @@ class Stay {
   events: StayEventMap
   height: number
   historyChildren: Map<string, StayChild>
-  listeners: Map<string, StayAction>
+  listeners: Map<string, Required<ListenerProps>>
   root: Canvas
   stack: StackItem[]
   stackIndex: number
@@ -223,11 +224,14 @@ class Stay {
         if (particalChildren.update) {
           child.shape.contentUpdated = true
         }
-        child.shape._draw({
+        const updateNextFrame = child.draw({
           context,
           canvas,
           now,
         })
+        if (updateNextFrame) {
+          this.forceUpdateLayer(child.layer)
+        }
         child.drawAction = null
         child.beforeLayer = child.layer
       })
@@ -358,6 +362,8 @@ class Stay {
         zIndex,
         className,
         layer = -1,
+        transitionType = "linear",
+        duration = 0,
       }: createChildProps<T>) => {
         layer = parseLayer(this.root.layers, layer)
         this.checkName(className, [ROOTNAME])
@@ -369,6 +375,8 @@ class Stay {
           shape,
           drawAction: DRAW_ACTIONS.APPEND,
           then: (fn) => this.nextTick(fn),
+          duration,
+          transitionType,
         })
         return child
       },
@@ -378,6 +386,8 @@ class Stay {
         zIndex,
         id = undefined,
         layer = -1,
+        duration = 0,
+        transitionType = "linear",
       }: createChildProps<T>) => {
         layer = parseLayer(this.root.layers, layer)
         const child = this.tools.createChild({
@@ -386,13 +396,23 @@ class Stay {
           zIndex,
           className,
           layer,
+          duration,
+          transitionType,
         })
         this.zIndexUpdated = true
         this.pushToChildren(child)
         this.unLogedChildrenIds.add(child.id)
         return child
       },
-      updateChild: ({ child, zIndex, shape, className, layer }: updateChildProps) => {
+      updateChild: ({
+        child,
+        zIndex,
+        shape,
+        className,
+        layer,
+        duration,
+        transitionType,
+      }: updateChildProps) => {
         if (className === "") {
           throw new Error("className cannot be empty")
         }
@@ -408,6 +428,8 @@ class Stay {
           zIndex: zIndex,
           layer: layer === undefined ? child.layer : layer,
           className,
+          duration,
+          transitionType,
         })
         this.unLogedChildrenIds.add(child.id)
         return child
@@ -421,6 +443,12 @@ class Stay {
         return new Promise<void>((resolve) => {
           this.nextTick(resolve)
         })
+      },
+      getChildBySelector: <T extends Shape>(selector: string): StayChild<T> | void => {
+        const children = this.tools.getChildrenBySelector(selector)
+        if (children.length !== 0) {
+          return children[0] as StayChild<T>
+        }
       },
       getChildrenBySelector: (
         selector: string,
@@ -734,6 +762,10 @@ class Stay {
             this.composeStore[name] = {}
           }
 
+          if (!Array.isArray(event)) {
+            event = [event]
+          }
+
           event.forEach((actionEventName) => {
             const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
             if (!avaliableSet.includes(this.state) || !(actionEventName in triggerEvents)) {
@@ -814,7 +846,7 @@ class Stay {
     topLayer.onclick = (e: MouseEvent) => click(this.fireEvent.bind(this), e)
     topLayer.ondblclick = (e: MouseEvent) => dblclick(this.fireEvent.bind(this), e)
     topLayer.oncontextmenu = (e: MouseEvent) => contextmenu(this.fireEvent.bind(this), e)
-    topLayer.ondragover = (e) => false
+    topLayer.ondragover = (e) => dragover(this.fireEvent.bind(this), e)
     topLayer.ondrop = (e: DragEvent) => drop(this.fireEvent.bind(this), e)
     topLayer.addEventListener("wheel", (e: WheelEvent) => wheel(this.fireEvent.bind(this), e), {
       passive: this.passive,

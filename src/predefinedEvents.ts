@@ -177,3 +177,9 @@ export const DropEvent: EventProps = {
   trigger: MOUSE_EVENTS.DROP,
   conditionCallback: () => true,
 }
+
+export const DragOverEvent: EventProps = {
+  name: "dragover",
+  trigger: MOUSE_EVENTS.DRAG_OVER,
+  conditionCallback: () => true,
+}

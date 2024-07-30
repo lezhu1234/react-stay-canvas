@@ -1,6 +1,7 @@
 import { valueof } from "../stay/types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { Dict, SimplePoint } from "../userTypes"
+import { Dict, EasingFunction, SimplePoint } from "../userTypes"
+import { applyEasing } from "../utils"
 
 export interface ShapeProps {
   color?: string | CanvasGradient
@@ -83,7 +84,7 @@ export abstract class Shape {
     return { ...this }
   }
 
-  _draw({ context, canvas, now }: ShapeDrawProps) {
+  _draw({ context, canvas, now }: ShapeDrawProps): boolean {
     context.lineWidth = this.lineWidth
     context.globalCompositeOperation = this.gco
     this.setColor(context, this.color)
@@ -99,6 +100,7 @@ export abstract class Shape {
       }
       this.contentUpdated = false
     }
+    return this.updateNextFrame
   }
 
   _move(offsetX: number, offsetY: number): [number, number] {
@@ -233,6 +235,23 @@ export abstract class Shape {
       x: point.x * scaleRatio + offsetX,
       y: point.y * scaleRatio + offsetY,
     }
+  }
+  intermediateState(
+    before: Shape,
+    after: Shape,
+    ratio: number,
+    transitionType: EasingFunction
+  ): Shape | false {
+    return false
+  }
+
+  getNumberIntermediateState(
+    before: number,
+    after: number,
+    ratio: number,
+    transitionType: EasingFunction
+  ) {
+    return before + (after - before) * applyEasing(transitionType, ratio)
   }
 
   abstract contains(point: SimplePoint, cxt?: CanvasRenderingContext2D): boolean

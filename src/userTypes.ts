@@ -43,6 +43,8 @@ export interface createChildProps<T> {
   shape: T
   className: string
   layer?: number
+  duration?: number
+  transitionType?: EasingFunction
 }
 
 export type updateChildProps<T = Shape> = {
@@ -54,6 +56,8 @@ export interface UpdateStayChildProps<T> {
   layer?: number | undefined
   shape?: T | undefined
   zIndex?: number
+  duration?: number
+  transitionType?: EasingFunction
 }
 
 export type ChildSortFunction = (a: StayChild, b: StayChild) => number
@@ -66,7 +70,7 @@ export interface getContainPointChildrenProps {
 
 export type SortChildrenMethodsValues = valueof<typeof SORT_CHILDREN_METHODS>
 
-export interface ActionCallbackProps {
+export interface ActionCallbackProps<T = Dict> {
   originEvent: Event
   e: ActionEvent
   store: storeType
@@ -74,7 +78,7 @@ export interface ActionCallbackProps {
   composeStore: Record<string, any>
   canvas: Canvas
   tools: StayTools
-  payload: Dict
+  payload: T
 }
 
 export interface Area {
@@ -93,13 +97,18 @@ export interface ExportChildrenProps {
   area: Area
 }
 
-export interface ListenerProps {
-  name: string
+export interface ListenerNamePayloadPair {
+  name: any
+  payload: any
+}
+
+export interface ListenerProps<T extends ListenerNamePayloadPair = ListenerNamePayloadPair> {
+  name: T["name"]
   state?: string
   selector?: string
   event: string | string[]
   sortBy?: SortChildrenMethodsValues | ChildSortFunction
-  callback: UserCallback
+  callback: UserCallback<T["payload"]>
 }
 
 export interface StayTools {
@@ -111,6 +120,7 @@ export interface StayTools {
   hasChild: (id: string) => boolean
   fix: () => void
   switchState: (state: string) => void
+  getChildBySelector: <T extends Shape>(selector: string) => StayChild<T> | void
   getChildrenBySelector: (
     selector: string,
     sortBy?: SortChildrenMethodsValues | ChildSortFunction
@@ -136,14 +146,53 @@ export interface StayChildProps<T> {
   zIndex?: number
   className: string
   layer: number
+  transitionType?: EasingFunction
   beforeLayer?: number | null
   shape: T
   drawAction?: DrawActionsValuesType | null
   then?: (fn: () => void) => void
+  duration?: number
 }
 
 export interface RegionToTargetCanvasProps {
   area: Area
   targetArea?: Area
   children: StayChild[]
+}
+
+export type EasingFunction =
+  | "linear"
+  | "easeInSine"
+  | "easeOutSine"
+  | "easeInOutSine"
+  | "easeInQuad"
+  | "easeOutQuad"
+  | "easeInOutQuad"
+  | "easeInCubic"
+  | "easeOutCubic"
+  | "easeInOutCubic"
+  | "easeInQuart"
+  | "easeOutQuart"
+  | "easeInOutQuart"
+  | "easeInQuint"
+  | "easeOutQuint"
+  | "easeInOutQuint"
+  | "easeInExpo"
+  | "easeOutExpo"
+  | "easeInOutExpo"
+  | "easeInCirc"
+  | "easeOutCirc"
+  | "easeInOutCirc"
+  | "easeInBack"
+  | "easeOutBack"
+  | "easeInOutBack"
+  | "easeInElastic"
+  | "easeOutElastic"
+  | "easeInOutElastic"
+  | "easeInBounce"
+  | "easeOutBounce"
+  | "easeInOutBounce"
+
+export type EasingFunctionMap = {
+  [key in EasingFunction]: (x: number) => number
 }

@@ -50,3 +50,8 @@ export function contextmenu(fireEvent: FireEvent, e: MouseEvent) {
 export function drop(fireEvent: FireEvent, e: DragEvent) {
   fireEvent(e, MOUSE_EVENTS.DROP)
 }
+
+export function dragover(fireEvent: FireEvent, e: DragEvent) {
+  fireEvent(e, MOUSE_EVENTS.DRAG_OVER)
+  return false
+}

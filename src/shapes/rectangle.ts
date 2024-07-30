@@ -188,6 +188,10 @@ export class Rectangle extends Shape {
       x2: this.x + this.width,
       y2: this.y + this.height,
     })
+    this.center.update({
+      x: this.x + this.width / 2,
+      y: this.y + this.height / 2,
+    })
     this.area = this.width * this.height
   }
 

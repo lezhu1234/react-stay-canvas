@@ -29,6 +29,7 @@ export class Rectangle extends Shape {
   width: number
   x: number
   y: number
+  center: Point
   constructor({ x, y, width, height, props = {} }: RectangleAttr) {
     super(props)
     this.x = x
@@ -41,6 +42,7 @@ export class Rectangle extends Shape {
     this.rightTop = new Point(this.x + this.width, this.y)
     this.rightBottom = new Point(this.x + this.width, this.y + this.height)
     this.leftBottom = new Point(this.x, this.y + this.height)
+    this.center = new Point(this.x + this.width / 2, this.y + this.height / 2)
     this.leftBorder = new Line({
       x1: this.x,
       y1: this.y,

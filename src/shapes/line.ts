@@ -48,10 +48,7 @@ export class Line extends Shape {
       y1: this.y1,
       x2: this.x2,
       y2: this.y2,
-      props: {
-        color: this.color,
-        lineWidth: this.lineWidth,
-      },
+      props: this._copy(),
     })
   }
 

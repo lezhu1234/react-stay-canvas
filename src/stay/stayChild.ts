@@ -115,6 +115,7 @@ export class StayChild<T extends Shape = Shape> {
         updateNextFrame = true
       }
     }
+
     return this.#currentShape._draw(props) || updateNextFrame
   }
 

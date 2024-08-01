@@ -10,7 +10,7 @@ import React, {
 import * as PredefinedEventList from "./predefinedEvents"
 import StayStage from "./stay/stayStage"
 import { ContextLayerSetFunction, StayCanvasProps } from "./types"
-import { Dict, StayCanvasRefType } from "./userTypes"
+import { StayCanvasRefType } from "./userTypes"
 
 const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayCanvas(
   {
@@ -42,11 +42,36 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
     throw new Error("layers must be greater than 0")
   }
 
+  type GetNamePayloadPairType<T> = T extends {
+    name: infer U
+    callback: (props: infer R) => void
+  }
+    ? R extends { payload: infer S }
+      ? {
+          name: U
+          payload: S
+        }
+      : never
+    : never
+
+  type GetListenerPairProps<T extends unknown[]> = T extends Array<infer Items>
+    ? GetNamePayloadPairType<Items>
+    : never
+
   const canvasLayers = useRef<HTMLCanvasElement[]>([])
   const stay = useRef<StayStage>()
 
+  type x<T> = T extends { name: infer U; payload: infer V }[] ? U : never
+
   eventList = useMemo(() => eventList || [], [eventList])
   listenerList = useMemo(() => listenerList || [], [listenerList])
+
+  type ListenerPair = GetListenerPairProps<typeof listenerList>
+  type GetListenerPairName<T> = T extends { name: infer U } ? U : never
+  type GetListenerPayloadByName<Name> = ListenerPair extends { name: Name; payload: infer U }
+    ? U
+    : never
+  type ListenerNames = GetListenerPairName<ListenerPair>
 
   const container = useCallback((node: HTMLDivElement) => {
     if (!node) {
@@ -76,10 +101,14 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
     ref,
     () => {
       return {
-        trigger(name: string, payload?: Dict) {
-          const customEvent = new Event(name)
+        trigger<T extends ListenerNames>(name: T, payload?: GetListenerPayloadByName<T>) {
+          const customEvent = new Event(name as string)
           if (stay.current) {
-            stay.current.triggerAction(customEvent, { [name]: customEvent }, payload || {})
+            stay.current.triggerAction(
+              customEvent,
+              { [name as string]: customEvent },
+              payload || {}
+            )
           }
         },
       }

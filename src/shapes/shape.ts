@@ -2,6 +2,7 @@ import { valueof } from "../stay/types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { Dict, EasingFunction, SimplePoint } from "../userTypes"
 import { applyEasing } from "../utils"
+import W3Color from "../w3color"
 
 export interface ShapeProps {
   color?: string | CanvasGradient
@@ -54,6 +55,8 @@ export abstract class Shape {
     lineWidth,
     type,
     gco,
+    zoomCenter,
+    zoomY,
     state = "default",
     hidden = false,
     stateDrawFuncMap = {},
@@ -62,8 +65,8 @@ export abstract class Shape {
     this.lineWidth = lineWidth || 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
     this.type = type || SHAPE_DRAW_TYPES.STROKE // this is a placeholder for the type property that will be implemented in the subclasses
-    this.zoomY = 1
-    this.zoomCenter = { x: 0, y: 0 }
+    this.zoomY = zoomY ?? 1
+    this.zoomCenter = zoomCenter ?? { x: 0, y: 0 }
     this.gco = gco || "source-over"
     this.offsetX = 0
     this.offsetY = 0
@@ -245,6 +248,60 @@ export abstract class Shape {
     return false
   }
 
+  getIntermediateProps(
+    before: Shape,
+    after: Shape,
+    ratio: number,
+    transitionType: EasingFunction
+  ): ShapeProps {
+    let color = after.color
+    if (typeof before.color === "string" && typeof after.color === "string") {
+      color = this.getColorIntermediateState(before.color, after.color, ratio, transitionType)
+    }
+    if (before.hidden && !after.hidden && typeof after.color === "string") {
+      color = this.getColorIntermediateState(
+        new W3Color(after.color).toRgbaString(0),
+        after.color,
+        ratio,
+        transitionType
+      )
+    }
+    if (after.hidden && !before.hidden && typeof before.color === "string") {
+      color = this.getColorIntermediateState(
+        before.color,
+        new W3Color(before.color).toRgbaString(0),
+        ratio,
+        transitionType
+      )
+    }
+    return {
+      ...this._copy(),
+      color,
+      hidden: false,
+      lineWidth: this.getNumberIntermediateState(
+        before.lineWidth,
+        after.lineWidth,
+        ratio,
+        transitionType
+      ),
+      zoomY: this.getNumberIntermediateState(before.zoomY, after.zoomY, ratio, transitionType),
+      zoomCenter: {
+        x: this.getNumberIntermediateState(
+          before.zoomCenter.x,
+          after.zoomCenter.x,
+          ratio,
+          transitionType
+        ),
+        y: this.getNumberIntermediateState(
+          before.zoomCenter.y,
+          after.zoomCenter.y,
+          ratio,
+          transitionType
+        ),
+      },
+    }
+  }
+
   getNumberIntermediateState(
     before: number,
     after: number,
@@ -252,6 +309,22 @@ export abstract class Shape {
     transitionType: EasingFunction
   ) {
     return before + (after - before) * applyEasing(transitionType, ratio)
+  }
+
+  getColorIntermediateState(
+    before: string,
+    after: string,
+    ratio: number,
+    transitionType: EasingFunction
+  ) {
+    const beforeRgba = new W3Color(before).toRgba()
+    const afterColor = new W3Color(after).toRgba()
+    return new W3Color({
+      r: this.getNumberIntermediateState(beforeRgba.r, afterColor.r, ratio, transitionType),
+      g: this.getNumberIntermediateState(beforeRgba.g, afterColor.g, ratio, transitionType),
+      b: this.getNumberIntermediateState(beforeRgba.b, afterColor.b, ratio, transitionType),
+      a: this.getNumberIntermediateState(beforeRgba.a, afterColor.a, ratio, transitionType),
+    }).toRgbaString()
   }
 
   abstract contains(point: SimplePoint, cxt?: CanvasRenderingContext2D): boolean

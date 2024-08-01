@@ -20,10 +20,7 @@ export class Point extends Shape {
   }
 
   copy(): Point {
-    return new Point(this.x, this.y, {
-      color: this.color,
-      lineWidth: this.lineWidth,
-    })
+    return new Point(this.x, this.y, this._copy())
   }
   distance(point: Point): number {
     const dx = point.x - this.x

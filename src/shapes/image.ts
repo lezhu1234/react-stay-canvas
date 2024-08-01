@@ -64,8 +64,8 @@ export class StayImage extends Rectangle {
       if (this.sheight === undefined) {
         this.sheight = this.image.naturalHeight
       }
-      if (imageLoaded) {
-        imageLoaded(this)
+      if (this.imageLoaded) {
+        this.imageLoaded(this)
       }
       this.updateNextFrame = true
     }
@@ -121,12 +121,25 @@ export class StayImage extends Rectangle {
     )
   }
 
-  update({ src, x, y, width, sx, sy, swidth, sheight, height, props }: Partial<ImageProps>) {
-    this.src = src === undefined ? this.src : src
-    this.sx = sx === undefined ? this.sx : sx
-    this.sy = sy === undefined ? this.sy : sy
-    this.swidth = swidth === undefined ? this.swidth : swidth
-    this.sheight = sheight === undefined ? this.sheight : sheight
+  update({
+    src,
+    x,
+    y,
+    width,
+    sx,
+    sy,
+    swidth,
+    sheight,
+    height,
+    imageLoaded,
+    props,
+  }: Partial<ImageProps>) {
+    this.src = src ?? this.src
+    this.sx = sx ?? this.sx
+    this.sy = sy ?? this.sy
+    this.swidth = swidth ?? this.swidth
+    this.sheight = sheight ?? this.sheight
+    this.imageLoaded = imageLoaded ?? this.imageLoaded
     super.update({ x, y, width, height, props })
 
     if (src !== undefined) {

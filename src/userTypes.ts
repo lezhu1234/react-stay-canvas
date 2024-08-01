@@ -97,10 +97,26 @@ export interface ExportChildrenProps {
   area: Area
 }
 
+export type ListenerNamePayloadPairOrName = ListenerNamePayloadPair | string
 export interface ListenerNamePayloadPair {
   name: any
   payload: any
 }
+export type GetListenerNamePayloadPairByName<T extends string> = {
+  name: T
+  payload: Dict
+}
+
+export type ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<
+  T extends ListenerNamePayloadPairOrName[]
+> = T extends [infer R, ...infer U]
+  ? U extends ListenerNamePayloadPairOrName[]
+    ? [
+        R extends string ? GetListenerNamePayloadPairByName<R> : R,
+        ...ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<U>
+      ]
+    : []
+  : []
 
 export interface ListenerProps<T extends ListenerNamePayloadPair = ListenerNamePayloadPair> {
   name: T["name"]
@@ -196,3 +212,42 @@ export type EasingFunction =
 export type EasingFunctionMap = {
   [key in EasingFunction]: (x: number) => number
 }
+
+export type Contra<T> = T extends any ? (arg: T) => void : never
+
+export type InferContra<T> = [T] extends [(arg: infer I) => void] ? I : never
+
+export type PickOne<T> = InferContra<InferContra<Contra<Contra<T>>>>
+export type Union2Tuple<T> = PickOne<T> extends infer U
+  ? Exclude<T, U> extends never
+    ? [T]
+    : [...Union2Tuple<Exclude<T, U>>, U]
+  : never
+
+export type Insert<T extends unknown[], U> = T extends [infer F, ...infer L]
+  ? [F, U, ...L] | [F, ...Insert<L, U>]
+  : [U]
+
+export type PermutationsOfTuple<T extends unknown[], R extends unknown[] = []> = T extends [
+  infer F,
+  ...infer L
+]
+  ? PermutationsOfTuple<L, Insert<R, F> | [F, ...R]>
+  : R
+
+export type DisOrderArr<T> = PermutationsOfTuple<Union2Tuple<T>>
+export type UnionListenerProps<T extends ListenerNamePayloadPair[]> = {
+  [key in keyof T]: ListenerProps<T[key]>
+}
+
+export type ListenerArrayProps<T extends ListenerNamePayloadPairOrName[]> = UnionListenerProps<
+  ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>
+>
+
+export type Tuple2Union<T extends unknown[]> = T extends [infer F, ...infer L]
+  ? F | Tuple2Union<L>
+  : never
+
+export type LisenerTupleToLisenerUnion<T extends ListenerNamePayloadPairOrName[]> = Tuple2Union<
+  ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>
+>

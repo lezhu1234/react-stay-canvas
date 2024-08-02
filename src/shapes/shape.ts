@@ -327,6 +327,12 @@ export abstract class Shape {
     }).toRgbaString()
   }
 
+  awaitCopy() {
+    return new Promise((resolve) => {
+      resolve(this.copy())
+    })
+  }
+
   abstract contains(point: SimplePoint, cxt?: CanvasRenderingContext2D): boolean
 
   abstract copy(): Shape

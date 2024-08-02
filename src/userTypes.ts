@@ -127,6 +127,8 @@ export interface ListenerProps<T extends ListenerNamePayloadPair = ListenerNameP
   callback: UserCallback<T["payload"]>
 }
 
+export type SelectorFunc = (child: StayChild) => boolean
+
 export interface StayTools {
   createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
   appendChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
@@ -136,9 +138,9 @@ export interface StayTools {
   hasChild: (id: string) => boolean
   fix: () => void
   switchState: (state: string) => void
-  getChildBySelector: <T extends Shape>(selector: string) => StayChild<T> | void
+  getChildBySelector: <T extends Shape>(selector: string | SelectorFunc) => StayChild<T> | void
   getChildrenBySelector: (
-    selector: string,
+    selector: string | SelectorFunc,
     sortBy?: SortChildrenMethodsValues | ChildSortFunction
   ) => StayChild[]
   getAvailiableStates: (selector: string) => string[]
@@ -149,7 +151,7 @@ export interface StayTools {
   reset: () => Promise<void>
   exportChildren: (props: ImportChildrenProps) => ExportChildrenProps
   importChildren: (props: ExportChildrenProps, targetArea?: Area) => void
-  regionToTargetCanvas: (props: RegionToTargetCanvasProps) => HTMLCanvasElement
+  regionToTargetCanvas: (props: RegionToTargetCanvasProps) => Promise<HTMLCanvasElement>
   log: () => void
   redo: () => void
   undo: () => void
@@ -166,7 +168,7 @@ export interface StayChildProps<T> {
   beforeLayer?: number | null
   shape: T
   drawAction?: DrawActionsValuesType | null
-  then?: (fn: () => void) => void
+  afterRefresh?: (fn: () => void) => void
   duration?: number
 }
 

@@ -34,6 +34,7 @@ import {
   Dict,
   getContainPointChildrenProps,
   ListenerProps,
+  SelectorFunc,
   SimplePoint,
   SortChildrenMethodsValues,
   StayTools,
@@ -374,7 +375,7 @@ class Stay {
           layer,
           shape,
           drawAction: DRAW_ACTIONS.APPEND,
-          then: (fn) => this.nextTick(fn),
+          afterRefresh: (fn) => this.nextTick(fn),
           duration,
           transitionType,
         })
@@ -444,22 +445,28 @@ class Stay {
           this.nextTick(resolve)
         })
       },
-      getChildBySelector: <T extends Shape>(selector: string): StayChild<T> | void => {
+      getChildBySelector: <T extends Shape>(
+        selector: string | SelectorFunc
+      ): StayChild<T> | void => {
         const children = this.tools.getChildrenBySelector(selector)
         if (children.length !== 0) {
           return children[0] as StayChild<T>
         }
       },
       getChildrenBySelector: (
-        selector: string,
+        selector: string | SelectorFunc,
         sortBy = SORT_CHILDREN_METHODS.AREA_ASC
       ): StayChild[] => {
-        const children = infixExpressionParser<StayChild>({
-          selector,
-          fullSet: [...this.getChildren().values()],
-          elemntEqualFunc: (a: StayChild, b: StayChild) => a.id === b.id,
-          selectorConvertFunc: (s: string) => this.findBySimpleSelector(s),
-        })
+        const fullSet = [...this.getChildren().values()]
+        const children =
+          typeof selector === "function"
+            ? fullSet.filter((child) => selector(child))
+            : infixExpressionParser<StayChild>({
+                selector,
+                fullSet,
+                elemntEqualFunc: (a: StayChild, b: StayChild) => a.id === b.id,
+                selectorConvertFunc: (s: string) => this.findBySimpleSelector(s),
+              })
 
         const sortMap = new Map<SortChildrenMethodsValues, [string, 1 | -1]>([
           [SORT_CHILDREN_METHODS.AREA_ASC, ["area", 1]],
@@ -664,15 +671,20 @@ class Stay {
           throw new Error("Unable to get 2D context")
         }
 
-        children.forEach((c) => {
-          const child = c.copy()
-          child.shape.move(offsetX, offsetY)
-          child.shape.zoom(
-            child.shape._zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
-          )
-          child.shape._draw({ context: tempCtx, canvas: tempCanvas, now: Date.now() })
+        const childrenReady = Promise.all(
+          children.map(async (c) => {
+            const child = await c.awaitCopy()
+            child.shape.move(offsetX, offsetY)
+            child.shape.zoom(
+              child.shape._zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
+            )
+            child.shape._draw({ context: tempCtx, canvas: tempCanvas, now: Date.now() })
+          })
+        )
+
+        return new Promise((resolve) => {
+          childrenReady.then(() => resolve(tempCanvas))
         })
-        return tempCanvas
       },
       redo: () => {
         if (this.stackIndex >= this.stack.length) {
@@ -751,7 +763,7 @@ class Stay {
       ) => {
         const isMouseEvent = originEvent instanceof MouseEvent
         interface CallBackType {
-          callback: (p: ActionCallbackProps) => any
+          callback: ((p: ActionCallbackProps) => any) | Promise<(p: ActionCallbackProps) => any>
           e: ActionEvent
           name: string
         }
@@ -766,7 +778,7 @@ class Stay {
             event = [event]
           }
 
-          event.forEach((actionEventName) => {
+          event.forEach(async (actionEventName) => {
             const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
             if (!avaliableSet.includes(this.state) || !(actionEventName in triggerEvents)) {
               return false
@@ -799,7 +811,7 @@ class Stay {
               name,
             })
             if (callback) {
-              const eventFuncMap = callback({
+              const eventFuncMap = await callback({
                 originEvent,
                 e: actionEvent,
                 store: this.store,

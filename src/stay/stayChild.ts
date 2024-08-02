@@ -17,7 +17,7 @@ export class StayChild<T extends Shape = Shape> {
   layer: number
   shape: T
   zIndex: number
-  then: (fn: () => void) => void
+  afterRefresh: (fn: () => void) => void
   #currentShape: Shape
   #lastShape: Shape
   duration: number
@@ -34,20 +34,20 @@ export class StayChild<T extends Shape = Shape> {
     drawAction,
     transitionType,
     duration,
-    then = (fn: () => void) => void 0,
+    afterRefresh = (fn: () => void) => void 0,
   }: StayChildProps<T>) {
     this.id = id ?? uuid4()
     this.zIndex = zIndex === undefined ? 1 : zIndex
     this.className = className
     this.layer = layer
     this.beforeLayer = beforeLayer ?? null
-    this.shape = shape.copy() as T
+    this.shape = shape as T
     this.#currentShape = shape.copy()
     this.#lastShape = shape.copy()
     this.#shapeCopy = shape.copy()
     this.drawAction = drawAction ?? null
     this.duration = Math.max(duration ?? 0, 0)
-    this.then = then
+    this.afterRefresh = afterRefresh
     this.transitionType = transitionType ?? "linear"
     this.updateTime = Date.now()
   }
@@ -95,6 +95,13 @@ export class StayChild<T extends Shape = Shape> {
 
   copy(): StayChild<T> {
     return new StayChild({ ...this, shape: this.shape.copy() })
+  }
+
+  awaitCopy(): Promise<StayChild<T>> {
+    return new Promise(async (resolve) => {
+      const shape = await this.shape.awaitCopy()
+      resolve(new StayChild({ ...this, shape }))
+    })
   }
 
   draw(props: ShapeDrawProps): boolean {

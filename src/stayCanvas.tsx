@@ -61,8 +61,6 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
   const canvasLayers = useRef<HTMLCanvasElement[]>([])
   const stay = useRef<StayStage>()
 
-  type x<T> = T extends { name: infer U; payload: infer V }[] ? U : never
-
   eventList = useMemo(() => eventList || [], [eventList])
   listenerList = useMemo(() => listenerList || [], [listenerList])
 

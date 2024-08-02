@@ -87,6 +87,29 @@ export class StayImage extends Rectangle {
     })
   }
 
+  awaitCopy() {
+    return new Promise<StayImage>((resolve) => {
+      new StayImage({
+        src: this.src,
+        x: this.x,
+        y: this.y,
+        sx: this.sx,
+        sy: this.sy,
+        swidth: this.swidth,
+        sheight: this.sheight,
+        imageLoaded: (image) => {
+          if (this.imageLoaded) {
+            this.imageLoaded(image)
+          }
+          resolve(image)
+        },
+        width: this.width,
+        height: this.height,
+        props: this._copy(),
+      })
+    })
+  }
+
   /**
    * 在画布上绘制图像。
    *

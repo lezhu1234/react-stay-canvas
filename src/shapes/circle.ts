@@ -1,6 +1,7 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { Point } from "./point"
-import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
+import { Shape } from "./shape"
+import { ShapeDrawProps, ShapeProps } from "../userTypes"
 
 export interface CircleAttr {
   x: number

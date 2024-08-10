@@ -1,8 +1,8 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { EasingFunction } from "../userTypes"
+import { EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { Line } from "./line"
 import { Point } from "./point"
-import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
+import { Shape } from "./shape"
 
 export interface RectShapeAttr {
   x: number

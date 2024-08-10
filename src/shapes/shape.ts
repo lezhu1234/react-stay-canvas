@@ -1,26 +1,8 @@
 import { valueof } from "../stay/types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { Dict, EasingFunction, SimplePoint } from "../userTypes"
+import { Dict, EasingFunction, ShapeDrawProps, ShapeProps, SimplePoint } from "../userTypes"
 import { applyEasing } from "../utils"
 import W3Color from "../w3color"
-
-export interface ShapeProps {
-  color?: string | CanvasGradient
-  lineWidth?: number
-  zoomY?: number
-  zoomCenter?: SimplePoint
-  type?: valueof<typeof SHAPE_DRAW_TYPES>
-  gco?: GlobalCompositeOperation
-  stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void>
-  state?: string
-  hidden?: boolean
-}
-
-export interface ShapeDrawProps {
-  context: CanvasRenderingContext2D
-  canvas: HTMLCanvasElement
-  now: number
-}
 
 export interface GetCurrentArgumentsProps {
   startArguments: Dict

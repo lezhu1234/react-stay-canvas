@@ -1,4 +1,5 @@
-import { Shape, ShapeDrawProps } from "../shapes/shape"
+import { Shape } from "../shapes/shape"
+import { ShapeDrawProps, ShapeProps } from "../userTypes"
 import { DRAW_ACTIONS } from "../userConstants"
 import {
   DrawActionsValuesType,

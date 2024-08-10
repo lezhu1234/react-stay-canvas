@@ -10,6 +10,8 @@ export const MOUSE_EVENTS = {
   MOUSE_LEAVE: "mouseleave",
   DROP: "drop",
   DRAG_OVER: "dragover",
+  DRAG_START: "dragstart",
+  DRAG_END: "dragend",
 } as const
 
 export const KEYBOARRD_EVENTS = {

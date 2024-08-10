@@ -1,10 +1,10 @@
 import Canvas from "./canvas"
+import { Shape } from "./shapes"
 import { Point } from "./shapes/point"
-import { Shape } from "./shapes/shape"
 import { StayChild } from "./stay/stayChild"
 import { valueof } from "./stay/types"
 import { UserCallback } from "./types"
-import { DRAW_ACTIONS, SORT_CHILDREN_METHODS } from "./userConstants"
+import { DRAW_ACTIONS, SHAPE_DRAW_TYPES, SORT_CHILDREN_METHODS } from "./userConstants"
 
 type SortChildrenMethodsKeys = keyof typeof SORT_CHILDREN_METHODS
 export type StayChildren = Record<string, StayChild>
@@ -253,3 +253,43 @@ export type Tuple2Union<T extends unknown[]> = T extends [infer F, ...infer L]
 export type LisenerTupleToLisenerUnion<T extends ListenerNamePayloadPairOrName[]> = Tuple2Union<
   ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>
 >
+export interface ShapeDrawProps {
+  context: CanvasRenderingContext2D
+  canvas: HTMLCanvasElement
+  now: number
+}
+export interface ShapeProps {
+  color?: string | CanvasGradient
+  lineWidth?: number
+  zoomY?: number
+  zoomCenter?: SimplePoint
+  type?: valueof<typeof SHAPE_DRAW_TYPES>
+  gco?: GlobalCompositeOperation
+  stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void>
+  state?: string
+  hidden?: boolean
+}
+
+export type FourrDirection = "top" | "right" | "bottom" | "left"
+export type DiagonalDirection = "top-right" | "top-left" | "bottom-right" | "bottom-left"
+
+export interface Border {
+  size?: number
+  color?: string
+  type: "solid" | "dashed"
+  direction: FourrDirection
+}
+
+export interface TextAttr {
+  x: number
+  y: number
+  text: string
+  font?: string
+  color?: string | CanvasGradient
+  border?: Border[]
+  offsetXRatio?: number
+  offsetYRatio?: number
+  textBaseline?: CanvasTextBaseline
+  textAlign?: CanvasTextAlign
+  props?: ShapeProps
+}

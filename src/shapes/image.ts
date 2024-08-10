@@ -1,5 +1,6 @@
 import { Rectangle } from "./rectangle"
-import { ShapeDrawProps, ShapeProps } from "./shape"
+import { Shape } from "./shape"
+import { ShapeDrawProps, ShapeProps } from "../userTypes"
 
 export interface ImageProps {
   src: string

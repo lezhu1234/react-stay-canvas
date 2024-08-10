@@ -1,5 +1,6 @@
 import { Point } from "./point"
-import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
+import { Shape } from "./shape"
+import { ShapeDrawProps, ShapeProps } from "../userTypes"
 import { Vector } from "./vector"
 export interface UpdateLineProps {
   x1?: number

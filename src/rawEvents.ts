@@ -47,6 +47,13 @@ export function contextmenu(fireEvent: FireEvent, e: MouseEvent) {
   fireEvent(e, MOUSE_EVENTS.CONTEXT_MENU)
 }
 
+export function dragstart(fireEvent: FireEvent, e: DragEvent) {
+  fireEvent(e, MOUSE_EVENTS.DRAG_START)
+}
+export function dragend(fireEvent: FireEvent, e: DragEvent) {
+  fireEvent(e, MOUSE_EVENTS.DRAG_END)
+}
+
 export function drop(fireEvent: FireEvent, e: DragEvent) {
   fireEvent(e, MOUSE_EVENTS.DROP)
 }

@@ -3,7 +3,9 @@ import {
   click,
   contextmenu,
   dblclick,
+  dragend,
   dragover,
+  dragstart,
   drop,
   keydown,
   keyup,
@@ -859,6 +861,8 @@ class Stay {
     topLayer.ondblclick = (e: MouseEvent) => dblclick(this.fireEvent.bind(this), e)
     topLayer.oncontextmenu = (e: MouseEvent) => contextmenu(this.fireEvent.bind(this), e)
     topLayer.ondragover = (e) => dragover(this.fireEvent.bind(this), e)
+    topLayer.ondragstart = (e: DragEvent) => dragstart(this.fireEvent.bind(this), e)
+    topLayer.ondragend = (e: DragEvent) => dragend(this.fireEvent.bind(this), e)
     topLayer.ondrop = (e: DragEvent) => drop(this.fireEvent.bind(this), e)
     topLayer.addEventListener("wheel", (e: WheelEvent) => wheel(this.fireEvent.bind(this), e), {
       passive: this.passive,

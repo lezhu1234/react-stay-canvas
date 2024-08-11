@@ -1,6 +1,7 @@
 import { Line, Point } from "./shapes"
 import { SUPPORT_OPRATOR } from "./userConstants"
 import { EasingFunction, EasingFunctionMap } from "./userTypes"
+import { RGBA } from "./w3color"
 
 export type InfixExpressionParserProps<T> = {
   selector: string
@@ -362,4 +363,19 @@ export function applyEasing(easingName: EasingFunction, x: number): number {
     throw new Error(`Unknown easing function: ${easingName}`)
   }
   return easingFunction(x)
+}
+
+export function isRGBA(value: unknown): value is RGBA {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "r" in value &&
+    "g" in value &&
+    "b" in value &&
+    "a" in value &&
+    typeof (value as RGBA).r === "number" &&
+    typeof (value as RGBA).g === "number" &&
+    typeof (value as RGBA).b === "number" &&
+    typeof (value as RGBA).a === "number"
+  )
 }

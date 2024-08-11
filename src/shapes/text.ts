@@ -1,26 +1,34 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { Border, DiagonalDirection, FourrDirection, ShapeDrawProps, TextAttr } from "../userTypes"
-import { Point } from "./point"
+import {
+  Border,
+  DiagonalDirection,
+  EasingFunction,
+  FourrDirection,
+  ShapeDrawProps,
+  TextAttr,
+} from "../userTypes"
+import { SimplePoint } from "./point"
 import { Rectangle } from "./rectangle"
 import { Shape } from "./shape"
 
 export class StayText extends Shape {
   font: string
   height: number
-  leftBottom: Point
-  leftTop: Point
-  rect: Rectangle
+  leftBottom: SimplePoint
+  leftTop: SimplePoint
+  // rect: Rectangle
   text: string
   width: number
   x: number
   y: number
   border: Border[] | undefined
-  rightBottom: Point
-  rightTop: Point
+  rightBottom: SimplePoint
+  rightTop: SimplePoint
   textBaseline: CanvasTextBaseline
   textAlign: CanvasTextAlign
   offsetXRatio: number
   offsetYRatio: number
+  textObj: TextMetrics | undefined
 
   constructor({
     x,
@@ -33,6 +41,7 @@ export class StayText extends Shape {
     offsetXRatio,
     offsetYRatio,
     props,
+    textObj,
   }: TextAttr) {
     super(props || { type: SHAPE_DRAW_TYPES.FILL })
     this.text = text
@@ -46,17 +55,19 @@ export class StayText extends Shape {
     this.offsetYRatio = offsetYRatio ?? 0
     this.textBaseline = textBaseline ?? "alphabetic"
     this.textAlign = textAlign ?? "start"
-    this.rect = new Rectangle({ x: 0, y: 0, width: 0, height: 0 })
-    this.leftBottom = new Point(0, 0)
-    this.leftTop = new Point(0, 0)
-    this.rightBottom = new Point(0, 0)
-    this.rightTop = new Point(0, 0)
+    // this.rect = new Rectangle({ x: 0, y: 0, width: 0, height: 0 })
+    this.leftBottom = new SimplePoint(0, 0)
+    this.leftTop = new SimplePoint(0, 0)
+    this.rightBottom = new SimplePoint(0, 0)
+    this.rightTop = new SimplePoint(0, 0)
+    this.textObj = textObj
 
     this.init()
   }
 
-  contains(point: Point): boolean {
-    return this.rect.contains(point)
+  contains(point: SimplePoint): boolean {
+    // return this.rect.contains(point)
+    return false
   }
 
   copy(): Shape {
@@ -66,6 +77,10 @@ export class StayText extends Shape {
       text: this.text,
       font: this.font,
       border: this.border,
+      textBaseline: this.textBaseline,
+      textAlign: this.textAlign,
+      offsetXRatio: this.offsetXRatio,
+      offsetYRatio: this.offsetYRatio,
       props: this._copy(),
     })
   }
@@ -115,53 +130,105 @@ export class StayText extends Shape {
   }
 
   init(ctx?: CanvasRenderingContext2D | undefined) {
-    let context: CanvasRenderingContext2D | undefined = ctx
-    if (!ctx) {
-      context = document.createElement("canvas").getContext("2d")!
-      context.font = this.font
-      context.textBaseline = this.textBaseline
-      context.textAlign = this.textAlign
+    if (!this.textObj) {
+      let context: CanvasRenderingContext2D | undefined = ctx
+      if (!ctx) {
+        context = document.createElement("canvas").getContext("2d")!
+        context.font = this.font
+        context.textBaseline = this.textBaseline
+        context.textAlign = this.textAlign
+      }
+
+      this.textObj = context!.measureText(this.text) // TextMetrics object
     }
 
-    const text = context!.measureText(this.text) // TextMetrics object
-    this.width = text.width
-    this.height = text.fontBoundingBoxAscent + text.fontBoundingBoxDescent
+    this.width = this.textObj.width
+    this.height = this.textObj.fontBoundingBoxAscent + this.textObj.fontBoundingBoxDescent
 
     const offsetX = -this.width / 2 + this.width * this.offsetXRatio
-    const offsetY = -this.height / 2 + this.height * this.offsetYRatio
+    const offsetY = this.height * this.offsetYRatio
 
     this.leftTop.update({ x: this.x + offsetX, y: this.y + offsetY })
     this.leftBottom.update({ x: this.x + offsetX, y: this.y + this.height + offsetY })
     this.rightTop.update({ x: this.x + this.width + offsetX, y: this.y + offsetY })
     this.rightBottom.update({ x: this.x + this.width + offsetX, y: this.y + this.height + offsetY })
 
-    this.rect.update({
-      x: this.leftTop.x,
-      y: this.leftTop.y,
-      width: this.width,
-      height: this.height,
-    })
+    // this.rect.update({
+    //   x: this.leftTop.x,
+    //   y: this.leftTop.y,
+    //   width: this.width,
+    //   height: this.height,
+    // })
   }
 
   move(offsetX: number, offsetY: number): void {
     this.update({ x: this.x + offsetX, y: this.y + offsetY })
   }
 
-  update({ x = this.x, y = this.y, font = this.font, text = this.text, props }: Partial<TextAttr>) {
-    this.x = x
-    this.y = y
-    this.font = font
-    this.text = text
+  update({
+    x,
+    y,
+    font,
+    text,
+    border,
+    textBaseline,
+    textAlign,
+    offsetXRatio,
+    offsetYRatio,
+    props,
+    textObj,
+  }: Partial<TextAttr>) {
+    this.x = x ?? this.x
+    this.y = y ?? this.y
+    this.font = font ?? this.font
+    this.text = text ?? this.text
+    this.border = border ?? this.border
+    this.textBaseline = textBaseline ?? this.textBaseline
+    this.textAlign = textAlign ?? this.textAlign
+    this.offsetXRatio = offsetXRatio ?? this.offsetXRatio
+    this.offsetYRatio = offsetYRatio ?? this.offsetYRatio
+    this.textObj = textObj ?? this.textObj
     this._update(props || {})
     this.init()
     return this
   }
 
   zoom(zoomScale: number): void {
-    const center = this.getZoomPoint(zoomScale, new Point(this.x, this.y))
+    const center = this.getZoomPoint(zoomScale, new SimplePoint(this.x, this.y))
     this.update({
       x: center.x,
       y: center.y,
+    })
+  }
+
+  intermediateState(
+    before: StayText,
+    after: StayText,
+    ratio: number,
+    transitionType: EasingFunction
+  ) {
+    return new StayText({
+      x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
+      y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),
+      text: after.text,
+      font: after.font,
+      border: after.border,
+      offsetXRatio: this.getNumberIntermediateState(
+        before.offsetXRatio,
+        after.offsetXRatio,
+        ratio,
+        transitionType
+      ),
+      offsetYRatio: this.getNumberIntermediateState(
+        before.offsetYRatio,
+        after.offsetYRatio,
+        ratio,
+        transitionType
+      ),
+      textAlign: after.textAlign,
+      textBaseline: after.textBaseline,
+      textObj: after.textObj,
+      props: this.getIntermediateProps(before, after, ratio, transitionType),
     })
   }
 }

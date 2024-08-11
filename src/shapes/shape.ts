@@ -1,8 +1,8 @@
 import { valueof } from "../stay/types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { Dict, EasingFunction, ShapeDrawProps, ShapeProps, SimplePoint } from "../userTypes"
-import { applyEasing } from "../utils"
-import W3Color from "../w3color"
+import { Dict, EasingFunction, ShapeDrawProps, ShapeProps, PointType } from "../userTypes"
+import { applyEasing, isRGBA } from "../utils"
+import W3Color, { RGBA, rgbaToString } from "../w3color"
 
 export interface GetCurrentArgumentsProps {
   startArguments: Dict
@@ -25,13 +25,14 @@ export abstract class Shape {
   state: string
   stateDrawFuncMap: Dict<(props: ShapeDrawProps) => void | boolean>
   type: valueof<typeof SHAPE_DRAW_TYPES>
-  zeroPoint: SimplePoint
-  zeroPointCopy: SimplePoint
-  zoomCenter: SimplePoint
+  zeroPoint: PointType
+  zeroPointCopy: PointType
+  zoomCenter: PointType
   zoomY: number
   updateNextFrame: boolean
   contentUpdated: boolean
   hidden: boolean
+  rgbaColor?: RGBA
   constructor({
     color,
     lineWidth,
@@ -41,6 +42,7 @@ export abstract class Shape {
     zoomY,
     state = "default",
     hidden = false,
+    rgbaColor,
     stateDrawFuncMap = {},
   }: ShapeProps) {
     this.color = color || "white"
@@ -63,6 +65,15 @@ export abstract class Shape {
     this.updateNextFrame = false
     this.contentUpdated = true
     this.hidden = hidden
+
+    this.rgbaColor = rgbaColor
+    if (typeof this.color === "string" && !this.rgbaColor) {
+      if (!isRGBA(this.color)) {
+        this.rgbaColor = new W3Color(this.color).toRgba()
+      } else {
+        this.rgbaColor = this.color
+      }
+    }
   }
 
   _copy() {
@@ -126,7 +137,7 @@ export abstract class Shape {
     return this
   }
 
-  _zoom(deltaY: number, zoomCenter: SimplePoint): number {
+  _zoom(deltaY: number, zoomCenter: PointType): number {
     const stepZoomY = 1 + deltaY * -0.001
     this.zoomY *= stepZoomY
     this.zoomCenter = zoomCenter
@@ -166,14 +177,14 @@ export abstract class Shape {
     return currentArguments
   }
 
-  getInitPoint(point: SimplePoint) {
+  getInitPoint(point: PointType) {
     return {
       x: (point.x - this.zeroPoint.x) / this.zoomY,
       y: (point.y - this.zeroPoint.y) / this.zoomY,
     }
   }
 
-  getZoomPoint(zoomScale: number, point: SimplePoint) {
+  getZoomPoint(zoomScale: number, point: PointType) {
     return {
       x: (point.x - this.zoomCenter.x) * zoomScale + this.zoomCenter.x,
       y: (point.y - this.zoomCenter.y) * zoomScale + this.zoomCenter.y,
@@ -187,7 +198,7 @@ export abstract class Shape {
     return len / scaleRatio / this.zoomY
   }
 
-  screenToWorldPoint(point: SimplePoint, offsetX: number, offsetY: number, scaleRatio: number) {
+  screenToWorldPoint(point: PointType, offsetX: number, offsetY: number, scaleRatio: number) {
     const originPoint = this.getInitPoint({ x: point.x, y: point.y })
     return {
       x: (originPoint.x - offsetX) / scaleRatio,
@@ -215,7 +226,7 @@ export abstract class Shape {
     return len * scaleRatio
   }
 
-  worldToScreenPoint(point: SimplePoint, offsetX: number, offsetY: number, scaleRatio: number) {
+  worldToScreenPoint(point: PointType, offsetX: number, offsetY: number, scaleRatio: number) {
     return {
       x: point.x * scaleRatio + offsetX,
       y: point.y * scaleRatio + offsetY,
@@ -236,29 +247,42 @@ export abstract class Shape {
     ratio: number,
     transitionType: EasingFunction
   ): ShapeProps {
-    let color = after.color
-    if (typeof before.color === "string" && typeof after.color === "string") {
-      color = this.getColorIntermediateState(before.color, after.color, ratio, transitionType)
-    }
-    if (before.hidden && !after.hidden && typeof after.color === "string") {
-      color = this.getColorIntermediateState(
-        new W3Color(after.color).toRgbaString(0),
-        after.color,
+    let color = after.color,
+      rgbaColor: RGBA | undefined = undefined
+    if (isRGBA(before.rgbaColor) && isRGBA(after.rgbaColor)) {
+      const { rgba, rgbaString } = this.getColorIntermediateState(
+        before.rgbaColor,
+        after.rgbaColor,
         ratio,
         transitionType
       )
+      color = rgbaString
+      rgbaColor = rgba
     }
-    if (after.hidden && !before.hidden && typeof before.color === "string") {
-      color = this.getColorIntermediateState(
-        before.color,
-        new W3Color(before.color).toRgbaString(0),
+    if (before.hidden && !after.hidden && isRGBA(after.rgbaColor)) {
+      const { rgba, rgbaString } = this.getColorIntermediateState(
+        { ...after.rgbaColor, a: 0 },
+        after.rgbaColor,
         ratio,
         transitionType
       )
+      color = rgbaString
+      rgbaColor = rgba
+    }
+    if (after.hidden && !before.hidden && isRGBA(before.rgbaColor)) {
+      const { rgba, rgbaString } = this.getColorIntermediateState(
+        before.rgbaColor,
+        { ...before.rgbaColor, a: 0 },
+        ratio,
+        transitionType
+      )
+      color = rgbaString
+      rgbaColor = rgba
     }
     return {
       ...this._copy(),
       color,
+      rgbaColor,
       hidden: false,
       lineWidth: this.getNumberIntermediateState(
         before.lineWidth,
@@ -294,19 +318,33 @@ export abstract class Shape {
   }
 
   getColorIntermediateState(
-    before: string,
-    after: string,
+    before: string | RGBA,
+    after: string | RGBA,
     ratio: number,
     transitionType: EasingFunction
   ) {
-    const beforeRgba = new W3Color(before).toRgba()
-    const afterColor = new W3Color(after).toRgba()
-    return new W3Color({
+    let beforeRgba: RGBA, afterColor: RGBA
+
+    if (typeof before === "string") {
+      beforeRgba = new W3Color(before).toRgba()
+    } else {
+      beforeRgba = before
+    }
+    if (typeof after === "string") {
+      afterColor = new W3Color(after).toRgba()
+    } else {
+      afterColor = after
+    }
+
+    // const beforeRgba = new W3Color(before).toRgba()
+    // const afterColor = new W3Color(after).toRgba()
+    const rgba: RGBA = {
       r: this.getNumberIntermediateState(beforeRgba.r, afterColor.r, ratio, transitionType),
       g: this.getNumberIntermediateState(beforeRgba.g, afterColor.g, ratio, transitionType),
       b: this.getNumberIntermediateState(beforeRgba.b, afterColor.b, ratio, transitionType),
       a: this.getNumberIntermediateState(beforeRgba.a, afterColor.a, ratio, transitionType),
-    }).toRgbaString()
+    }
+    return { rgba, rgbaString: rgbaToString(rgba) }
   }
 
   awaitCopy() {
@@ -315,7 +353,7 @@ export abstract class Shape {
     })
   }
 
-  abstract contains(point: SimplePoint, cxt?: CanvasRenderingContext2D): boolean
+  abstract contains(point: PointType, cxt?: CanvasRenderingContext2D): boolean
 
   abstract copy(): Shape
 
@@ -323,7 +361,7 @@ export abstract class Shape {
 
   abstract move(offsetX: number, offsetY: number): void
 
-  abstract update(props: any): this
+  abstract update(props: { props?: ShapeProps }): this
 
   abstract zoom(zoomScale: number): void
 }

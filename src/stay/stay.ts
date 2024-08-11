@@ -37,7 +37,7 @@ import {
   getContainPointChildrenProps,
   ListenerProps,
   SelectorFunc,
-  SimplePoint,
+  PointType,
   SortChildrenMethodsValues,
   StayTools,
   updateChildProps,
@@ -367,6 +367,7 @@ class Stay {
         layer = -1,
         transitionType = "linear",
         duration = 0,
+        drawEndCallback,
       }: createChildProps<T>) => {
         layer = parseLayer(this.root.layers, layer)
         this.checkName(className, [ROOTNAME])
@@ -380,6 +381,7 @@ class Stay {
           afterRefresh: (fn) => this.nextTick(fn),
           duration,
           transitionType,
+          drawEndCallback,
         })
         return child
       },
@@ -446,6 +448,10 @@ class Stay {
         return new Promise<void>((resolve) => {
           this.nextTick(resolve)
         })
+      },
+      getChildById: <T extends Shape>(id: string): StayChild<T> | undefined => {
+        const child = this.getChildById(id)
+        return child as StayChild<T>
       },
       getChildBySelector: <T extends Shape>(
         selector: string | SelectorFunc
@@ -589,7 +595,7 @@ class Stay {
           this.nextTick(resolve)
         })
       },
-      zoom: (deltaY: number, center: SimplePoint): Promise<void> => {
+      zoom: (deltaY: number, center: PointType): Promise<void> => {
         this.getChildren().forEach((child) => {
           child.shape.zoom(child.shape._zoom(deltaY, center))
         })

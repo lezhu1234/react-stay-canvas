@@ -5,6 +5,7 @@ import { StayChild } from "./stay/stayChild"
 import { valueof } from "./stay/types"
 import { UserCallback } from "./types"
 import { DRAW_ACTIONS, SHAPE_DRAW_TYPES, SORT_CHILDREN_METHODS } from "./userConstants"
+import { RGBA } from "./w3color"
 
 type SortChildrenMethodsKeys = keyof typeof SORT_CHILDREN_METHODS
 export type StayChildren = Record<string, StayChild>
@@ -13,7 +14,7 @@ export type DrawActionsValuesType = valueof<typeof DRAW_ACTIONS>
 export type storeType = Map<string, any>
 export type Dict<T = any> = Record<string, T>
 
-export interface SimplePoint {
+export interface PointType {
   x: number
   y: number
 }
@@ -45,6 +46,7 @@ export interface createChildProps<T> {
   layer?: number
   duration?: number
   transitionType?: EasingFunction
+  drawEndCallback?: (child: StayChild) => void
 }
 
 export type updateChildProps<T = Shape> = {
@@ -52,18 +54,20 @@ export type updateChildProps<T = Shape> = {
 } & Partial<createChildProps<T>>
 
 export interface UpdateStayChildProps<T> {
+  id?: string
   className?: string
   layer?: number | undefined
   shape?: T | undefined
   zIndex?: number
   duration?: number
   transitionType?: EasingFunction
+  drawEndCallback?: (c: StayChild) => void
 }
 
 export type ChildSortFunction = (a: StayChild, b: StayChild) => number
 export interface getContainPointChildrenProps {
   selector: string | string[]
-  point: SimplePoint
+  point: PointType
   returnFirst?: boolean | undefined
   sortBy?: SortChildrenMethodsValues | ChildSortFunction
 }
@@ -138,6 +142,7 @@ export interface StayTools {
   hasChild: (id: string) => boolean
   fix: () => void
   switchState: (state: string) => void
+  getChildById: <T extends Shape>(id: string) => StayChild<T> | void
   getChildBySelector: <T extends Shape>(selector: string | SelectorFunc) => StayChild<T> | void
   getChildrenBySelector: (
     selector: string | SelectorFunc,
@@ -147,7 +152,7 @@ export interface StayTools {
   changeCursor: (cursor: string) => void
   moveStart: () => void
   move: (offsetX: number, offsetY: number) => Promise<void>
-  zoom: (deltaY: number, center: SimplePoint) => Promise<void>
+  zoom: (deltaY: number, center: PointType) => Promise<void>
   reset: () => Promise<void>
   exportChildren: (props: ImportChildrenProps) => ExportChildrenProps
   importChildren: (props: ExportChildrenProps, targetArea?: Area) => void
@@ -169,6 +174,7 @@ export interface StayChildProps<T> {
   shape: T
   drawAction?: DrawActionsValuesType | null
   afterRefresh?: (fn: () => void) => void
+  drawEndCallback?: (child: StayChild) => void
   duration?: number
 }
 
@@ -262,12 +268,13 @@ export interface ShapeProps {
   color?: string | CanvasGradient
   lineWidth?: number
   zoomY?: number
-  zoomCenter?: SimplePoint
+  zoomCenter?: PointType
   type?: valueof<typeof SHAPE_DRAW_TYPES>
   gco?: GlobalCompositeOperation
   stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void>
   state?: string
   hidden?: boolean
+  rgbaColor?: RGBA
 }
 
 export type FourrDirection = "top" | "right" | "bottom" | "left"
@@ -292,4 +299,5 @@ export interface TextAttr {
   textBaseline?: CanvasTextBaseline
   textAlign?: CanvasTextAlign
   props?: ShapeProps
+  textObj?: TextMetrics
 }

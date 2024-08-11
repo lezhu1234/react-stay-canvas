@@ -24,7 +24,7 @@ interface RGB {
   b: number
 }
 
-interface RGBA {
+export interface RGBA {
   r: number
   g: number
   b: number
@@ -105,7 +105,7 @@ function rgbToString(color: RGB): string {
   return `rgb(${color.r}, ${color.g}, ${color.b})`
 }
 
-function rgbaToString(color: RGBA): string {
+export function rgbaToString(color: RGBA): string {
   return `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a})`
 }
 

@@ -6,6 +6,19 @@ export interface PointProps {
   y: number
   props?: ShapeProps
 }
+
+export class SimplePoint {
+  x: number
+  y: number
+  constructor(x: number, y: number) {
+    this.x = x
+    this.y = y
+  }
+  update({ x, y }: Partial<SimplePoint>) {
+    this.x = x ?? this.x
+    this.y = y ?? this.y
+  }
+}
 export class Point extends Shape {
   x: number
   y: number

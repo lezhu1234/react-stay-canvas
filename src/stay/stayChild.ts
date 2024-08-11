@@ -25,6 +25,8 @@ export class StayChild<T extends Shape = Shape> {
   transitionType: EasingFunction
   updateTime: number
   #shapeCopy: Shape
+  drawEndCallback: ((child: StayChild) => void) | undefined
+
   constructor({
     id,
     zIndex,
@@ -36,6 +38,7 @@ export class StayChild<T extends Shape = Shape> {
     transitionType,
     duration,
     afterRefresh = (fn: () => void) => void 0,
+    drawEndCallback,
   }: StayChildProps<T>) {
     this.id = id ?? uuid4()
     this.zIndex = zIndex === undefined ? 1 : zIndex
@@ -44,13 +47,14 @@ export class StayChild<T extends Shape = Shape> {
     this.beforeLayer = beforeLayer ?? null
     this.shape = shape as T
     this.#currentShape = shape.copy()
-    this.#lastShape = shape.copy()
+    this.#lastShape = shape.copy().update({ props: { hidden: true } })
     this.#shapeCopy = shape.copy()
     this.drawAction = drawAction ?? null
     this.duration = Math.max(duration ?? 0, 0)
     this.afterRefresh = afterRefresh
     this.transitionType = transitionType ?? "linear"
     this.updateTime = Date.now()
+    this.drawEndCallback = drawEndCallback
   }
 
   static diff<T extends Shape>(
@@ -122,13 +126,28 @@ export class StayChild<T extends Shape = Shape> {
         this.#currentShape = intermediateState
         updateNextFrame = true
       }
+    } else {
+      if (this.drawEndCallback) {
+        this.drawEndCallback(this)
+        this.drawEndCallback = undefined
+      }
     }
 
     return this.#currentShape._draw(props) || updateNextFrame
   }
 
-  _update({ className, layer, shape, zIndex, transitionType, duration }: UpdateStayChildProps<T>) {
-    this.className = className || this.className
+  _update({
+    id,
+    className,
+    layer,
+    shape,
+    zIndex,
+    transitionType,
+    duration,
+    drawEndCallback,
+  }: UpdateStayChildProps<T>) {
+    this.id = id ?? this.id
+    this.className = className ?? this.className
     this.beforeLayer = this.layer
     this.zIndex = zIndex ?? this.zIndex
     this.layer = layer ?? this.layer
@@ -139,5 +158,6 @@ export class StayChild<T extends Shape = Shape> {
     this.updateTime = Date.now()
     this.transitionType = transitionType ?? this.transitionType
     this.duration = duration ?? this.duration
+    this.drawEndCallback = drawEndCallback ?? this.drawEndCallback
   }
 }

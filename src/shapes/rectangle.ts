@@ -228,10 +228,10 @@ export class Rectangle extends Shape {
     ratio: number,
     transitionType: EasingFunction
   ) {
-    let color = after.color
-    if (typeof before.color === "string" && typeof after.color === "string") {
-      color = this.getColorIntermediateState(before.color, after.color, ratio, transitionType)
-    }
+    // let color = after.color
+    // if (typeof before.color === "string" && typeof after.color === "string") {
+    //   color = this.getColorIntermediateState(before.color, after.color, ratio, transitionType)
+    // }
     return new Rectangle({
       x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
       y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),

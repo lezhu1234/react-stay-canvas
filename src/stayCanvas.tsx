@@ -22,6 +22,7 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
     layers = 2,
     className = "",
     passive = true,
+    autoRender = true,
   }: StayCanvasProps,
   ref
 ) {
@@ -80,7 +81,8 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
       contextLayerSetFunctionList,
       width,
       height,
-      passive
+      passive,
+      autoRender
     )
     ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
       stay.current!.registerEvent(event)

@@ -77,8 +77,10 @@ class Stay {
   rootChild: StayChild<Root>
   passive: boolean
   nextTickFunctions: (() => void)[]
+  autoRender: boolean
+  rendering: boolean
 
-  constructor(root: Canvas, passive: boolean) {
+  constructor(root: Canvas, passive: boolean, autoRender: boolean = true) {
     this.root = root
     this.passive = passive
     this.x = 0
@@ -121,7 +123,12 @@ class Stay {
     this.nextTickFunctions = []
 
     this.initEvents()
-    this.startRender()
+
+    this.autoRender = autoRender
+    if (autoRender) {
+      this.startRender()
+    }
+    this.rendering = autoRender
   }
 
   addEventListener({
@@ -180,7 +187,7 @@ class Stay {
     delete this.events[name]
   }
 
-  draw(forceDraw = false, now = Date.now()) {
+  draw(forceDraw = false, now = Date.now(), time?: number) {
     interface ChildLayer {
       update: boolean
       members: StayChild[]
@@ -227,11 +234,14 @@ class Stay {
         if (particalChildren.update) {
           child.shape.contentUpdated = true
         }
-        const updateNextFrame = child.draw({
-          context,
-          canvas,
-          now,
-        })
+        const updateNextFrame = child.draw(
+          {
+            context,
+            canvas,
+            now,
+          },
+          time
+        )
         if (updateNextFrame) {
           this.forceUpdateLayer(child.layer)
         }
@@ -354,8 +364,41 @@ class Stay {
   nextTick(fn: () => void) {
     this.nextTickFunctions.push(fn)
   }
+
+  render(startTime: number) {
+    this.draw(true, Date.now(), (Date.now() - startTime) / 1000)
+    if (
+      ![...this.getChildren().values()].every((child) => {
+        return child.state === "idle"
+      })
+    ) {
+      window.requestAnimationFrame(() => {
+        this.render(startTime)
+      })
+    } else {
+      this.rendering = false
+      this.draw(true, Date.now(), (Date.now() - startTime) / 1000)
+    }
+  }
   getTools(): StayTools {
     return {
+      start: () => {
+        if (this.autoRender) {
+          throw new Error("autoRender is true, you can't call start")
+        }
+
+        this.rendering = true
+
+        this.render(Date.now())
+      },
+      progress: (time: number) => {
+        if (this.rendering) {
+          throw new Error(
+            "rendering is true, you can't call progress, you need to set autoRender to false and wait canvas render over if you called start() method"
+          )
+        }
+        this.draw(true, Date.now(), time)
+      },
       hasChild: (id: string) => {
         return this.getChildren().has(id)
       },
@@ -365,8 +408,7 @@ class Stay {
         zIndex,
         className,
         layer = -1,
-        transitionType = "linear",
-        duration = 0,
+        transition,
         drawEndCallback,
       }: createChildProps<T>) => {
         layer = parseLayer(this.root.layers, layer)
@@ -379,8 +421,7 @@ class Stay {
           shape,
           drawAction: DRAW_ACTIONS.APPEND,
           afterRefresh: (fn) => this.nextTick(fn),
-          duration,
-          transitionType,
+          transition,
           drawEndCallback,
         })
         return child
@@ -391,8 +432,7 @@ class Stay {
         zIndex,
         id = undefined,
         layer = -1,
-        duration = 0,
-        transitionType = "linear",
+        transition,
       }: createChildProps<T>) => {
         layer = parseLayer(this.root.layers, layer)
         const child = this.tools.createChild({
@@ -401,23 +441,14 @@ class Stay {
           zIndex,
           className,
           layer,
-          duration,
-          transitionType,
+          transition,
         })
         this.zIndexUpdated = true
         this.pushToChildren(child)
         this.unLogedChildrenIds.add(child.id)
         return child
       },
-      updateChild: ({
-        child,
-        zIndex,
-        shape,
-        className,
-        layer,
-        duration,
-        transitionType,
-      }: updateChildProps) => {
+      updateChild: ({ child, zIndex, shape, className, layer, transition }: updateChildProps) => {
         if (className === "") {
           throw new Error("className cannot be empty")
         }
@@ -433,8 +464,7 @@ class Stay {
           zIndex: zIndex,
           layer: layer === undefined ? child.layer : layer,
           className,
-          duration,
-          transitionType,
+          transition,
         })
         this.unLogedChildrenIds.add(child.id)
         return child
@@ -908,7 +938,13 @@ class Stay {
   }
 
   removeChildById(id: string) {
-    this.#children.delete(id)
+    const child = this.getChildById(id)
+    if (child) {
+      child.setRemove((layer: number) => {
+        this.#children.delete(id)
+        this.forceUpdateLayer(layer)
+      })
+    }
   }
 
   snapshotChildren() {

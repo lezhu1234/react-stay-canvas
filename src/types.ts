@@ -83,5 +83,37 @@ export interface StayCanvasProps {
   eventList?: EventProps[]
   listenerList?: ListenerProps[]
   passive?: boolean
+  autoRender?: boolean
   mounted?: (tools: StayTools) => void
 }
+
+export type NumericString = `${number}` | `+${number}` | `-${number}` | number
+export type ShapeConfig = {
+  offsetX?: NumericString
+  offsetY?: NumericString
+  scale?: number
+  opacity?: number
+}
+
+export type Positive<T extends number> = number extends T
+  ? never
+  : `${T}` extends `-${string}` | "0"
+  ? never
+  : T
+
+export type Negative<T extends number> = number extends T
+  ? never
+  : Positive<T> extends never
+  ? T extends 0
+    ? never
+    : T
+  : never
+
+export type NumberInRangeZeroOne<T extends number> = Positive<T> extends never
+  ? T extends 0
+    ? T
+    : never
+  : T extends number
+  ? (T extends 1 ? T : never) | (`${T}` extends `0.${string}` ? T : never) | never
+  : never
+export type ZeroToOne = NumberInRangeZeroOne<number>

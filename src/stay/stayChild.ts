@@ -1,5 +1,5 @@
 import { Shape } from "../shapes/shape"
-import { ShapeDrawProps, ShapeProps } from "../userTypes"
+import { ShapeDrawProps, ShapeProps, StayChildTransitions, TransitionConfig } from "../userTypes"
 import { DRAW_ACTIONS } from "../userConstants"
 import {
   DrawActionsValuesType,
@@ -7,7 +7,7 @@ import {
   StayChildProps,
   UpdateStayChildProps,
 } from "../userTypes"
-import { uuid4 } from "../utils"
+import { getShapeByEffect, uuid4 } from "../utils"
 import { StepProps } from "./types"
 
 export class StayChild<T extends Shape = Shape> {
@@ -16,16 +16,16 @@ export class StayChild<T extends Shape = Shape> {
   drawAction: DrawActionsValuesType | null
   id: string
   layer: number
-  shape: T
   zIndex: number
   afterRefresh: (fn: () => void) => void
-  #currentShape: Shape
-  #lastShape: Shape
-  duration: number
-  transitionType: EasingFunction
-  updateTime: number
-  #shapeCopy: Shape
   drawEndCallback: ((child: StayChild) => void) | undefined
+  state: "entering" | "updating" | "removing" | "idle"
+  shapeStack: {
+    shape: T
+    transition: TransitionConfig | Omit<TransitionConfig, "effect"> | undefined
+  }[]
+  endTransition: TransitionConfig | undefined
+  #removeCallback: ((layer: number) => void) | undefined
 
   constructor({
     id,
@@ -35,8 +35,7 @@ export class StayChild<T extends Shape = Shape> {
     beforeLayer,
     shape,
     drawAction,
-    transitionType,
-    duration,
+    transition,
     afterRefresh = (fn: () => void) => void 0,
     drawEndCallback,
   }: StayChildProps<T>) {
@@ -45,16 +44,32 @@ export class StayChild<T extends Shape = Shape> {
     this.className = className
     this.layer = layer
     this.beforeLayer = beforeLayer ?? null
-    this.shape = shape as T
-    this.#currentShape = shape.copy()
-    this.#lastShape = shape.copy().update({ props: { hidden: true } })
-    this.#shapeCopy = shape.copy()
+    this.shapeStack = []
     this.drawAction = drawAction ?? null
-    this.duration = Math.max(duration ?? 0, 0)
     this.afterRefresh = afterRefresh
-    this.transitionType = transitionType ?? "linear"
-    this.updateTime = Date.now()
     this.drawEndCallback = drawEndCallback
+    this.state = "entering"
+    this.#removeCallback = undefined
+    this.init(shape, transition)
+    this.endTransition = transition?.leave ?? undefined
+  }
+
+  init(shape: T, transition: StayChildTransitions | undefined) {
+    if (transition && transition.enter) {
+      const initShape = getShapeByEffect(transition.enter.effect, shape.copy() as T, "enter")
+      this.shapeStack.push({
+        shape: initShape,
+        transition: undefined,
+      })
+    }
+    this.shapeStack.push({
+      shape,
+      transition: transition ? transition.enter : undefined,
+    })
+  }
+
+  get shape() {
+    return this.shapeStack[this.shapeStack.length - 1].shape
   }
 
   static diff<T extends Shape>(
@@ -109,31 +124,67 @@ export class StayChild<T extends Shape = Shape> {
     })
   }
 
-  draw(props: ShapeDrawProps): boolean {
-    const ratio = ((Date.now() - this.updateTime) / this.duration) * 0.001
+  setRemove(callback: (layer: number) => void) {
+    this.state = "removing"
+    if (this.endTransition) {
+      this._update({
+        shape: getShapeByEffect<T>(this.endTransition.effect, this.shape.copy() as T, "leave"),
+        transition: this.endTransition,
+      })
+    }
+    this.#removeCallback = callback
+  }
 
-    let updateNextFrame = false
-    this.#currentShape = this.shape
-    if (ratio < 1) {
-      const intermediateState = this.shape.intermediateState(
-        this.#lastShape,
-        this.shape,
-        ratio,
-        this.transitionType
-      )
+  checkRemove() {
+    if (this.state === "idle" && this.#removeCallback) {
+      this.#removeCallback(this.layer)
+      this.#removeCallback = undefined
+    }
+  }
 
-      if (intermediateState !== false) {
-        this.#currentShape = intermediateState
-        updateNextFrame = true
-      }
-    } else {
-      if (this.drawEndCallback) {
-        this.drawEndCallback(this)
-        this.drawEndCallback = undefined
-      }
+  idleDraw(props: ShapeDrawProps) {
+    this.state = "idle"
+    this.checkRemove()
+    return this.shape._draw(props)
+  }
+
+  draw(props: ShapeDrawProps, time?: number): boolean {
+    if (time === undefined) {
+      return this.idleDraw(props)
     }
 
-    return this.#currentShape._draw(props) || updateNextFrame
+    if (time < 0) {
+      throw new Error("time cannot be negative")
+    }
+
+    let stepStartTime = 0
+
+    for (let index = 0; index < this.shapeStack.length; index++) {
+      const { transition, shape } = this.shapeStack[index]
+      const duration = transition?.duration ?? 0
+      const delay = transition?.delay ?? 0
+
+      const stepDelayEndTime = stepStartTime + delay
+      const stepEndTime = stepStartTime + duration + delay
+
+      if (stepDelayEndTime > time) {
+        return this.shapeStack[index - 1].shape._draw(props)
+      }
+
+      if (stepEndTime > time) {
+        const ratio = (time - stepStartTime) / (stepEndTime - stepStartTime)
+        const intermediateShape = this.shape.intermediateState(
+          this.shapeStack[index - 1].shape,
+          shape,
+          ratio,
+          transition?.type ?? "linear"
+        )
+        return intermediateShape._draw(props) || true
+      }
+      stepStartTime = stepEndTime
+    }
+
+    return this.idleDraw(props)
   }
 
   _update({
@@ -142,8 +193,7 @@ export class StayChild<T extends Shape = Shape> {
     layer,
     shape,
     zIndex,
-    transitionType,
-    duration,
+    transition,
     drawEndCallback,
   }: UpdateStayChildProps<T>) {
     this.id = id ?? this.id
@@ -151,13 +201,15 @@ export class StayChild<T extends Shape = Shape> {
     this.beforeLayer = this.layer
     this.zIndex = zIndex ?? this.zIndex
     this.layer = layer ?? this.layer
-    this.#lastShape = this.#shapeCopy.copy()
-    this.shape = shape ? (shape.copy() as T) : (this.shape.copy() as T)
-    this.#shapeCopy = this.shape.copy()
     this.drawAction = DRAW_ACTIONS.UPDATE
-    this.updateTime = Date.now()
-    this.transitionType = transitionType ?? this.transitionType
-    this.duration = duration ?? this.duration
     this.drawEndCallback = drawEndCallback ?? this.drawEndCallback
+    this.state = "updating"
+
+    if (shape) {
+      this.shapeStack.push({
+        shape,
+        transition,
+      })
+    }
   }
 }

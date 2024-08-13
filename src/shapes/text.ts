@@ -187,10 +187,17 @@ export class StayText extends Shape {
     this.textAlign = textAlign ?? this.textAlign
     this.offsetXRatio = offsetXRatio ?? this.offsetXRatio
     this.offsetYRatio = offsetYRatio ?? this.offsetYRatio
-    this.textObj = textObj ?? this.textObj
+    this.textObj = textObj
     this._update(props || {})
     this.init()
     return this
+  }
+
+  getCenterPoint() {
+    return new SimplePoint(
+      (this.leftBottom.x + this.rightBottom.x) / 2,
+      (this.leftTop.y + this.leftBottom.y) / 2
+    )
   }
 
   zoom(zoomScale: number): void {

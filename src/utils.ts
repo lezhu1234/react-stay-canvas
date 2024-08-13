@@ -1,7 +1,8 @@
-import { Line, Point } from "./shapes"
+import { Line, Point, Shape } from "./shapes"
+import { NumberInRangeZeroOne, NumericString, Positive, ShapeConfig } from "./types"
 import { SUPPORT_OPRATOR } from "./userConstants"
-import { EasingFunction, EasingFunctionMap } from "./userTypes"
-import { RGBA } from "./w3color"
+import { EasingFunction, EasingFunctionMap, Effects, StayChildTransitions } from "./userTypes"
+import { RGB, RGBA } from "./w3color"
 
 export type InfixExpressionParserProps<T> = {
   selector: string
@@ -365,6 +366,19 @@ export function applyEasing(easingName: EasingFunction, x: number): number {
   return easingFunction(x)
 }
 
+export function isRGB(value: unknown): value is RGB {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "r" in value &&
+    "g" in value &&
+    "b" in value &&
+    typeof (value as RGB).r === "number" &&
+    typeof (value as RGB).g === "number" &&
+    typeof (value as RGB).b === "number"
+  )
+}
+
 export function isRGBA(value: unknown): value is RGBA {
   return (
     typeof value === "object" &&
@@ -377,5 +391,118 @@ export function isRGBA(value: unknown): value is RGBA {
     typeof (value as RGBA).g === "number" &&
     typeof (value as RGBA).b === "number" &&
     typeof (value as RGBA).a === "number"
+  )
+}
+export function validateNumericString(value: string | number): NumericString {
+  if (/^[+-]?\d+$/.test(value.toString())) {
+    return value as NumericString
+  }
+  throw new Error("Invalid numeric string")
+}
+export function ensurePositive<T extends number>(value: T): Positive<T> {
+  if (value <= 0) {
+    throw new Error("Value must be positive")
+  }
+  return value as Positive<T>
+}
+
+export function ensureNotNegative<T extends number>(value: T): number {
+  if (value < 0) {
+    throw new Error("Value must be non-negative")
+  }
+  return value as number
+}
+
+export function ensureInRangeZeroOne<T extends number>(value: T): number {
+  if (value < 0 || value > 1) {
+    throw new Error("Value must be in range [0, 1]")
+  }
+  return value as number
+}
+
+export function isRelativeNumericString<T extends NumericString>(value: T) {
+  return typeof value === "string" && (value.startsWith("+") || value.startsWith("-"))
+}
+
+export function getShapeByConfig<Q extends Shape>(config: ShapeConfig, shape: Q) {
+  const { offsetX, offsetY, scale, opacity } = config
+  const center = shape.getCenterPoint()
+
+  let ox = validateNumericString(offsetX ?? 0)
+  let oy = validateNumericString(offsetY ?? 0)
+  const s = ensureNotNegative(scale ?? 1)
+  const o = ensureInRangeZeroOne(opacity ?? 1) // 0 for hidden and 1 for visible
+
+  if (!isRelativeNumericString(ox)) {
+    ox = Number(ox)
+    ox = ox - center.x
+  }
+  if (!isRelativeNumericString(oy)) {
+    oy = Number(oy)
+    oy = oy - center.y
+  }
+
+  ox = Number(ox)
+  oy = Number(oy)
+
+  shape.move(ox, oy)
+  shape.zoom(
+    shape._zoom(((s ?? 1) - 1) * -1000, {
+      x: center.x + ox,
+      y: center.y + oy,
+    })
+  )
+
+  shape.update({ props: { opacity: o } })
+
+  return shape
+}
+
+export function getShapeByEffect<T extends Shape>(
+  effects: Effects[] | ShapeConfig,
+  shape: T,
+  type: "enter" | "leave"
+) {
+  if (!Array.isArray(effects)) {
+    return getShapeByConfig(effects, shape)
+  }
+  let offsetX: NumericString = "+0",
+    offsetY: NumericString = "+0",
+    scale = 1,
+    opacity = 1
+  effects.forEach((effect) => {
+    switch (effect) {
+      case "left10px":
+        offsetX = "-10"
+        break
+      case "right10px":
+        offsetX = "+10"
+        break
+      case "up10px":
+        offsetY = "-10"
+        break
+      case "down10px":
+        offsetY = "+10"
+        break
+      case "fade100%":
+        opacity = 0
+        break
+      case "zoomIn100%":
+        scale = 2
+        break
+      case "zoomOut100%":
+        scale = 0
+        break
+    }
+  })
+
+  return getShapeByConfig(
+    {
+      offsetX,
+      offsetY,
+      scale,
+      opacity,
+    },
+    shape
   )
 }

@@ -1,4 +1,4 @@
-import { Point } from "./point"
+import { Point, SimplePoint } from "./point"
 import { Shape } from "./shape"
 import { ShapeDrawProps, ShapeProps } from "../userTypes"
 import { Vector } from "./vector"
@@ -37,6 +37,10 @@ export class Line extends Shape {
     this.endPoint = new Point(this.x2, this.y2)
 
     this.updateRelatedValue()
+  }
+
+  getCenterPoint(): SimplePoint {
+    return new SimplePoint((this.x1 + this.x2) / 2, (this.y1 + this.y2) / 2)
   }
 
   contains(point: Point): boolean {

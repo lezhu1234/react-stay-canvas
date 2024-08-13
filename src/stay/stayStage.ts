@@ -12,11 +12,13 @@ export default class StayStage {
     contextLayerSetFunctionList: ContextLayerSetFunction[],
     width: number,
     height: number,
-    passive: boolean
+    passive: boolean,
+    autoRender: boolean = true
   ) {
     this.#stay = new Stay(
       new Canvas(canvasLayers, contextLayerSetFunctionList, width, height),
-      passive
+      passive,
+      autoRender
     )
     this.tools = this.#stay.getTools()
   }

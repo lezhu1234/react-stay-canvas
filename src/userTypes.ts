@@ -3,9 +3,9 @@ import { Shape } from "./shapes"
 import { Point } from "./shapes/point"
 import { StayChild } from "./stay/stayChild"
 import { valueof } from "./stay/types"
-import { UserCallback } from "./types"
+import { NumberInRangeZeroOne, ShapeConfig, UserCallback } from "./types"
 import { DRAW_ACTIONS, SHAPE_DRAW_TYPES, SORT_CHILDREN_METHODS } from "./userConstants"
-import { RGBA } from "./w3color"
+import { RGB, RGBA } from "./w3color"
 
 type SortChildrenMethodsKeys = keyof typeof SORT_CHILDREN_METHODS
 export type StayChildren = Record<string, StayChild>
@@ -44,14 +44,14 @@ export interface createChildProps<T> {
   shape: T
   className: string
   layer?: number
-  duration?: number
-  transitionType?: EasingFunction
+  transition?: Omit<StayChildTransitions, "update">
   drawEndCallback?: (child: StayChild) => void
 }
 
 export type updateChildProps<T = Shape> = {
   child: StayChild
-} & Partial<createChildProps<T>>
+  transition?: Omit<TransitionConfig, "effect">
+} & Partial<Omit<createChildProps<T>, "transition">>
 
 export interface UpdateStayChildProps<T> {
   id?: string
@@ -59,8 +59,7 @@ export interface UpdateStayChildProps<T> {
   layer?: number | undefined
   shape?: T | undefined
   zIndex?: number
-  duration?: number
-  transitionType?: EasingFunction
+  transition?: Omit<TransitionConfig, "effect">
   drawEndCallback?: (c: StayChild) => void
 }
 
@@ -160,8 +159,23 @@ export interface StayTools {
   log: () => void
   redo: () => void
   undo: () => void
+  start: () => void
+  progress: (time: number) => void
   triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
   deleteListener: (name: string) => void
+}
+
+export interface TransitionConfig {
+  effect: Effects[] | ShapeConfig
+  type?: EasingFunction
+  duration: number
+  delay?: number
+}
+
+export interface StayChildTransitions {
+  enter?: TransitionConfig
+  leave?: TransitionConfig
+  update?: Omit<TransitionConfig, "effect">
 }
 
 export interface StayChildProps<T> {
@@ -169,13 +183,12 @@ export interface StayChildProps<T> {
   zIndex?: number
   className: string
   layer: number
-  transitionType?: EasingFunction
+  transition?: Omit<StayChildTransitions, "update">
   beforeLayer?: number | null
   shape: T
   drawAction?: DrawActionsValuesType | null
   afterRefresh?: (fn: () => void) => void
   drawEndCallback?: (child: StayChild) => void
-  duration?: number
 }
 
 export interface RegionToTargetCanvasProps {
@@ -183,6 +196,15 @@ export interface RegionToTargetCanvasProps {
   targetArea?: Area
   children: StayChild[]
 }
+
+export type Effects =
+  | "left10px"
+  | "right10px"
+  | "up10px"
+  | "down10px"
+  | "fade100%"
+  | "zoomIn100%"
+  | "zoomOut100%"
 
 export type EasingFunction =
   | "linear"
@@ -265,7 +287,8 @@ export interface ShapeDrawProps {
   now: number
 }
 export interface ShapeProps {
-  color?: string | CanvasGradient
+  color?: string | CanvasGradient | RGB
+  opacity?: number
   lineWidth?: number
   zoomY?: number
   zoomCenter?: PointType
@@ -274,7 +297,6 @@ export interface ShapeProps {
   stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void>
   state?: string
   hidden?: boolean
-  rgbaColor?: RGBA
 }
 
 export type FourrDirection = "top" | "right" | "bottom" | "left"

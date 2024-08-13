@@ -1,7 +1,7 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { Line } from "./line"
-import { Point } from "./point"
+import { Point, SimplePoint } from "./point"
 import { Shape } from "./shape"
 
 export interface RectShapeAttr {
@@ -71,6 +71,10 @@ export class Rectangle extends Shape {
     this.area = this.width * this.height
 
     this.updateRelatedValue()
+  }
+
+  getCenterPoint(): SimplePoint {
+    return new SimplePoint(this.x + this.width / 2, this.y + this.height / 2)
   }
 
   computeFitInfo(width: number, height: number) {
@@ -228,10 +232,6 @@ export class Rectangle extends Shape {
     ratio: number,
     transitionType: EasingFunction
   ) {
-    // let color = after.color
-    // if (typeof before.color === "string" && typeof after.color === "string") {
-    //   color = this.getColorIntermediateState(before.color, after.color, ratio, transitionType)
-    // }
     return new Rectangle({
       x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
       y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),

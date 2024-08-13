@@ -20,11 +20,14 @@ export class SimplePoint {
   }
 }
 export class Point extends Shape {
+  getCenterPoint(): SimplePoint {
+    return new SimplePoint(this.x, this.y)
+  }
   x: number
   y: number
 
   constructor(x: number, y: number, props: ShapeProps = {}) {
-    super(props)
+    super({ ...props, type: "fill" })
     this.x = x
     this.y = y
   }
@@ -42,8 +45,6 @@ export class Point extends Shape {
     return Math.sqrt(dx * dx + dy * dy)
   }
   draw({ context }: ShapeDrawProps): void {
-    context.lineWidth = this.lineWidth
-    context.fillStyle = this.color
     context.fillRect(this.x, this.y, 1, 1)
   }
   move(offsetX: number, offsetY: number): void {

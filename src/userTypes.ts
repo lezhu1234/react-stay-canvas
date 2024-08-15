@@ -21,6 +21,7 @@ export interface PointType {
 
 export type StayCanvasRefType = {
   trigger: (name: string, payload?: Dict) => void
+  reCreate: () => void
 }
 
 export interface ActionEvent {
@@ -141,6 +142,7 @@ export interface StayTools {
   hasChild: (id: string) => boolean
   fix: () => void
   switchState: (state: string) => void
+  getChildrenWithoutRoot: () => StayChild[]
   getChildById: <T extends Shape>(id: string) => StayChild<T> | void
   getChildBySelector: <T extends Shape>(selector: string | SelectorFunc) => StayChild<T> | void
   getChildrenBySelector: (
@@ -297,6 +299,8 @@ export interface ShapeProps {
   stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void>
   state?: string
   hidden?: boolean
+  lineDash?: number[]
+  lineDashOffset?: number
 }
 
 export type FourrDirection = "top" | "right" | "bottom" | "left"

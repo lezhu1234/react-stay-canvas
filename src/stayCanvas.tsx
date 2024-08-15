@@ -72,10 +72,7 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
     : never
   type ListenerNames = GetListenerPairName<ListenerPair>
 
-  const container = useCallback((node: HTMLDivElement) => {
-    if (!node) {
-      return
-    }
+  const init = () => {
     stay.current = new StayStage(
       canvasLayers.current,
       contextLayerSetFunctionList,
@@ -95,6 +92,13 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
       mounted(stay.current.tools)
       stay.current.draw()
     }
+  }
+
+  const container = useCallback((node: HTMLDivElement) => {
+    if (!node) {
+      return
+    }
+    init()
   }, [])
 
   useImperativeHandle(
@@ -110,6 +114,9 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
               payload || {}
             )
           }
+        },
+        reCreate() {
+          init()
         },
       }
     },

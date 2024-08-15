@@ -57,15 +57,26 @@ export class StayChild<T extends Shape = Shape> {
   init(shape: T, transition: StayChildTransitions | undefined) {
     if (transition && transition.enter) {
       const initShape = getShapeByEffect(transition.enter.effect, shape.copy() as T, "enter")
+      this.push(initShape, undefined)
+    }
+    this.push(shape, transition ? transition.enter : undefined)
+  }
+
+  push(
+    shape: T | undefined,
+    transition: TransitionConfig | Omit<TransitionConfig, "effect"> | undefined
+  ) {
+    if (!shape) {
+      return
+    }
+    if (!transition && this.shapeStack.length > 0) {
+      this.shapeStack[this.shapeStack.length - 1].shape = shape
+    } else {
       this.shapeStack.push({
-        shape: initShape,
-        transition: undefined,
+        shape,
+        transition,
       })
     }
-    this.shapeStack.push({
-      shape,
-      transition: transition ? transition.enter : undefined,
-    })
   }
 
   get shape() {
@@ -143,9 +154,12 @@ export class StayChild<T extends Shape = Shape> {
   }
 
   idleDraw(props: ShapeDrawProps) {
-    this.state = "idle"
+    const drawState = this.shape._draw(props)
+    if (drawState !== true || this.state === "removing") {
+      this.state = "idle"
+    }
     this.checkRemove()
-    return this.shape._draw(props)
+    return drawState
   }
 
   draw(props: ShapeDrawProps, time?: number): boolean {
@@ -205,11 +219,6 @@ export class StayChild<T extends Shape = Shape> {
     this.drawEndCallback = drawEndCallback ?? this.drawEndCallback
     this.state = "updating"
 
-    if (shape) {
-      this.shapeStack.push({
-        shape,
-        transition,
-      })
-    }
+    this.push(shape, transition)
   }
 }

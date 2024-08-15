@@ -34,6 +34,8 @@ export abstract class Shape {
   contentUpdated: boolean
   hidden: boolean
   opacity: number
+  lineDash: number[]
+  lineDashOffset: number
   constructor({
     color,
     lineWidth,
@@ -45,19 +47,23 @@ export abstract class Shape {
     hidden = false,
     stateDrawFuncMap = {},
     opacity,
+    lineDash,
+    lineDashOffset,
   }: ShapeProps) {
-    this.color = color || "white"
-    this.lineWidth = lineWidth || 1
+    this.color = color ?? "white"
+    this.lineWidth = lineWidth ?? 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
     this.type = type || SHAPE_DRAW_TYPES.STROKE // this is a placeholder for the type property that will be implemented in the subclasses
     this.zoomY = zoomY ?? 1
     this.zoomCenter = zoomCenter ?? { x: 0, y: 0 }
-    this.gco = gco || "source-over"
+    this.gco = gco ?? "source-over"
     this.offsetX = 0
     this.offsetY = 0
     this.zeroPoint = { x: 0, y: 0 }
     this.zeroPointCopy = { x: 0, y: 0 }
     this.state = state
+    this.lineDash = lineDash ?? []
+    this.lineDashOffset = lineDashOffset ?? 0
     this.stateDrawFuncMap = {
       default: this.draw,
       ...stateDrawFuncMap,
@@ -93,6 +99,8 @@ export abstract class Shape {
   _draw({ context, canvas, now }: ShapeDrawProps): boolean {
     context.lineWidth = this.lineWidth
     context.globalCompositeOperation = this.gco
+    context.setLineDash(this.lineDash)
+    context.lineDashOffset = this.lineDashOffset
     this.setColor(context, this.colorStringOrCanvasGradient)
     // this.draw({ context, canvas, now })
     if (this.updateNextFrame || this.contentUpdated) {

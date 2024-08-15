@@ -470,6 +470,9 @@ class Stay {
         return child
       },
       removeChild: (childId: string): Promise<void> | void => {
+        if (childId === this.rootChild.id) {
+          throw new Error("root cannot be removed")
+        }
         const child = this.getChildById(childId)
         if (!child) return
         this.drawLayers[child.layer].forceUpdate = true
@@ -478,6 +481,9 @@ class Stay {
         return new Promise<void>((resolve) => {
           this.nextTick(resolve)
         })
+      },
+      getChildrenWithoutRoot: () => {
+        return [...this.getChildren().values()].filter((child) => child.id !== this.rootChild.id)
       },
       getChildById: <T extends Shape>(id: string): StayChild<T> | undefined => {
         const child = this.getChildById(id)

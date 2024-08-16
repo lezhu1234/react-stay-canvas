@@ -19,7 +19,7 @@ export class StayChild<T extends Shape = Shape> {
   zIndex: number
   afterRefresh: (fn: () => void) => void
   drawEndCallback: ((child: StayChild) => void) | undefined
-  state: "entering" | "updating" | "removing" | "idle"
+  state: "entering" | "updating" | "hidden" | "idle"
   shapeStack: {
     shape: T
     transition: TransitionConfig | Omit<TransitionConfig, "effect"> | undefined
@@ -69,7 +69,10 @@ export class StayChild<T extends Shape = Shape> {
     if (!shape) {
       return
     }
-    if (!transition && this.shapeStack.length > 0) {
+    if (
+      (!transition || (!transition.duration && !transition.delay)) &&
+      this.shapeStack.length > 0
+    ) {
       this.shapeStack[this.shapeStack.length - 1].shape = shape
     } else {
       this.shapeStack.push({
@@ -135,27 +138,26 @@ export class StayChild<T extends Shape = Shape> {
     })
   }
 
-  setRemove(callback: (layer: number) => void) {
-    this.state = "removing"
+  hidden() {
+    this.state = "hidden"
     if (this.endTransition) {
       this._update({
         shape: getShapeByEffect<T>(this.endTransition.effect, this.shape.copy() as T, "leave"),
         transition: this.endTransition,
       })
     }
-    this.#removeCallback = callback
   }
 
   checkRemove() {
-    if (this.state === "idle" && this.#removeCallback) {
-      this.#removeCallback(this.layer)
-      this.#removeCallback = undefined
-    }
+    // if (this.state === "idle" && this.#removeCallback) {
+    //   this.#removeCallback(this.layer)
+    //   this.#removeCallback = undefined
+    // }
   }
 
   idleDraw(props: ShapeDrawProps) {
     const drawState = this.shape._draw(props)
-    if (drawState !== true || this.state === "removing") {
+    if (drawState !== true || this.state === "hidden") {
       this.state = "idle"
     }
     this.checkRemove()
@@ -196,6 +198,10 @@ export class StayChild<T extends Shape = Shape> {
         return intermediateShape._draw(props) || true
       }
       stepStartTime = stepEndTime
+    }
+
+    if (this.state === "hidden") {
+      return false
     }
 
     return this.idleDraw(props)

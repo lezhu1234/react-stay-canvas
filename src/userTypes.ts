@@ -137,7 +137,7 @@ export interface StayTools {
   createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
   appendChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
   updateChild: (props: updateChildProps) => StayChild
-  removeChild: (childId: string) => Promise<void> | void
+  removeChild: (childId: string, soft?: boolean) => Promise<void> | void
   getContainPointChildren: (props: getContainPointChildrenProps) => StayChild[]
   hasChild: (id: string) => boolean
   fix: () => void

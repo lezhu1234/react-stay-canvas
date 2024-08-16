@@ -469,19 +469,20 @@ class Stay {
         this.unLogedChildrenIds.add(child.id)
         return child
       },
-      removeChild: (childId: string): Promise<void> | void => {
+      removeChild: (childId: string, soft: boolean = false): Promise<void> | void => {
         if (childId === this.rootChild.id) {
           throw new Error("root cannot be removed")
         }
         const child = this.getChildById(childId)
         if (!child) return
         this.drawLayers[child.layer].forceUpdate = true
-        this.removeChildById(child.id)
+        this.removeChildById(child.id, soft)
         this.unLogedChildrenIds.add(child.id)
         return new Promise<void>((resolve) => {
           this.nextTick(resolve)
         })
       },
+
       getChildrenWithoutRoot: () => {
         return [...this.getChildren().values()].filter((child) => child.id !== this.rootChild.id)
       },
@@ -943,13 +944,16 @@ class Stay {
     this.currentPressedKeys[key] = false
   }
 
-  removeChildById(id: string) {
+  removeChildById(id: string, soft: boolean) {
     const child = this.getChildById(id)
     if (child) {
-      child.setRemove((layer: number) => {
+      if (soft) {
+        child.hidden()
+      } else {
         this.#children.delete(id)
-        this.forceUpdateLayer(layer)
-      })
+        this.forceUpdateLayer(child.layer)
+        this.draw(true)
+      }
     }
   }
 

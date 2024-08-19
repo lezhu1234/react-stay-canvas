@@ -137,7 +137,11 @@ export interface StayTools {
   createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
   appendChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
   updateChild: (props: updateChildProps) => StayChild
-  removeChild: (childId: string, soft?: boolean) => Promise<void> | void
+  removeChild: (
+    childId: string,
+    soft?: boolean,
+    removeTransition?: TransitionConfig
+  ) => Promise<void> | void
   getContainPointChildren: (props: getContainPointChildrenProps) => StayChild[]
   hasChild: (id: string) => boolean
   fix: () => void
@@ -145,6 +149,7 @@ export interface StayTools {
   getChildrenWithoutRoot: () => StayChild[]
   getChildById: <T extends Shape>(id: string) => StayChild<T> | void
   getChildBySelector: <T extends Shape>(selector: string | SelectorFunc) => StayChild<T> | void
+  getChildrenByArea: (area: Area, selector?: string | SelectorFunc) => StayChild[]
   getChildrenBySelector: (
     selector: string | SelectorFunc,
     sortBy?: SortChildrenMethodsValues | ChildSortFunction
@@ -313,12 +318,17 @@ export interface Border {
   direction: FourrDirection
 }
 
+export interface TextDecoration {
+  position: number
+  color?: string
+}
 export interface TextAttr {
   x: number
   y: number
   text: string
   font?: string
   color?: string | CanvasGradient
+  decoration?: TextDecoration
   border?: Border[]
   offsetXRatio?: number
   offsetYRatio?: number

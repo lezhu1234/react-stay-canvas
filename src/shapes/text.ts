@@ -129,11 +129,15 @@ export class StayText extends Shape {
     // this.rect.draw(ctx)
   }
 
+  static get tempContext() {
+    return document.createElement("canvas").getContext("2d")
+  }
+
   init(ctx?: CanvasRenderingContext2D | undefined) {
     if (!this.textObj) {
       let context: CanvasRenderingContext2D | undefined = ctx
       if (!ctx) {
-        context = document.createElement("canvas").getContext("2d")!
+        context = StayText.tempContext!
         context.font = this.font
         context.textBaseline = this.textBaseline
         context.textAlign = this.textAlign

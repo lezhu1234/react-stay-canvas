@@ -41,6 +41,8 @@ import {
   SortChildrenMethodsValues,
   StayTools,
   updateChildProps,
+  Area,
+  TransitionConfig,
 } from "../userTypes"
 import { assert, infixExpressionParser, numberAlmostEqual, parseLayer, uuid4 } from "../utils"
 import { StayChild } from "./stayChild"
@@ -469,14 +471,18 @@ class Stay {
         this.unLogedChildrenIds.add(child.id)
         return child
       },
-      removeChild: (childId: string, soft: boolean = false): Promise<void> | void => {
+      removeChild: (
+        childId: string,
+        soft: boolean = false,
+        removeTransition?: TransitionConfig
+      ): Promise<void> | void => {
         if (childId === this.rootChild.id) {
           throw new Error("root cannot be removed")
         }
         const child = this.getChildById(childId)
         if (!child) return
         this.drawLayers[child.layer].forceUpdate = true
-        this.removeChildById(child.id, soft)
+        this.removeChildById(child.id, soft, removeTransition)
         this.unLogedChildrenIds.add(child.id)
         return new Promise<void>((resolve) => {
           this.nextTick(resolve)
@@ -498,20 +504,27 @@ class Stay {
           return children[0] as StayChild<T>
         }
       },
+      getChildrenByArea: (area: Area, selector?: string | SelectorFunc) => {
+        const children = this.getChildrenBySelector(selector)
+        const selectedChildren: StayChild[] = []
+        children.forEach((child) => {
+          const center = child.shape.getCenterPoint()
+          if (
+            center.x >= area.x &&
+            center.x <= area.x + area.width &&
+            center.y >= area.y &&
+            center.y <= area.y + area.height
+          ) {
+            selectedChildren.push(child)
+          }
+        })
+        return selectedChildren
+      },
       getChildrenBySelector: (
         selector: string | SelectorFunc,
         sortBy = SORT_CHILDREN_METHODS.AREA_ASC
       ): StayChild[] => {
-        const fullSet = [...this.getChildren().values()]
-        const children =
-          typeof selector === "function"
-            ? fullSet.filter((child) => selector(child))
-            : infixExpressionParser<StayChild>({
-                selector,
-                fullSet,
-                elemntEqualFunc: (a: StayChild, b: StayChild) => a.id === b.id,
-                selectorConvertFunc: (s: string) => this.findBySimpleSelector(s),
-              })
+        const children = this.getChildrenBySelector(selector)
 
         const sortMap = new Map<SortChildrenMethodsValues, [string, 1 | -1]>([
           [SORT_CHILDREN_METHODS.AREA_ASC, ["area", 1]],
@@ -904,7 +917,12 @@ class Stay {
     topLayer.ondblclick = (e: MouseEvent) => dblclick(this.fireEvent.bind(this), e)
     topLayer.oncontextmenu = (e: MouseEvent) => contextmenu(this.fireEvent.bind(this), e)
     topLayer.ondragover = (e) => dragover(this.fireEvent.bind(this), e)
-    topLayer.ondragstart = (e: DragEvent) => dragstart(this.fireEvent.bind(this), e)
+    // topLayer.ondragstart = (e: DragEvent) => dragstart(this.fireEvent.bind(this), e)
+    topLayer.addEventListener(
+      "dragstart",
+      (e: DragEvent) => dragstart(this.fireEvent.bind(this), e),
+      false
+    )
     topLayer.ondragend = (e: DragEvent) => dragend(this.fireEvent.bind(this), e)
     topLayer.ondrop = (e: DragEvent) => drop(this.fireEvent.bind(this), e)
     topLayer.addEventListener("wheel", (e: WheelEvent) => wheel(this.fireEvent.bind(this), e), {
@@ -912,6 +930,23 @@ class Stay {
     })
     topLayer.onmouseenter = (e: MouseEvent) => mouseenter(this.fireEvent.bind(this), e)
     topLayer.onmouseleave = (e: MouseEvent) => mouseleave(this.fireEvent.bind(this), e)
+  }
+
+  getChildrenBySelector(selector?: string | SelectorFunc) {
+    const fullSet = [...this.getChildren().values()]
+    if (!selector) {
+      return fullSet
+    }
+    const children =
+      typeof selector === "function"
+        ? fullSet.filter((child) => selector(child))
+        : infixExpressionParser<StayChild>({
+            selector,
+            fullSet,
+            elemntEqualFunc: (a: StayChild, b: StayChild) => a.id === b.id,
+            selectorConvertFunc: (s: string) => this.findBySimpleSelector(s),
+          })
+    return children
   }
 
   pressKey(key: string) {
@@ -944,15 +979,14 @@ class Stay {
     this.currentPressedKeys[key] = false
   }
 
-  removeChildById(id: string, soft: boolean) {
+  removeChildById(id: string, soft: boolean, removeTransition?: TransitionConfig) {
     const child = this.getChildById(id)
     if (child) {
       if (soft) {
-        child.hidden()
+        child.hidden(removeTransition)
       } else {
         this.#children.delete(id)
         this.forceUpdateLayer(child.layer)
-        this.draw(true)
       }
     }
   }

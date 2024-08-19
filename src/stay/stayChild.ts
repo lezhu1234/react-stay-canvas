@@ -138,14 +138,15 @@ export class StayChild<T extends Shape = Shape> {
     })
   }
 
-  hidden() {
-    this.state = "hidden"
-    if (this.endTransition) {
+  hidden(removeTransition?: TransitionConfig) {
+    const transition = removeTransition ?? this.endTransition
+    if (transition) {
       this._update({
-        shape: getShapeByEffect<T>(this.endTransition.effect, this.shape.copy() as T, "leave"),
-        transition: this.endTransition,
+        shape: getShapeByEffect<T>(transition.effect, this.shape.copy() as T, "leave"),
+        transition,
       })
     }
+    this.state = "hidden"
   }
 
   checkRemove() {
@@ -188,7 +189,7 @@ export class StayChild<T extends Shape = Shape> {
       }
 
       if (stepEndTime > time) {
-        const ratio = (time - stepStartTime) / (stepEndTime - stepStartTime)
+        const ratio = (time - stepDelayEndTime) / (stepEndTime - stepDelayEndTime)
         const intermediateShape = this.shape.intermediateState(
           this.shapeStack[index - 1].shape,
           shape,

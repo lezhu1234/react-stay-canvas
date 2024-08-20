@@ -1,6 +1,6 @@
 import { valueof } from "../stay/types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { Dict, EasingFunction, ShapeDrawProps, ShapeProps, PointType } from "../userTypes"
+import { Dict, EasingFunction, ShapeDrawProps, ShapeProps, PointType, Font } from "../userTypes"
 import { applyEasing, isRGB, isRGBA } from "../utils"
 import W3Color, { RGB, RGBA, rgbaToString } from "../w3color"
 import { SimplePoint } from "./point"
@@ -169,6 +169,10 @@ export abstract class Shape {
     return this[key] // this will return the value of the property with the given key (e.g., this.get('color') will return the color of the shape)
   }
 
+  pointOuterOfCanvas(canvas: HTMLCanvasElement, point: SimplePoint) {
+    return point.x < 0 || point.x > canvas.width || point.y < 0 || point.y > canvas.height
+  }
+
   getCurrentArguments({
     now,
     startArguments,
@@ -256,8 +260,9 @@ export abstract class Shape {
     before: Shape,
     after: Shape,
     ratio: number,
-    transitionType: EasingFunction
-  ): Shape {
+    transitionType: EasingFunction,
+    canvas: HTMLCanvasElement
+  ): Shape | false {
     return this
   }
 
@@ -298,6 +303,33 @@ export abstract class Shape {
           transitionType
         ),
       },
+    }
+  }
+
+  getFontIntermediateState(
+    beforeFont: Required<Font>,
+    afterFont: Required<Font>,
+    ratio: number,
+    transitionType: EasingFunction
+  ) {
+    const size = this.getNumberIntermediateState(
+      beforeFont.size,
+      afterFont.size,
+      ratio,
+      transitionType
+    )
+    const fontWeight = this.getNumberIntermediateState(
+      beforeFont.fontWeight,
+      afterFont.fontWeight,
+      ratio,
+      transitionType
+    )
+
+    return {
+      fontFamily: afterFont.fontFamily,
+      fontWeight,
+      italic: afterFont.italic,
+      size,
     }
   }
 

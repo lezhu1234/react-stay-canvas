@@ -1,7 +1,7 @@
 import { Line, Point, Shape } from "./shapes"
 import { NumberInRangeZeroOne, NumericString, Positive, ShapeConfig } from "./types"
 import { SUPPORT_OPRATOR } from "./userConstants"
-import { EasingFunction, EasingFunctionMap, Effects, StayChildTransitions } from "./userTypes"
+import { EasingFunction, EasingFunctionMap, Effects, Font, StayChildTransitions } from "./userTypes"
 import { RGB, RGBA } from "./w3color"
 
 export type InfixExpressionParserProps<T> = {
@@ -505,4 +505,14 @@ export function getShapeByEffect<T extends Shape>(
     },
     shape
   )
+}
+
+export function getDefaultFont(font?: Font): Required<Font> {
+  return {
+    size: 16,
+    fontFamily: "monospace",
+    fontWeight: 400,
+    italic: false,
+    ...font,
+  }
 }

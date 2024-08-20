@@ -3,16 +3,18 @@ import {
   Border,
   DiagonalDirection,
   EasingFunction,
+  Font,
   FourrDirection,
   ShapeDrawProps,
   TextAttr,
 } from "../userTypes"
+import { getDefaultFont } from "../utils"
 import { SimplePoint } from "./point"
 import { Rectangle } from "./rectangle"
 import { Shape } from "./shape"
 
 export class StayText extends Shape {
-  font: string
+  font: Required<Font>
   height: number
   leftBottom: SimplePoint
   leftTop: SimplePoint
@@ -45,7 +47,7 @@ export class StayText extends Shape {
   }: TextAttr) {
     super(props || { type: SHAPE_DRAW_TYPES.FILL })
     this.text = text
-    this.font = font || ""
+    this.font = getDefaultFont(font)
     this.x = x
     this.y = y
     this.width = 0
@@ -85,8 +87,22 @@ export class StayText extends Shape {
     })
   }
 
-  draw({ context }: ShapeDrawProps): void {
-    context.font = this.font
+  get fontStr() {
+    const { size, fontFamily, fontWeight, italic } = this.font
+    return `${fontWeight} ${italic ? "italic" : ""} ${size ?? 16}px ${fontFamily ?? "monospace"}`
+  }
+
+  draw({ context, canvas }: ShapeDrawProps): void {
+    if (
+      this.leftTop.x > canvas.width ||
+      this.leftTop.y > canvas.height ||
+      this.rightBottom.x < 0 ||
+      this.rightBottom.y < 0
+    ) {
+      return
+    }
+
+    context.font = this.fontStr
     context.textBaseline = this.textBaseline
     context.textAlign = this.textAlign
     this.init(context)
@@ -138,7 +154,7 @@ export class StayText extends Shape {
       let context: CanvasRenderingContext2D | undefined = ctx
       if (!ctx) {
         context = StayText.tempContext!
-        context.font = this.font
+        context.font = this.fontStr
         context.textBaseline = this.textBaseline
         context.textAlign = this.textAlign
       }
@@ -184,7 +200,7 @@ export class StayText extends Shape {
   }: Partial<TextAttr>) {
     this.x = x ?? this.x
     this.y = y ?? this.y
-    this.font = font ?? this.font
+    this.font = getDefaultFont(font) ?? this.font
     this.text = text ?? this.text
     this.border = border ?? this.border
     this.textBaseline = textBaseline ?? this.textBaseline
@@ -216,13 +232,27 @@ export class StayText extends Shape {
     before: StayText,
     after: StayText,
     ratio: number,
-    transitionType: EasingFunction
+    transitionType: EasingFunction,
+    canvas: HTMLCanvasElement
   ) {
+    const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
+
+    if (x < -100 || x > canvas.width + 100) {
+      return false
+    }
+
+    const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
+
+    if (y < -100 || y > canvas.height + 100) {
+      return false
+    }
+
+    const font = this.getFontIntermediateState(before.font, after.font, ratio, transitionType)
     return new StayText({
       x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
       y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),
       text: after.text,
-      font: after.font,
+      font,
       border: after.border,
       offsetXRatio: this.getNumberIntermediateState(
         before.offsetXRatio,

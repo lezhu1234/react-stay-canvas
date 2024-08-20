@@ -326,7 +326,7 @@ export interface TextAttr {
   x: number
   y: number
   text: string
-  font?: string
+  font?: Font
   color?: string | CanvasGradient
   decoration?: TextDecoration
   border?: Border[]
@@ -336,4 +336,11 @@ export interface TextAttr {
   textAlign?: CanvasTextAlign
   props?: ShapeProps
   textObj?: TextMetrics
+}
+
+export interface Font {
+  size?: number
+  fontFamily?: string
+  fontWeight?: number
+  italic?: boolean
 }

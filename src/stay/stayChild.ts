@@ -194,8 +194,12 @@ export class StayChild<T extends Shape = Shape> {
           this.shapeStack[index - 1].shape,
           shape,
           ratio,
-          transition?.type ?? "linear"
+          transition?.type ?? "linear",
+          props.canvas
         )
+        if (intermediateShape === false) {
+          return false
+        }
         return intermediateShape._draw(props) || true
       }
       stepStartTime = stepEndTime

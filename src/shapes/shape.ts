@@ -86,10 +86,7 @@ export abstract class Shape {
   }
 
   get colorStringOrCanvasGradient() {
-    if (isRGB(this.color)) {
-      return rgbaToString(this.rgba)
-    }
-    return this.color
+    return rgbaToString(this.rgba)
   }
 
   _copy() {
@@ -232,10 +229,14 @@ export abstract class Shape {
 
   setColor(context: CanvasRenderingContext2D, color: string | CanvasGradient) {
     this.color = color
+    this.setContextColor(context, color)
+  }
+
+  setContextColor(context: CanvasRenderingContext2D, color: string | CanvasGradient) {
     if (this.type === SHAPE_DRAW_TYPES.STROKE) {
-      context.strokeStyle = this.color
+      context.strokeStyle = color
     } else if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      context.fillStyle = this.color
+      context.fillStyle = color
     }
   }
 
@@ -324,12 +325,19 @@ export abstract class Shape {
       ratio,
       transitionType
     )
+    const backgroundColor = this.getColorIntermediateState(
+      beforeFont.backgroundColor,
+      afterFont.backgroundColor,
+      ratio,
+      transitionType
+    )
 
     return {
       fontFamily: afterFont.fontFamily,
       fontWeight,
       italic: afterFont.italic,
       size,
+      backgroundColor,
     }
   }
 

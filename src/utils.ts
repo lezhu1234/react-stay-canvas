@@ -513,6 +513,20 @@ export function getDefaultFont(font?: Font): Required<Font> {
     fontFamily: "monospace",
     fontWeight: 400,
     italic: false,
+    backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
     ...font,
   }
+}
+
+export function getRGBAStr(color?: string | RGB | RGBA): string {
+  if (typeof color === "string") {
+    return color
+  }
+  if (isRGBA(color)) {
+    return `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a})`
+  }
+  if (isRGB(color)) {
+    return `rgba(${color.r}, ${color.g}, ${color.b}, 1)`
+  }
+  return `rgba(0,0,0,0)`
 }

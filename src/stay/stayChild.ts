@@ -1,5 +1,11 @@
 import { Shape } from "../shapes/shape"
-import { ShapeDrawProps, ShapeProps, StayChildTransitions, TransitionConfig } from "../userTypes"
+import {
+  ExtraTransform,
+  ShapeDrawProps,
+  ShapeProps,
+  StayChildTransitions,
+  TransitionConfig,
+} from "../userTypes"
 import { DRAW_ACTIONS } from "../userConstants"
 import {
   DrawActionsValuesType,
@@ -9,6 +15,7 @@ import {
 } from "../userTypes"
 import { getShapeByEffect, uuid4 } from "../utils"
 import { StepProps } from "./types"
+import { SimplePoint, StayText } from "../shapes"
 
 export class StayChild<T extends Shape = Shape> {
   beforeLayer: number | null
@@ -156,8 +163,14 @@ export class StayChild<T extends Shape = Shape> {
     // }
   }
 
-  idleDraw(props: ShapeDrawProps) {
-    const drawState = this.shape._draw(props)
+  async idleDraw(props: ShapeDrawProps, extraTransform?: ExtraTransform) {
+    let shape = this.shape
+    if (extraTransform) {
+      shape = (await shape.awaitCopy()) as T
+      shape.move(extraTransform.offsetX, extraTransform.offsetY)
+      shape.zoom(shape._zoom(extraTransform.zoom, extraTransform.zoomCenter))
+    }
+    const drawState = shape._draw(props)
     if (drawState !== true || this.state === "hidden") {
       this.state = "idle"
     }
@@ -165,9 +178,13 @@ export class StayChild<T extends Shape = Shape> {
     return drawState
   }
 
-  draw(props: ShapeDrawProps, time?: number): boolean {
+  async draw(
+    props: ShapeDrawProps,
+    time?: number,
+    extraTransform?: ExtraTransform
+  ): Promise<boolean> {
     if (time === undefined) {
-      return this.idleDraw(props)
+      return await this.idleDraw(props, extraTransform)
     }
 
     if (time < 0) {
@@ -175,7 +192,6 @@ export class StayChild<T extends Shape = Shape> {
     }
 
     let stepStartTime = 0
-
     for (let index = 0; index < this.shapeStack.length; index++) {
       const { transition, shape } = this.shapeStack[index]
       const duration = transition?.duration ?? 0
@@ -185,7 +201,13 @@ export class StayChild<T extends Shape = Shape> {
       const stepEndTime = stepStartTime + duration + delay
 
       if (stepDelayEndTime > time) {
-        return this.shapeStack[index - 1].shape._draw(props)
+        let _shape = this.shapeStack[index - 1].shape
+        if (extraTransform) {
+          _shape = (await _shape.awaitCopy()) as T
+          _shape.move(extraTransform.offsetX, extraTransform.offsetY)
+          _shape.zoom(_shape._zoom(extraTransform.zoom, extraTransform.zoomCenter))
+        }
+        return _shape._draw(props)
       }
 
       if (stepEndTime > time) {
@@ -200,7 +222,13 @@ export class StayChild<T extends Shape = Shape> {
         if (intermediateShape === false) {
           return false
         }
-        return intermediateShape._draw(props) || true
+        let _shape = intermediateShape
+        if (extraTransform) {
+          _shape = (await _shape.awaitCopy()) as T
+          _shape.move(extraTransform.offsetX, extraTransform.offsetY)
+          _shape.zoom(_shape._zoom(extraTransform.zoom, extraTransform.zoomCenter))
+        }
+        return _shape._draw(props) || true
       }
       stepStartTime = stepEndTime
     }
@@ -209,7 +237,7 @@ export class StayChild<T extends Shape = Shape> {
       return false
     }
 
-    return this.idleDraw(props)
+    return await this.idleDraw(props, extraTransform)
   }
 
   _update({

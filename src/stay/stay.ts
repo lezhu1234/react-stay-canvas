@@ -229,14 +229,14 @@ class Stay {
         })
       }
 
-      particalChildren.members.forEach((child: StayChild) => {
+      particalChildren.members.forEach(async (child: StayChild) => {
         if (!particalChildren.update && !child.drawAction && !forceDraw) {
           return
         }
         if (particalChildren.update) {
           child.shape.contentUpdated = true
         }
-        const updateNextFrame = child.draw(
+        const updateNextFrame = await child.draw(
           {
             context,
             canvas,
@@ -711,7 +711,7 @@ class Stay {
           needUpdateLayers.push(child.layer)
         })
       },
-      regionToTargetCanvas: ({ area, targetArea, children }) => {
+      regionToTargetCanvas: ({ area, targetArea, children, progress }) => {
         targetArea = targetArea ?? {
           x: 0,
           y: 0,
@@ -731,12 +731,20 @@ class Stay {
 
         const childrenReady = Promise.all(
           children.map(async (c) => {
-            const child = await c.awaitCopy()
-            child.shape.move(offsetX, offsetY)
-            child.shape.zoom(
-              child.shape._zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
+            await c.draw(
+              {
+                context: tempCtx,
+                canvas: tempCanvas,
+                now: Date.now(),
+              },
+              progress,
+              {
+                offsetX,
+                offsetY,
+                zoom: (scale - 1) * -1000,
+                zoomCenter: { x: targetArea.x, y: targetArea.y },
+              }
             )
-            child.shape._draw({ context: tempCtx, canvas: tempCanvas, now: Date.now() })
           })
         )
 

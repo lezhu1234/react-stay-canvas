@@ -202,6 +202,7 @@ export interface RegionToTargetCanvasProps {
   area: Area
   targetArea?: Area
   children: StayChild[]
+  progress?: number
 }
 
 export type Effects =
@@ -343,4 +344,12 @@ export interface Font {
   fontFamily?: string
   fontWeight?: number
   italic?: boolean
+  backgroundColor?: string | RGBA
+}
+
+export interface ExtraTransform {
+  zoom: number
+  zoomCenter: { x: number; y: number }
+  offsetX: number
+  offsetY: number
 }

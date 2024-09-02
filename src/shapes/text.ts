@@ -8,7 +8,7 @@ import {
   ShapeDrawProps,
   TextAttr,
 } from "../userTypes"
-import { getDefaultFont } from "../utils"
+import { getDefaultFont, getRGBAStr } from "../utils"
 import { SimplePoint } from "./point"
 import { Rectangle } from "./rectangle"
 import { Shape } from "./shape"
@@ -107,6 +107,10 @@ export class StayText extends Shape {
     context.textAlign = this.textAlign
     this.init(context)
 
+    this.setContextColor(context, getRGBAStr(this.font.backgroundColor))
+    context.fillRect(this.leftTop.x, this.leftTop.y, this.width, this.height)
+    this.setContextColor(context, this.colorStringOrCanvasGradient)
+
     if (this.type === SHAPE_DRAW_TYPES.FILL) {
       context.fillText(this.text, this.leftBottom.x, this.leftBottom.y)
     } else if (this.type === SHAPE_DRAW_TYPES.STROKE) {
@@ -200,7 +204,7 @@ export class StayText extends Shape {
   }: Partial<TextAttr>) {
     this.x = x ?? this.x
     this.y = y ?? this.y
-    this.font = getDefaultFont(font) ?? this.font
+    this.font = { ...this.font, ...font }
     this.text = text ?? this.text
     this.border = border ?? this.border
     this.textBaseline = textBaseline ?? this.textBaseline
@@ -249,8 +253,8 @@ export class StayText extends Shape {
 
     const font = this.getFontIntermediateState(before.font, after.font, ratio, transitionType)
     return new StayText({
-      x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
-      y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),
+      x,
+      y,
       text: after.text,
       font,
       border: after.border,
@@ -268,7 +272,6 @@ export class StayText extends Shape {
       ),
       textAlign: after.textAlign,
       textBaseline: after.textBaseline,
-      textObj: after.textObj,
       props: this.getIntermediateProps(before, after, ratio, transitionType),
     })
   }

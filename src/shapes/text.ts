@@ -241,13 +241,13 @@ export class StayText extends Shape {
   ) {
     const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
 
-    if (x < -100 || x > canvas.width + 100) {
+    if (x < -this.width || x > canvas.width) {
       return false
     }
 
     const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
 
-    if (y < -100 || y > canvas.height + 100) {
+    if (y < -this.height || y > canvas.height) {
       return false
     }
 

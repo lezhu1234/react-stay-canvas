@@ -149,9 +149,10 @@ export class StayText extends Shape {
     // this.rect.draw(ctx)
   }
 
-  static get tempContext() {
-    return document.createElement("canvas").getContext("2d")
-  }
+  // static get tempContext() {
+  //   return document.createElement("canvas").getContext("2d")
+  // }
+  static tempContext = document.createElement("canvas").getContext("2d")
 
   init(ctx?: CanvasRenderingContext2D | undefined) {
     if (!this.textObj) {

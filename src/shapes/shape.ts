@@ -98,7 +98,7 @@ export abstract class Shape {
     context.globalCompositeOperation = this.gco
     context.setLineDash(this.lineDash)
     context.lineDashOffset = this.lineDashOffset
-    this.setColor(context, this.colorStringOrCanvasGradient)
+    this.setColor(context, this.rgba)
     // this.draw({ context, canvas, now })
     if (this.updateNextFrame || this.contentUpdated) {
       if (!this.hidden) {
@@ -227,8 +227,11 @@ export abstract class Shape {
     }
   }
 
-  setColor(context: CanvasRenderingContext2D, color: string | CanvasGradient) {
+  setColor(context: CanvasRenderingContext2D, color: string | CanvasGradient | RGBA) {
     this.color = color
+    if (isRGBA(color)) {
+      color = rgbaToString(color)
+    }
     this.setContextColor(context, color)
   }
 
@@ -274,7 +277,17 @@ export abstract class Shape {
     transitionType: EasingFunction
   ): ShapeProps {
     return {
-      ...this._copy(),
+      type: this.type,
+      gco: this.gco,
+      state: this.state,
+      stateDrawFuncMap: this.stateDrawFuncMap,
+      lineDash: this.lineDash,
+      lineDashOffset: this.getNumberIntermediateState(
+        before.lineDashOffset,
+        after.lineDashOffset,
+        ratio,
+        transitionType
+      ),
       color: this.getColorIntermediateState(before.rgba, after.rgba, ratio, transitionType),
       hidden: false,
       lineWidth: this.getNumberIntermediateState(

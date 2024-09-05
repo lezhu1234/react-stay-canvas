@@ -143,6 +143,10 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
     })
   }, [listenerList])
 
+  useEffect(() => {
+    init()
+  }, [width, height])
+
   return (
     <>
       <div

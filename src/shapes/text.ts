@@ -152,7 +152,8 @@ export class StayText extends Shape {
   // static get tempContext() {
   //   return document.createElement("canvas").getContext("2d")
   // }
-  static tempContext = document.createElement("canvas").getContext("2d")
+  static tempContext =
+    typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null
 
   init(ctx?: CanvasRenderingContext2D | undefined) {
     if (!this.textObj) {
@@ -230,6 +231,7 @@ export class StayText extends Shape {
     this.update({
       x: center.x,
       y: center.y,
+      font: { size: this.font.size * zoomScale },
     })
   }
 

@@ -344,7 +344,7 @@ export interface Font {
   fontFamily?: string
   fontWeight?: number
   italic?: boolean
-  backgroundColor?: string | RGBA
+  backgroundColor?: string | RGBA | CanvasGradient
 }
 
 export interface ExtraTransform {

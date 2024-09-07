@@ -8,7 +8,8 @@ import {
   ShapeDrawProps,
   TextAttr,
 } from "../userTypes"
-import { getDefaultFont, getRGBAStr } from "../utils"
+import { getDefaultFont, getRGBAStr, isRGBA } from "../utils"
+import { rgbaToString } from "../w3color"
 import { SimplePoint } from "./point"
 import { Rectangle } from "./rectangle"
 import { Shape } from "./shape"
@@ -107,7 +108,14 @@ export class StayText extends Shape {
     context.textAlign = this.textAlign
     this.init(context)
 
-    this.setContextColor(context, getRGBAStr(this.font.backgroundColor))
+    let c: string | CanvasGradient
+    if (isRGBA(this.font.backgroundColor)) {
+      c = rgbaToString(this.font.backgroundColor)
+    } else {
+      c = this.font.backgroundColor
+    }
+
+    this.setContextColor(context, c)
     context.fillRect(this.leftTop.x, this.leftTop.y, this.width, this.height)
     this.setContextColor(context, this.colorStringOrCanvasGradient)
 
@@ -255,10 +263,22 @@ export class StayText extends Shape {
     }
 
     const font = this.getFontIntermediateState(before.font, after.font, ratio, transitionType)
+    const props = this.getIntermediateProps(before, after, ratio, transitionType)
+    let opacity = props.opacity
+    let text = after.text
+
+    if (before.text !== after.text) {
+      if (ratio > 0.5) {
+        opacity = this.getNumberIntermediateState(0, 1, (ratio - 0.5) * 2, transitionType)
+      } else {
+        text = before.text
+        opacity = this.getNumberIntermediateState(0, 1, (0.5 - ratio) * 2, transitionType)
+      }
+    }
     return new StayText({
       x,
       y,
-      text: after.text,
+      text,
       font,
       border: after.border,
       offsetXRatio: this.getNumberIntermediateState(
@@ -275,7 +295,7 @@ export class StayText extends Shape {
       ),
       textAlign: after.textAlign,
       textBaseline: after.textBaseline,
-      props: this.getIntermediateProps(before, after, ratio, transitionType),
+      props: { ...props, opacity },
     })
   }
 }

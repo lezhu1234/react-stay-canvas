@@ -17,7 +17,7 @@ export interface GetCurrentArgumentsProps {
 
 export abstract class Shape {
   area: number
-  color: string | CanvasGradient | RGB
+  color: CanvasGradient | RGBA
   gco: GlobalCompositeOperation
   lineWidth: number
   offsetX: number
@@ -50,7 +50,6 @@ export abstract class Shape {
     lineDash,
     lineDashOffset,
   }: ShapeProps) {
-    this.color = color ?? "white"
     this.lineWidth = lineWidth ?? 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
     this.type = type || SHAPE_DRAW_TYPES.STROKE // this is a placeholder for the type property that will be implemented in the subclasses
@@ -73,20 +72,29 @@ export abstract class Shape {
     this.contentUpdated = true
     this.hidden = hidden
     this.opacity = opacity ?? 1
+    this.color = this.tryConvertToRGBA(color ?? "white", this.opacity)
   }
 
-  get rgba() {
-    if (isRGB(this.color)) {
-      return { ...this.color, a: this.opacity }
+  tryConvertToRGBA(
+    color: string | CanvasGradient | RGB | RGBA,
+    opacity?: number
+  ): RGBA | CanvasGradient {
+    if (isRGBA(color)) {
+      return { ...color, a: opacity ?? color.a }
+    } else if (isRGB(color)) {
+      return { ...color, a: opacity ?? 1 }
     } else if (typeof this.color === "string") {
-      const w3color = new W3Color(this.color)
-      return { ...w3color.toRgb(), a: this.opacity }
+      const c = new W3Color(this.color).toRgba()
+      return { ...c, a: opacity ?? c.a }
     }
-    throw new Error("Invalid color")
+    return color as CanvasGradient
   }
 
   get colorStringOrCanvasGradient() {
-    return rgbaToString(this.rgba)
+    if (isRGBA(this.color)) {
+      return rgbaToString(this.color)
+    }
+    return this.color
   }
 
   _copy() {
@@ -98,7 +106,7 @@ export abstract class Shape {
     context.globalCompositeOperation = this.gco
     context.setLineDash(this.lineDash)
     context.lineDashOffset = this.lineDashOffset
-    this.setColor(context, this.rgba)
+    this.setColor(context, this.color)
     // this.draw({ context, canvas, now })
     if (this.updateNextFrame || this.contentUpdated) {
       if (!this.hidden) {
@@ -136,7 +144,6 @@ export abstract class Shape {
     stateDrawFuncMap,
     opacity,
   }: ShapeProps) {
-    this.color = color ?? this.color
     this.lineWidth = lineWidth ?? this.lineWidth
     this.zoomY = zoomY ?? this.zoomY
     this.zoomCenter = zoomCenter ?? this.zoomCenter
@@ -144,6 +151,7 @@ export abstract class Shape {
     this.gco = gco ?? this.gco
     this.hidden = hidden ?? this.hidden
     this.opacity = opacity ?? this.opacity
+    this.color = this.tryConvertToRGBA(color ?? this.color, this.opacity)
 
     this.stateDrawFuncMap = stateDrawFuncMap ?? this.stateDrawFuncMap
     this.contentUpdated = true
@@ -227,12 +235,16 @@ export abstract class Shape {
     }
   }
 
-  setColor(context: CanvasRenderingContext2D, color: string | CanvasGradient | RGBA) {
+  setColor(context: CanvasRenderingContext2D, color: CanvasGradient | RGBA) {
     this.color = color
+
+    let c: string | CanvasGradient
     if (isRGBA(color)) {
-      color = rgbaToString(color)
+      c = rgbaToString(color)
+    } else {
+      c = color
     }
-    this.setContextColor(context, color)
+    this.setContextColor(context, c)
   }
 
   setContextColor(context: CanvasRenderingContext2D, color: string | CanvasGradient) {
@@ -288,7 +300,7 @@ export abstract class Shape {
         ratio,
         transitionType
       ),
-      color: this.getColorIntermediateState(before.rgba, after.rgba, ratio, transitionType),
+      color: this.getColorIntermediateState(before.color, after.color, ratio, transitionType),
       hidden: false,
       lineWidth: this.getNumberIntermediateState(
         before.lineWidth,
@@ -339,8 +351,8 @@ export abstract class Shape {
       transitionType
     )
     const backgroundColor = this.getColorIntermediateState(
-      beforeFont.backgroundColor,
-      afterFont.backgroundColor,
+      this.tryConvertToRGBA(beforeFont.backgroundColor),
+      this.tryConvertToRGBA(afterFont.backgroundColor),
       ratio,
       transitionType
     )
@@ -364,31 +376,20 @@ export abstract class Shape {
   }
 
   getColorIntermediateState(
-    before: string | RGBA,
-    after: string | RGBA,
+    before: RGBA | CanvasGradient,
+    after: RGBA | CanvasGradient,
     ratio: number,
     transitionType: EasingFunction
   ) {
-    let beforeRgba: RGBA, afterColor: RGBA
-
-    if (typeof before === "string") {
-      beforeRgba = new W3Color(before).toRgba()
-    } else {
-      beforeRgba = before
-    }
-    if (typeof after === "string") {
-      afterColor = new W3Color(after).toRgba()
-    } else {
-      afterColor = after
+    if (!isRGBA(before) || !isRGBA(after)) {
+      return after
     }
 
-    // const beforeRgba = new W3Color(before).toRgba()
-    // const afterColor = new W3Color(after).toRgba()
     const rgba: RGBA = {
-      r: this.getNumberIntermediateState(beforeRgba.r, afterColor.r, ratio, transitionType),
-      g: this.getNumberIntermediateState(beforeRgba.g, afterColor.g, ratio, transitionType),
-      b: this.getNumberIntermediateState(beforeRgba.b, afterColor.b, ratio, transitionType),
-      a: this.getNumberIntermediateState(beforeRgba.a, afterColor.a, ratio, transitionType),
+      r: this.getNumberIntermediateState(before.r, after.r, ratio, transitionType),
+      g: this.getNumberIntermediateState(before.g, after.g, ratio, transitionType),
+      b: this.getNumberIntermediateState(before.b, after.b, ratio, transitionType),
+      a: this.getNumberIntermediateState(before.a, after.a, ratio, transitionType),
     }
     return rgba
   }

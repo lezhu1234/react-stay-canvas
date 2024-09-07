@@ -69,6 +69,14 @@ export class StayChild<T extends Shape = Shape> {
     this.push(shape, transition ? transition.enter : undefined)
   }
 
+  get totalDuration() {
+    return this.shapeStack.reduce((acc, cur) => {
+      const duration = cur.transition?.duration ?? 0
+      const delay = cur.transition?.delay ?? 0
+      return acc + duration + delay
+    }, 0)
+  }
+
   push(
     shape: T | undefined,
     transition: TransitionConfig | Omit<TransitionConfig, "effect"> | undefined

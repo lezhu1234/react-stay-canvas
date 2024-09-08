@@ -269,10 +269,20 @@ export class StayText extends Shape {
 
     if (before.text !== after.text) {
       if (ratio > 0.5) {
-        opacity = this.getNumberIntermediateState(0, 1, (ratio - 0.5) * 2, transitionType)
+        opacity = this.getNumberIntermediateState(
+          0,
+          before.opacity,
+          (ratio - 0.5) * 2,
+          transitionType
+        )
       } else {
         text = before.text
-        opacity = this.getNumberIntermediateState(0, 1, (0.5 - ratio) * 2, transitionType)
+        opacity = this.getNumberIntermediateState(
+          0,
+          after.opacity,
+          (0.5 - ratio) * 2,
+          transitionType
+        )
       }
     }
     return new StayText({

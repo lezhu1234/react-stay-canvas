@@ -92,6 +92,8 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
       mounted(stay.current.tools)
       stay.current.draw()
     }
+
+    canvasLayers.current[canvasLayers.current.length - 1].focus()
   }
 
   const container = useCallback((node: HTMLDivElement) => {
@@ -177,6 +179,7 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
               style={{
                 position: "absolute",
                 display: "block",
+                outline: "none",
                 left: 0,
                 top: 0,
               }}

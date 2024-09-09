@@ -22,6 +22,7 @@ export interface PointType {
 export type StayCanvasRefType = {
   trigger: (name: string, payload?: Dict) => void
   reCreate: () => void
+  focus: () => void
 }
 
 export interface ActionEvent {
@@ -345,6 +346,8 @@ export interface Font {
   fontWeight?: number
   italic?: boolean
   backgroundColor?: string | RGBA | CanvasGradient
+  underline?: boolean
+  strikethrough?: boolean
 }
 
 export interface ExtraTransform {

@@ -514,6 +514,8 @@ export function getDefaultFont(font?: Font): Required<Font> {
     fontWeight: 400,
     italic: false,
     backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
+    strikethrough: false,
+    underline: false,
     ...font,
   }
 }

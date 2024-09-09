@@ -120,6 +120,9 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
         reCreate() {
           init()
         },
+        focus() {
+          canvasLayers.current[canvasLayers.current.length - 1].focus()
+        },
       }
     },
     []

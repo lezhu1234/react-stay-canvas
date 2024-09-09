@@ -83,8 +83,8 @@ export abstract class Shape {
       return { ...color, a: opacity ?? color.a }
     } else if (isRGB(color)) {
       return { ...color, a: opacity ?? 1 }
-    } else if (typeof this.color === "string") {
-      const c = new W3Color(this.color).toRgba()
+    } else if (typeof color === "string") {
+      const c = new W3Color(color).toRgba()
       return { ...c, a: opacity ?? c.a }
     }
     return color as CanvasGradient
@@ -337,7 +337,7 @@ export abstract class Shape {
     afterFont: Required<Font>,
     ratio: number,
     transitionType: EasingFunction
-  ) {
+  ): Required<Font> {
     const size = this.getNumberIntermediateState(
       beforeFont.size,
       afterFont.size,
@@ -363,6 +363,8 @@ export abstract class Shape {
       italic: afterFont.italic,
       size,
       backgroundColor,
+      underline: afterFont.underline,
+      strikethrough: afterFont.strikethrough,
     }
   }
 

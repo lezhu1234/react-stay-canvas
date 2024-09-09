@@ -125,6 +125,23 @@ export class StayText extends Shape {
       context.strokeText(this.text, this.leftBottom.x, this.leftBottom.y)
     }
 
+    if (this.font.strikethrough) {
+      context.lineWidth = this.height / 10
+      context.strokeStyle = this.colorStringOrCanvasGradient
+      context.beginPath()
+      context.moveTo(this.leftTop.x, this.leftTop.y + this.height / 2)
+      context.lineTo(this.rightBottom.x, this.leftTop.y + this.height / 2)
+      context.stroke()
+    }
+    if (this.font.underline) {
+      context.lineWidth = this.height / 10
+      context.strokeStyle = this.colorStringOrCanvasGradient
+      context.beginPath()
+      context.moveTo(this.leftBottom.x, this.leftBottom.y)
+      context.lineTo(this.rightBottom.x, this.leftBottom.y)
+      context.stroke()
+    }
+
     if (this.border) {
       this.border.forEach((border) => {
         context.strokeStyle = border.color || "black"

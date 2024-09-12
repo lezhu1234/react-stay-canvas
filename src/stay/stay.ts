@@ -189,7 +189,7 @@ class Stay {
     delete this.events[name]
   }
 
-  draw(forceDraw = false, now = Date.now(), time?: number) {
+  async draw(forceDraw = false, now = Date.now(), time?: number) {
     interface ChildLayer {
       update: boolean
       members: StayChild[]
@@ -229,9 +229,10 @@ class Stay {
         })
       }
 
-      particalChildren.members.forEach(async (child: StayChild) => {
+      for (let i = 0; i < particalChildren.members.length; i++) {
+        const child = particalChildren.members[i]
         if (!particalChildren.update && !child.drawAction && !forceDraw) {
-          return
+          continue
         }
         if (particalChildren.update) {
           child.shape.contentUpdated = true
@@ -244,13 +245,39 @@ class Stay {
           },
           time
         )
+
         if (updateNextFrame) {
           this.forceUpdateLayer(child.layer)
         }
         child.drawAction = null
         child.beforeLayer = child.layer
-      })
+      }
+      // particalChildren.members.forEach(async (child: StayChild) => {
+      //   if (!particalChildren.update && !child.drawAction && !forceDraw) {
+      //     return
+      //   }
+      //   if (particalChildren.update) {
+      //     child.shape.contentUpdated = true
+      //   }
+      //   const drawStartTime = performance.now()
+      //   const updateNextFrame = await child.draw(
+      //     {
+      //       context,
+      //       canvas,
+      //       now,
+      //     },
+      //     time
+      //   )
+      //   drawCost += performance.now() - drawStartTime
+      //   console.log(performance.now() - drawStartTime)
+      //   if (updateNextFrame) {
+      //     this.forceUpdateLayer(child.layer)
+      //   }
+      //   child.drawAction = null
+      //   child.beforeLayer = child.layer
+      // })
     }
+
     this.zIndexUpdated = false
 
     // run next tick function

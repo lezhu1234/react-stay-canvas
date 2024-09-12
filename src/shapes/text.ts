@@ -44,15 +44,15 @@ export class StayText extends Shape {
     offsetXRatio,
     offsetYRatio,
     props,
-    textObj,
+    width,
+    height,
   }: TextAttr) {
     super(props || { type: SHAPE_DRAW_TYPES.FILL })
     this.text = text
     this.font = getDefaultFont(font)
     this.x = x
     this.y = y
-    this.width = 0
-    this.height = 0
+
     this.border = border
     this.offsetXRatio = offsetXRatio ?? 0
     this.offsetYRatio = offsetYRatio ?? 0
@@ -63,7 +63,9 @@ export class StayText extends Shape {
     this.leftTop = new SimplePoint(0, 0)
     this.rightBottom = new SimplePoint(0, 0)
     this.rightTop = new SimplePoint(0, 0)
-    this.textObj = textObj
+    const size = this.getSize(width, height)
+    this.width = size.width
+    this.height = size.height
 
     this.init()
   }
@@ -106,7 +108,7 @@ export class StayText extends Shape {
     context.font = this.fontStr
     context.textBaseline = this.textBaseline
     context.textAlign = this.textAlign
-    this.init(context)
+    // this.init(context)
 
     let c: string | CanvasGradient
     if (isRGBA(this.font.backgroundColor)) {
@@ -180,22 +182,22 @@ export class StayText extends Shape {
   static tempContext =
     typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null
 
-  init(ctx?: CanvasRenderingContext2D | undefined) {
-    if (!this.textObj) {
-      let context: CanvasRenderingContext2D | undefined = ctx
-      if (!ctx) {
-        context = StayText.tempContext!
-        context.font = this.fontStr
-        context.textBaseline = this.textBaseline
-        context.textAlign = this.textAlign
-      }
-
-      this.textObj = context!.measureText(this.text) // TextMetrics object
+  getSize(width?: number, height?: number) {
+    if (width !== undefined && height !== undefined) {
+      return { width, height }
     }
+    const context = StayText.tempContext!
+    context.font = this.fontStr
+    context.textBaseline = this.textBaseline
+    context.textAlign = this.textAlign
 
-    this.width = this.textObj.width
-    this.height = this.textObj.fontBoundingBoxAscent + this.textObj.fontBoundingBoxDescent
-
+    const textObj = context!.measureText(this.text) // TextMetrics object
+    return {
+      width: textObj.width,
+      height: textObj.fontBoundingBoxAscent + textObj.fontBoundingBoxDescent,
+    }
+  }
+  init(ctx?: CanvasRenderingContext2D | undefined) {
     const offsetX = -this.width / 2 + this.width * this.offsetXRatio
     const offsetY = this.height * this.offsetYRatio
 
@@ -227,7 +229,8 @@ export class StayText extends Shape {
     offsetXRatio,
     offsetYRatio,
     props,
-    textObj,
+    width,
+    height,
   }: Partial<TextAttr>) {
     this.x = x ?? this.x
     this.y = y ?? this.y
@@ -238,7 +241,9 @@ export class StayText extends Shape {
     this.textAlign = textAlign ?? this.textAlign
     this.offsetXRatio = offsetXRatio ?? this.offsetXRatio
     this.offsetYRatio = offsetYRatio ?? this.offsetYRatio
-    this.textObj = textObj
+    const size = this.getSize(width, height)
+    this.width = size.width
+    this.height = size.height
     this._update(props || {})
     this.init()
     return this
@@ -268,14 +273,21 @@ export class StayText extends Shape {
     canvas: HTMLCanvasElement
   ) {
     const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
+    const width = this.getNumberIntermediateState(before.width, after.width, ratio, transitionType)
 
-    if (x < -this.width || x > canvas.width) {
+    if (x < -width || x > canvas.width) {
       return false
     }
 
     const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
+    const height = this.getNumberIntermediateState(
+      before.height,
+      after.height,
+      ratio,
+      transitionType
+    )
 
-    if (y < -this.height || y > canvas.height) {
+    if (y < -height || y > canvas.height) {
       return false
     }
 
@@ -307,6 +319,8 @@ export class StayText extends Shape {
       y,
       text,
       font,
+      width,
+      height,
       border: after.border,
       offsetXRatio: this.getNumberIntermediateState(
         before.offsetXRatio,

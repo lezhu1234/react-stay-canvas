@@ -337,7 +337,8 @@ export interface TextAttr {
   textBaseline?: CanvasTextBaseline
   textAlign?: CanvasTextAlign
   props?: ShapeProps
-  textObj?: TextMetrics
+  width?: number
+  height?: number
 }
 
 export interface Font {

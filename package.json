@@ -1,6 +1,6 @@
 {
   "name": "react-stay-canvas",
-  "version": "1.0.76",
+  "version": "1.0.77",
   "description": "stay-canvas for react",
   "scripts": {
     "rollup": "rollup -c && pnpm version patch && pnpm publish",

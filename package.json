@@ -3,7 +3,8 @@
   "version": "1.0.79",
   "description": "stay-canvas for react",
   "scripts": {
-    "rollup": "rollup -c && pnpm version patch && pnpm publish",
+    "build": "rollup -c",
+    "publish": "rollup -c && pnpm version patch && pnpm publish",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

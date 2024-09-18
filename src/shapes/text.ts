@@ -300,7 +300,7 @@ export class StayText extends Shape {
       if (ratio > 0.5) {
         opacity = this.getNumberIntermediateState(
           0,
-          before.opacity,
+          after.opacity,
           (ratio - 0.5) * 2,
           transitionType
         )
@@ -308,7 +308,7 @@ export class StayText extends Shape {
         text = before.text
         opacity = this.getNumberIntermediateState(
           0,
-          after.opacity,
+          before.opacity,
           (0.5 - ratio) * 2,
           transitionType
         )

@@ -388,9 +388,9 @@ export abstract class Shape {
     }
 
     const rgba: RGBA = {
-      r: this.getNumberIntermediateState(before.r, after.r, ratio, transitionType),
-      g: this.getNumberIntermediateState(before.g, after.g, ratio, transitionType),
-      b: this.getNumberIntermediateState(before.b, after.b, ratio, transitionType),
+      r: Math.floor(this.getNumberIntermediateState(before.r, after.r, ratio, transitionType)),
+      g: Math.floor(this.getNumberIntermediateState(before.g, after.g, ratio, transitionType)),
+      b: Math.floor(this.getNumberIntermediateState(before.b, after.b, ratio, transitionType)),
       a: this.getNumberIntermediateState(before.a, after.a, ratio, transitionType),
     }
     return rgba

@@ -1,6 +1,6 @@
 {
   "name": "react-stay-canvas",
-  "version": "1.0.83",
+  "version": "1.0.84",
   "description": "stay-canvas for react",
   "scripts": {
     "build": "rollup -c",

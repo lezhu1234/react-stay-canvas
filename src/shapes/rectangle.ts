@@ -1,7 +1,8 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
+import { EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { Line } from "./line"
-import { Point } from "./point"
-import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
+import { Point, SimplePoint } from "./point"
+import { Shape } from "./shape"
 
 export interface RectShapeAttr {
   x: number
@@ -29,6 +30,7 @@ export class Rectangle extends Shape {
   width: number
   x: number
   y: number
+  center: Point
   constructor({ x, y, width, height, props = {} }: RectangleAttr) {
     super(props)
     this.x = x
@@ -41,6 +43,7 @@ export class Rectangle extends Shape {
     this.rightTop = new Point(this.x + this.width, this.y)
     this.rightBottom = new Point(this.x + this.width, this.y + this.height)
     this.leftBottom = new Point(this.x, this.y + this.height)
+    this.center = new Point(this.x + this.width / 2, this.y + this.height / 2)
     this.leftBorder = new Line({
       x1: this.x,
       y1: this.y,
@@ -68,6 +71,10 @@ export class Rectangle extends Shape {
     this.area = this.width * this.height
 
     this.updateRelatedValue()
+  }
+
+  getCenterPoint(): SimplePoint {
+    return new SimplePoint(this.x + this.width / 2, this.y + this.height / 2)
   }
 
   computeFitInfo(width: number, height: number) {
@@ -161,7 +168,7 @@ export class Rectangle extends Shape {
     this.y = y
     this.width = width
     this.height = height
-    this._update(props || {})
+    this._update(props ?? {})
     this.updateRelatedValue()
 
     return this
@@ -185,6 +192,10 @@ export class Rectangle extends Shape {
       y1: this.y + this.height,
       x2: this.x + this.width,
       y2: this.y + this.height,
+    })
+    this.center.update({
+      x: this.x + this.width / 2,
+      y: this.y + this.height / 2,
     })
     this.area = this.width * this.height
   }
@@ -212,6 +223,21 @@ export class Rectangle extends Shape {
       y: leftTop.y,
       width: this.width * zoomScale,
       height: this.height * zoomScale,
+    })
+  }
+
+  intermediateState(
+    before: Rectangle,
+    after: Rectangle,
+    ratio: number,
+    transitionType: EasingFunction
+  ) {
+    return new Rectangle({
+      x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
+      y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),
+      width: this.getNumberIntermediateState(before.width, after.width, ratio, transitionType),
+      height: this.getNumberIntermediateState(before.height, after.height, ratio, transitionType),
+      props: this.getIntermediateProps(before, after, ratio, transitionType),
     })
   }
 }

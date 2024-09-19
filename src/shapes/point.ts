@@ -1,16 +1,33 @@
 import { Line } from "./line"
-import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
+import { Shape } from "./shape"
+import { ShapeDrawProps, ShapeProps } from "../userTypes"
 export interface PointProps {
   x: number
   y: number
   props?: ShapeProps
 }
+
+export class SimplePoint {
+  x: number
+  y: number
+  constructor(x: number, y: number) {
+    this.x = x
+    this.y = y
+  }
+  update({ x, y }: Partial<SimplePoint>) {
+    this.x = x ?? this.x
+    this.y = y ?? this.y
+  }
+}
 export class Point extends Shape {
+  getCenterPoint(): SimplePoint {
+    return new SimplePoint(this.x, this.y)
+  }
   x: number
   y: number
 
   constructor(x: number, y: number, props: ShapeProps = {}) {
-    super(props)
+    super({ ...props, type: "fill" })
     this.x = x
     this.y = y
   }
@@ -20,10 +37,7 @@ export class Point extends Shape {
   }
 
   copy(): Point {
-    return new Point(this.x, this.y, {
-      color: this.color,
-      lineWidth: this.lineWidth,
-    })
+    return new Point(this.x, this.y, this._copy())
   }
   distance(point: Point): number {
     const dx = point.x - this.x
@@ -31,8 +45,6 @@ export class Point extends Shape {
     return Math.sqrt(dx * dx + dy * dy)
   }
   draw({ context }: ShapeDrawProps): void {
-    context.lineWidth = this.lineWidth
-    context.fillStyle = this.color
     context.fillRect(this.x, this.y, 1, 1)
   }
   move(offsetX: number, offsetY: number): void {

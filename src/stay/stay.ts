@@ -3,9 +3,15 @@ import {
   click,
   contextmenu,
   dblclick,
+  dragend,
+  dragover,
+  dragstart,
+  drop,
   keydown,
   keyup,
   mousedown,
+  mouseenter,
+  mouseleave,
   mousemove,
   mouseup,
   wheel,
@@ -13,7 +19,7 @@ import {
 import { Point, Rectangle, Root, Shape } from "../shapes"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
-import { EventProps, StayAction, StayEventMap, StayEventProps } from "../types"
+import { EventProps, StayEventMap, StayEventProps } from "../types"
 import {
   ALLSTATE,
   DEFAULTSTATE,
@@ -30,10 +36,13 @@ import {
   Dict,
   getContainPointChildrenProps,
   ListenerProps,
-  SimplePoint,
+  SelectorFunc,
+  PointType,
   SortChildrenMethodsValues,
   StayTools,
   updateChildProps,
+  Area,
+  TransitionConfig,
 } from "../userTypes"
 import { assert, infixExpressionParser, numberAlmostEqual, parseLayer, uuid4 } from "../utils"
 import { StayChild } from "./stayChild"
@@ -53,7 +62,7 @@ class Stay {
   events: StayEventMap
   height: number
   historyChildren: Map<string, StayChild>
-  listeners: Map<string, StayAction>
+  listeners: Map<string, Required<ListenerProps>>
   root: Canvas
   stack: StackItem[]
   stackIndex: number
@@ -70,8 +79,10 @@ class Stay {
   rootChild: StayChild<Root>
   passive: boolean
   nextTickFunctions: (() => void)[]
+  autoRender: boolean
+  rendering: boolean
 
-  constructor(root: Canvas, passive: boolean) {
+  constructor(root: Canvas, passive: boolean, autoRender: boolean = true) {
     this.root = root
     this.passive = passive
     this.x = 0
@@ -114,7 +125,12 @@ class Stay {
     this.nextTickFunctions = []
 
     this.initEvents()
-    this.startRender()
+
+    this.autoRender = autoRender
+    if (autoRender) {
+      this.startRender()
+    }
+    this.rendering = autoRender
   }
 
   addEventListener({
@@ -173,7 +189,7 @@ class Stay {
     delete this.events[name]
   }
 
-  draw(forceDraw = false, now = Date.now()) {
+  async draw(forceDraw = false, now = Date.now(), time?: number) {
     interface ChildLayer {
       update: boolean
       members: StayChild[]
@@ -213,22 +229,55 @@ class Stay {
         })
       }
 
-      particalChildren.members.forEach((child: StayChild) => {
+      for (let i = 0; i < particalChildren.members.length; i++) {
+        const child = particalChildren.members[i]
         if (!particalChildren.update && !child.drawAction && !forceDraw) {
-          return
+          continue
         }
         if (particalChildren.update) {
           child.shape.contentUpdated = true
         }
-        child.shape._draw({
-          context,
-          canvas,
-          now,
-        })
+        const updateNextFrame = await child.draw(
+          {
+            context,
+            canvas,
+            now,
+          },
+          time
+        )
+
+        if (updateNextFrame) {
+          this.forceUpdateLayer(child.layer)
+        }
         child.drawAction = null
         child.beforeLayer = child.layer
-      })
+      }
+      // particalChildren.members.forEach(async (child: StayChild) => {
+      //   if (!particalChildren.update && !child.drawAction && !forceDraw) {
+      //     return
+      //   }
+      //   if (particalChildren.update) {
+      //     child.shape.contentUpdated = true
+      //   }
+      //   const drawStartTime = performance.now()
+      //   const updateNextFrame = await child.draw(
+      //     {
+      //       context,
+      //       canvas,
+      //       now,
+      //     },
+      //     time
+      //   )
+      //   drawCost += performance.now() - drawStartTime
+      //   console.log(performance.now() - drawStartTime)
+      //   if (updateNextFrame) {
+      //     this.forceUpdateLayer(child.layer)
+      //   }
+      //   child.drawAction = null
+      //   child.beforeLayer = child.layer
+      // })
     }
+
     this.zIndexUpdated = false
 
     // run next tick function
@@ -267,7 +316,7 @@ class Stay {
     return this.getChildById(id)
   }
 
-  fireEvent(e: KeyboardEvent | MouseEvent | WheelEvent, trigger: string) {
+  fireEvent(e: KeyboardEvent | MouseEvent | WheelEvent | DragEvent, trigger: string) {
     const isMouseEvent = e instanceof MouseEvent
     const triggerEvents: { [key: string]: ActionEvent } = {}
     Object.keys(this.events).forEach((eventName) => {
@@ -344,8 +393,41 @@ class Stay {
   nextTick(fn: () => void) {
     this.nextTickFunctions.push(fn)
   }
+
+  render(startTime: number) {
+    this.draw(true, Date.now(), (Date.now() - startTime) / 1000)
+    if (
+      ![...this.getChildren().values()].every((child) => {
+        return child.state === "idle"
+      })
+    ) {
+      window.requestAnimationFrame(() => {
+        this.render(startTime)
+      })
+    } else {
+      this.rendering = false
+      this.draw(true, Date.now(), (Date.now() - startTime) / 1000)
+    }
+  }
   getTools(): StayTools {
     return {
+      start: () => {
+        if (this.autoRender) {
+          throw new Error("autoRender is true, you can't call start")
+        }
+
+        this.rendering = true
+
+        this.render(Date.now())
+      },
+      progress: (time: number) => {
+        if (this.rendering) {
+          throw new Error(
+            "rendering is true, you can't call progress, you need to set autoRender to false and wait canvas render over if you called start() method"
+          )
+        }
+        this.draw(true, Date.now(), time)
+      },
       hasChild: (id: string) => {
         return this.getChildren().has(id)
       },
@@ -355,6 +437,8 @@ class Stay {
         zIndex,
         className,
         layer = -1,
+        transition,
+        drawEndCallback,
       }: createChildProps<T>) => {
         layer = parseLayer(this.root.layers, layer)
         this.checkName(className, [ROOTNAME])
@@ -365,7 +449,9 @@ class Stay {
           layer,
           shape,
           drawAction: DRAW_ACTIONS.APPEND,
-          then: (fn) => this.nextTick(fn),
+          afterRefresh: (fn) => this.nextTick(fn),
+          transition,
+          drawEndCallback,
         })
         return child
       },
@@ -375,6 +461,7 @@ class Stay {
         zIndex,
         id = undefined,
         layer = -1,
+        transition,
       }: createChildProps<T>) => {
         layer = parseLayer(this.root.layers, layer)
         const child = this.tools.createChild({
@@ -383,13 +470,14 @@ class Stay {
           zIndex,
           className,
           layer,
+          transition,
         })
         this.zIndexUpdated = true
         this.pushToChildren(child)
         this.unLogedChildrenIds.add(child.id)
         return child
       },
-      updateChild: ({ child, zIndex, shape, className, layer }: updateChildProps) => {
+      updateChild: ({ child, zIndex, shape, className, layer, transition }: updateChildProps) => {
         if (className === "") {
           throw new Error("className cannot be empty")
         }
@@ -405,30 +493,65 @@ class Stay {
           zIndex: zIndex,
           layer: layer === undefined ? child.layer : layer,
           className,
+          transition,
         })
         this.unLogedChildrenIds.add(child.id)
         return child
       },
-      removeChild: (childId: string): Promise<void> | void => {
+      removeChild: (
+        childId: string,
+        soft: boolean = false,
+        removeTransition?: TransitionConfig
+      ): Promise<void> | void => {
+        if (childId === this.rootChild.id) {
+          throw new Error("root cannot be removed")
+        }
         const child = this.getChildById(childId)
         if (!child) return
         this.drawLayers[child.layer].forceUpdate = true
-        this.removeChildById(child.id)
+        this.removeChildById(child.id, soft, removeTransition)
         this.unLogedChildrenIds.add(child.id)
         return new Promise<void>((resolve) => {
           this.nextTick(resolve)
         })
       },
+
+      getChildrenWithoutRoot: () => {
+        return [...this.getChildren().values()].filter((child) => child.id !== this.rootChild.id)
+      },
+      getChildById: <T extends Shape>(id: string): StayChild<T> | undefined => {
+        const child = this.getChildById(id)
+        return child as StayChild<T>
+      },
+      getChildBySelector: <T extends Shape>(
+        selector: string | SelectorFunc
+      ): StayChild<T> | void => {
+        const children = this.tools.getChildrenBySelector(selector)
+        if (children.length !== 0) {
+          return children[0] as StayChild<T>
+        }
+      },
+      getChildrenByArea: (area: Area, selector?: string | SelectorFunc) => {
+        const children = this.getChildrenBySelector(selector)
+        const selectedChildren: StayChild[] = []
+        children.forEach((child) => {
+          const center = child.shape.getCenterPoint()
+          if (
+            center.x >= area.x &&
+            center.x <= area.x + area.width &&
+            center.y >= area.y &&
+            center.y <= area.y + area.height
+          ) {
+            selectedChildren.push(child)
+          }
+        })
+        return selectedChildren
+      },
       getChildrenBySelector: (
-        selector: string,
+        selector: string | SelectorFunc,
         sortBy = SORT_CHILDREN_METHODS.AREA_ASC
       ): StayChild[] => {
-        const children = infixExpressionParser<StayChild>({
-          selector,
-          fullSet: [...this.getChildren().values()],
-          elemntEqualFunc: (a: StayChild, b: StayChild) => a.id === b.id,
-          selectorConvertFunc: (s: string) => this.findBySimpleSelector(s),
-        })
+        const children = this.getChildrenBySelector(selector)
 
         const sortMap = new Map<SortChildrenMethodsValues, [string, 1 | -1]>([
           [SORT_CHILDREN_METHODS.AREA_ASC, ["area", 1]],
@@ -549,7 +672,7 @@ class Stay {
           this.nextTick(resolve)
         })
       },
-      zoom: (deltaY: number, center: SimplePoint): Promise<void> => {
+      zoom: (deltaY: number, center: PointType): Promise<void> => {
         this.getChildren().forEach((child) => {
           child.shape.zoom(child.shape._zoom(deltaY, center))
         })
@@ -615,7 +738,7 @@ class Stay {
           needUpdateLayers.push(child.layer)
         })
       },
-      regionToTargetCanvas: ({ area, targetArea, children }) => {
+      regionToTargetCanvas: ({ area, targetArea, children, progress }) => {
         targetArea = targetArea ?? {
           x: 0,
           y: 0,
@@ -633,15 +756,28 @@ class Stay {
           throw new Error("Unable to get 2D context")
         }
 
-        children.forEach((c) => {
-          const child = c.copy()
-          child.shape.move(offsetX, offsetY)
-          child.shape.zoom(
-            child.shape._zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
-          )
-          child.shape._draw({ context: tempCtx, canvas: tempCanvas, now: Date.now() })
+        const childrenReady = Promise.all(
+          children.map(async (c) => {
+            await c.draw(
+              {
+                context: tempCtx,
+                canvas: tempCanvas,
+                now: Date.now(),
+              },
+              progress,
+              {
+                offsetX,
+                offsetY,
+                zoom: (scale - 1) * -1000,
+                zoomCenter: { x: targetArea.x, y: targetArea.y },
+              }
+            )
+          })
+        )
+
+        return new Promise((resolve) => {
+          childrenReady.then(() => resolve(tempCanvas))
         })
-        return tempCanvas
       },
       redo: () => {
         if (this.stackIndex >= this.stack.length) {
@@ -720,17 +856,22 @@ class Stay {
       ) => {
         const isMouseEvent = originEvent instanceof MouseEvent
         interface CallBackType {
-          callback: (p: ActionCallbackProps) => any
+          callback: ((p: ActionCallbackProps) => any) | Promise<(p: ActionCallbackProps) => any>
           e: ActionEvent
           name: string
         }
-        let needUpdate = false
+        // let needUpdate = false
         const callbackList: CallBackType[] = []
         this.listeners.forEach(({ name, event, state, selector, sortBy, callback }) => {
           if (!(name in this.composeStore)) {
             this.composeStore[name] = {}
           }
-          event.forEach((actionEventName) => {
+
+          if (!Array.isArray(event)) {
+            event = [event]
+          }
+
+          event.forEach(async (actionEventName) => {
             const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
             if (!avaliableSet.includes(this.state) || !(actionEventName in triggerEvents)) {
               return false
@@ -745,18 +886,25 @@ class Stay {
                 sortBy: sortBy,
               })
 
-              if (child.length === 0) return false
-              actionEvent.target = child[0] as StayChild
+              // 特殊处理 mouseleave 事件
+              if (actionEventName === "mouseleave") {
+                actionEvent.target = this.rootChild
+              } else {
+                if (child.length === 0) {
+                  return false
+                }
+                actionEvent.target = child[0] as StayChild
+              }
             }
 
-            needUpdate = true
+            // needUpdate = true
             callbackList.push({
               callback,
               e: actionEvent,
               name,
             })
             if (callback) {
-              const eventFuncMap = callback({
+              const eventFuncMap = await callback({
                 originEvent,
                 e: actionEvent,
                 store: this.store,
@@ -803,9 +951,37 @@ class Stay {
     topLayer.onclick = (e: MouseEvent) => click(this.fireEvent.bind(this), e)
     topLayer.ondblclick = (e: MouseEvent) => dblclick(this.fireEvent.bind(this), e)
     topLayer.oncontextmenu = (e: MouseEvent) => contextmenu(this.fireEvent.bind(this), e)
+    topLayer.ondragover = (e) => dragover(this.fireEvent.bind(this), e)
+    // topLayer.ondragstart = (e: DragEvent) => dragstart(this.fireEvent.bind(this), e)
+    topLayer.addEventListener(
+      "dragstart",
+      (e: DragEvent) => dragstart(this.fireEvent.bind(this), e),
+      false
+    )
+    topLayer.ondragend = (e: DragEvent) => dragend(this.fireEvent.bind(this), e)
+    topLayer.ondrop = (e: DragEvent) => drop(this.fireEvent.bind(this), e)
     topLayer.addEventListener("wheel", (e: WheelEvent) => wheel(this.fireEvent.bind(this), e), {
       passive: this.passive,
     })
+    topLayer.onmouseenter = (e: MouseEvent) => mouseenter(this.fireEvent.bind(this), e)
+    topLayer.onmouseleave = (e: MouseEvent) => mouseleave(this.fireEvent.bind(this), e)
+  }
+
+  getChildrenBySelector(selector?: string | SelectorFunc) {
+    const fullSet = [...this.getChildren().values()]
+    if (!selector) {
+      return fullSet
+    }
+    const children =
+      typeof selector === "function"
+        ? fullSet.filter((child) => selector(child))
+        : infixExpressionParser<StayChild>({
+            selector,
+            fullSet,
+            elemntEqualFunc: (a: StayChild, b: StayChild) => a.id === b.id,
+            selectorConvertFunc: (s: string) => this.findBySimpleSelector(s),
+          })
+    return children
   }
 
   pressKey(key: string) {
@@ -838,8 +1014,16 @@ class Stay {
     this.currentPressedKeys[key] = false
   }
 
-  removeChildById(id: string) {
-    this.#children.delete(id)
+  removeChildById(id: string, soft: boolean, removeTransition?: TransitionConfig) {
+    const child = this.getChildById(id)
+    if (child) {
+      if (soft) {
+        child.hidden(removeTransition)
+      } else {
+        this.#children.delete(id)
+        this.forceUpdateLayer(child.layer)
+      }
+    }
   }
 
   snapshotChildren() {

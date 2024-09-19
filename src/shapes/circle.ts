@@ -1,6 +1,7 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { Point } from "./point"
-import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
+import { Point, SimplePoint } from "./point"
+import { Shape } from "./shape"
+import { ShapeDrawProps, ShapeProps } from "../userTypes"
 
 export interface CircleAttr {
   x: number
@@ -10,6 +11,9 @@ export interface CircleAttr {
 }
 
 export class Circle extends Shape {
+  getCenterPoint(): SimplePoint {
+    return new SimplePoint(this.x, this.y)
+  }
   center!: Point
   radius: number
   x: number

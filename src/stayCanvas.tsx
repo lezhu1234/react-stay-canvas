@@ -10,9 +10,9 @@ import React, {
 import * as PredefinedEventList from "./predefinedEvents"
 import StayStage from "./stay/stayStage"
 import { ContextLayerSetFunction, StayCanvasProps } from "./types"
-import { Dict, StayCanvasTriggerType } from "./userTypes"
+import { StayCanvasRefType } from "./userTypes"
 
-const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function StayCanvas(
+const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayCanvas(
   {
     width = 500,
     height = 500,
@@ -22,6 +22,7 @@ const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function S
     layers = 2,
     className = "",
     passive = true,
+    autoRender = true,
   }: StayCanvasProps,
   ref
 ) {
@@ -42,22 +43,43 @@ const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function S
     throw new Error("layers must be greater than 0")
   }
 
+  type GetNamePayloadPairType<T> = T extends {
+    name: infer U
+    callback: (props: infer R) => void
+  }
+    ? R extends { payload: infer S }
+      ? {
+          name: U
+          payload: S
+        }
+      : never
+    : never
+
+  type GetListenerPairProps<T extends unknown[]> = T extends Array<infer Items>
+    ? GetNamePayloadPairType<Items>
+    : never
+
   const canvasLayers = useRef<HTMLCanvasElement[]>([])
   const stay = useRef<StayStage>()
 
   eventList = useMemo(() => eventList || [], [eventList])
   listenerList = useMemo(() => listenerList || [], [listenerList])
 
-  const container = useCallback((node: HTMLDivElement) => {
-    if (!node) {
-      return
-    }
+  type ListenerPair = GetListenerPairProps<typeof listenerList>
+  type GetListenerPairName<T> = T extends { name: infer U } ? U : never
+  type GetListenerPayloadByName<Name> = ListenerPair extends { name: Name; payload: infer U }
+    ? U
+    : never
+  type ListenerNames = GetListenerPairName<ListenerPair>
+
+  const init = () => {
     stay.current = new StayStage(
       canvasLayers.current,
       contextLayerSetFunctionList,
       width,
       height,
-      passive
+      passive,
+      autoRender
     )
     ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
       stay.current!.registerEvent(event)
@@ -70,17 +92,36 @@ const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function S
       mounted(stay.current.tools)
       stay.current.draw()
     }
+
+    canvasLayers.current[canvasLayers.current.length - 1].focus()
+  }
+
+  const container = useCallback((node: HTMLDivElement) => {
+    if (!node) {
+      return
+    }
+    init()
   }, [])
 
   useImperativeHandle(
     ref,
     () => {
       return {
-        trigger(name: string, payload?: Dict) {
-          const customEvent = new Event(name)
+        trigger<T extends ListenerNames>(name: T, payload?: GetListenerPayloadByName<T>) {
+          const customEvent = new Event(name as string)
           if (stay.current) {
-            stay.current.triggerAction(customEvent, { [name]: customEvent }, payload || {})
+            stay.current.triggerAction(
+              customEvent,
+              { [name as string]: customEvent },
+              payload || {}
+            )
           }
+        },
+        reCreate() {
+          init()
+        },
+        focus() {
+          canvasLayers.current[canvasLayers.current.length - 1].focus()
         },
       }
     },
@@ -106,6 +147,10 @@ const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function S
       stay.current!.addEventListener(listener)
     })
   }, [listenerList])
+
+  useEffect(() => {
+    init()
+  }, [width, height])
 
   return (
     <>
@@ -136,6 +181,8 @@ const StayCanvas = forwardRef<StayCanvasTriggerType, StayCanvasProps>(function S
               height={height}
               style={{
                 position: "absolute",
+                display: "block",
+                outline: "none",
                 left: 0,
                 top: 0,
               }}

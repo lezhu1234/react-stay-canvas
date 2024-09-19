@@ -1,15 +1,7 @@
 import { Rectangle } from "./shapes/rectangle"
 import { valueof } from "./stay/types"
 import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
-import {
-  ActionCallbackProps,
-  ActionEvent,
-  ChildSortFunction,
-  ListenerProps,
-  SortChildrenMethodsValues,
-  StayTools,
-  storeType,
-} from "./userTypes"
+import { ActionCallbackProps, ActionEvent, ListenerProps, StayTools, storeType } from "./userTypes"
 
 export interface composeProps {
   status?: string
@@ -47,20 +39,20 @@ export interface UserConditionCallbackFunction {
   (props: UserConditionCallbackProps): boolean
 }
 
-export type CallbackFuncMap<T extends ActionCallbackProps> = {
+export type CallbackFuncMap<T extends ActionCallbackProps<U>, U> = {
   [key in T["e"]["name"]]: () => { [key: string]: any } | void | undefined
 }
 
-export type UserCallback = (p: ActionCallbackProps) => CallbackFuncMap<typeof p> | void
+export type UserCallback<T> = (p: ActionCallbackProps<T>) => CallbackFuncMap<typeof p, T> | void
 
-export interface StayAction {
-  name: string
-  state: string
-  selector: string
-  event: string[]
-  sortBy: SortChildrenMethodsValues | ChildSortFunction
-  callback: UserCallback
-}
+// export interface StayAction {
+//   name: string
+//   state: string
+//   selector: string
+//   event: string[]
+//   sortBy: SortChildrenMethodsValues | ChildSortFunction
+//   callback: UserCallback
+// }
 
 export interface StayEventMap {
   [key: string]: StayEventProps
@@ -91,5 +83,37 @@ export interface StayCanvasProps {
   eventList?: EventProps[]
   listenerList?: ListenerProps[]
   passive?: boolean
+  autoRender?: boolean
   mounted?: (tools: StayTools) => void
 }
+
+export type NumericString = `${number}` | `+${number}` | `-${number}` | number
+export type ShapeConfig = {
+  offsetX?: NumericString
+  offsetY?: NumericString
+  scale?: number
+  opacity?: number
+}
+
+export type Positive<T extends number> = number extends T
+  ? never
+  : `${T}` extends `-${string}` | "0"
+  ? never
+  : T
+
+export type Negative<T extends number> = number extends T
+  ? never
+  : Positive<T> extends never
+  ? T extends 0
+    ? never
+    : T
+  : never
+
+export type NumberInRangeZeroOne<T extends number> = Positive<T> extends never
+  ? T extends 0
+    ? T
+    : never
+  : T extends number
+  ? (T extends 1 ? T : never) | (`${T}` extends `0.${string}` ? T : never) | never
+  : never
+export type ZeroToOne = NumberInRangeZeroOne<number>

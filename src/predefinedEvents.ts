@@ -55,6 +55,18 @@ export const MousemoveEvent: EventProps = {
   },
 }
 
+export const MouseEnterEvent: EventProps = {
+  name: "mouseenter",
+  trigger: MOUSE_EVENTS.MOUSE_ENTER,
+  conditionCallback: () => true,
+}
+
+export const MouseLeaveEvent: EventProps = {
+  name: "mouseleave",
+  trigger: MOUSE_EVENTS.MOUSE_LEAVE,
+  conditionCallback: () => true,
+}
+
 const DragEndEvent: EventProps = {
   name: "dragend",
   trigger: MOUSE_EVENTS.MOUSE_UP,
@@ -157,5 +169,17 @@ export const KeyUpEvent: EventProps = {
 export const KeyDownEvent: EventProps = {
   name: "keydown",
   trigger: KEYBOARRD_EVENTS.KEY_DOWN,
+  conditionCallback: () => true,
+}
+
+export const DropEvent: EventProps = {
+  name: "drop",
+  trigger: MOUSE_EVENTS.DROP,
+  conditionCallback: () => true,
+}
+
+export const DragOverEvent: EventProps = {
+  name: "dragover",
+  trigger: MOUSE_EVENTS.DRAG_OVER,
   conditionCallback: () => true,
 }

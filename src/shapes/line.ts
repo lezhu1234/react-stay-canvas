@@ -1,5 +1,6 @@
-import { Point } from "./point"
-import { Shape, ShapeDrawProps, ShapeProps } from "./shape"
+import { Point, SimplePoint } from "./point"
+import { Shape } from "./shape"
+import { ShapeDrawProps, ShapeProps } from "../userTypes"
 import { Vector } from "./vector"
 export interface UpdateLineProps {
   x1?: number
@@ -38,6 +39,10 @@ export class Line extends Shape {
     this.updateRelatedValue()
   }
 
+  getCenterPoint(): SimplePoint {
+    return new SimplePoint((this.x1 + this.x2) / 2, (this.y1 + this.y2) / 2)
+  }
+
   contains(point: Point): boolean {
     throw new Error("Method not implemented.")
   }
@@ -48,10 +53,7 @@ export class Line extends Shape {
       y1: this.y1,
       x2: this.x2,
       y2: this.y2,
-      props: {
-        color: this.color,
-        lineWidth: this.lineWidth,
-      },
+      props: this._copy(),
     })
   }
 
@@ -96,10 +98,10 @@ export class Line extends Shape {
   }
 
   update({ x1, y1, x2, y2, props }: UpdateLineProps) {
-    this.x1 = x1 || this.x1
-    this.y1 = y1 || this.y1
-    this.x2 = x2 || this.x2
-    this.y2 = y2 || this.y2
+    this.x1 = x1 ?? this.x1
+    this.y1 = y1 ?? this.y1
+    this.x2 = x2 ?? this.x2
+    this.y2 = y2 ?? this.y2
     this._update(props || {})
     this.updateRelatedValue()
     return this

@@ -1,5 +1,8 @@
-import { Line, Point } from "./shapes"
+import { Line, Point, Shape } from "./shapes"
+import { NumberInRangeZeroOne, NumericString, Positive, ShapeConfig } from "./types"
 import { SUPPORT_OPRATOR } from "./userConstants"
+import { EasingFunction, EasingFunctionMap, Effects, Font, StayChildTransitions } from "./userTypes"
+import { RGB, RGBA } from "./w3color"
 
 export type InfixExpressionParserProps<T> = {
   selector: string
@@ -160,6 +163,372 @@ export function getCornersByCenterLine(centerLine: Line, width: number) {
   return [new Point(x1, y1), new Point(x2, y2), new Point(x3, y3), new Point(x4, y4)]
 }
 
-export function numberAlmostEqual(a: number, b: number, epsilon = 0.0001) {
+export function numberAlmostEqual(a: number, b: number, epsilon = 0.0001): boolean {
   return Math.abs(a - b) < epsilon
+}
+
+export function easeInSine(x: number): number {
+  return 1 - Math.cos((x * Math.PI) / 2)
+}
+
+export function easeOutSine(x: number): number {
+  return Math.sin((x * Math.PI) / 2)
+}
+
+export function easeInOutSine(x: number): number {
+  return -(Math.cos(Math.PI * x) - 1) / 2
+}
+
+export function easeInQuad(x: number): number {
+  return x * x
+}
+
+export function easeOutQuad(x: number): number {
+  return 1 - (1 - x) * (1 - x)
+}
+
+export function easeInOutQuad(x: number): number {
+  return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2
+}
+
+export function easeInCubic(x: number): number {
+  return x * x * x
+}
+
+export function easeOutCubic(x: number): number {
+  return 1 - Math.pow(1 - x, 3)
+}
+
+export function easeInOutCubic(x: number): number {
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2
+}
+
+export function easeInQuart(x: number): number {
+  return x * x * x * x
+}
+
+export function easeOutQuart(x: number): number {
+  return 1 - Math.pow(1 - x, 4)
+}
+
+export function easeInOutQuart(x: number): number {
+  return x < 0.5 ? 8 * x * x * x * x : 1 - Math.pow(-2 * x + 2, 4) / 2
+}
+
+export function easeInQuint(x: number): number {
+  return x * x * x * x * x
+}
+
+export function easeOutQuint(x: number): number {
+  return 1 - Math.pow(1 - x, 5)
+}
+
+export function easeInOutQuint(x: number): number {
+  return x < 0.5 ? 16 * x * x * x * x * x : 1 - Math.pow(-2 * x + 2, 5) / 2
+}
+
+export function easeInExpo(x: number): number {
+  return x === 0 ? 0 : Math.pow(2, 10 * x - 10)
+}
+
+export function easeOutExpo(x: number): number {
+  return x === 1 ? 1 : 1 - Math.pow(2, -10 * x)
+}
+
+export function easeInOutExpo(x: number): number {
+  return x === 0
+    ? 0
+    : x === 1
+    ? 1
+    : x < 0.5
+    ? Math.pow(2, 20 * x - 10) / 2
+    : (2 - Math.pow(2, -20 * x + 10)) / 2
+}
+
+export function easeInCirc(x: number): number {
+  return 1 - Math.sqrt(1 - Math.pow(x, 2))
+}
+
+export function easeOutCirc(x: number): number {
+  return Math.sqrt(1 - Math.pow(x - 1, 2))
+}
+
+export function easeInOutCirc(x: number): number {
+  return x < 0.5
+    ? (1 - Math.sqrt(1 - Math.pow(2 * x, 2))) / 2
+    : (Math.sqrt(1 - Math.pow(-2 * x + 2, 2)) + 1) / 2
+}
+
+export function easeInBack(x: number): number {
+  const c1 = 1.70158
+  const c3 = c1 + 1
+  return c3 * x * x * x - c1 * x * x
+}
+
+export function easeOutBack(x: number): number {
+  const c1 = 1.70158
+  const c3 = c1 + 1
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2)
+}
+
+export function easeInOutBack(x: number): number {
+  const c1 = 1.70158
+  const c2 = c1 * 1.525
+  return x < 0.5
+    ? (Math.pow(2 * x, 2) * ((c2 + 1) * 2 * x - c2)) / 2
+    : (Math.pow(2 * x - 2, 2) * ((c2 + 1) * (x * 2 - 2) + c2) + 2) / 2
+}
+
+export function easeInElastic(x: number): number {
+  const c4 = (2 * Math.PI) / 3
+  return x === 0 ? 0 : x === 1 ? 1 : -Math.pow(2, 10 * x - 10) * Math.sin((x * 10 - 10.75) * c4)
+}
+
+export function easeOutElastic(x: number): number {
+  const c4 = (2 * Math.PI) / 3
+  return x === 0 ? 0 : x === 1 ? 1 : Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * c4) + 1
+}
+
+export function easeInOutElastic(x: number): number {
+  const c5 = (2 * Math.PI) / 4.5
+  return x === 0
+    ? 0
+    : x === 1
+    ? 1
+    : x < 0.5
+    ? -(Math.pow(2, 20 * x - 10) * Math.sin((20 * x - 11.125) * c5)) / 2
+    : (Math.pow(2, -20 * x + 10) * Math.sin((20 * x - 11.125) * c5)) / 2 + 1
+}
+
+export function easeInBounce(x: number): number {
+  return 1 - easeOutBounce(1 - x)
+}
+
+export function easeOutBounce(x: number): number {
+  const n1 = 7.5625
+  const d1 = 2.75
+  if (x < 1 / d1) {
+    return n1 * x * x
+  } else if (x < 2 / d1) {
+    return n1 * (x -= 1.5 / d1) * x + 0.75
+  } else if (x < 2.5 / d1) {
+    return n1 * (x -= 2.25 / d1) * x + 0.9375
+  } else {
+    return n1 * (x -= 2.625 / d1) * x + 0.984375
+  }
+}
+export function linear(x: number): number {
+  return x
+}
+export function easeInOutBounce(x: number): number {
+  return x < 0.5 ? (1 - easeOutBounce(1 - 2 * x)) / 2 : (1 + easeOutBounce(2 * x - 1)) / 2
+}
+
+export const easingFunctions: EasingFunctionMap = {
+  linear,
+  easeInSine,
+  easeOutSine,
+  easeInOutSine,
+  easeInQuad,
+  easeOutQuad,
+  easeInOutQuad,
+  easeInCubic,
+  easeOutCubic,
+  easeInOutCubic,
+  easeInQuart,
+  easeOutQuart,
+  easeInOutQuart,
+  easeInQuint,
+  easeOutQuint,
+  easeInOutQuint,
+  easeInExpo,
+  easeOutExpo,
+  easeInOutExpo,
+  easeInCirc,
+  easeOutCirc,
+  easeInOutCirc,
+  easeInBack,
+  easeOutBack,
+  easeInOutBack,
+  easeInElastic,
+  easeOutElastic,
+  easeInOutElastic,
+  easeInBounce,
+  easeOutBounce,
+  easeInOutBounce,
+}
+
+export function applyEasing(easingName: EasingFunction, x: number): number {
+  const easingFunction = easingFunctions[easingName]
+  if (!easingFunction) {
+    throw new Error(`Unknown easing function: ${easingName}`)
+  }
+  return easingFunction(x)
+}
+
+export function isRGB(value: unknown): value is RGB {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "r" in value &&
+    "g" in value &&
+    "b" in value &&
+    typeof (value as RGB).r === "number" &&
+    typeof (value as RGB).g === "number" &&
+    typeof (value as RGB).b === "number"
+  )
+}
+
+export function isRGBA(value: unknown): value is RGBA {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "r" in value &&
+    "g" in value &&
+    "b" in value &&
+    "a" in value &&
+    typeof (value as RGBA).r === "number" &&
+    typeof (value as RGBA).g === "number" &&
+    typeof (value as RGBA).b === "number" &&
+    typeof (value as RGBA).a === "number"
+  )
+}
+export function validateNumericString(value: string | number): NumericString {
+  if (/^[+-]?\d+$/.test(value.toString())) {
+    return value as NumericString
+  }
+  throw new Error("Invalid numeric string")
+}
+export function ensurePositive<T extends number>(value: T): Positive<T> {
+  if (value <= 0) {
+    throw new Error("Value must be positive")
+  }
+  return value as Positive<T>
+}
+
+export function ensureNotNegative<T extends number>(value: T): number {
+  if (value < 0) {
+    throw new Error("Value must be non-negative")
+  }
+  return value as number
+}
+
+export function ensureInRangeZeroOne<T extends number>(value: T): number {
+  if (value < 0 || value > 1) {
+    throw new Error("Value must be in range [0, 1]")
+  }
+  return value as number
+}
+
+export function isRelativeNumericString<T extends NumericString>(value: T) {
+  return typeof value === "string" && (value.startsWith("+") || value.startsWith("-"))
+}
+
+export function getShapeByConfig<Q extends Shape>(config: ShapeConfig, shape: Q) {
+  const { offsetX, offsetY, scale, opacity } = config
+  const center = shape.getCenterPoint()
+
+  let ox = validateNumericString(offsetX ?? 0)
+  let oy = validateNumericString(offsetY ?? 0)
+  const s = ensureNotNegative(scale ?? 1)
+  const o = ensureInRangeZeroOne(opacity ?? 1) // 0 for hidden and 1 for visible
+
+  if (!isRelativeNumericString(ox)) {
+    ox = Number(ox)
+    ox = ox - center.x
+  }
+  if (!isRelativeNumericString(oy)) {
+    oy = Number(oy)
+    oy = oy - center.y
+  }
+
+  ox = Number(ox)
+  oy = Number(oy)
+
+  shape.move(ox, oy)
+  shape.zoom(
+    shape._zoom(((s ?? 1) - 1) * -1000, {
+      x: center.x + ox,
+      y: center.y + oy,
+    })
+  )
+
+  shape.update({ props: { opacity: o } })
+
+  return shape
+}
+
+export function getShapeByEffect<T extends Shape>(
+  effects: Effects[] | ShapeConfig,
+  shape: T,
+  type: "enter" | "leave"
+) {
+  if (!Array.isArray(effects)) {
+    return getShapeByConfig(effects, shape)
+  }
+  let offsetX: NumericString = "+0",
+    offsetY: NumericString = "+0",
+    scale = 1,
+    opacity = 1
+  effects.forEach((effect) => {
+    switch (effect) {
+      case "left10px":
+        offsetX = "-10"
+        break
+      case "right10px":
+        offsetX = "+10"
+        break
+      case "up10px":
+        offsetY = "-10"
+        break
+      case "down10px":
+        offsetY = "+10"
+        break
+      case "fade100%":
+        opacity = 0
+        break
+      case "zoomIn100%":
+        scale = 2
+        break
+      case "zoomOut100%":
+        scale = 0
+        break
+    }
+  })
+
+  return getShapeByConfig(
+    {
+      offsetX,
+      offsetY,
+      scale,
+      opacity,
+    },
+    shape
+  )
+}
+
+export function getDefaultFont(font?: Font): Required<Font> {
+  return {
+    size: 16,
+    fontFamily: "monospace",
+    fontWeight: 400,
+    italic: false,
+    backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
+    strikethrough: false,
+    underline: false,
+    ...font,
+  }
+}
+
+export function getRGBAStr(color?: string | RGB | RGBA): string {
+  if (typeof color === "string") {
+    return color
+  }
+  if (isRGBA(color)) {
+    return `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a})`
+  }
+  if (isRGB(color)) {
+    return `rgba(${color.r}, ${color.g}, ${color.b}, 1)`
+  }
+  return `rgba(0,0,0,0)`
 }

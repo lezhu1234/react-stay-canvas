@@ -1,5 +1,6 @@
 import { Rectangle } from "./rectangle"
-import { ShapeDrawProps, ShapeProps } from "./shape"
+import { Shape } from "./shape"
+import { ShapeDrawProps, ShapeProps } from "../userTypes"
 
 export interface ImageProps {
   src: string
@@ -64,8 +65,8 @@ export class StayImage extends Rectangle {
       if (this.sheight === undefined) {
         this.sheight = this.image.naturalHeight
       }
-      if (imageLoaded) {
-        imageLoaded(this)
+      if (this.imageLoaded) {
+        this.imageLoaded(this)
       }
       this.updateNextFrame = true
     }
@@ -84,6 +85,29 @@ export class StayImage extends Rectangle {
       width: this.width,
       height: this.height,
       props: this._copy(),
+    })
+  }
+
+  awaitCopy() {
+    return new Promise<StayImage>((resolve) => {
+      new StayImage({
+        src: this.src,
+        x: this.x,
+        y: this.y,
+        sx: this.sx,
+        sy: this.sy,
+        swidth: this.swidth,
+        sheight: this.sheight,
+        imageLoaded: (image) => {
+          if (this.imageLoaded) {
+            this.imageLoaded(image)
+          }
+          resolve(image)
+        },
+        width: this.width,
+        height: this.height,
+        props: this._copy(),
+      })
     })
   }
 
@@ -121,12 +145,25 @@ export class StayImage extends Rectangle {
     )
   }
 
-  update({ src, x, y, width, sx, sy, swidth, sheight, height, props }: Partial<ImageProps>) {
-    this.src = src === undefined ? this.src : src
-    this.sx = sx === undefined ? this.sx : sx
-    this.sy = sy === undefined ? this.sy : sy
-    this.swidth = swidth === undefined ? this.swidth : swidth
-    this.sheight = sheight === undefined ? this.sheight : sheight
+  update({
+    src,
+    x,
+    y,
+    width,
+    sx,
+    sy,
+    swidth,
+    sheight,
+    height,
+    imageLoaded,
+    props,
+  }: Partial<ImageProps>) {
+    this.src = src ?? this.src
+    this.sx = sx ?? this.sx
+    this.sy = sy ?? this.sy
+    this.swidth = swidth ?? this.swidth
+    this.sheight = sheight ?? this.sheight
+    this.imageLoaded = imageLoaded ?? this.imageLoaded
     super.update({ x, y, width, height, props })
 
     if (src !== undefined) {

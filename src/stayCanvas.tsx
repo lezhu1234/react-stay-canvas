@@ -23,6 +23,7 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
     className = "",
     passive = true,
     autoRender = true,
+    recreateOnResize = false,
   }: StayCanvasProps,
   ref
 ) {
@@ -149,7 +150,9 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
   }, [listenerList])
 
   useEffect(() => {
-    init()
+    if (recreateOnResize) {
+      init()
+    }
   }, [width, height])
 
   return (

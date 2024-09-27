@@ -150,9 +150,7 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
   }, [listenerList])
 
   useEffect(() => {
-    if (recreateOnResize) {
-      init()
-    }
+    init()
   }, [width, height])
 
   return (

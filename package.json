@@ -4,7 +4,7 @@
   "description": "stay-canvas for react",
   "scripts": {
     "build": "rollup -c",
-    "publish": "rollup -c && pnpm version patch && pnpm publish",
+    "pub": "rollup -c && pnpm version patch && pnpm publish",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

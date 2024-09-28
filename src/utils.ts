@@ -104,8 +104,8 @@ export function infixExpressionParser<T>({
         return char === ")"
           ? opratorStack[opratorStack.length - 1] !== "("
           : opratorStack.length > 0 &&
-              opratorInfo[opratorStack[opratorStack.length - 1]].priority >
-                opratorInfo[char as opratorWithBracket].priority
+          opratorInfo[opratorStack[opratorStack.length - 1]].priority >
+          opratorInfo[char as opratorWithBracket].priority
       }
 
       doOpration(opratorNeedPop)
@@ -239,10 +239,10 @@ export function easeInOutExpo(x: number): number {
   return x === 0
     ? 0
     : x === 1
-    ? 1
-    : x < 0.5
-    ? Math.pow(2, 20 * x - 10) / 2
-    : (2 - Math.pow(2, -20 * x + 10)) / 2
+      ? 1
+      : x < 0.5
+        ? Math.pow(2, 20 * x - 10) / 2
+        : (2 - Math.pow(2, -20 * x + 10)) / 2
 }
 
 export function easeInCirc(x: number): number {
@@ -294,10 +294,10 @@ export function easeInOutElastic(x: number): number {
   return x === 0
     ? 0
     : x === 1
-    ? 1
-    : x < 0.5
-    ? -(Math.pow(2, 20 * x - 10) * Math.sin((20 * x - 11.125) * c5)) / 2
-    : (Math.pow(2, -20 * x + 10) * Math.sin((20 * x - 11.125) * c5)) / 2 + 1
+      ? 1
+      : x < 0.5
+        ? -(Math.pow(2, 20 * x - 10) * Math.sin((20 * x - 11.125) * c5)) / 2
+        : (Math.pow(2, -20 * x + 10) * Math.sin((20 * x - 11.125) * c5)) / 2 + 1
 }
 
 export function easeInBounce(x: number): number {
@@ -453,7 +453,11 @@ export function getShapeByConfig<Q extends Shape>(config: ShapeConfig, shape: Q)
     })
   )
 
-  shape.update({ props: { opacity: o } })
+  if (isRGBA(shape.color)) {
+    const color: RGBA = { ...shape.color, a: o }
+    shape.update({ props: { color } })
+  }
+
 
   return shape
 }

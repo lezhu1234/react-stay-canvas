@@ -8,7 +8,7 @@ import {
   ShapeDrawProps,
   TextAttr,
 } from "../userTypes"
-import { getDefaultFont, getRGBAStr, isRGBA } from "../utils"
+import { getDefaultFont, getRGBAStr, isRGB, isRGBA } from "../utils"
 import { rgbaToString } from "../w3color"
 import { SimplePoint } from "./point"
 import { Rectangle } from "./rectangle"
@@ -293,26 +293,34 @@ export class StayText extends Shape {
 
     const font = this.getFontIntermediateState(before.font, after.font, ratio, transitionType)
     const props = this.getIntermediateProps(before, after, ratio, transitionType)
-    let opacity = props.opacity
     let text = after.text
 
-    if (before.text !== after.text) {
+    if (
+      before.text !== after.text
+      && isRGBA(before.color)
+      && isRGBA(after.color)
+      && isRGBA(props.color)
+    ) {
+      let color = props.color
       if (ratio > 0.5) {
-        opacity = this.getNumberIntermediateState(
+        const opacity = this.getNumberIntermediateState(
           0,
-          after.opacity,
+          after.color.a,
           (ratio - 0.5) * 2,
           transitionType
         )
+        color = { ...color, a: opacity }
       } else {
         text = before.text
-        opacity = this.getNumberIntermediateState(
+        const opacity = this.getNumberIntermediateState(
           0,
-          before.opacity,
+          before.color.a,
           (0.5 - ratio) * 2,
           transitionType
         )
+        color = { ...color, a: opacity }
       }
+      props.color = color
     }
     return new StayText({
       x,
@@ -336,7 +344,7 @@ export class StayText extends Shape {
       ),
       textAlign: after.textAlign,
       textBaseline: after.textBaseline,
-      props: { ...props, opacity },
+      props: { ...props },
     })
   }
 }

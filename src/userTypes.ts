@@ -116,11 +116,11 @@ export type ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<
   T extends ListenerNamePayloadPairOrName[]
 > = T extends [infer R, ...infer U]
   ? U extends ListenerNamePayloadPairOrName[]
-    ? [
-        R extends string ? GetListenerNamePayloadPairByName<R> : R,
-        ...ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<U>
-      ]
-    : []
+  ? [
+    R extends string ? GetListenerNamePayloadPairByName<R> : R,
+    ...ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<U>
+  ]
+  : []
   : []
 
 export interface ListenerProps<T extends ListenerNamePayloadPair = ListenerNamePayloadPair> {
@@ -259,8 +259,8 @@ export type InferContra<T> = [T] extends [(arg: infer I) => void] ? I : never
 export type PickOne<T> = InferContra<InferContra<Contra<Contra<T>>>>
 export type Union2Tuple<T> = PickOne<T> extends infer U
   ? Exclude<T, U> extends never
-    ? [T]
-    : [...Union2Tuple<Exclude<T, U>>, U]
+  ? [T]
+  : [...Union2Tuple<Exclude<T, U>>, U]
   : never
 
 export type Insert<T extends unknown[], U> = T extends [infer F, ...infer L]
@@ -297,7 +297,6 @@ export interface ShapeDrawProps {
 }
 export interface ShapeProps {
   color?: string | CanvasGradient | RGB
-  opacity?: number
   lineWidth?: number
   zoomY?: number
   zoomCenter?: PointType

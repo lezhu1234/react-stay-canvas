@@ -33,7 +33,6 @@ export abstract class Shape {
   updateNextFrame: boolean
   contentUpdated: boolean
   hidden: boolean
-  opacity: number
   lineDash: number[]
   lineDashOffset: number
   constructor({
@@ -46,7 +45,6 @@ export abstract class Shape {
     state = "default",
     hidden = false,
     stateDrawFuncMap = {},
-    opacity,
     lineDash,
     lineDashOffset,
   }: ShapeProps) {
@@ -71,21 +69,19 @@ export abstract class Shape {
     this.updateNextFrame = false
     this.contentUpdated = true
     this.hidden = hidden
-    this.opacity = opacity ?? 1
-    this.color = this.tryConvertToRGBA(color ?? "white", this.opacity)
+    this.color = this.tryConvertToRGBA(color ?? "white")
   }
 
   tryConvertToRGBA(
-    color: string | CanvasGradient | RGB | RGBA,
-    opacity?: number
+    color: string | CanvasGradient | RGB | RGBA
   ): RGBA | CanvasGradient {
     if (isRGBA(color)) {
-      return { ...color, a: opacity ?? color.a }
+      return { ...color }
     } else if (isRGB(color)) {
-      return { ...color, a: opacity ?? 1 }
+      return { ...color, a: 1 }
     } else if (typeof color === "string") {
       const c = new W3Color(color).toRgba()
-      return { ...c, a: opacity ?? c.a }
+      return { ...c }
     }
     return color as CanvasGradient
   }
@@ -142,7 +138,6 @@ export abstract class Shape {
     state,
     hidden,
     stateDrawFuncMap,
-    opacity,
   }: ShapeProps) {
     this.lineWidth = lineWidth ?? this.lineWidth
     this.zoomY = zoomY ?? this.zoomY
@@ -150,8 +145,7 @@ export abstract class Shape {
     this.type = type ?? this.type
     this.gco = gco ?? this.gco
     this.hidden = hidden ?? this.hidden
-    this.opacity = opacity ?? this.opacity
-    this.color = this.tryConvertToRGBA(color ?? this.color, this.opacity)
+    this.color = this.tryConvertToRGBA(color ?? this.color)
 
     this.stateDrawFuncMap = stateDrawFuncMap ?? this.stateDrawFuncMap
     this.contentUpdated = true
@@ -305,12 +299,6 @@ export abstract class Shape {
       lineWidth: this.getNumberIntermediateState(
         before.lineWidth,
         after.lineWidth,
-        ratio,
-        transitionType
-      ),
-      opacity: this.getNumberIntermediateState(
-        before.opacity,
-        after.opacity,
         ratio,
         transitionType
       ),

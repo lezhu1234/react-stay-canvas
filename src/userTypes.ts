@@ -296,7 +296,7 @@ export interface ShapeDrawProps {
   now: number
 }
 export interface ShapeProps {
-  color?: string | CanvasGradient | RGB
+  color?: string | CanvasGradient | RGB | RGBA
   lineWidth?: number
   zoomY?: number
   zoomCenter?: PointType

@@ -97,13 +97,6 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
     canvasLayers.current[canvasLayers.current.length - 1].focus()
   }
 
-  const container = useCallback((node: HTMLDivElement) => {
-    if (!node) {
-      return
-    }
-    init()
-  }, [])
-
   useImperativeHandle(
     ref,
     () => {
@@ -156,7 +149,6 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
   return (
     <>
       <div
-        ref={container}
         className={className}
         style={{
           display: "flex",

@@ -117,9 +117,9 @@ export class StayText extends Shape {
       c = this.font.backgroundColor
     }
 
-    this.setContextColor(context, c)
+    this.setContextColor(context, c, SHAPE_DRAW_TYPES.FILL)
     context.fillRect(this.leftTop.x, this.leftTop.y, this.width, this.height)
-    this.setContextColor(context, this.colorStringOrCanvasGradient)
+    this.setContextColor(context, this.colorStringOrCanvasGradient, this.type)
 
     if (this.type === SHAPE_DRAW_TYPES.FILL) {
       context.fillText(this.text, this.leftBottom.x, this.leftBottom.y)

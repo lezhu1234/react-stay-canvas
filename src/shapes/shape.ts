@@ -238,13 +238,16 @@ export abstract class Shape {
     } else {
       c = color
     }
-    this.setContextColor(context, c)
+    this.setContextColor(context, c, this.type)
   }
 
-  setContextColor(context: CanvasRenderingContext2D, color: string | CanvasGradient) {
-    if (this.type === SHAPE_DRAW_TYPES.STROKE) {
+  setContextColor(
+    context: CanvasRenderingContext2D,
+    color: string | CanvasGradient,
+    type: valueof<typeof SHAPE_DRAW_TYPES>) {
+    if (type === SHAPE_DRAW_TYPES.STROKE) {
       context.strokeStyle = color
-    } else if (this.type === SHAPE_DRAW_TYPES.FILL) {
+    } else if (type === SHAPE_DRAW_TYPES.FILL) {
       context.fillStyle = color
     }
   }
@@ -365,9 +368,9 @@ export abstract class Shape {
     return before + (after - before) * applyEasing(transitionType, ratio)
   }
 
-  getColorIntermediateState(
-    before: RGBA | CanvasGradient,
-    after: RGBA | CanvasGradient,
+  getColorIntermediateState<T>(
+    before: T,
+    after: T,
     ratio: number,
     transitionType: EasingFunction
   ) {

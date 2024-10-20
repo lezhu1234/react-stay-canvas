@@ -32,6 +32,7 @@ export class StayText extends Shape {
   offsetXRatio: number
   offsetYRatio: number
   textObj: TextMetrics | undefined
+  autoTransitionDiffText: boolean
 
   constructor({
     x,
@@ -46,6 +47,7 @@ export class StayText extends Shape {
     props,
     width,
     height,
+    autoTransitionDiffText,
   }: TextAttr) {
     super(props || { type: SHAPE_DRAW_TYPES.FILL })
     this.text = text
@@ -66,6 +68,7 @@ export class StayText extends Shape {
     const size = this.getSize(width, height)
     this.width = size.width
     this.height = size.height
+    this.autoTransitionDiffText = autoTransitionDiffText ?? true
 
     this.init()
   }
@@ -300,6 +303,7 @@ export class StayText extends Shape {
       && isRGBA(before.color)
       && isRGBA(after.color)
       && isRGBA(props.color)
+      && this.autoTransitionDiffText
     ) {
       let color = props.color
       if (ratio > 0.5) {
@@ -322,6 +326,7 @@ export class StayText extends Shape {
       }
       props.color = color
     }
+
     return new StayText({
       x,
       y,

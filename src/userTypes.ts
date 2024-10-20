@@ -338,6 +338,7 @@ export interface TextAttr {
   props?: ShapeProps
   width?: number
   height?: number
+  autoTransitionDiffText?: boolean
 }
 
 export interface Font {

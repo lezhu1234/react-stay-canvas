@@ -72,9 +72,7 @@ export abstract class Shape {
     this.color = this.tryConvertToRGBA(color ?? "white")
   }
 
-  tryConvertToRGBA(
-    color: string | CanvasGradient | RGB | RGBA
-  ): RGBA | CanvasGradient {
+  tryConvertToRGBA(color: string | CanvasGradient | RGB | RGBA): RGBA | CanvasGradient {
     if (isRGBA(color)) {
       return { ...color }
     } else if (isRGB(color)) {
@@ -244,7 +242,8 @@ export abstract class Shape {
   setContextColor(
     context: CanvasRenderingContext2D,
     color: string | CanvasGradient,
-    type: valueof<typeof SHAPE_DRAW_TYPES>) {
+    type: valueof<typeof SHAPE_DRAW_TYPES>
+  ) {
     if (type === SHAPE_DRAW_TYPES.STROKE) {
       context.strokeStyle = color
     } else if (type === SHAPE_DRAW_TYPES.FILL) {
@@ -368,12 +367,7 @@ export abstract class Shape {
     return before + (after - before) * applyEasing(transitionType, ratio)
   }
 
-  getColorIntermediateState<T>(
-    before: T,
-    after: T,
-    ratio: number,
-    transitionType: EasingFunction
-  ) {
+  getColorIntermediateState<T>(before: T, after: T, ratio: number, transitionType: EasingFunction) {
     if (!isRGBA(before) || !isRGBA(after)) {
       return after
     }
@@ -406,4 +400,8 @@ export abstract class Shape {
   abstract zoom(zoomScale: number): void
 
   abstract getCenterPoint(): SimplePoint
+
+  zeroShape(): Shape {
+    return this.copy()
+  }
 }

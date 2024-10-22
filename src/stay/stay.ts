@@ -481,6 +481,7 @@ class Stay {
         if (className === "") {
           throw new Error("className cannot be empty")
         }
+        layer = parseLayer(this.root.layers, layer)
 
         if (zIndex === undefined) {
           zIndex = child.zIndex

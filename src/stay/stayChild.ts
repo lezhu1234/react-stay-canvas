@@ -63,7 +63,8 @@ export class StayChild<T extends Shape = Shape> {
 
   init(shape: T, transition: StayChildTransitions | undefined) {
     if (transition && transition.enter) {
-      const initShape = getShapeByEffect(transition.enter.effect, shape.copy() as T, "enter")
+      const _shape = shape.zeroShape() as T
+      const initShape = getShapeByEffect(transition.enter.effect, _shape, "enter")
       this.push(initShape, undefined)
     }
     this.push(shape, transition ? transition.enter : undefined)
@@ -207,7 +208,6 @@ export class StayChild<T extends Shape = Shape> {
 
       const stepDelayEndTime = stepStartTime + delay
       const stepEndTime = stepStartTime + duration + delay
-
       if (stepDelayEndTime > time) {
         let _shape = this.shapeStack[index - 1].shape
         if (extraTransform) {

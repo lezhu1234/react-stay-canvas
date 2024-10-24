@@ -144,7 +144,6 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
 
   useEffect(() => {
     init()
-    console.log("init")
   }, [width, height])
 
   return (

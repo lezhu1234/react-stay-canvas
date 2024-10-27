@@ -116,11 +116,11 @@ export type ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<
   T extends ListenerNamePayloadPairOrName[]
 > = T extends [infer R, ...infer U]
   ? U extends ListenerNamePayloadPairOrName[]
-  ? [
-    R extends string ? GetListenerNamePayloadPairByName<R> : R,
-    ...ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<U>
-  ]
-  : []
+    ? [
+        R extends string ? GetListenerNamePayloadPairByName<R> : R,
+        ...ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<U>
+      ]
+    : []
   : []
 
 export interface ListenerProps<T extends ListenerNamePayloadPair = ListenerNamePayloadPair> {
@@ -171,6 +171,7 @@ export interface StayTools {
   progress: (time: number) => void
   triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
   deleteListener: (name: string) => void
+  getCurrentShapes: () => { shape: Shape; name: string; id: string; layer: number }[]
 }
 
 export interface TransitionConfig {
@@ -259,8 +260,8 @@ export type InferContra<T> = [T] extends [(arg: infer I) => void] ? I : never
 export type PickOne<T> = InferContra<InferContra<Contra<Contra<T>>>>
 export type Union2Tuple<T> = PickOne<T> extends infer U
   ? Exclude<T, U> extends never
-  ? [T]
-  : [...Union2Tuple<Exclude<T, U>>, U]
+    ? [T]
+    : [...Union2Tuple<Exclude<T, U>>, U]
   : never
 
 export type Insert<T extends unknown[], U> = T extends [infer F, ...infer L]

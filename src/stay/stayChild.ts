@@ -248,6 +248,50 @@ export class StayChild<T extends Shape = Shape> {
     return await this.idleDraw(props, extraTransform)
   }
 
+  getShapeByTime(props: ShapeDrawProps, time: number): Shape {
+    if (time === undefined) {
+      return this.shape
+    }
+
+    if (time < 0) {
+      throw new Error("time cannot be negative")
+    }
+
+    let stepStartTime = 0
+    for (let index = 0; index < this.shapeStack.length; index++) {
+      const { transition, shape } = this.shapeStack[index]
+      const duration = transition?.duration ?? 0
+      const delay = transition?.delay ?? 0
+
+      const stepDelayEndTime = stepStartTime + delay
+      const stepEndTime = stepStartTime + duration + delay
+      if (stepDelayEndTime > time) {
+        let _shape = this.shapeStack[index - 1].shape
+
+        return _shape
+      }
+
+      if (stepEndTime > time) {
+        const ratio = (time - stepDelayEndTime) / (stepEndTime - stepDelayEndTime)
+        const intermediateShape = this.shape.intermediateState(
+          this.shapeStack[index - 1].shape,
+          shape,
+          ratio,
+          transition?.type ?? "linear",
+          props.canvas
+        )
+        if (intermediateShape === false) {
+          return this.shapeStack[0].shape
+        }
+        let _shape = intermediateShape
+        return _shape
+      }
+      stepStartTime = stepEndTime
+    }
+
+    return this.shape
+  }
+
   _update({
     id,
     className,

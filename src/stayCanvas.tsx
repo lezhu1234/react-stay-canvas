@@ -5,6 +5,7 @@ import React, {
   useImperativeHandle,
   useMemo,
   useRef,
+  useState,
 } from "react"
 
 import * as PredefinedEventList from "./predefinedEvents"
@@ -27,6 +28,7 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
   }: StayCanvasProps,
   ref
 ) {
+  const [initialized, setInitialized] = useState(false)
   let contextLayerSetFunctionList: ContextLayerSetFunction[] = []
 
   if (typeof layers === "number") {
@@ -143,7 +145,13 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
   }, [listenerList])
 
   useEffect(() => {
-    init()
+    if (width > 0 && height > 0 && (!initialized || recreateOnResize)) {
+      init()
+      setInitialized(true)
+    }
+    if (stay.current) {
+      stay.current.refresh()
+    }
   }, [width, height])
 
   return (

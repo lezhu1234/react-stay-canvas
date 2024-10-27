@@ -81,6 +81,7 @@ class Stay {
   nextTickFunctions: (() => void)[]
   autoRender: boolean
   rendering: boolean
+  lastProgress: number
 
   constructor(root: Canvas, passive: boolean, autoRender: boolean = true) {
     this.root = root
@@ -131,6 +132,7 @@ class Stay {
       this.startRender()
     }
     this.rendering = autoRender
+    this.lastProgress = 0
   }
 
   addEventListener({
@@ -411,6 +413,18 @@ class Stay {
   }
   getTools(): StayTools {
     return {
+      getCurrentShapes: () => {
+        return [...this.tools.getChildrenWithoutRoot().values()].map((child) => {
+          const canvas = this.root.layers[child.layer]
+          const context = this.root.contexts[child.layer]
+          return {
+            shape: child.getShapeByTime({ canvas, context, now: Date.now() }, this.lastProgress),
+            name: child.className,
+            id: child.id,
+            layer: child.layer,
+          }
+        })
+      },
       start: () => {
         if (this.autoRender) {
           throw new Error("autoRender is true, you can't call start")
@@ -426,6 +440,7 @@ class Stay {
             "rendering is true, you can't call progress, you need to set autoRender to false and wait canvas render over if you called start() method"
           )
         }
+        this.lastProgress = time
         this.draw(true, Date.now(), time)
       },
       hasChild: (id: string) => {

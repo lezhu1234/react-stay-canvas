@@ -496,7 +496,6 @@ class Stay {
         if (className === "") {
           throw new Error("className cannot be empty")
         }
-        layer = parseLayer(this.root.layers, layer)
 
         if (zIndex === undefined) {
           zIndex = child.zIndex
@@ -507,7 +506,7 @@ class Stay {
         child._update({
           shape,
           zIndex: zIndex,
-          layer: layer === undefined ? child.layer : layer,
+          layer: layer === undefined ? child.layer : parseLayer(this.root.layers, layer),
           className,
           transition,
         })

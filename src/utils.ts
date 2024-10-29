@@ -104,8 +104,8 @@ export function infixExpressionParser<T>({
         return char === ")"
           ? opratorStack[opratorStack.length - 1] !== "("
           : opratorStack.length > 0 &&
-          opratorInfo[opratorStack[opratorStack.length - 1]].priority >
-          opratorInfo[char as opratorWithBracket].priority
+              opratorInfo[opratorStack[opratorStack.length - 1]].priority >
+                opratorInfo[char as opratorWithBracket].priority
       }
 
       doOpration(opratorNeedPop)
@@ -239,10 +239,10 @@ export function easeInOutExpo(x: number): number {
   return x === 0
     ? 0
     : x === 1
-      ? 1
-      : x < 0.5
-        ? Math.pow(2, 20 * x - 10) / 2
-        : (2 - Math.pow(2, -20 * x + 10)) / 2
+    ? 1
+    : x < 0.5
+    ? Math.pow(2, 20 * x - 10) / 2
+    : (2 - Math.pow(2, -20 * x + 10)) / 2
 }
 
 export function easeInCirc(x: number): number {
@@ -294,10 +294,10 @@ export function easeInOutElastic(x: number): number {
   return x === 0
     ? 0
     : x === 1
-      ? 1
-      : x < 0.5
-        ? -(Math.pow(2, 20 * x - 10) * Math.sin((20 * x - 11.125) * c5)) / 2
-        : (Math.pow(2, -20 * x + 10) * Math.sin((20 * x - 11.125) * c5)) / 2 + 1
+    ? 1
+    : x < 0.5
+    ? -(Math.pow(2, 20 * x - 10) * Math.sin((20 * x - 11.125) * c5)) / 2
+    : (Math.pow(2, -20 * x + 10) * Math.sin((20 * x - 11.125) * c5)) / 2 + 1
 }
 
 export function easeInBounce(x: number): number {
@@ -458,7 +458,6 @@ export function getShapeByConfig<Q extends Shape>(config: ShapeConfig, shape: Q)
     shape.update({ props: { color } })
   }
 
-
   return shape
 }
 
@@ -470,23 +469,23 @@ export function getShapeByEffect<T extends Shape>(
   if (!Array.isArray(effects)) {
     return getShapeByConfig(effects, shape)
   }
-  let offsetX: NumericString = "+0",
-    offsetY: NumericString = "+0",
+  let offsetX: number = 0,
+    offsetY: number = 0,
     scale = 1,
     opacity = 1
   effects.forEach((effect) => {
     switch (effect) {
       case "left10px":
-        offsetX = "-10"
+        offsetX -= 10
         break
       case "right10px":
-        offsetX = "+10"
+        offsetX += 10
         break
       case "up10px":
-        offsetY = "-10"
+        offsetY -= 10
         break
       case "down10px":
-        offsetY = "+10"
+        offsetY += 10
         break
       case "fade100%":
         opacity = 0
@@ -502,8 +501,8 @@ export function getShapeByEffect<T extends Shape>(
 
   return getShapeByConfig(
     {
-      offsetX,
-      offsetY,
+      offsetX: (offsetX >= 0 ? "+" + offsetX : offsetX.toString()) as NumericString,
+      offsetY: (offsetY >= 0 ? "+" + offsetY : offsetY.toString()) as NumericString,
       scale,
       opacity,
     },

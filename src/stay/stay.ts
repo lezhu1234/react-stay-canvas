@@ -248,7 +248,7 @@ class Stay {
           time
         )
 
-        if (updateNextFrame) {
+        if (updateNextFrame || forceDraw) {
           this.forceUpdateLayer(child.layer)
         }
         child.drawAction = null
@@ -414,16 +414,25 @@ class Stay {
   getTools(): StayTools {
     return {
       getCurrentShapes: () => {
-        return [...this.tools.getChildrenWithoutRoot().values()].map((child) => {
-          const canvas = this.root.layers[child.layer]
-          const context = this.root.contexts[child.layer]
-          return {
-            shape: child.getShapeByTime({ canvas, context, now: Date.now() }, this.lastProgress),
-            name: child.className,
-            id: child.id,
-            layer: child.layer,
-          }
-        })
+        return [...this.tools.getChildrenWithoutRoot().values()]
+          .map((child) => {
+            const canvas = this.root.layers[child.layer]
+            const context = this.root.contexts[child.layer]
+            const shape = child.getShapeByTime(
+              { canvas, context, now: Date.now() },
+              this.lastProgress
+            )
+            if (shape === false) {
+              return null
+            }
+            return {
+              shape,
+              name: child.className,
+              id: child.id,
+              layer: child.layer,
+            }
+          })
+          .filter((item) => item !== null)
       },
       start: () => {
         if (this.autoRender) {
@@ -791,7 +800,9 @@ class Stay {
         )
 
         return new Promise((resolve) => {
-          childrenReady.then(() => resolve(tempCanvas))
+          childrenReady.then(() => {
+            resolve(tempCanvas)
+          })
         })
       },
       redo: () => {

@@ -192,63 +192,82 @@ export class StayChild<T extends Shape = Shape> {
     time?: number,
     extraTransform?: ExtraTransform
   ): Promise<boolean> {
-    if (time === undefined) {
-      return await this.idleDraw(props, extraTransform)
-    }
+    let shape = this.getShapeByTime(props, time)
 
-    if (time < 0) {
-      throw new Error("time cannot be negative")
-    }
-
-    let stepStartTime = 0
-    for (let index = 0; index < this.shapeStack.length; index++) {
-      const { transition, shape } = this.shapeStack[index]
-      const duration = transition?.duration ?? 0
-      const delay = transition?.delay ?? 0
-
-      const stepDelayEndTime = stepStartTime + delay
-      const stepEndTime = stepStartTime + duration + delay
-      if (stepDelayEndTime > time) {
-        let _shape = this.shapeStack[index - 1].shape
-        if (extraTransform) {
-          _shape = (await _shape.awaitCopy()) as T
-          _shape.move(extraTransform.offsetX, extraTransform.offsetY)
-          _shape.zoom(_shape._zoom(extraTransform.zoom, extraTransform.zoomCenter))
-        }
-        return _shape._draw(props)
-      }
-
-      if (stepEndTime > time) {
-        const ratio = (time - stepDelayEndTime) / (stepEndTime - stepDelayEndTime)
-        const intermediateShape = this.shape.intermediateState(
-          this.shapeStack[index - 1].shape,
-          shape,
-          ratio,
-          transition?.type ?? "linear",
-          props.canvas
-        )
-        if (intermediateShape === false) {
-          return false
-        }
-        let _shape = intermediateShape
-        if (extraTransform) {
-          _shape = (await _shape.awaitCopy()) as T
-          _shape.move(extraTransform.offsetX, extraTransform.offsetY)
-          _shape.zoom(_shape._zoom(extraTransform.zoom, extraTransform.zoomCenter))
-        }
-        return _shape._draw(props) || true
-      }
-      stepStartTime = stepEndTime
-    }
-
-    if (this.state === "hidden") {
+    if (shape === false) {
       return false
     }
 
-    return await this.idleDraw(props, extraTransform)
+    if (extraTransform) {
+      shape = (await shape.awaitCopy()) as T
+      shape.move(extraTransform.offsetX, extraTransform.offsetY)
+      shape.zoom(shape._zoom(extraTransform.zoom, extraTransform.zoomCenter))
+    }
+    const drawState = shape._draw(props)
+    // if (drawState !== true || this.state === "hidden") {
+    //   this.state = "idle"
+    // }
+    return drawState
+
+    // if (time === undefined) {
+    //   return await this.idleDraw(props, extraTransform)
+    // }
+
+    // if (time < 0) {
+    //   throw new Error("time cannot be negative")
+    // }
+
+    // let stepStartTime = 0
+    // for (let index = 0; index < this.shapeStack.length; index++) {
+    //   const { transition, shape } = this.shapeStack[index]
+    //   const duration = transition?.duration ?? 0
+    //   const delay = transition?.delay ?? 0
+
+    //   const stepDelayEndTime = stepStartTime + delay
+    //   const stepEndTime = stepStartTime + duration + delay
+
+    //   if (stepDelayEndTime > time) {
+    //     let _shape = this.shapeStack[index - 1].shape
+    //     if (extraTransform) {
+    //       _shape = (await _shape.awaitCopy()) as T
+    //       _shape.move(extraTransform.offsetX, extraTransform.offsetY)
+    //       _shape.zoom(_shape._zoom(extraTransform.zoom, extraTransform.zoomCenter))
+    //     }
+    //     _shape.contentUpdated = true
+    //     return _shape._draw(props)
+    //   }
+
+    //   if (stepEndTime >= time && index > 0) {
+    //     const ratio = (time - stepDelayEndTime) / (stepEndTime - stepDelayEndTime)
+    //     const intermediateShape = this.shape.intermediateState(
+    //       this.shapeStack[index - 1].shape,
+    //       shape,
+    //       ratio,
+    //       transition?.type ?? "linear",
+    //       props.canvas
+    //     )
+    //     if (intermediateShape === false) {
+    //       return false
+    //     }
+    //     let _shape = intermediateShape
+    //     if (extraTransform) {
+    //       _shape = (await _shape.awaitCopy()) as T
+    //       _shape.move(extraTransform.offsetX, extraTransform.offsetY)
+    //       _shape.zoom(_shape._zoom(extraTransform.zoom, extraTransform.zoomCenter))
+    //     }
+    //     return _shape._draw(props) || true
+    //   }
+    //   stepStartTime = stepEndTime
+    // }
+
+    // if (this.state === "hidden") {
+    //   return false
+    // }
+
+    // return await this.idleDraw(props, extraTransform)
   }
 
-  getShapeByTime(props: ShapeDrawProps, time: number): Shape {
+  getShapeByTime(props: ShapeDrawProps, time?: number): Shape | false {
     if (time === undefined) {
       return this.shape
     }
@@ -271,7 +290,7 @@ export class StayChild<T extends Shape = Shape> {
         return _shape
       }
 
-      if (stepEndTime > time) {
+      if (stepEndTime >= time && index > 0) {
         const ratio = (time - stepDelayEndTime) / (stepEndTime - stepDelayEndTime)
         const intermediateShape = this.shape.intermediateState(
           this.shapeStack[index - 1].shape,
@@ -281,16 +300,21 @@ export class StayChild<T extends Shape = Shape> {
           props.canvas
         )
         if (intermediateShape === false) {
-          return this.shapeStack[0].shape
+          return false
         }
         let _shape = intermediateShape
         return _shape
       }
       stepStartTime = stepEndTime
     }
+    if (this.state === "hidden") {
+      return false
+    }
 
     return this.shape
   }
+
+  timeline() {}
 
   _update({
     id,

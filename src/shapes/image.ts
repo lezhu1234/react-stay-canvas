@@ -1,9 +1,10 @@
 import { Rectangle } from "./rectangle"
 import { Shape } from "./shape"
-import { ShapeDrawProps, ShapeProps } from "../userTypes"
+import { EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
+import { isRGBA } from "../utils"
 
 export interface ImageProps {
-  src: string
+  src: string | HTMLImageElement
   x: number
   y: number
   width: number
@@ -25,10 +26,11 @@ export class StayImage extends Rectangle {
   naturalHeight: number
   naturalWidth: number
   sheight?: number
-  src: string
+  src: string | HTMLImageElement
   swidth?: number
   sx: number
   sy: number
+  opacity: number
   constructor({
     src,
     x,
@@ -48,29 +50,37 @@ export class StayImage extends Rectangle {
     this.swidth = swidth
     this.sheight = sheight
     this.src = src
-    this.image = new Image()
-    this.loadState = "loading"
+    if (typeof src === "string") {
+      this.image = new Image()
+      this.loadState = "loading"
+      this.image.onload = () => {
+        this.loadState = "loaded"
+        this.naturalWidth = this.image.naturalWidth
+        this.naturalHeight = this.image.naturalHeight
+        if (this.swidth === undefined) {
+          this.swidth = this.image.naturalWidth
+        }
+        if (this.sheight === undefined) {
+          this.sheight = this.image.naturalHeight
+        }
+        if (this.imageLoaded) {
+          this.imageLoaded(this)
+        }
+        this.updateNextFrame = true
+      }
+      this.image.src = src
+    } else {
+      this.image = src
+      this.loadState = "loaded"
+      this.swidth = this.image.naturalWidth
+      this.sheight = this.image.naturalHeight
+    }
+
     this.ctx = null
     this.imageLoaded = imageLoaded
     this.naturalWidth = 0
     this.naturalHeight = 0
-
-    this.image.onload = () => {
-      this.loadState = "loaded"
-      this.naturalWidth = this.image.naturalWidth
-      this.naturalHeight = this.image.naturalHeight
-      if (this.swidth === undefined) {
-        this.swidth = this.image.naturalWidth
-      }
-      if (this.sheight === undefined) {
-        this.sheight = this.image.naturalHeight
-      }
-      if (this.imageLoaded) {
-        this.imageLoaded(this)
-      }
-      this.updateNextFrame = true
-    }
-    this.image.src = src
+    this.opacity = isRGBA(this.color) ? this.color.a : 1
   }
   copy(): StayImage {
     return new StayImage({
@@ -108,6 +118,10 @@ export class StayImage extends Rectangle {
         height: this.height,
         props: this._copy(),
       })
+
+      if (typeof this.src !== "string") {
+        resolve(this)
+      }
     })
   }
 
@@ -132,6 +146,8 @@ export class StayImage extends Rectangle {
       this.ctx = context
       return
     }
+    const originOpacity = context.globalAlpha
+    context.globalAlpha = this.opacity
     context.drawImage(
       this.image,
       this.sx,
@@ -143,6 +159,33 @@ export class StayImage extends Rectangle {
       this.width,
       this.height
     )
+    context.globalAlpha = originOpacity
+  }
+
+  intermediateState(
+    before: StayImage,
+    after: StayImage,
+    ratio: number,
+    transitionType: EasingFunction
+  ) {
+    return new StayImage({
+      src: after.src,
+      x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
+      y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),
+      width: this.getNumberIntermediateState(before.width, after.width, ratio, transitionType),
+      height: this.getNumberIntermediateState(before.height, after.height, ratio, transitionType),
+      sx: this.getNumberIntermediateState(before.sx, after.sx, ratio, transitionType),
+      sy: this.getNumberIntermediateState(before.sy, after.sy, ratio, transitionType),
+      swidth:
+        before.swidth && after.swidth
+          ? this.getNumberIntermediateState(before.swidth, after.swidth, ratio, transitionType)
+          : after.swidth,
+      sheight:
+        before.sheight && after.sheight
+          ? this.getNumberIntermediateState(before.sheight, after.sheight, ratio, transitionType)
+          : after.sheight,
+      props: this.getIntermediateProps(before, after, ratio, transitionType),
+    })
   }
 
   update({
@@ -166,9 +209,16 @@ export class StayImage extends Rectangle {
     this.imageLoaded = imageLoaded ?? this.imageLoaded
     super.update({ x, y, width, height, props })
 
-    if (src !== undefined) {
+    if (src === undefined) {
+      // do nothing
+    } else if (typeof src === "string") {
       this.loadState = "loading"
       this.image.src = src
+    } else {
+      this.image = src
+      this.loadState = "loaded"
+      this.swidth = this.image.naturalWidth
+      this.sheight = this.image.naturalHeight
     }
     return this
   }

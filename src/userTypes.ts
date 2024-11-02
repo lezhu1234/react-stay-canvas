@@ -1,5 +1,5 @@
 import Canvas from "./canvas"
-import { Shape } from "./shapes"
+import { GetCurrentArgumentsProps, Shape } from "./shapes"
 import { Point } from "./shapes/point"
 import { StayChild } from "./stay/stayChild"
 import { valueof } from "./stay/types"
@@ -38,6 +38,16 @@ export interface ActionEvent {
   deltaX: number
   deltaY: number
   deltaZ: number
+}
+
+export interface TimelineChildProps<T extends Shape> {
+  id?: string
+  zIndex?: number
+  shape: T
+  className: string
+  layer?: number
+  transition?: Omit<StayChildTransitions, "update">
+  timeline: TimeLineProps<T>[]
 }
 
 export interface createChildProps<T> {
@@ -172,6 +182,7 @@ export interface StayTools {
   triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
   deleteListener: (name: string) => void
   getCurrentShapes: () => { shape: Shape; name: string; id: string; layer: number }[]
+  timelineChild: <T extends Shape>(props: TimelineChildProps<T>) => StayChild<T>
 }
 
 export interface TransitionConfig {
@@ -200,6 +211,18 @@ export interface StayChildProps<T> {
   drawEndCallback?: (child: StayChild) => void
 }
 
+export interface StayChildTimeLineProps<T extends Shape> {
+  id?: string
+  zIndex?: number
+  className: string
+  layer: number
+  shape: T
+  beforeLayer?: number | null
+  timeline: TimeLineProps<T>[]
+  drawAction?: DrawActionsValuesType | null
+  afterRefresh?: (fn: () => void) => void
+  drawEndCallback?: (child: StayChild) => void
+}
 export interface RegionToTargetCanvasProps {
   area: Area
   targetArea?: Area
@@ -308,6 +331,7 @@ export interface ShapeProps {
   hidden?: boolean
   lineDash?: number[]
   lineDashOffset?: number
+  filter?: string
 }
 
 export type FourrDirection = "top" | "right" | "bottom" | "left"
@@ -357,4 +381,32 @@ export interface ExtraTransform {
   zoomCenter: { x: number; y: number }
   offsetX: number
   offsetY: number
+}
+
+export interface TimeLineProps<T extends Shape> {
+  start: number
+  duration: number
+  type?: EasingFunction
+  props: Parameters<T["update"]>[0]
+}
+
+export interface IntermediateShapeInfo {
+  before: Shape
+  after: Shape
+  ratio: number
+  type: EasingFunction
+  intermediate: boolean
+  beforeIndex: number
+  afterIndex: number
+}
+
+export function isIntermediateShapeInfo<T extends Shape>(
+  shape: IntermediateShapeInfo | T
+): shape is IntermediateShapeInfo {
+  return (shape as IntermediateShapeInfo).intermediate === true
+}
+
+export interface ShapeStackElement<T> {
+  shape: T
+  transition: TransitionConfig | Omit<TransitionConfig, "effect"> | undefined
 }

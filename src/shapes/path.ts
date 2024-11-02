@@ -63,7 +63,7 @@ export class Path extends Shape {
   contains(point: Point, ctx: CanvasRenderingContext2D): boolean {
     return ctx.isPointInPath(this.path, point.x, point.y)
   }
-  copy(): Shape {
+  copy(): Path {
     return new Path({
       radius: this.radius,
       points: this.points.map((point) => point.copy()),

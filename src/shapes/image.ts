@@ -222,4 +222,19 @@ export class StayImage extends Rectangle {
     }
     return this
   }
+
+  zeroShape(): StayImage {
+    return new StayImage({
+      src: this.image,
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+      sx: this.sx,
+      sy: this.sy,
+      swidth: this.swidth,
+      sheight: this.sheight,
+      props: { ...this._copy(), color: { ...this.color, a: 0 } },
+    })
+  }
 }

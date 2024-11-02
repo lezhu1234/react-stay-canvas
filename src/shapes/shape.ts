@@ -35,6 +35,7 @@ export abstract class Shape {
   hidden: boolean
   lineDash: number[]
   lineDashOffset: number
+  filter: string
   constructor({
     color,
     lineWidth,
@@ -47,6 +48,7 @@ export abstract class Shape {
     stateDrawFuncMap = {},
     lineDash,
     lineDashOffset,
+    filter,
   }: ShapeProps) {
     this.lineWidth = lineWidth ?? 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
@@ -65,6 +67,7 @@ export abstract class Shape {
       default: this.draw,
       ...stateDrawFuncMap,
     }
+    this.filter = filter ?? ""
     this.startTime = 0
     this.updateNextFrame = false
     this.contentUpdated = true
@@ -101,6 +104,7 @@ export abstract class Shape {
     context.setLineDash(this.lineDash)
     context.lineDashOffset = this.lineDashOffset
     this.setColor(context, this.color)
+    context.filter = this.filter
     // this.draw({ context, canvas, now })
     if (this.updateNextFrame || this.contentUpdated) {
       if (!this.hidden) {
@@ -272,9 +276,8 @@ export abstract class Shape {
     before: Shape,
     after: Shape,
     ratio: number,
-    transitionType: EasingFunction,
-    canvas: HTMLCanvasElement
-  ): Shape | false {
+    transitionType: EasingFunction
+  ): Shape {
     return this
   }
 
@@ -400,6 +403,17 @@ export abstract class Shape {
   abstract zoom(zoomScale: number): void
 
   abstract getCenterPoint(): SimplePoint
+
+  earlyStopIntermediateState(
+    before: Shape,
+    after: Shape,
+    ratio: number,
+    transitionType: EasingFunction,
+    containerWidth: number,
+    containerHeight: number
+  ) {
+    return false
+  }
 
   zeroShape(): Shape {
     return this.copy()

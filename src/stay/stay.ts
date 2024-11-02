@@ -413,18 +413,28 @@ class Stay {
   }
   getTools(): StayTools {
     return {
+      timelineChild: ({ timeline, shape, layer, id = undefined, zIndex, className }) => {
+        layer = parseLayer(this.root.layers, layer)
+        this.checkName(className, [ROOTNAME])
+        const child = StayChild.timeline({
+          shape,
+          timeline,
+          id,
+          zIndex: zIndex === undefined ? 1 : zIndex,
+          className,
+          layer,
+          drawAction: DRAW_ACTIONS.APPEND,
+          afterRefresh: (fn) => this.nextTick(fn),
+        })
+        this.zIndexUpdated = true
+        this.pushToChildren(child)
+        this.unLogedChildrenIds.add(child.id)
+        return child
+      },
       getCurrentShapes: () => {
         return [...this.tools.getChildrenWithoutRoot().values()]
           .map((child) => {
-            const canvas = this.root.layers[child.layer]
-            const context = this.root.contexts[child.layer]
-            const shape = child.getShapeByTime(
-              { canvas, context, now: Date.now() },
-              this.lastProgress
-            )
-            if (shape === false) {
-              return null
-            }
+            const shape = child.getShapeByTime(this.lastProgress)
             return {
               shape,
               name: child.className,

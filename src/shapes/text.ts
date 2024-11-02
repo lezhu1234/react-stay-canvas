@@ -268,18 +268,19 @@ export class StayText extends Shape {
     })
   }
 
-  intermediateState(
+  earlyStopIntermediateState(
     before: StayText,
     after: StayText,
     ratio: number,
     transitionType: EasingFunction,
-    canvas: HTMLCanvasElement
+    containerWidth: number,
+    containerHeight: number
   ) {
     const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
     const width = this.getNumberIntermediateState(before.width, after.width, ratio, transitionType)
 
-    if (x < -width || x > canvas.width) {
-      return false
+    if (x < -width || x > containerWidth) {
+      return true
     }
 
     const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
@@ -290,20 +291,54 @@ export class StayText extends Shape {
       transitionType
     )
 
-    if (y < -height || y > canvas.height) {
-      return false
+    if (y < -height || y > containerHeight) {
+      return true
     }
+    return false
+  }
+
+  zeroShape(): StayText {
+    return new StayText({
+      x: this.x,
+      y: this.y,
+      text: this.text,
+      font: this.font,
+      border: this.border,
+      textBaseline: this.textBaseline,
+      textAlign: this.textAlign,
+      offsetXRatio: this.offsetXRatio,
+      offsetYRatio: this.offsetYRatio,
+      props: { ...this._copy(), color: { ...this.color, a: 0 } },
+    })
+  }
+
+  intermediateState(
+    before: StayText,
+    after: StayText,
+    ratio: number,
+    transitionType: EasingFunction
+  ) {
+    const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
+    const width = this.getNumberIntermediateState(before.width, after.width, ratio, transitionType)
+
+    const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
+    const height = this.getNumberIntermediateState(
+      before.height,
+      after.height,
+      ratio,
+      transitionType
+    )
 
     const font = this.getFontIntermediateState(before.font, after.font, ratio, transitionType)
     const props = this.getIntermediateProps(before, after, ratio, transitionType)
     let text = after.text
 
     if (
-      before.text !== after.text
-      && isRGBA(before.color)
-      && isRGBA(after.color)
-      && isRGBA(props.color)
-      && this.autoTransitionDiffText
+      before.text !== after.text &&
+      isRGBA(before.color) &&
+      isRGBA(after.color) &&
+      isRGBA(props.color) &&
+      this.autoTransitionDiffText
     ) {
       let color = props.color
       if (ratio > 0.5) {

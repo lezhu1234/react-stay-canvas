@@ -196,11 +196,7 @@ export class StayChild<T extends Shape = Shape> {
     return drawState
   }
 
-  async draw(
-    props: ShapeDrawProps,
-    time?: number,
-    extraTransform?: ExtraTransform
-  ): Promise<boolean> {
+  draw(props: ShapeDrawProps, time?: number, extraTransform?: ExtraTransform): boolean {
     const info = this.getIntermediateInfoOrShape(time)
     if (
       isIntermediateShapeInfo(info) &&
@@ -223,7 +219,7 @@ export class StayChild<T extends Shape = Shape> {
     // }
 
     if (extraTransform) {
-      shape = (await shape.awaitCopy()) as T
+      shape = shape.copy() as T
       shape.move(extraTransform.offsetX, extraTransform.offsetY)
       shape.zoom(shape._zoom(extraTransform.zoom, extraTransform.zoomCenter))
     }

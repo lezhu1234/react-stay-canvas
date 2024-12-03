@@ -4,6 +4,7 @@ import { Line } from "./line"
 import { Point, SimplePoint } from "./point"
 import { Shape } from "./shape"
 import { ShapeDrawProps, ShapeProps } from "../userTypes"
+import { DrawCanvasContext } from "../types"
 
 export interface PathAttr {
   points: Point[]
@@ -60,7 +61,7 @@ export class Path extends Shape {
     })
     return new SimplePoint(x / this.points.length, y / this.points.length)
   }
-  contains(point: Point, ctx: CanvasRenderingContext2D): boolean {
+  contains(point: Point, ctx: DrawCanvasContext): boolean {
     return ctx.isPointInPath(this.path, point.x, point.y)
   }
   copy(): Path {

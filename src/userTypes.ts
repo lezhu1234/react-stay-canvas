@@ -3,7 +3,7 @@ import { GetCurrentArgumentsProps, Shape } from "./shapes"
 import { Point } from "./shapes/point"
 import { StayChild } from "./stay/stayChild"
 import { valueof } from "./stay/types"
-import { NumberInRangeZeroOne, ShapeConfig, UserCallback } from "./types"
+import { DrawCanvasContext, NumberInRangeZeroOne, ShapeConfig, UserCallback } from "./types"
 import { DRAW_ACTIONS, SHAPE_DRAW_TYPES, SORT_CHILDREN_METHODS } from "./userConstants"
 import { RGB, RGBA } from "./w3color"
 
@@ -315,7 +315,7 @@ export type LisenerTupleToLisenerUnion<T extends ListenerNamePayloadPairOrName[]
   ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>
 >
 export interface ShapeDrawProps {
-  context: CanvasRenderingContext2D
+  context: DrawCanvasContext
   canvas: HTMLCanvasElement
   now: number
 }

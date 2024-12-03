@@ -1,4 +1,5 @@
 import { valueof } from "../stay/types"
+import { DrawCanvasContext } from "../types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { Dict, EasingFunction, ShapeDrawProps, ShapeProps, PointType, Font } from "../userTypes"
 import { applyEasing, isRGB, isRGBA } from "../utils"
@@ -231,7 +232,7 @@ export abstract class Shape {
     }
   }
 
-  setColor(context: CanvasRenderingContext2D, color: CanvasGradient | RGBA) {
+  setColor(context: DrawCanvasContext, color: CanvasGradient | RGBA) {
     this.color = color
 
     let c: string | CanvasGradient
@@ -244,7 +245,7 @@ export abstract class Shape {
   }
 
   setContextColor(
-    context: CanvasRenderingContext2D,
+    context: DrawCanvasContext,
     color: string | CanvasGradient,
     type: valueof<typeof SHAPE_DRAW_TYPES>
   ) {
@@ -390,7 +391,7 @@ export abstract class Shape {
     })
   }
 
-  abstract contains(point: PointType, cxt?: CanvasRenderingContext2D): boolean
+  abstract contains(point: PointType, cxt?: DrawCanvasContext): boolean
 
   abstract copy(): Shape
 

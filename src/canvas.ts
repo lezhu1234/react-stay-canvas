@@ -1,7 +1,7 @@
-import { ContextLayerSetFunction } from "./types"
+import { ContextLayerSetFunction, DrawCanvasContext } from "./types"
 
 class Canvas {
-  contexts: CanvasRenderingContext2D[]
+  contexts: DrawCanvasContext[]
   height: number
   layers: HTMLCanvasElement[]
   status: string
@@ -20,7 +20,7 @@ class Canvas {
     this.height = height
     this.status = "default"
     this.contexts = layers.map((layer, i) => {
-      return contextLayerSetFunctionList[i](layer) as CanvasRenderingContext2D
+      return contextLayerSetFunctionList[i](layer) as DrawCanvasContext
     })
 
     this.init()
@@ -33,7 +33,7 @@ class Canvas {
     return this.layers[0].getBoundingClientRect().y
   }
 
-  public clear(context: CanvasRenderingContext2D) {
+  public clear(context: DrawCanvasContext) {
     context.clearRect(0, 0, this.width, this.height)
   }
 

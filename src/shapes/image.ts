@@ -2,6 +2,7 @@ import { Rectangle } from "./rectangle"
 import { Shape } from "./shape"
 import { EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { isRGBA } from "../utils"
+import { DrawCanvasContext } from "../types"
 
 export interface ImageProps {
   src: string | HTMLImageElement
@@ -19,7 +20,7 @@ export interface ImageProps {
 type ImageLoadState = "wait" | "loading" | "loaded"
 
 export class StayImage extends Rectangle {
-  ctx: null | CanvasRenderingContext2D
+  ctx: null | DrawCanvasContext
   image: HTMLImageElement
   imageLoaded?: (image: StayImage) => void
   loadState: ImageLoadState
@@ -128,7 +129,8 @@ export class StayImage extends Rectangle {
   /**
    * 在画布上绘制图像。
    *
-   * @param ctx - CanvasRenderingContext2D，用于在HTML5 canvas元素上绘图的2D渲染上下文对象。
+   * @param ctx - CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+，用于在HTML5 canvas元素上绘图的2D渲染上下文对象。
    * @param this.image - Image对象，要绘制的图像源。
    * @param this.sx - number，图像源的起始x坐标，相对于图像的左上角。
    * @param this.sy - number，图像源的起始y坐标，相对于图像的左上角。

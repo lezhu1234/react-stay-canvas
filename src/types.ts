@@ -73,7 +73,7 @@ export type StayEventProps = StayEventRequiredProps & StayEventChooseProps
 export type EventProps = StayEventRequiredProps & Partial<StayEventChooseProps>
 
 export interface ContextLayerSetFunction {
-  (layer: HTMLCanvasElement): CanvasRenderingContext2D | null
+  (layer: HTMLCanvasElement): DrawCanvasContext | null
 }
 export interface StayCanvasProps {
   className?: string
@@ -87,6 +87,7 @@ export interface StayCanvasProps {
   mounted?: (tools: StayTools) => void
   recreateOnResize?: boolean
 }
+export type DrawCanvasContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
 export type NumericString = `${number}` | `+${number}` | `-${number}` | number
 export type ShapeConfig = {
@@ -106,14 +107,14 @@ export type Negative<T extends number> = number extends T
   ? never
   : Positive<T> extends never
   ? T extends 0
-  ? never
-  : T
+    ? never
+    : T
   : never
 
 export type NumberInRangeZeroOne<T extends number> = Positive<T> extends never
   ? T extends 0
-  ? T
-  : never
+    ? T
+    : never
   : T extends number
   ? (T extends 1 ? T : never) | (`${T}` extends `0.${string}` ? T : never) | never
   : never

@@ -1,3 +1,4 @@
+import { DrawCanvasContext } from "../types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import {
   Border,
@@ -200,7 +201,7 @@ export class StayText extends Shape {
       height: textObj.fontBoundingBoxAscent + textObj.fontBoundingBoxDescent,
     }
   }
-  init(ctx?: CanvasRenderingContext2D | undefined) {
+  init(ctx?: DrawCanvasContext | undefined) {
     const offsetX = -this.width / 2 + this.width * this.offsetXRatio
     const offsetY = this.height * this.offsetYRatio
 

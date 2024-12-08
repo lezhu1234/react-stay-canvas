@@ -25,6 +25,7 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
     passive = true,
     autoRender = true,
     recreateOnResize = false,
+    focusOnInit = true,
   }: StayCanvasProps,
   ref
 ) {
@@ -96,7 +97,9 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
       stay.current.draw()
     }
 
-    canvasLayers.current[canvasLayers.current.length - 1].focus()
+    if (focusOnInit) {
+      canvasLayers.current[canvasLayers.current.length - 1].focus()
+    }
   }
 
   useImperativeHandle(

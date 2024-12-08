@@ -86,6 +86,7 @@ export interface StayCanvasProps {
   autoRender?: boolean
   mounted?: (tools: StayTools) => void
   recreateOnResize?: boolean
+  focusOnInit?: boolean
 }
 export type DrawCanvasContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 

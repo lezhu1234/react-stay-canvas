@@ -1,5 +1,26 @@
 import { ContextLayerSetFunction, DrawCanvasContext } from "./types"
 
+function dprScale(
+  canvas: HTMLCanvasElement,
+  ctx: DrawCanvasContext,
+  width: number,
+  height: number
+) {
+  // Get the DPR and size of the canvas
+  const dpr = window.devicePixelRatio
+
+  // Set the "actual" size of the canvas
+  canvas.width = width * dpr
+  canvas.height = height * dpr
+
+  // Scale the context to ensure correct drawing operations
+  ctx.scale(dpr, dpr)
+
+  // Set the "drawn" size of the canvas
+  canvas.style.width = `${width}px`
+  canvas.style.height = `${height}px`
+}
+
 class Canvas {
   contexts: DrawCanvasContext[]
   height: number
@@ -37,7 +58,11 @@ class Canvas {
     context.clearRect(0, 0, this.width, this.height)
   }
 
-  init() {}
+  init() {
+    this.layers.forEach((layer, i) => {
+      dprScale(layer, this.contexts[i], this.width, this.height)
+    })
+  }
 }
 
 export default Canvas

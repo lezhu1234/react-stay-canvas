@@ -99,7 +99,7 @@ export abstract class Shape {
     return { ...this }
   }
 
-  _draw({ context, canvas, now }: ShapeDrawProps): boolean {
+  _draw({ context, now, width, height }: ShapeDrawProps): boolean {
     context.lineWidth = this.lineWidth
     context.globalCompositeOperation = this.gco
     context.setLineDash(this.lineDash)
@@ -111,8 +111,9 @@ export abstract class Shape {
       if (!this.hidden) {
         const drawStateResult = this.stateDrawFuncMap[this.state].bind(this)({
           context,
-          canvas,
           now,
+          width,
+          height,
         })
         this.updateNextFrame = drawStateResult || false
       }

@@ -242,8 +242,9 @@ class Stay {
         const updateNextFrame = child.draw(
           {
             context,
-            canvas,
             now,
+            width: this.width,
+            height: this.height,
           },
           time
         )
@@ -771,8 +772,9 @@ class Stay {
             await c.draw(
               {
                 context: tempCtx,
-                canvas: tempCanvas,
                 now: Date.now(),
+                width: this.width,
+                height: this.height,
               },
               progress,
               {

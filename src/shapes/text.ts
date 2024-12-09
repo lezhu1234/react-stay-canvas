@@ -99,10 +99,10 @@ export class StayText extends Shape {
     return `${fontWeight} ${italic ? "italic" : ""} ${size ?? 16}px ${fontFamily ?? "monospace"}`
   }
 
-  draw({ context, canvas }: ShapeDrawProps): void {
+  draw({ context, width, height }: ShapeDrawProps): void {
     if (
-      this.leftTop.x > canvas.width ||
-      this.leftTop.y > canvas.height ||
+      this.leftTop.x > width ||
+      this.leftTop.y > height ||
       this.rightBottom.x < 0 ||
       this.rightBottom.y < 0
     ) {

@@ -205,8 +205,8 @@ export class StayChild<T extends Shape = Shape> {
         info.after,
         info.ratio,
         info.type,
-        props.canvas.width,
-        props.canvas.height
+        props.width,
+        props.height
       )
     ) {
       return false

@@ -316,8 +316,9 @@ export type LisenerTupleToLisenerUnion<T extends ListenerNamePayloadPairOrName[]
 >
 export interface ShapeDrawProps {
   context: DrawCanvasContext
-  canvas: HTMLCanvasElement
   now: number
+  width: number
+  height: number
 }
 export interface ShapeProps {
   color?: string | CanvasGradient | RGB | RGBA

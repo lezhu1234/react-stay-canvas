@@ -181,8 +181,6 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
                 }
               }}
               tabIndex={1}
-              width={width}
-              height={height}
               style={{
                 position: "absolute",
                 display: "block",

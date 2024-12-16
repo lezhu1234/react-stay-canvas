@@ -690,7 +690,10 @@ class Stay {
 
       move: (offsetX: number, offsetY: number): Promise<void> => {
         this.getChildren().forEach((child) => {
-          child.shape.move(...child.shape._move(offsetX, offsetY))
+          // child.shape.move(...child.shape._move(offsetX, offsetY))
+          child.shapeStack.forEach(({ shape }) => {
+            shape._move(offsetX, offsetY)
+          })
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)
@@ -701,9 +704,9 @@ class Stay {
       },
       zoom: (deltaY: number, center: PointType): Promise<void> => {
         this.getChildren().forEach((child) => {
-          if (child.state !== "hidden") {
-            child.shape.zoom(child.shape._zoom(deltaY, center))
-          }
+          child.shapeStack.forEach(({ shape }) => {
+            shape.zoom(shape._zoom(deltaY, center))
+          })
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)

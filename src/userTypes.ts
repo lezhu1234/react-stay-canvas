@@ -144,6 +144,17 @@ export interface ListenerProps<T extends ListenerNamePayloadPair = ListenerNameP
 
 export type SelectorFunc = (child: StayChild) => boolean
 
+export interface ProgressBound {
+  beforeTime: number
+  afterTime: number
+}
+
+export interface StayDrawProps {
+  forceDraw?: boolean
+  now?: number
+  time?: number
+  bound?: ProgressBound
+}
 export interface StayTools {
   createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
   appendChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
@@ -178,7 +189,7 @@ export interface StayTools {
   redo: () => void
   undo: () => void
   start: () => void
-  progress: (time: number) => void
+  progress: (time: number, bound?: ProgressBound) => void
   triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
   deleteListener: (name: string) => void
   getCurrentShapes: () => { shape: Shape; name: string; id: string; layer: number }[]

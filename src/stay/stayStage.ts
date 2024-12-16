@@ -48,7 +48,11 @@ export default class StayStage {
   }
 
   refresh() {
-    return this.#stay.draw(true, Date.now(), this.#stay.lastProgress)
+    return this.#stay.draw({
+      forceDraw: true,
+      now: Date.now(),
+      time: this.#stay.lastProgress,
+    })
   }
 
   redo() {

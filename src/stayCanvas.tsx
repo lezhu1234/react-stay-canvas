@@ -94,7 +94,7 @@ const StayCanvas = forwardRef<StayCanvasRefType, StayCanvasProps>(function StayC
 
     if (mounted) {
       mounted(stay.current.tools)
-      stay.current.draw()
+      stay.current.draw({})
     }
 
     if (focusOnInit) {

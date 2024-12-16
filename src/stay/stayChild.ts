@@ -18,8 +18,8 @@ import {
   StayChildProps,
   UpdateStayChildProps,
 } from "../userTypes"
-import { getShapeByEffect, uuid4 } from "../utils"
-import { StepProps } from "./types"
+import { assert, getShapeByEffect, uuid4 } from "../utils"
+import { DrawChildProps, StepProps } from "./types"
 
 export class StayChild<T extends Shape = Shape> {
   beforeLayer: number | null
@@ -196,7 +196,7 @@ export class StayChild<T extends Shape = Shape> {
     return drawState
   }
 
-  draw(props: ShapeDrawProps, time?: number, extraTransform?: ExtraTransform): boolean {
+  draw({ time, props, extraTransform, bound }: DrawChildProps): boolean {
     const info = this.getIntermediateInfoOrShape(time)
     if (
       isIntermediateShapeInfo(info) &&
@@ -212,7 +212,23 @@ export class StayChild<T extends Shape = Shape> {
       return false
     }
 
-    let shape = this.getShapeByTime(time)
+    let shape: Shape
+    if (bound && time) {
+      const beforeShape = this.getShapeByTime(bound.beforeTime)
+      const afterShape = this.getShapeByTime(bound.afterTime)
+      const element = this.getNextShapeStackElementByTime(Math.ceil(bound.afterTime))
+      shape = this.shape.intermediateState(
+        beforeShape,
+        afterShape,
+        (time - bound.beforeTime) / (bound.afterTime - bound.beforeTime),
+        element.transition?.type ?? "linear"
+      )
+    } else {
+      shape = this.getShapeByTime(time)
+    }
+
+    // ?
+    shape.contentUpdated = true
 
     // if (this.state === "hidden") {
     //   return false
@@ -228,6 +244,27 @@ export class StayChild<T extends Shape = Shape> {
     //   this.state = "idle"
     // }
     return drawState
+  }
+
+  getNextShapeStackElementByTime(time: number) {
+    let stepStartTime = 0
+    for (let index = 0; index < this.shapeStack.length; index++) {
+      const { transition, shape } = this.shapeStack[index]
+      const duration = transition?.duration ?? 0
+      const delay = transition?.delay ?? 0
+
+      const stepDelayEndTime = stepStartTime + delay
+      const stepEndTime = stepStartTime + duration + delay
+      if (stepDelayEndTime > time) {
+        return this.shapeStack[index - 1]
+      }
+
+      if (stepEndTime >= time) {
+        return this.shapeStack[index]
+      }
+    }
+
+    return this.shapeStack[this.shapeStack.length - 1]
   }
 
   getIntermediateInfoOrShape(time?: number): IntermediateShapeInfo | Shape {
@@ -251,7 +288,7 @@ export class StayChild<T extends Shape = Shape> {
         return this.shapeStack[index - 1].shape
       }
 
-      if (stepEndTime >= time && index > 0) {
+      if (stepEndTime > time && index > 0) {
         const ratio = (time - stepDelayEndTime) / (stepEndTime - stepDelayEndTime)
         return {
           before: this.shapeStack[index - 1].shape,
@@ -262,6 +299,10 @@ export class StayChild<T extends Shape = Shape> {
           beforeIndex: index - 1,
           afterIndex: index,
         }
+      }
+
+      if (stepEndTime === time) {
+        return shape
       }
       stepStartTime = stepEndTime
     }

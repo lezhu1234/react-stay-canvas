@@ -43,6 +43,8 @@ import {
   updateChildProps,
   Area,
   TransitionConfig,
+  ProgressBound,
+  StayDrawProps,
 } from "../userTypes"
 import { assert, infixExpressionParser, numberAlmostEqual, parseLayer, uuid4 } from "../utils"
 import { StayChild } from "./stayChild"
@@ -191,7 +193,7 @@ class Stay {
     delete this.events[name]
   }
 
-  draw(forceDraw = false, now = Date.now(), time?: number) {
+  draw({ forceDraw = false, time, now = Date.now(), bound }: StayDrawProps) {
     interface ChildLayer {
       update: boolean
       members: StayChild[]
@@ -239,15 +241,16 @@ class Stay {
         if (particalChildren.update) {
           child.shape.contentUpdated = true
         }
-        const updateNextFrame = child.draw(
-          {
+        const updateNextFrame = child.draw({
+          props: {
             context,
             now,
             width: this.width,
             height: this.height,
           },
-          time
-        )
+          time,
+          bound,
+        })
 
         if (updateNextFrame || forceDraw) {
           this.forceUpdateLayer(child.layer)
@@ -374,7 +377,11 @@ class Stay {
   }
 
   render(startTime: number) {
-    this.draw(true, Date.now(), (Date.now() - startTime) / 1000)
+    this.draw({
+      forceDraw: true,
+      now: Date.now(),
+      time: (Date.now() - startTime) / 1000,
+    })
     if (
       ![...this.getChildren().values()].every((child) => {
         return child.state === "idle"
@@ -385,7 +392,11 @@ class Stay {
       })
     } else {
       this.rendering = false
-      this.draw(true, Date.now(), (Date.now() - startTime) / 1000)
+      this.draw({
+        forceDraw: true,
+        now: Date.now(),
+        time: (Date.now() - startTime) / 1000,
+      })
     }
   }
   getTools(): StayTools {
@@ -430,14 +441,19 @@ class Stay {
 
         this.render(Date.now())
       },
-      progress: (time: number) => {
+      progress: (time: number, bound?: ProgressBound) => {
         if (this.rendering) {
           throw new Error(
             "rendering is true, you can't call progress, you need to set autoRender to false and wait canvas render over if you called start() method"
           )
         }
         this.lastProgress = time
-        this.draw(true, Date.now(), time)
+        this.draw({
+          forceDraw: true,
+          now: Date.now(),
+          time,
+          bound,
+        })
       },
       hasChild: (id: string) => {
         return this.getChildren().has(id)
@@ -685,7 +701,9 @@ class Stay {
       },
       zoom: (deltaY: number, center: PointType): Promise<void> => {
         this.getChildren().forEach((child) => {
-          child.shape.zoom(child.shape._zoom(deltaY, center))
+          if (child.state !== "hidden") {
+            child.shape.zoom(child.shape._zoom(deltaY, center))
+          }
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)
@@ -769,21 +787,21 @@ class Stay {
 
         const childrenReady = Promise.all(
           children.map(async (c) => {
-            await c.draw(
-              {
+            await c.draw({
+              props: {
                 context: tempCtx,
                 now: Date.now(),
                 width: this.width,
                 height: this.height,
               },
-              progress,
-              {
+              time: progress,
+              extraTransform: {
                 offsetX,
                 offsetY,
                 zoom: (scale - 1) * -1000,
                 zoomCenter: { x: targetArea.x, y: targetArea.y },
-              }
-            )
+              },
+            })
           })
         )
 
@@ -1046,7 +1064,10 @@ class Stay {
   }
 
   startRender() {
-    this.draw(true, Date.now())
+    this.draw({
+      forceDraw: true,
+      now: Date.now(),
+    })
     window.requestAnimationFrame(this.startRender.bind(this))
   }
 }

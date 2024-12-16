@@ -1,4 +1,5 @@
 import { Shape } from "../shapes/shape"
+import { ExtraTransform, ProgressBound, ShapeDrawProps } from "../userTypes"
 
 export interface StackItem {
   state: string
@@ -23,3 +24,10 @@ export interface StepRecorderProps {
 }
 
 export type valueof<T> = T extends Record<string, infer V> ? V : never
+
+export interface DrawChildProps {
+  props: ShapeDrawProps
+  time?: number
+  extraTransform?: ExtraTransform
+  bound?: ProgressBound
+}

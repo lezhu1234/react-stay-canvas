@@ -154,6 +154,15 @@ export interface StayDrawProps {
   now?: number
   time?: number
   bound?: ProgressBound
+  beforeDrawCallback?: () => void
+  afterDrawCallback?: (canvas: Canvas) => void
+}
+
+export interface ProgressProps {
+  time: number
+  bound?: ProgressBound
+  beforeDrawCallback?: () => void
+  afterDrawCallback?: (canvas: Canvas) => void
 }
 export interface StayTools {
   createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
@@ -189,7 +198,7 @@ export interface StayTools {
   redo: () => void
   undo: () => void
   start: () => void
-  progress: (time: number, bound?: ProgressBound) => void
+  progress: (props: ProgressProps) => void
   triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
   deleteListener: (name: string) => void
   getCurrentShapes: () => { shape: Shape; name: string; id: string; layer: number }[]

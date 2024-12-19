@@ -68,7 +68,7 @@ export abstract class Shape {
       default: this.draw,
       ...stateDrawFuncMap,
     }
-    this.filter = filter ?? ""
+    this.filter = filter ?? "none"
     this.startTime = 0
     this.updateNextFrame = false
     this.contentUpdated = true
@@ -141,6 +141,7 @@ export abstract class Shape {
     gco,
     state,
     hidden,
+    filter,
     stateDrawFuncMap,
   }: ShapeProps) {
     this.lineWidth = lineWidth ?? this.lineWidth
@@ -149,6 +150,7 @@ export abstract class Shape {
     this.type = type ?? this.type
     this.gco = gco ?? this.gco
     this.hidden = hidden ?? this.hidden
+    this.filter = filter ?? this.filter
     this.color = this.tryConvertToRGBA(color ?? this.color)
 
     this.stateDrawFuncMap = stateDrawFuncMap ?? this.stateDrawFuncMap

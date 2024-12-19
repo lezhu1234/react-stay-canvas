@@ -193,7 +193,14 @@ class Stay {
     delete this.events[name]
   }
 
-  draw({ forceDraw = false, time, now = Date.now(), bound }: StayDrawProps) {
+  draw({
+    forceDraw = false,
+    time,
+    now = Date.now(),
+    bound,
+    beforeDrawCallback,
+    afterDrawCallback,
+  }: StayDrawProps) {
     interface ChildLayer {
       update: boolean
       members: StayChild[]
@@ -216,6 +223,10 @@ class Stay {
         childrenInlayer[child.layer].update ||= child.drawAction === DRAW_ACTIONS.UPDATE
       }
     })
+
+    if (beforeDrawCallback) {
+      beforeDrawCallback()
+    }
 
     for (const layerIndex in childrenInlayer) {
       const particalChildren = childrenInlayer[layerIndex]
@@ -258,6 +269,10 @@ class Stay {
         child.drawAction = null
         child.beforeLayer = child.layer
       }
+    }
+
+    if (afterDrawCallback) {
+      afterDrawCallback(this.root)
     }
 
     this.zIndexUpdated = false
@@ -441,7 +456,7 @@ class Stay {
 
         this.render(Date.now())
       },
-      progress: (time: number, bound?: ProgressBound) => {
+      progress: ({ time, bound, beforeDrawCallback, afterDrawCallback }) => {
         if (this.rendering) {
           throw new Error(
             "rendering is true, you can't call progress, you need to set autoRender to false and wait canvas render over if you called start() method"
@@ -453,6 +468,8 @@ class Stay {
           now: Date.now(),
           time,
           bound,
+          beforeDrawCallback,
+          afterDrawCallback,
         })
       },
       hasChild: (id: string) => {

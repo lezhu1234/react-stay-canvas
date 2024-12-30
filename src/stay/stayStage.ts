@@ -5,7 +5,7 @@ import Stay from "./stay"
 
 type Args<T> = T extends (...args: infer R) => any ? R : never
 export default class StayStage {
-  #stay: Stay
+  #stay: Stay<string>
   tools: StayTools
   constructor(
     canvasLayers: HTMLCanvasElement[],
@@ -51,7 +51,6 @@ export default class StayStage {
     return this.#stay.draw({
       forceDraw: true,
       now: Date.now(),
-      time: this.#stay.lastProgress,
     })
   }
 

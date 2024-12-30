@@ -3,7 +3,13 @@ import { GetCurrentArgumentsProps, Shape } from "./shapes"
 import { Point } from "./shapes/point"
 import { StayChild } from "./stay/stayChild"
 import { valueof } from "./stay/types"
-import { DrawCanvasContext, NumberInRangeZeroOne, ShapeConfig, UserCallback } from "./types"
+import {
+  DrawCanvasContext,
+  EventProps,
+  NumberInRangeZeroOne,
+  ShapeConfig,
+  UserCallback,
+} from "./types"
 import { DRAW_ACTIONS, SHAPE_DRAW_TYPES, SORT_CHILDREN_METHODS } from "./userConstants"
 import { RGB, RGBA } from "./w3color"
 
@@ -25,20 +31,41 @@ export type StayCanvasRefType = {
   focus: () => void
 }
 
-export interface ActionEvent {
+export interface MouseActionEvent<EventName extends PredefinedMouseEventName> {
   state: string
-  name: string
+  pressedKeys: Set<string>
+  name: EventName
   x: number
   y: number
   point: Point
   target: StayChild
+  isMouseEvent: true
+}
+
+export interface KeyActionEvent<EventName extends PredefinedKeyEventName> {
+  state: string
+  key: string
   pressedKeys: Set<string>
-  key: string | null
-  isMouseEvent: boolean
+  name: EventName
+  isMouseEvent: false
+}
+
+export interface WheelActionEvent<EventName extends PredefinedWheelEventName>
+  extends MouseActionEvent<EventName> {
+  name: EventName
   deltaX: number
   deltaY: number
   deltaZ: number
 }
+
+export type ActionEvent<EventName extends string | string[]> =
+  EventName extends PredefinedWheelEventName
+    ? WheelActionEvent<EventName>
+    : EventName extends PredefinedKeyEventName
+    ? KeyActionEvent<EventName>
+    : EventName extends PredefinedMouseEventName
+    ? MouseActionEvent<EventName>
+    : never
 
 export interface TimelineChildProps<T extends Shape> {
   id?: string
@@ -85,9 +112,9 @@ export interface getContainPointChildrenProps {
 
 export type SortChildrenMethodsValues = valueof<typeof SORT_CHILDREN_METHODS>
 
-export interface ActionCallbackProps<T = Dict> {
+export interface ActionCallbackProps<T = Dict, EventName extends string | string[] = string> {
   originEvent: Event
-  e: ActionEvent
+  e: ActionEvent<EventName>
   store: storeType
   stateStore: storeType
   composeStore: Record<string, any>
@@ -133,13 +160,16 @@ export type ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<
     : []
   : []
 
-export interface ListenerProps<T extends ListenerNamePayloadPair = ListenerNamePayloadPair> {
+export interface ListenerProps<
+  T extends ListenerNamePayloadPair = ListenerNamePayloadPair,
+  EventName extends string = string
+> {
   name: T["name"]
   state?: string
   selector?: string
-  event: string | string[]
+  event: EventName | EventName[]
   sortBy?: SortChildrenMethodsValues | ChildSortFunction
-  callback: UserCallback<T["payload"]>
+  callback: UserCallback<T["payload"], EventName | EventName[]>
 }
 
 export type SelectorFunc = (child: StayChild) => boolean
@@ -152,8 +182,6 @@ export interface ProgressBound {
 export interface StayDrawProps {
   forceDraw?: boolean
   now?: number
-  time?: number
-  bound?: ProgressBound
   beforeDrawCallback?: () => void
   afterDrawCallback?: (canvas: Canvas) => void
 }
@@ -198,10 +226,10 @@ export interface StayTools {
   redo: () => void
   undo: () => void
   start: () => void
+  refresh: () => void
   progress: (props: ProgressProps) => void
   triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
   deleteListener: (name: string) => void
-  getCurrentShapes: () => { shape: Shape; name: string; id: string; layer: number }[]
   timelineChild: <T extends Shape>(props: TimelineChildProps<T>) => StayChild<T>
 }
 
@@ -319,13 +347,17 @@ export type PermutationsOfTuple<T extends unknown[], R extends unknown[] = []> =
   : R
 
 export type DisOrderArr<T> = PermutationsOfTuple<Union2Tuple<T>>
-export type UnionListenerProps<T extends ListenerNamePayloadPair[]> = {
-  [key in keyof T]: ListenerProps<T[key]>
+export type UnionListenerProps<
+  T extends ListenerNamePayloadPair[],
+  EventName extends string = string
+> = {
+  [key in keyof T]: ListenerProps<T[key], EventName>
 }
 
-export type ListenerArrayProps<T extends ListenerNamePayloadPairOrName[]> = UnionListenerProps<
-  ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>
->
+export type ListenerArrayProps<
+  T extends ListenerNamePayloadPairOrName[],
+  EventName extends string = PredefinedEventName | (string & {})
+> = UnionListenerProps<ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>, EventName>
 
 export type Tuple2Union<T extends unknown[]> = T extends [infer F, ...infer L]
   ? F | Tuple2Union<L>
@@ -421,6 +453,19 @@ export interface IntermediateShapeInfo {
   afterIndex: number
 }
 
+export interface ShapeBound {
+  beforeIndex: number
+  afterIndex: number
+  beforeTime: number
+  afterTime: number
+  ratio: number
+}
+
+export interface CurrentShapeInfo<T> extends ShapeBound {
+  current: T
+  currentTime: number
+}
+
 export function isIntermediateShapeInfo<T extends Shape>(
   shape: IntermediateShapeInfo | T
 ): shape is IntermediateShapeInfo {
@@ -431,3 +476,25 @@ export interface ShapeStackElement<T> {
   shape: T
   transition: TransitionConfig | Omit<TransitionConfig, "effect"> | undefined
 }
+
+export type PredefinedWheelEventName = "wheel" | "zoomout" | "zoomin"
+
+export type PredefinedMouseEventName =
+  | "mousedown"
+  | "dragover"
+  | "drop"
+  | "mouseup"
+  | "startmove"
+  | "move"
+  | "moveend"
+  | "dragstart"
+  | "drag"
+  | "dragend"
+  | "mouseleave"
+  | "mouseenter"
+  | "mousemove"
+  | "click"
+  | PredefinedWheelEventName
+
+export type PredefinedKeyEventName = "keydown" | "keyup" | "undo" | "redo"
+export type PredefinedEventName = PredefinedMouseEventName | PredefinedKeyEventName

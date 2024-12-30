@@ -1,8 +1,11 @@
 import { Shape } from "../shapes/shape"
 import {
+  CurrentShapeInfo,
   ExtraTransform,
   IntermediateShapeInfo,
   isIntermediateShapeInfo,
+  ProgressBound,
+  ShapeBound,
   ShapeDrawProps,
   ShapeProps,
   ShapeStackElement,
@@ -19,7 +22,7 @@ import {
   UpdateStayChildProps,
 } from "../userTypes"
 import { assert, getShapeByEffect, uuid4 } from "../utils"
-import { DrawChildProps, StepProps } from "./types"
+import { DrawChildProps, SetShapeChildCurrentTime, StepProps } from "./types"
 
 export class StayChild<T extends Shape = Shape> {
   beforeLayer: number | null
@@ -35,6 +38,15 @@ export class StayChild<T extends Shape = Shape> {
   endTransition: TransitionConfig | undefined
   #removeCallback: ((layer: number) => void) | undefined
 
+  private intermidateShapeCache = new Map<
+    string,
+    {
+      shape: T
+      hit: number
+    }
+  >()
+  private intermidateShapeCacheSize = 10
+  shape: T
   constructor({
     id,
     zIndex,
@@ -60,7 +72,13 @@ export class StayChild<T extends Shape = Shape> {
     this.#removeCallback = undefined
     this.init(shape, transition)
     this.endTransition = transition?.leave ?? undefined
+
+    this.shape = shape
   }
+
+  // get shape() {
+  //   return this.currentShapeInfo.current
+  // }
 
   init(shape: T, transition: StayChildTransitions | undefined) {
     if (transition && transition.enter) {
@@ -97,11 +115,13 @@ export class StayChild<T extends Shape = Shape> {
         transition,
       })
     }
+
+    this.shape = this.shapeStack[this.shapeStack.length - 1].shape
   }
 
-  get shape() {
-    return this.shapeStack[this.shapeStack.length - 1].shape
-  }
+  // get shape() {
+  //   return this.shapeStack[this.shapeStack.length - 1].shape
+  // }
 
   static diff<T extends Shape>(
     history: StayChild<T> | undefined,
@@ -148,13 +168,6 @@ export class StayChild<T extends Shape = Shape> {
     return new StayChild({ ...this, shape: this.shape.copy() })
   }
 
-  awaitCopy(): Promise<StayChild<T>> {
-    return new Promise(async (resolve) => {
-      const shape = await this.shape.awaitCopy()
-      resolve(new StayChild({ ...this, shape }))
-    })
-  }
-
   hidden(removeTransition?: TransitionConfig) {
     const transition = removeTransition ?? this.endTransition
     if (transition) {
@@ -184,7 +197,7 @@ export class StayChild<T extends Shape = Shape> {
   async idleDraw(props: ShapeDrawProps, extraTransform?: ExtraTransform) {
     let shape = this.shape
     if (extraTransform) {
-      shape = (await shape.awaitCopy()) as T
+      shape = (await shape.copy()) as T
       shape.move(extraTransform.offsetX, extraTransform.offsetY)
       shape.zoom(shape._zoom(extraTransform.zoom, extraTransform.zoomCenter))
     }
@@ -196,126 +209,179 @@ export class StayChild<T extends Shape = Shape> {
     return drawState
   }
 
-  draw({ time, props, extraTransform, bound }: DrawChildProps): boolean {
-    const info = this.getIntermediateInfoOrShape(time)
-    if (
-      isIntermediateShapeInfo(info) &&
-      this.shape.earlyStopIntermediateState(
-        info.before,
-        info.after,
-        info.ratio,
-        info.type,
-        props.width,
-        props.height
-      )
-    ) {
-      return false
+  setCurrentTime({ time, bound }: SetShapeChildCurrentTime) {
+    if (bound && bound.afterTime < bound.beforeTime) {
+      const temp = bound.afterTime
+      bound.afterTime = bound.beforeTime
+      bound.beforeTime = temp
     }
 
-    let shape: Shape
-    if (bound && time) {
-      const beforeShape = this.getShapeByTime(bound.beforeTime)
-      const afterShape = this.getShapeByTime(bound.afterTime)
-      const element = this.getNextShapeStackElementByTime(Math.ceil(bound.afterTime))
-      shape = this.shape.intermediateState(
-        beforeShape,
-        afterShape,
-        (time - bound.beforeTime) / (bound.afterTime - bound.beforeTime),
-        element.transition?.type ?? "linear"
-      )
-    } else {
-      shape = this.getShapeByTime(time)
+    const updateCurrentShape = (shape: T) => {
+      this.shape = shape
+      return shape
     }
 
-    // ?
-    shape.contentUpdated = true
+    const timeBound = this.getTimelineIndexBound(time)
+    let beforeTime = timeBound.beforeTime
+    let afterTime = timeBound.afterTime
+    let beforeShape = this.shapeStack[timeBound.beforeIndex]!.shape
+    let afterShape = this.shapeStack[timeBound.afterIndex]!.shape
+    let transitionType = this.shapeStack[timeBound.afterIndex]!.transition?.type ?? "linear"
 
-    // if (this.state === "hidden") {
-    //   return false
-    // }
+    if (bound) {
+      const _bound = bound as Required<ProgressBound>
+      const beforeBound = this.getTimelineIndexBound(_bound.beforeTime)
+      beforeShape = this.getTimelineShapeByBound(beforeBound)
+      beforeTime = _bound.beforeTime
+      const afterBound = this.getTimelineIndexBound(_bound.afterTime)
+      afterShape = this.getTimelineShapeByBound(afterBound)
+      afterTime = _bound.afterTime
+      const afterTransitionType = this.shapeStack[afterBound.afterIndex]!.transition?.type
 
+      if (afterTransitionType) {
+        transitionType = afterTransitionType
+      }
+    }
+
+    if (beforeTime > afterTime) {
+      throw new Error("beforeTime must be less than afterTime")
+    }
+
+    if (time < beforeTime) {
+      throw new Error("time must be greater than beforeTime")
+    }
+
+    if (time > afterTime) {
+      throw new Error("time must be less than afterTime")
+    }
+
+    if (beforeTime === afterTime) {
+      return updateCurrentShape(afterShape)
+    }
+
+    if (time === beforeTime) {
+      return updateCurrentShape(beforeShape)
+    }
+    if (time === afterTime) {
+      return updateCurrentShape(afterShape)
+    }
+
+    const currentShape = afterShape.intermediateState(
+      beforeShape,
+      afterShape,
+      (time - beforeTime) / (afterTime - beforeTime),
+      transitionType
+    ) as T
+
+    return updateCurrentShape(currentShape)
+  }
+
+  draw({ props, extraTransform }: DrawChildProps): boolean {
+    let shape = this.shape
     if (extraTransform) {
       shape = shape.copy() as T
       shape.move(extraTransform.offsetX, extraTransform.offsetY)
       shape.zoom(shape._zoom(extraTransform.zoom, extraTransform.zoomCenter))
     }
-    const drawState = shape._draw(props)
-    // if (drawState !== true || this.state === "hidden") {
-    //   this.state = "idle"
-    // }
-    return drawState
+    return shape._draw(props)
   }
 
-  getNextShapeStackElementByTime(time: number) {
-    let stepStartTime = 0
-    for (let index = 0; index < this.shapeStack.length; index++) {
-      const { transition, shape } = this.shapeStack[index]
-      const duration = transition?.duration ?? 0
-      const delay = transition?.delay ?? 0
+  getTimelineShapeByBound(bound: ShapeBound): T {
+    const ratio = bound.ratio
+    const beforeShape = this.shapeStack[bound.beforeIndex].shape
+    const afterShape = this.shapeStack[bound.afterIndex].shape
+    const transition = this.shapeStack[bound.afterIndex].transition
 
-      const stepDelayEndTime = stepStartTime + delay
-      const stepEndTime = stepStartTime + duration + delay
-      if (stepDelayEndTime > time) {
-        return this.shapeStack[index - 1]
-      }
-
-      if (stepEndTime >= time) {
-        return this.shapeStack[index]
-      }
+    if (ratio === 0) {
+      return beforeShape
+    }
+    if (ratio === 1) {
+      return afterShape
     }
 
-    return this.shapeStack[this.shapeStack.length - 1]
+    const transitionType = transition?.type ?? "linear"
+
+    const key = `${bound.beforeIndex}-${bound.afterIndex}-${ratio}-${transitionType}`
+
+    const cachedShape = this.intermidateShapeCache.get(key)
+    if (cachedShape) {
+      cachedShape.hit++
+      return cachedShape.shape
+    }
+    if (this.intermidateShapeCache.size > this.intermidateShapeCacheSize) {
+      let minCacheHit = Infinity,
+        minCacheHitKey = ""
+      this.intermidateShapeCache.forEach((value, key) => {
+        if (value.hit < minCacheHit) {
+          minCacheHit = value.hit
+          minCacheHitKey = key
+        }
+      })
+      this.intermidateShapeCache.delete(minCacheHitKey)
+    }
+
+    const intermediateShape = afterShape.intermediateState(
+      beforeShape,
+      afterShape,
+      ratio,
+      transitionType
+    ) as T
+    this.intermidateShapeCache.set(key, { shape: intermediateShape, hit: 1 })
+    return intermediateShape
   }
 
-  getIntermediateInfoOrShape(time?: number): IntermediateShapeInfo | Shape {
-    if (time === undefined) {
-      return this.shape
-    }
-
+  getTimelineIndexBound(time: number): ShapeBound {
     if (time < 0) {
       throw new Error("time cannot be negative")
     }
 
     let stepStartTime = 0
     for (let index = 0; index < this.shapeStack.length; index++) {
-      const { transition, shape } = this.shapeStack[index]
+      const { transition } = this.shapeStack[index]
       const duration = transition?.duration ?? 0
       const delay = transition?.delay ?? 0
 
       const stepDelayEndTime = stepStartTime + delay
       const stepEndTime = stepStartTime + duration + delay
       if (stepDelayEndTime > time) {
-        return this.shapeStack[index - 1].shape
+        return {
+          beforeIndex: index - 1,
+          afterIndex: index - 1,
+          beforeTime: stepStartTime,
+          afterTime: stepDelayEndTime,
+          ratio: 0,
+        }
       }
 
-      if (stepEndTime > time && index > 0) {
+      if (stepEndTime > time) {
         const ratio = (time - stepDelayEndTime) / (stepEndTime - stepDelayEndTime)
         return {
-          before: this.shapeStack[index - 1].shape,
-          after: shape,
           ratio,
-          type: transition?.type ?? "linear",
-          intermediate: true,
           beforeIndex: index - 1,
           afterIndex: index,
+          beforeTime: stepDelayEndTime,
+          afterTime: stepEndTime,
         }
       }
 
       if (stepEndTime === time) {
-        return shape
+        return {
+          beforeIndex: index,
+          afterIndex: index,
+          beforeTime: stepEndTime,
+          afterTime: stepEndTime,
+          ratio: 0,
+        }
       }
       stepStartTime = stepEndTime
     }
 
-    return this.shape
-  }
-
-  getShapeByTime(time?: number): Shape {
-    const info = this.getIntermediateInfoOrShape(time)
-    if (isIntermediateShapeInfo(info)) {
-      return this.shape.intermediateState(info.before, info.after, info.ratio, info.type)
-    } else {
-      return info
+    return {
+      beforeIndex: this.shapeStack.length - 1,
+      afterIndex: this.shapeStack.length - 1,
+      beforeTime: time,
+      afterTime: time,
+      ratio: 0,
     }
   }
 

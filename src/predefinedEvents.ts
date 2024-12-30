@@ -1,8 +1,14 @@
 import { Point } from "./shapes/point"
 import { EventProps } from "./types"
 import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
+import {
+  PredefinedEventName,
+  PredefinedKeyEventName,
+  PredefinedMouseEventName,
+  PredefinedWheelEventName,
+} from "./userTypes"
 
-export const mouseDownEvent: EventProps = {
+export const mouseDownEvent: EventProps<PredefinedMouseEventName> = {
   name: "mousedown",
   trigger: MOUSE_EVENTS.MOUSE_DOWN,
   conditionCallback: () => true,
@@ -12,27 +18,25 @@ export const mouseDownEvent: EventProps = {
   },
 }
 
-export const UndoEvent: EventProps = {
+export const UndoEvent: EventProps<PredefinedKeyEventName> = {
   name: "undo",
   trigger: KEYBOARRD_EVENTS.KEY_UP,
   conditionCallback: ({ e }) => {
     return (
-      e.pressedKeys.has("Control") && !e.pressedKeys.has("Shift") && e.key?.toLowerCase() === "z"
+      e.pressedKeys.has("Control") && !e.pressedKeys.has("Shift") && e.key.toLowerCase() === "z"
     )
   },
 }
 
-export const RedoEvent: EventProps = {
+export const RedoEvent: EventProps<PredefinedKeyEventName> = {
   name: "redo",
   trigger: KEYBOARRD_EVENTS.KEY_UP,
   conditionCallback: ({ e }) => {
-    return (
-      e.pressedKeys.has("Control") && e.pressedKeys.has("Shift") && e.key?.toLowerCase() === "z"
-    )
+    return e.pressedKeys.has("Control") && e.pressedKeys.has("Shift") && e.key.toLowerCase() === "z"
   },
 }
 
-export const ClickEvent: EventProps = {
+export const ClickEvent: EventProps<PredefinedMouseEventName> = {
   name: "click",
   trigger: MOUSE_EVENTS.MOUSE_UP,
   conditionCallback: ({ e, store }) => {
@@ -47,7 +51,7 @@ export const ClickEvent: EventProps = {
   },
 }
 
-export const MousemoveEvent: EventProps = {
+export const MousemoveEvent: EventProps<PredefinedMouseEventName> = {
   name: "mousemove",
   trigger: MOUSE_EVENTS.MOUSE_MOVE,
   conditionCallback: ({ e }) => {
@@ -55,19 +59,19 @@ export const MousemoveEvent: EventProps = {
   },
 }
 
-export const MouseEnterEvent: EventProps = {
+export const MouseEnterEvent: EventProps<PredefinedMouseEventName> = {
   name: "mouseenter",
   trigger: MOUSE_EVENTS.MOUSE_ENTER,
   conditionCallback: () => true,
 }
 
-export const MouseLeaveEvent: EventProps = {
+export const MouseLeaveEvent: EventProps<PredefinedMouseEventName> = {
   name: "mouseleave",
   trigger: MOUSE_EVENTS.MOUSE_LEAVE,
   conditionCallback: () => true,
 }
 
-const DragEndEvent: EventProps = {
+const DragEndEvent: EventProps<PredefinedMouseEventName> = {
   name: "dragend",
   trigger: MOUSE_EVENTS.MOUSE_UP,
   successCallback: ({ store, deleteEvent }) => {
@@ -77,7 +81,7 @@ const DragEndEvent: EventProps = {
   },
 }
 
-const DragEvent: EventProps = {
+const DragEvent: EventProps<PredefinedMouseEventName> = {
   name: "drag",
   trigger: MOUSE_EVENTS.MOUSE_MOVE,
   conditionCallback: ({ e, store }) => {
@@ -94,7 +98,7 @@ const DragEvent: EventProps = {
   },
 }
 
-export const DragStartEvent: EventProps = {
+export const DragStartEvent: EventProps<PredefinedMouseEventName> = {
   name: "dragstart",
   trigger: MOUSE_EVENTS.MOUSE_DOWN,
   conditionCallback: ({ e }) => {
@@ -106,7 +110,7 @@ export const DragStartEvent: EventProps = {
   },
 }
 
-const MoveEndEvent: EventProps = {
+const MoveEndEvent: EventProps<PredefinedMouseEventName> = {
   name: "moveend",
   trigger: MOUSE_EVENTS.MOUSE_UP,
   conditionCallback: () => true,
@@ -116,7 +120,7 @@ const MoveEndEvent: EventProps = {
   },
 }
 
-const MoveEvent: EventProps = {
+const MoveEvent: EventProps<PredefinedMouseEventName> = {
   name: "move",
   trigger: MOUSE_EVENTS.MOUSE_MOVE,
   conditionCallback: ({ e, store }) => {
@@ -127,7 +131,7 @@ const MoveEvent: EventProps = {
   },
 }
 
-export const StartMoveEvent: EventProps = {
+export const StartMoveEvent: EventProps<PredefinedMouseEventName> = {
   name: "startmove",
   trigger: MOUSE_EVENTS.MOUSE_DOWN,
   conditionCallback: ({ e }) => {
@@ -138,7 +142,7 @@ export const StartMoveEvent: EventProps = {
   },
 }
 
-export const MouseUpEvent: EventProps = {
+export const MouseUpEvent: EventProps<PredefinedMouseEventName> = {
   name: "mouseup",
   trigger: MOUSE_EVENTS.MOUSE_UP,
   conditionCallback: () => true,
@@ -148,37 +152,37 @@ export const MouseUpEvent: EventProps = {
   },
 }
 
-export const ZoomInEvent: EventProps = {
+export const ZoomInEvent: EventProps<PredefinedWheelEventName> = {
   name: "zoomin",
   trigger: MOUSE_EVENTS.WHEEL,
   conditionCallback: ({ e }) => e.deltaY < 0,
 }
 
-export const ZoomOutEvent: EventProps = {
+export const ZoomOutEvent: EventProps<PredefinedWheelEventName> = {
   name: "zoomout",
   trigger: MOUSE_EVENTS.WHEEL,
   conditionCallback: ({ e }) => e.deltaY > 0,
 }
 
-export const KeyUpEvent: EventProps = {
+export const KeyUpEvent: EventProps<PredefinedKeyEventName> = {
   name: "keyup",
   trigger: KEYBOARRD_EVENTS.KEY_UP,
   conditionCallback: () => true,
 }
 
-export const KeyDownEvent: EventProps = {
+export const KeyDownEvent: EventProps<PredefinedKeyEventName> = {
   name: "keydown",
   trigger: KEYBOARRD_EVENTS.KEY_DOWN,
   conditionCallback: () => true,
 }
 
-export const DropEvent: EventProps = {
+export const DropEvent: EventProps<PredefinedMouseEventName> = {
   name: "drop",
   trigger: MOUSE_EVENTS.DROP,
   conditionCallback: () => true,
 }
 
-export const DragOverEvent: EventProps = {
+export const DragOverEvent: EventProps<PredefinedMouseEventName> = {
   name: "dragover",
   trigger: MOUSE_EVENTS.DRAG_OVER,
   conditionCallback: () => true,

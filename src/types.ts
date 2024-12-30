@@ -22,28 +22,34 @@ export interface UserCallbackTools {
   deleteEvent: (name: string) => void
 }
 
-export interface UserSuccessCallbackProps {
-  e: ActionEvent
+export interface UserSuccessCallbackProps<EventName extends string> {
+  e: ActionEvent<EventName>
   store: storeType
   stateStore: storeType
-  deleteEvent: (name: string) => void
+  deleteEvent: (name: EventName) => void
 }
 
-export interface UserConditionCallbackProps {
-  e: ActionEvent
+export interface UserConditionCallbackProps<EventName extends string> {
+  e: ActionEvent<EventName>
   store: storeType
   stateStore: storeType
 }
 
-export interface UserConditionCallbackFunction {
-  (props: UserConditionCallbackProps): boolean
+export interface UserConditionCallbackFunction<EventName extends string> {
+  (props: UserConditionCallbackProps<EventName>): boolean
 }
 
-export type CallbackFuncMap<T extends ActionCallbackProps<U>, U> = {
-  [key in T["e"]["name"]]: () => { [key: string]: any } | void | undefined
+export type CallbackFuncMap<
+  T extends ActionCallbackProps<U, EventName>,
+  U,
+  EventName extends string | string[]
+> = {
+  [key in T["e"]["name"]]?: () => { [key: string]: any } | void | undefined
 }
 
-export type UserCallback<T> = (p: ActionCallbackProps<T>) => CallbackFuncMap<typeof p, T> | void
+export type UserCallback<T, EventName extends string | string[]> = (
+  p: ActionCallbackProps<T, EventName>
+) => CallbackFuncMap<ActionCallbackProps<T, EventName>, T, EventName> | void
 
 // export interface StayAction {
 //   name: string
@@ -54,33 +60,37 @@ export type UserCallback<T> = (p: ActionCallbackProps<T>) => CallbackFuncMap<typ
 //   callback: UserCallback
 // }
 
-export interface StayEventMap {
-  [key: string]: StayEventProps
+export type StayEventMap<EventName extends string> = {
+  [key in EventName]: StayEventProps<EventName>
 }
 
-export interface StayEventRequiredProps {
-  name: string
+export interface StayEventRequiredProps<EventName extends string> {
+  name: EventName
   trigger: valueof<typeof MOUSE_EVENTS> | valueof<typeof KEYBOARRD_EVENTS>
 }
 
-export interface StayEventChooseProps {
-  conditionCallback: UserConditionCallbackFunction
-  successCallback: (props: UserSuccessCallbackProps) => void | EventProps | EventProps[]
+export interface StayEventChooseProps<EventName extends string> {
+  conditionCallback: UserConditionCallbackFunction<EventName>
+  successCallback: (
+    props: UserSuccessCallbackProps<EventName>
+  ) => void | EventProps<EventName> | EventProps<EventName>[]
 }
 
-export type StayEventProps = StayEventRequiredProps & StayEventChooseProps
+export type StayEventProps<EventName extends string> = StayEventRequiredProps<EventName> &
+  StayEventChooseProps<EventName>
 
-export type EventProps = StayEventRequiredProps & Partial<StayEventChooseProps>
+export type EventProps<EventName extends string> = StayEventRequiredProps<EventName> &
+  Partial<StayEventChooseProps<EventName>>
 
 export interface ContextLayerSetFunction {
   (layer: HTMLCanvasElement): DrawCanvasContext | null
 }
-export interface StayCanvasProps {
+export interface StayCanvasProps<EventName extends string = string> {
   className?: string
   width?: number
   height?: number
   layers?: number | ContextLayerSetFunction[]
-  eventList?: EventProps[]
+  eventList?: EventProps<EventName>[]
   listenerList?: ListenerProps[]
   passive?: boolean
   autoRender?: boolean

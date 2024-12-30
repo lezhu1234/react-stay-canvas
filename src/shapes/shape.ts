@@ -388,12 +388,6 @@ export abstract class Shape {
     return rgba
   }
 
-  awaitCopy() {
-    return new Promise((resolve) => {
-      resolve(this.copy())
-    })
-  }
-
   abstract contains(point: PointType, cxt?: DrawCanvasContext): boolean
 
   abstract copy(): Shape

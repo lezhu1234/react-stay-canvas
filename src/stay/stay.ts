@@ -45,26 +45,30 @@ import {
   TransitionConfig,
   ProgressBound,
   StayDrawProps,
+  PredefinedMouseEventName,
+  PredefinedEventName,
+  PredefinedWheelEventName,
+  ListenerNamePayloadPair,
 } from "../userTypes"
 import { assert, infixExpressionParser, numberAlmostEqual, parseLayer, uuid4 } from "../utils"
 import { StayChild } from "./stayChild"
-import { StackItem, StepProps } from "./types"
+import { SetShapeChildCurrentTime, StackItem, StepProps } from "./types"
 
 interface drawLayer {
   forceUpdate: boolean
 }
 
-class Stay {
+class Stay<EventName extends string> {
   #children: Map<string, StayChild>
   composeStore: Record<string, any>
   currentPressedKeys: {
     [key: string]: boolean
   }
   drawLayers: drawLayer[]
-  events: StayEventMap
+  events: StayEventMap<EventName>
   height: number
   historyChildren: Map<string, StayChild>
-  listeners: Map<string, Required<ListenerProps>>
+  listeners: Map<string, Required<ListenerProps<ListenerNamePayloadPair, EventName>>>
   root: Canvas
   stack: StackItem[]
   stackIndex: number
@@ -83,7 +87,6 @@ class Stay {
   nextTickFunctions: (() => void)[]
   autoRender: boolean
   rendering: boolean
-  lastProgress: number
 
   constructor(root: Canvas, passive: boolean, autoRender: boolean = true) {
     this.root = root
@@ -107,7 +110,7 @@ class Stay {
       layer: 0,
     })
     this.#children.set(this.rootChild.id, this.rootChild)
-    this.events = {}
+    this.events = {} as StayEventMap<EventName>
     this.store = new Map<string, any>()
     this.stateStore = new Map<string, any>()
     this.composeStore = {}
@@ -134,7 +137,6 @@ class Stay {
       this.startRender()
     }
     this.rendering = autoRender
-    this.lastProgress = 0
   }
 
   addEventListener({
@@ -154,7 +156,7 @@ class Stay {
       name,
       state,
       selector,
-      event: eventList as string[],
+      event: eventList as EventName[],
       sortBy,
       callback,
     })
@@ -178,7 +180,7 @@ class Stay {
   }
 
   clearEvents() {
-    this.events = {}
+    this.events = {} as StayEventMap<EventName>
   }
 
   cloneChildren(): Map<string, StayChild> {
@@ -189,15 +191,18 @@ class Stay {
     return newChildren
   }
 
-  deleteEvent(name: string) {
+  deleteEvent(name: EventName) {
     delete this.events[name]
   }
 
+  updateChildrenTime(props: SetShapeChildCurrentTime) {
+    this.getChildren().forEach((child) => {
+      child.setCurrentTime(props)
+    })
+  }
   draw({
     forceDraw = false,
-    time,
     now = Date.now(),
-    bound,
     beforeDrawCallback,
     afterDrawCallback,
   }: StayDrawProps) {
@@ -259,8 +264,6 @@ class Stay {
             width: this.width,
             height: this.height,
           },
-          time,
-          bound,
         })
 
         if (updateNextFrame || forceDraw) {
@@ -315,13 +318,14 @@ class Stay {
 
   fireEvent(e: KeyboardEvent | MouseEvent | WheelEvent | DragEvent, trigger: string) {
     const isMouseEvent = e instanceof MouseEvent
-    const triggerEvents: { [key: string]: ActionEvent } = {}
-    Object.keys(this.events).forEach((eventName) => {
+    const triggerEvents: { [key: string]: ActionEvent<EventName> } = {}
+    Object.keys(this.events).forEach((_eventName) => {
+      const eventName = _eventName as EventName
       // may be deleted by other event
       if (!this.events[eventName]) {
         return
       }
-      const event = this.events[eventName] as StayEventProps
+      const event = this.events[eventName] as StayEventProps<EventName>
       if (event.trigger !== trigger) return false
 
       const actionEvent = {
@@ -330,9 +334,10 @@ class Stay {
         pressedKeys: new Set(
           Object.keys(this.currentPressedKeys).filter((key) => this.currentPressedKeys[key])
         ),
-      } as ActionEvent
+        isMouseEvent: isMouseEvent,
+      } as ActionEvent<EventName>
 
-      actionEvent.isMouseEvent = isMouseEvent
+      // actionEvent.isMouseEvent = isMouseEvent
 
       if (actionEvent.isMouseEvent) {
         const mouseE = e as MouseEvent
@@ -341,9 +346,10 @@ class Stay {
         actionEvent.point = new Point(actionEvent.x, actionEvent.y)
         if (event.trigger === MOUSE_EVENTS.WHEEL) {
           const wheelE = e as WheelEvent
-          actionEvent.deltaX = wheelE.deltaX
-          actionEvent.deltaY = wheelE.deltaY
-          actionEvent.deltaZ = wheelE.deltaZ
+          const _actionEvent = actionEvent as ActionEvent<PredefinedWheelEventName>
+          _actionEvent.deltaX = wheelE.deltaX
+          _actionEvent.deltaY = wheelE.deltaY
+          _actionEvent.deltaZ = wheelE.deltaZ
         }
       } else {
         const keyboardE = e as KeyboardEvent
@@ -391,11 +397,10 @@ class Stay {
     this.nextTickFunctions.push(fn)
   }
 
-  render(startTime: number) {
+  render() {
     this.draw({
       forceDraw: true,
       now: Date.now(),
-      time: (Date.now() - startTime) / 1000,
     })
     if (
       ![...this.getChildren().values()].every((child) => {
@@ -403,14 +408,13 @@ class Stay {
       })
     ) {
       window.requestAnimationFrame(() => {
-        this.render(startTime)
+        this.render()
       })
     } else {
       this.rendering = false
       this.draw({
         forceDraw: true,
         now: Date.now(),
-        time: (Date.now() - startTime) / 1000,
       })
     }
   }
@@ -434,19 +438,7 @@ class Stay {
         this.unLogedChildrenIds.add(child.id)
         return child
       },
-      getCurrentShapes: () => {
-        return [...this.tools.getChildrenWithoutRoot().values()]
-          .map((child) => {
-            const shape = child.getShapeByTime(this.lastProgress)
-            return {
-              shape,
-              name: child.className,
-              id: child.id,
-              layer: child.layer,
-            }
-          })
-          .filter((item) => item !== null)
-      },
+
       start: () => {
         if (this.autoRender) {
           throw new Error("autoRender is true, you can't call start")
@@ -454,7 +446,7 @@ class Stay {
 
         this.rendering = true
 
-        this.render(Date.now())
+        this.render()
       },
       progress: ({ time, bound, beforeDrawCallback, afterDrawCallback }) => {
         if (this.rendering) {
@@ -462,14 +454,18 @@ class Stay {
             "rendering is true, you can't call progress, you need to set autoRender to false and wait canvas render over if you called start() method"
           )
         }
-        this.lastProgress = time
+        this.updateChildrenTime({ time, bound })
         this.draw({
           forceDraw: true,
           now: Date.now(),
-          time,
-          bound,
           beforeDrawCallback,
           afterDrawCallback,
+        })
+      },
+      refresh: () => {
+        this.draw({
+          forceDraw: true,
+          now: Date.now(),
         })
       },
       hasChild: (id: string) => {
@@ -707,10 +703,7 @@ class Stay {
 
       move: (offsetX: number, offsetY: number): Promise<void> => {
         this.getChildren().forEach((child) => {
-          // child.shape.move(...child.shape._move(offsetX, offsetY))
-          child.shapeStack.forEach(({ shape }) => {
-            shape._move(offsetX, offsetY)
-          })
+          child.shape.move(...child.shape._move(offsetX, offsetY))
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)
@@ -721,9 +714,7 @@ class Stay {
       },
       zoom: (deltaY: number, center: PointType): Promise<void> => {
         this.getChildren().forEach((child) => {
-          child.shapeStack.forEach(({ shape }) => {
-            shape.zoom(shape._zoom(deltaY, center))
-          })
+          child.shape.zoom(child.shape._zoom(deltaY, center))
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)
@@ -807,6 +798,10 @@ class Stay {
 
         const childrenReady = Promise.all(
           children.map(async (c) => {
+            if (progress) {
+              c.setCurrentTime({ time: progress })
+            }
+
             await c.draw({
               props: {
                 context: tempCtx,
@@ -814,7 +809,6 @@ class Stay {
                 width: this.width,
                 height: this.height,
               },
-              time: progress,
               extraTransform: {
                 offsetX,
                 offsetY,
@@ -903,13 +897,15 @@ class Stay {
       },
       triggerAction: (
         originEvent: Event,
-        triggerEvents: { [key: string]: ActionEvent },
+        triggerEvents: { [key: string]: ActionEvent<EventName> },
         payload: Dict
       ) => {
         const isMouseEvent = originEvent instanceof MouseEvent
         interface CallBackType {
-          callback: ((p: ActionCallbackProps) => any) | Promise<(p: ActionCallbackProps) => any>
-          e: ActionEvent
+          callback:
+            | ((p: ActionCallbackProps<Dict<any>, EventName>) => any)
+            | Promise<(p: ActionCallbackProps<Dict<any>, EventName>) => any>
+          e: ActionEvent<EventName>
           name: string
         }
         // let needUpdate = false
@@ -932,20 +928,21 @@ class Stay {
             const actionEvent = triggerEvents[actionEventName]
 
             if (isMouseEvent) {
+              const _actionEvent = actionEvent as ActionEvent<PredefinedMouseEventName>
               const child = this.tools.getContainPointChildren({
-                point: actionEvent.point,
+                point: _actionEvent.point,
                 selector: selector,
                 sortBy: sortBy,
               })
 
               // 特殊处理 mouseleave 事件
               if (actionEventName === "mouseleave") {
-                actionEvent.target = this.rootChild
+                _actionEvent.target = this.rootChild
               } else {
                 if (child.length === 0) {
                   return false
                 }
-                actionEvent.target = child[0] as StayChild
+                _actionEvent.target = child[0] as StayChild
               }
             }
 
@@ -955,6 +952,14 @@ class Stay {
               e: actionEvent,
               name,
             })
+
+            type Prettify<T, D extends number = 1, U extends number[] = []> = {
+              [K in keyof T]: T[K] extends object
+                ? U["length"] extends D
+                  ? T[K]
+                  : Prettify<T[K], D, [...U, 0]>
+                : T[K]
+            } & {}
             if (callback) {
               const eventFuncMap = await callback({
                 originEvent,
@@ -966,8 +971,10 @@ class Stay {
                 canvas: this.root,
                 payload,
               })
+
               if (eventFuncMap !== undefined && actionEvent.name in eventFuncMap) {
-                const particalComposeStore = eventFuncMap[actionEvent.name]()
+                // TODO: type
+                const particalComposeStore = (eventFuncMap as any)[actionEvent.name]()
                 this.composeStore[name] = {
                   ...this.composeStore[name],
                   ...particalComposeStore,
@@ -1051,7 +1058,7 @@ class Stay {
     this.stackIndex++
   }
 
-  registerEvent({ name, trigger, conditionCallback, successCallback }: EventProps) {
+  registerEvent({ name, trigger, conditionCallback, successCallback }: EventProps<EventName>) {
     const defaultConditionCallback = () => true
     const defaultSuccessCallback = () => void 0
     this.events[name] = {

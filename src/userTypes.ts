@@ -108,6 +108,7 @@ export interface getContainPointChildrenProps {
   point: PointType
   returnFirst?: boolean | undefined
   sortBy?: SortChildrenMethodsValues | ChildSortFunction
+  withRoot?: boolean
 }
 
 export type SortChildrenMethodsValues = valueof<typeof SORT_CHILDREN_METHODS>
@@ -216,8 +217,8 @@ export interface StayTools {
   getAvailiableStates: (selector: string) => string[]
   changeCursor: (cursor: string) => void
   moveStart: () => void
-  move: (offsetX: number, offsetY: number) => Promise<void>
-  zoom: (deltaY: number, center: PointType) => Promise<void>
+  move: (offsetX: number, offsetY: number, filter?: (child: StayChild) => boolean) => Promise<void>
+  zoom: (deltaY: number, center: PointType, filter?: (child: StayChild) => boolean) => Promise<void>
   reset: () => Promise<void>
   exportChildren: (props: ImportChildrenProps) => ExportChildrenProps
   importChildren: (props: ExportChildrenProps, targetArea?: Area) => void

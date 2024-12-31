@@ -87,6 +87,7 @@ class Stay<EventName extends string> {
   nextTickFunctions: (() => void)[]
   autoRender: boolean
   rendering: boolean
+  rootId: string
 
   constructor(root: Canvas, passive: boolean, autoRender: boolean = true) {
     this.root = root
@@ -96,8 +97,9 @@ class Stay<EventName extends string> {
     this.width = this.root.width
     this.height = this.root.height
     this.#children = new Map<string, StayChild>()
+    this.rootId = `${ROOTNAME}-${uuid4()}`
     this.rootChild = new StayChild({
-      id: `${ROOTNAME}-${uuid4()}`,
+      id: this.rootId,
       zIndex: -1,
       shape: new Root({
         x: this.x,
@@ -649,6 +651,7 @@ class Stay<EventName extends string> {
         selector,
         sortBy,
         returnFirst = false,
+        withRoot = true,
       }: getContainPointChildrenProps): StayChild[] => {
         let _selector = selector
 
@@ -659,9 +662,13 @@ class Stay<EventName extends string> {
         assert(_selector, "no className or id")
         const selectorChildren = this.tools.getChildrenBySelector(_selector as string, sortBy)
 
-        const hitChildren: StayChild[] = selectorChildren.filter((c) =>
+        let hitChildren: StayChild[] = selectorChildren.filter((c) =>
           c.shape.contains(point, this.root.contexts[c.layer])
         )
+
+        if (!withRoot) {
+          hitChildren = hitChildren.filter((c) => c.id !== this.rootId)
+        }
 
         return returnFirst && hitChildren.length > 0 ? [hitChildren[0]] : hitChildren
       },
@@ -701,8 +708,15 @@ class Stay<EventName extends string> {
         })
       },
 
-      move: (offsetX: number, offsetY: number): Promise<void> => {
+      move: (
+        offsetX: number,
+        offsetY: number,
+        filter: (child: StayChild) => boolean = () => true
+      ): Promise<void> => {
         this.getChildren().forEach((child) => {
+          if (child.id !== this.rootId && !filter(child)) {
+            return
+          }
           child.shape.move(...child.shape._move(offsetX, offsetY))
         })
         this.root.layers.forEach((_, i) => {
@@ -712,8 +726,15 @@ class Stay<EventName extends string> {
           this.nextTick(resolve)
         })
       },
-      zoom: (deltaY: number, center: PointType): Promise<void> => {
+      zoom: (
+        deltaY: number,
+        center: PointType,
+        filter: (child: StayChild) => boolean = () => true
+      ): Promise<void> => {
         this.getChildren().forEach((child) => {
+          if (child.id !== this.rootId && !filter(child)) {
+            return
+          }
           child.shape.zoom(child.shape._zoom(deltaY, center))
         })
         this.root.layers.forEach((_, i) => {
@@ -929,20 +950,21 @@ class Stay<EventName extends string> {
 
             if (isMouseEvent) {
               const _actionEvent = actionEvent as ActionEvent<PredefinedMouseEventName>
-              const child = this.tools.getContainPointChildren({
+              const children = this.tools.getContainPointChildren({
                 point: _actionEvent.point,
                 selector: selector,
                 sortBy: sortBy,
+                withRoot: false,
               })
 
               // 特殊处理 mouseleave 事件
               if (actionEventName === "mouseleave") {
                 _actionEvent.target = this.rootChild
               } else {
-                if (child.length === 0) {
+                if (children.length === 0) {
                   return false
                 }
-                _actionEvent.target = child[0] as StayChild
+                _actionEvent.target = children[0] as StayChild
               }
             }
 
@@ -953,13 +975,6 @@ class Stay<EventName extends string> {
               name,
             })
 
-            type Prettify<T, D extends number = 1, U extends number[] = []> = {
-              [K in keyof T]: T[K] extends object
-                ? U["length"] extends D
-                  ? T[K]
-                  : Prettify<T[K], D, [...U, 0]>
-                : T[K]
-            } & {}
             if (callback) {
               const eventFuncMap = await callback({
                 originEvent,

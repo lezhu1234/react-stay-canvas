@@ -49,6 +49,7 @@ import {
   PredefinedEventName,
   PredefinedWheelEventName,
   ListenerNamePayloadPair,
+  PredefinedEventListenerProps,
 } from "../userTypes"
 import { assert, infixExpressionParser, numberAlmostEqual, parseLayer, uuid4 } from "../utils"
 import { StayChild } from "./stayChild"
@@ -148,7 +149,7 @@ class Stay<EventName extends string> {
     state = DEFAULTSTATE,
     selector = `.${ROOTNAME}`,
     sortBy = SORT_CHILDREN_METHODS.AREA_ASC,
-  }: ListenerProps) {
+  }: ListenerProps<ListenerNamePayloadPair, EventName>) {
     let eventList = event
     if (!Array.isArray(event)) {
       eventList = [event]
@@ -158,7 +159,7 @@ class Stay<EventName extends string> {
       name,
       state,
       selector,
-      event: eventList as EventName[],
+      event: eventList,
       sortBy,
       callback,
     })

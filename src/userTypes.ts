@@ -173,6 +173,17 @@ export interface ListenerProps<
   callback: UserCallback<T["payload"], EventName | EventName[]>
 }
 
+export interface PredefinedEventListenerProps<
+  EventName extends PredefinedEventName = PredefinedEventName
+> {
+  name: string
+  state?: string
+  selector?: string
+  event: EventName | EventName[]
+  sortBy?: SortChildrenMethodsValues | ChildSortFunction
+  callback: UserCallback<Dict, EventName | EventName[]>
+}
+
 export type SelectorFunc = (child: StayChild) => boolean
 
 export interface ProgressBound {
@@ -357,7 +368,7 @@ export type UnionListenerProps<
 
 export type ListenerArrayProps<
   T extends ListenerNamePayloadPairOrName[],
-  EventName extends string = PredefinedEventName | (string & {})
+  EventName extends string = string
 > = UnionListenerProps<ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>, EventName>
 
 export type Tuple2Union<T extends unknown[]> = T extends [infer F, ...infer L]

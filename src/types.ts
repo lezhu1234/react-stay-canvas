@@ -1,7 +1,18 @@
 import { Rectangle } from "./shapes/rectangle"
 import { valueof } from "./stay/types"
 import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
-import { ActionCallbackProps, ActionEvent, ListenerProps, StayTools, storeType } from "./userTypes"
+import {
+  ActionCallbackProps,
+  ActionEvent,
+  ListenerProps,
+  PredefinedEventListenerProps,
+  PredefinedEventName,
+  PredefinedKeyEventName,
+  PredefinedMouseEventName,
+  PredefinedWheelEventName,
+  StayTools,
+  storeType,
+} from "./userTypes"
 
 export interface composeProps {
   status?: string
@@ -91,7 +102,12 @@ export interface StayCanvasProps<EventName extends string = string> {
   height?: number
   layers?: number | ContextLayerSetFunction[]
   eventList?: EventProps<EventName>[]
-  listenerList?: ListenerProps[]
+  listenerList?: (
+    | ListenerProps
+    | PredefinedEventListenerProps<PredefinedWheelEventName>
+    | PredefinedEventListenerProps<PredefinedMouseEventName>
+    | PredefinedEventListenerProps<PredefinedKeyEventName>
+  )[]
   passive?: boolean
   autoRender?: boolean
   mounted?: (tools: StayTools) => void

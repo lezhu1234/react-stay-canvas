@@ -35,6 +35,7 @@ import {
   PredefinedWheelEventName,
   SelectorFunc,
   StayDrawProps,
+  StayMode,
   StayTools,
   updateChildProps,
 } from "../userTypes"
@@ -74,11 +75,10 @@ class Stay<EventName extends string> {
   rootChild: StayInstantChild<Root>
   passive: boolean
   nextTickFunctions: (() => void)[]
-  autoRender: boolean
-  rendering: boolean
+  mode: StayMode
   rootId: string
 
-  constructor(root: Canvas, passive: boolean, autoRender: boolean = true) {
+  constructor(root: Canvas, passive: boolean, mode: StayMode = "instant") {
     this.root = root
     this.passive = passive
     this.x = 0
@@ -121,11 +121,10 @@ class Stay<EventName extends string> {
 
     this.initEvents()
 
-    this.autoRender = autoRender
-    if (autoRender) {
+    this.mode = mode
+    if (mode === "instant") {
       this.startRender()
     }
-    this.rendering = autoRender
   }
 
   addEventListener({
@@ -400,19 +399,19 @@ class Stay<EventName extends string> {
       //   return child
       // },
 
-      start: () => {
-        if (this.autoRender) {
-          throw new Error("autoRender is true, you can't call start")
-        }
+      // start: () => {
+      //   if (this.autoRender) {
+      //     throw new Error("autoRender is true, you can't call start")
+      //   }
 
-        this.rendering = true
+      //   this.rendering = true
 
-        this.render()
-      },
+      //   this.render()
+      // },
       progress: ({ time, bound, beforeDrawCallback, afterDrawCallback }) => {
-        if (this.rendering) {
+        if (this.mode === "instant") {
           throw new Error(
-            "rendering is true, you can't call progress, you need to set autoRender to false and wait canvas render over if you called start() method"
+            "Instant Mode: you can't call progress, you need to switch to animated mode"
           )
         }
         this.updateChildrenTime({ time, bound })

@@ -25,7 +25,7 @@ const StayCanvas = forwardRef(
       layers = 2,
       className = "",
       passive = true,
-      autoRender = true,
+      mode = "instant",
       recreateOnResize = false,
       focusOnInit = true,
     }: StayCanvasProps<EventName>,
@@ -85,7 +85,7 @@ const StayCanvas = forwardRef(
         width,
         height,
         passive,
-        autoRender
+        mode
       )
       ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
         stay.current!.registerEvent(event)

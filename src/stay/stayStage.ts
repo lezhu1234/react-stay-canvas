@@ -1,6 +1,6 @@
 import Canvas from "../canvas"
 import { ContextLayerSetFunction } from "../types"
-import { StayTools } from "../userTypes"
+import { StayMode, StayTools } from "../userTypes"
 import Stay from "./stay"
 
 type Args<T> = T extends (...args: infer R) => any ? R : never
@@ -13,12 +13,12 @@ export default class StayStage {
     width: number,
     height: number,
     passive: boolean,
-    autoRender: boolean = true
+    mode: StayMode = "instant"
   ) {
     this.#stay = new Stay(
       new Canvas(canvasLayers, contextLayerSetFunctionList, width, height),
       passive,
-      autoRender
+      mode
     )
     this.tools = this.#stay.getTools()
   }

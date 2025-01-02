@@ -10,6 +10,7 @@ import {
   PredefinedKeyEventName,
   PredefinedMouseEventName,
   PredefinedWheelEventName,
+  StayMode,
   StayTools,
   storeType,
 } from "./userTypes"
@@ -109,7 +110,7 @@ export interface StayCanvasProps<EventName extends string = string> {
     | PredefinedEventListenerProps<PredefinedKeyEventName>
   )[]
   passive?: boolean
-  autoRender?: boolean
+  mode?: StayMode
   mounted?: (tools: StayTools) => void
   recreateOnResize?: boolean
   focusOnInit?: boolean

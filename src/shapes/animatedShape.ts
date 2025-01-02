@@ -1,4 +1,9 @@
-import { AnimatedShapeProps, AnimatedShapeTransitionConfig, EasingFunction } from "../userTypes"
+import {
+  AnimatedShapeProps,
+  AnimatedShapeTransitionConfig,
+  EasingFunction,
+  StayShapeTransitionConfig,
+} from "../userTypes"
 import { applyEasing } from "../utils"
 import { InstantShape } from "./instantShape"
 
@@ -12,11 +17,17 @@ export const DefaultTransitionConfig: Required<AnimatedShapeTransitionConfig> = 
   update: { type: "easeInOutSine", durationMs: 300, delayMs: 0 },
 }
 
+export const DefaultStayShapeTransitionConfig: Required<StayShapeTransitionConfig> = {
+  type: "easeInOutSine",
+  durationMs: 300,
+  delayMs: 0,
+}
+
 export abstract class AnimatedShape extends InstantShape {
-  transition: Required<AnimatedShapeTransitionConfig>
+  transition: Required<StayShapeTransitionConfig>
   constructor(props: AnimatedShapeProps) {
     super(props)
-    this.transition = { ...DefaultTransitionConfig, ...props.transition }
+    this.transition = { ...DefaultStayShapeTransitionConfig, ...props.transition }
   }
 
   getNumberIntermediateState(
@@ -66,5 +77,14 @@ export abstract class AnimatedShape extends InstantShape {
     return state
   }
 
+  abstract intermediateState(
+    before: AnimatedShape,
+    after: AnimatedShape,
+    ratio: number,
+    transitionType: EasingFunction
+  ): AnimatedShape
+
   abstract zeroShape(shape: AnimatedShape): AnimatedShape
+
+  abstract sameAs(shape: AnimatedShape): boolean
 }

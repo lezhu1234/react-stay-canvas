@@ -245,7 +245,7 @@ export interface StayTools {
   log: () => void
   redo: () => void
   undo: () => void
-  start: () => void
+  // start: () => void
   refresh: () => void
   progress: (props: ProgressProps) => void
   triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
@@ -470,6 +470,7 @@ export interface TextAttr {
   autoTransitionDiffText?: boolean
 }
 
+export type StayMode = "instant" | "animated"
 export interface Font {
   size?: number
   fontFamily?: string
@@ -485,6 +486,14 @@ export interface ExtraTransform {
   zoomCenter: { x: number; y: number }
   offsetX: number
   offsetY: number
+}
+
+export interface FrameBoundInfo<T extends AnimatedShape> {
+  beforeTime: number
+  afterTime: number
+  beforeShape: T
+  afterShape: T
+  ratio: number
 }
 
 // export interface TimeLineProps<T extends Shape> {

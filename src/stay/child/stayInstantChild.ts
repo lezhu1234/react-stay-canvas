@@ -19,7 +19,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   private shape: T | Map<string, T> | T[]
   shapeMap: Map<string, T>
   canvas: Canvas
-  private updatedLayers = new Set<number>()
+  protected updatedLayers = new Set<number>()
 
   //   history
   constructor({ id, className, shape, canvas }: StayInstantChildProps<T>) {

@@ -1,5 +1,4 @@
 export * from "./shapes"
-export { StayChild } from "./stay/stayChild"
 export { default as StayCanvas } from "./stayCanvas"
 export * from "./types"
 export * from "./userConstants"

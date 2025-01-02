@@ -2,6 +2,7 @@ import { DrawCanvasContext } from "../types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import {
   Border,
+  Coordinate,
   DiagonalDirection,
   EasingFunction,
   Font,
@@ -11,23 +12,22 @@ import {
 } from "../userTypes"
 import { getDefaultFont, getRGBAStr, isRGB, isRGBA } from "../utils"
 import { rgbaToString } from "../w3color"
-import { SimplePoint } from "./point"
 import { Rectangle } from "./rectangle"
 import { Shape } from "./shape"
 
 export class StayText extends Shape {
   font: Required<Font>
   height: number
-  leftBottom: SimplePoint
-  leftTop: SimplePoint
+  leftBottom: Coordinate
+  leftTop: Coordinate
   // rect: Rectangle
   text: string
   width: number
   x: number
   y: number
   border: Border[] | undefined
-  rightBottom: SimplePoint
-  rightTop: SimplePoint
+  rightBottom: Coordinate
+  rightTop: Coordinate
   textBaseline: CanvasTextBaseline
   textAlign: CanvasTextAlign
   offsetXRatio: number
@@ -62,10 +62,10 @@ export class StayText extends Shape {
     this.textBaseline = textBaseline ?? "alphabetic"
     this.textAlign = textAlign ?? "start"
     // this.rect = new Rectangle({ x: 0, y: 0, width: 0, height: 0 })
-    this.leftBottom = new SimplePoint(0, 0)
-    this.leftTop = new SimplePoint(0, 0)
-    this.rightBottom = new SimplePoint(0, 0)
-    this.rightTop = new SimplePoint(0, 0)
+    this.leftBottom = { x: 0, y: 0 }
+    this.leftTop = { x: 0, y: 0 }
+    this.rightBottom = { x: 0, y: 0 }
+    this.rightTop = { x: 0, y: 0 }
     const size = this.getSize(width, height)
     this.width = size.width
     this.height = size.height
@@ -74,7 +74,7 @@ export class StayText extends Shape {
     this.init()
   }
 
-  contains(point: SimplePoint): boolean {
+  contains(point: Coordinate): boolean {
     // return this.rect.contains(point)
     return false
   }
@@ -205,10 +205,15 @@ export class StayText extends Shape {
     const offsetX = -this.width / 2 + this.width * this.offsetXRatio
     const offsetY = this.height * this.offsetYRatio
 
-    this.leftTop.update({ x: this.x + offsetX, y: this.y + offsetY })
-    this.leftBottom.update({ x: this.x + offsetX, y: this.y + this.height + offsetY })
-    this.rightTop.update({ x: this.x + this.width + offsetX, y: this.y + offsetY })
-    this.rightBottom.update({ x: this.x + this.width + offsetX, y: this.y + this.height + offsetY })
+    this.leftTop.x = this.x + offsetX
+    this.leftTop.y = this.y + offsetY
+    this.leftBottom.x = this.x + offsetX
+    this.leftBottom.y = this.y + this.height + offsetY
+    this.rightTop.x = this.x + this.width + offsetX
+    this.rightTop.y = this.y + offsetY
+
+    this.rightBottom.x = this.x + this.width + offsetX
+    this.rightBottom.y = this.y + this.height + offsetY
 
     // this.rect.update({
     //   x: this.leftTop.x,
@@ -254,14 +259,14 @@ export class StayText extends Shape {
   }
 
   getCenterPoint() {
-    return new SimplePoint(
-      (this.leftBottom.x + this.rightBottom.x) / 2,
-      (this.leftTop.y + this.leftBottom.y) / 2
-    )
+    return {
+      x: (this.leftBottom.x + this.rightBottom.x) / 2,
+      y: (this.leftTop.y + this.leftBottom.y) / 2,
+    }
   }
 
   zoom(zoomScale: number): void {
-    const center = this.getZoomPoint(zoomScale, new SimplePoint(this.x, this.y))
+    const center = this.getZoomPoint(zoomScale, { x: this.x, y: this.y })
     this.update({
       x: center.x,
       y: center.y,

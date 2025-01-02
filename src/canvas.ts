@@ -21,7 +21,7 @@ function dprScale(
   canvas.style.height = `${height}px`
 }
 
-class Canvas {
+export class Canvas {
   contexts: DrawCanvasContext[]
   height: number
   layers: HTMLCanvasElement[]

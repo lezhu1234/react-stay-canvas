@@ -1,9 +1,9 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { getCornersByCenterLine } from "../utils"
 import { Line } from "./line"
-import { Point, SimplePoint } from "./point"
+import { Point } from "./point"
 import { Shape } from "./shape"
-import { ShapeDrawProps, ShapeProps } from "../userTypes"
+import { Coordinate, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { DrawCanvasContext } from "../types"
 
 export interface PathAttr {
@@ -52,14 +52,14 @@ export class Path extends Shape {
     return path
   }
 
-  getCenterPoint(): SimplePoint {
+  getCenterPoint(): Coordinate {
     let x = 0,
       y = 0
     this.points.forEach((point) => {
       x += point.x
       y += point.y
     })
-    return new SimplePoint(x / this.points.length, y / this.points.length)
+    return { x: x / this.points.length, y: y / this.points.length }
   }
   contains(point: Point, ctx: DrawCanvasContext): boolean {
     return ctx.isPointInPath(this.path, point.x, point.y)

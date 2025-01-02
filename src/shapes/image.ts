@@ -164,31 +164,31 @@ export class StayImage extends Rectangle {
     context.globalAlpha = originOpacity
   }
 
-  intermediateState(
-    before: StayImage,
-    after: StayImage,
-    ratio: number,
-    transitionType: EasingFunction
-  ) {
-    return new StayImage({
-      src: after.src,
-      x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
-      y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),
-      width: this.getNumberIntermediateState(before.width, after.width, ratio, transitionType),
-      height: this.getNumberIntermediateState(before.height, after.height, ratio, transitionType),
-      sx: this.getNumberIntermediateState(before.sx, after.sx, ratio, transitionType),
-      sy: this.getNumberIntermediateState(before.sy, after.sy, ratio, transitionType),
-      swidth:
-        before.swidth && after.swidth
-          ? this.getNumberIntermediateState(before.swidth, after.swidth, ratio, transitionType)
-          : after.swidth,
-      sheight:
-        before.sheight && after.sheight
-          ? this.getNumberIntermediateState(before.sheight, after.sheight, ratio, transitionType)
-          : after.sheight,
-      props: this.getIntermediateProps(before, after, ratio, transitionType),
-    })
-  }
+  // intermediateState(
+  //   before: StayImage,
+  //   after: StayImage,
+  //   ratio: number,
+  //   transitionType: EasingFunction
+  // ) {
+  //   return new StayImage({
+  //     src: after.src,
+  //     x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
+  //     y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),
+  //     width: this.getNumberIntermediateState(before.width, after.width, ratio, transitionType),
+  //     height: this.getNumberIntermediateState(before.height, after.height, ratio, transitionType),
+  //     sx: this.getNumberIntermediateState(before.sx, after.sx, ratio, transitionType),
+  //     sy: this.getNumberIntermediateState(before.sy, after.sy, ratio, transitionType),
+  //     swidth:
+  //       before.swidth && after.swidth
+  //         ? this.getNumberIntermediateState(before.swidth, after.swidth, ratio, transitionType)
+  //         : after.swidth,
+  //     sheight:
+  //       before.sheight && after.sheight
+  //         ? this.getNumberIntermediateState(before.sheight, after.sheight, ratio, transitionType)
+  //         : after.sheight,
+  //     props: this.getIntermediateProps(before, after, ratio, transitionType),
+  //   })
+  // }
 
   update({
     src,

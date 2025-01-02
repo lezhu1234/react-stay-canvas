@@ -1,7 +1,8 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
+import { Coordinate, EasingFunction, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
+import { InstantShape } from "./instantShape"
 import { Line } from "./line"
-import { Point, SimplePoint } from "./point"
+import { Point } from "./point"
 import { Shape } from "./shape"
 
 export interface RectShapeAttr {
@@ -15,7 +16,15 @@ export interface RectangleAttr extends RectShapeAttr {
   props?: ShapeProps
 }
 
-export class Rectangle extends Shape {
+export class Rectangle extends InstantShape {
+  getBound(): Rect {
+    return {
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+    }
+  }
   area: number
   bottomBorder: Line
   height: number
@@ -73,8 +82,11 @@ export class Rectangle extends Shape {
     this.updateRelatedValue()
   }
 
-  getCenterPoint(): SimplePoint {
-    return new SimplePoint(this.x + this.width / 2, this.y + this.height / 2)
+  getCenterPoint(): Coordinate {
+    return {
+      x: this.x + this.width / 2,
+      y: this.y + this.height / 2,
+    }
   }
 
   computeFitInfo(width: number, height: number) {
@@ -223,21 +235,6 @@ export class Rectangle extends Shape {
       y: leftTop.y,
       width: this.width * zoomScale,
       height: this.height * zoomScale,
-    })
-  }
-
-  intermediateState(
-    before: Rectangle,
-    after: Rectangle,
-    ratio: number,
-    transitionType: EasingFunction
-  ) {
-    return new Rectangle({
-      x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
-      y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),
-      width: this.getNumberIntermediateState(before.width, after.width, ratio, transitionType),
-      height: this.getNumberIntermediateState(before.height, after.height, ratio, transitionType),
-      props: this.getIntermediateProps(before, after, ratio, transitionType),
     })
   }
 }

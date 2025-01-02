@@ -1,7 +1,8 @@
 import Canvas from "./canvas"
 import { GetCurrentArgumentsProps, Shape } from "./shapes"
+import { InstantShape } from "./shapes/instantShape"
 import { Point } from "./shapes/point"
-import { StayChild } from "./stay/stayChild"
+import { StayInstantChild } from "./stay/child/stayInstantChild"
 import { valueof } from "./stay/types"
 import {
   DrawCanvasContext,
@@ -14,7 +15,7 @@ import { DRAW_ACTIONS, SHAPE_DRAW_TYPES, SORT_CHILDREN_METHODS } from "./userCon
 import { RGB, RGBA } from "./w3color"
 
 type SortChildrenMethodsKeys = keyof typeof SORT_CHILDREN_METHODS
-export type StayChildren = Record<string, StayChild>
+export type StayChildren = Record<string, StayInstantChild>
 export type DrawActionsValuesType = valueof<typeof DRAW_ACTIONS>
 
 export type storeType = Map<string, any>
@@ -38,7 +39,7 @@ export interface MouseActionEvent<EventName extends PredefinedMouseEventName> {
   x: number
   y: number
   point: Point
-  target: StayChild
+  target: StayInstantChild
   isMouseEvent: true
 }
 
@@ -79,35 +80,29 @@ export interface TimelineChildProps<T extends Shape> {
 
 export interface createChildProps<T> {
   id?: string
-  zIndex?: number
-  shape: T
+  shape: T | T[] | Map<string, T>
   className: string
-  layer?: number
-  transition?: Omit<StayChildTransitions, "update">
-  drawEndCallback?: (child: StayChild) => void
 }
 
-export type updateChildProps<T = Shape> = {
-  child: StayChild
+export type updateChildProps<T = InstantShape> = {
+  child: StayInstantChild
   transition?: Omit<TransitionConfig, "effect">
 } & Partial<Omit<createChildProps<T>, "transition">>
 
 export interface UpdateStayChildProps<T> {
   id?: string
   className?: string
-  layer?: number | undefined
   shape?: T | undefined
   zIndex?: number
   transition?: Omit<TransitionConfig, "effect">
-  drawEndCallback?: (c: StayChild) => void
 }
 
-export type ChildSortFunction = (a: StayChild, b: StayChild) => number
+export type ChildSortFunction = (a: StayInstantChild, b: StayInstantChild) => number
 export interface getContainPointChildrenProps {
   selector: string | string[]
   point: PointType
   returnFirst?: boolean | undefined
-  sortBy?: SortChildrenMethodsValues | ChildSortFunction
+  sortBy?: ChildSortFunction
   withRoot?: boolean
 }
 
@@ -124,6 +119,13 @@ export interface ActionCallbackProps<T = Dict, EventName extends string | string
   payload: T
 }
 
+export interface Coordinate {
+  x: number
+  y: number
+}
+
+export type StayChildShapes = Shape[]
+
 export interface Area {
   x: number
   y: number
@@ -131,12 +133,12 @@ export interface Area {
   height: number
 }
 export interface ImportChildrenProps {
-  children: StayChild[]
+  children: StayInstantChild[]
   area?: Area
 }
 
 export interface ExportChildrenProps {
-  children: StayChild[]
+  children: StayInstantChild[]
   area: Area
 }
 
@@ -169,7 +171,7 @@ export interface ListenerProps<
   state?: string
   selector?: string
   event: EventName | EventName[]
-  sortBy?: SortChildrenMethodsValues | ChildSortFunction
+  sortBy?: ChildSortFunction
   callback: UserCallback<T["payload"], EventName | EventName[]>
 }
 
@@ -180,11 +182,11 @@ export interface PredefinedEventListenerProps<
   state?: string
   selector?: string
   event: EventName | EventName[]
-  sortBy?: SortChildrenMethodsValues | ChildSortFunction
+  sortBy?: ChildSortFunction
   callback: UserCallback<Dict, EventName | EventName[]>
 }
 
-export type SelectorFunc = (child: StayChild) => boolean
+export type SelectorFunc = (child: StayInstantChild) => boolean
 
 export interface ProgressBound {
   beforeTime: number
@@ -205,31 +207,37 @@ export interface ProgressProps {
   afterDrawCallback?: (canvas: Canvas) => void
 }
 export interface StayTools {
-  createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
-  appendChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
-  updateChild: (props: updateChildProps) => StayChild
-  removeChild: (
-    childId: string,
-    soft?: boolean,
-    removeTransition?: TransitionConfig
-  ) => Promise<void> | void
-  getContainPointChildren: (props: getContainPointChildrenProps) => StayChild[]
+  createChild: <T extends InstantShape>(props: createChildProps<T>) => StayInstantChild<T>
+  appendChild: <T extends InstantShape>(props: createChildProps<T>) => StayInstantChild<T>
+  updateChild: (props: updateChildProps) => StayInstantChild
+  removeChild: (childId: string) => Promise<void> | void
+  getContainPointChildren: (props: getContainPointChildrenProps) => StayInstantChild[]
   hasChild: (id: string) => boolean
   fix: () => void
   switchState: (state: string) => void
-  getChildrenWithoutRoot: () => StayChild[]
-  getChildById: <T extends Shape>(id: string) => StayChild<T> | void
-  getChildBySelector: <T extends Shape>(selector: string | SelectorFunc) => StayChild<T> | void
-  getChildrenByArea: (area: Area, selector?: string | SelectorFunc) => StayChild[]
+  getChildrenWithoutRoot: () => StayInstantChild[]
+  getChildById: <T extends InstantShape>(id: string) => StayInstantChild<T> | void
+  getChildBySelector: <T extends InstantShape>(
+    selector: string | SelectorFunc
+  ) => StayInstantChild<T> | void
+  getChildrenByArea: (area: Area, selector?: string | SelectorFunc) => StayInstantChild[]
   getChildrenBySelector: (
     selector: string | SelectorFunc,
-    sortBy?: SortChildrenMethodsValues | ChildSortFunction
-  ) => StayChild[]
+    sortBy?: ChildSortFunction
+  ) => StayInstantChild[]
   getAvailiableStates: (selector: string) => string[]
   changeCursor: (cursor: string) => void
   moveStart: () => void
-  move: (offsetX: number, offsetY: number, filter?: (child: StayChild) => boolean) => Promise<void>
-  zoom: (deltaY: number, center: PointType, filter?: (child: StayChild) => boolean) => Promise<void>
+  move: (
+    offsetX: number,
+    offsetY: number,
+    filter?: (child: StayInstantChild) => boolean
+  ) => Promise<void>
+  zoom: (
+    deltaY: number,
+    center: PointType,
+    filter?: (child: StayInstantChild) => boolean
+  ) => Promise<void>
   reset: () => Promise<void>
   exportChildren: (props: ImportChildrenProps) => ExportChildrenProps
   importChildren: (props: ExportChildrenProps, targetArea?: Area) => void
@@ -242,7 +250,32 @@ export interface StayTools {
   progress: (props: ProgressProps) => void
   triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
   deleteListener: (name: string) => void
-  timelineChild: <T extends Shape>(props: TimelineChildProps<T>) => StayChild<T>
+  // timelineChild: <T extends InstantShape>(props: TimelineChildProps<T>) => StayInstantChild<T>
+}
+
+export type StayInstantChildShapes = Map<string, InstantShape>
+
+export interface Rect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface AnimatedShapeTransitionConfig {
+  enter?: StayShapeTransitionConfig
+  leave?: StayShapeTransitionConfig
+  update?: StayShapeTransitionConfig
+}
+
+export interface AnimatedShapeProps extends ShapeProps {
+  transition?: AnimatedShapeTransitionConfig
+}
+
+export interface StayShapeTransitionConfig {
+  type?: EasingFunction
+  durationMs?: number
+  delayMs?: number
 }
 
 export interface TransitionConfig {
@@ -258,35 +291,46 @@ export interface StayChildTransitions {
   update?: Omit<TransitionConfig, "effect">
 }
 
+export interface StayInstantChildUpdateProps<T extends InstantShape> {
+  id?: string
+  className?: string
+  shape?: T | T[] | Map<string, T>
+}
+
+export interface StayInstantChildProps<T extends InstantShape> {
+  id?: string
+  className: string
+  shape: T | T[] | Map<string, T>
+  canvas: Canvas
+}
+
 export interface StayChildProps<T> {
   id?: string
   zIndex?: number
   className: string
-  layer: number
+
   transition?: Omit<StayChildTransitions, "update">
-  beforeLayer?: number | null
+
   shape: T
   drawAction?: DrawActionsValuesType | null
-  afterRefresh?: (fn: () => void) => void
-  drawEndCallback?: (child: StayChild) => void
 }
 
 export interface StayChildTimeLineProps<T extends Shape> {
   id?: string
   zIndex?: number
   className: string
-  layer: number
+
   shape: T
-  beforeLayer?: number | null
+
   timeline: TimeLineProps<T>[]
   drawAction?: DrawActionsValuesType | null
   afterRefresh?: (fn: () => void) => void
-  drawEndCallback?: (child: StayChild) => void
+  drawEndCallback?: (child: StayInstantChild) => void
 }
 export interface RegionToTargetCanvasProps {
   area: Area
   targetArea?: Area
-  children: StayChild[]
+  children: StayInstantChild[]
   progress?: number
 }
 
@@ -397,6 +441,8 @@ export interface ShapeProps {
   lineDash?: number[]
   lineDashOffset?: number
   filter?: string
+  layer?: number
+  zIndex?: number
 }
 
 export type FourrDirection = "top" | "right" | "bottom" | "left"

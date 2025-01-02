@@ -17,6 +17,7 @@ import {
   wheel,
 } from "../rawEvents"
 import { Point, Rectangle, Root, Shape } from "../shapes"
+import { InstantShape } from "../shapes/instantShape"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
 import { EventProps, StayEventMap, StayEventProps } from "../types"
@@ -52,7 +53,8 @@ import {
   PredefinedEventListenerProps,
 } from "../userTypes"
 import { assert, infixExpressionParser, numberAlmostEqual, parseLayer, uuid4 } from "../utils"
-import { StayChild } from "./stayChild"
+
+import { StayInstantChild } from "./child/stayInstantChild"
 import { SetShapeChildCurrentTime, StackItem, StepProps } from "./types"
 
 interface drawLayer {
@@ -60,7 +62,7 @@ interface drawLayer {
 }
 
 class Stay<EventName extends string> {
-  #children: Map<string, StayChild>
+  #children: Map<string, StayInstantChild<InstantShape>>
   composeStore: Record<string, any>
   currentPressedKeys: {
     [key: string]: boolean
@@ -68,7 +70,7 @@ class Stay<EventName extends string> {
   drawLayers: drawLayer[]
   events: StayEventMap<EventName>
   height: number
-  historyChildren: Map<string, StayChild>
+  historyChildren: Map<string, StayInstantChild>
   listeners: Map<string, Required<ListenerProps<ListenerNamePayloadPair, EventName>>>
   root: Canvas
   stack: StackItem[]
@@ -83,7 +85,7 @@ class Stay<EventName extends string> {
   x: number
   y: number
   zIndexUpdated: boolean
-  rootChild: StayChild<Root>
+  rootChild: StayInstantChild<Root>
   passive: boolean
   nextTickFunctions: (() => void)[]
   autoRender: boolean
@@ -97,20 +99,18 @@ class Stay<EventName extends string> {
     this.y = 0
     this.width = this.root.width
     this.height = this.root.height
-    this.#children = new Map<string, StayChild>()
+    this.#children = new Map<string, StayInstantChild>()
     this.rootId = `${ROOTNAME}-${uuid4()}`
-    this.rootChild = new StayChild({
+    this.rootChild = new StayInstantChild({
       id: this.rootId,
-      zIndex: -1,
       shape: new Root({
         x: this.x,
         y: this.y,
         width: this.width,
         height: this.height,
       }),
-
+      canvas: this.root,
       className: ROOTNAME,
-      layer: 0,
     })
     this.#children.set(this.rootChild.id, this.rootChild)
     this.events = {} as StayEventMap<EventName>
@@ -148,7 +148,10 @@ class Stay<EventName extends string> {
     callback,
     state = DEFAULTSTATE,
     selector = `.${ROOTNAME}`,
-    sortBy = SORT_CHILDREN_METHODS.AREA_ASC,
+    sortBy = (child) => {
+      const { width, height } = child.getBound()
+      return width * height
+    },
   }: ListenerProps<ListenerNamePayloadPair, EventName>) {
     let eventList = event
     if (!Array.isArray(event)) {
@@ -186,8 +189,8 @@ class Stay<EventName extends string> {
     this.events = {} as StayEventMap<EventName>
   }
 
-  cloneChildren(): Map<string, StayChild> {
-    const newChildren = new Map<string, StayChild>()
+  cloneChildren(): Map<string, StayInstantChild> {
+    const newChildren = new Map<string, StayInstantChild>()
     this.getChildren().forEach((child, id) => {
       newChildren.set(id, child.copy())
     })
@@ -200,7 +203,7 @@ class Stay<EventName extends string> {
 
   updateChildrenTime(props: SetShapeChildCurrentTime) {
     this.getChildren().forEach((child) => {
-      child.setCurrentTime(props)
+      // child.setCurrentTime(props)
     })
   }
   draw({
@@ -211,7 +214,7 @@ class Stay<EventName extends string> {
   }: StayDrawProps) {
     interface ChildLayer {
       update: boolean
-      members: StayChild[]
+      members: StayInstantChild[]
     }
 
     const childrenInlayer: ChildLayer[] = this.drawLayers.map((layer) => {
@@ -224,19 +227,16 @@ class Stay<EventName extends string> {
     })
 
     this.getChildren().forEach((child) => {
-      childrenInlayer[child.layer].members.push(child)
-      if (child.beforeLayer && child.beforeLayer !== child.layer) {
-        childrenInlayer[child.beforeLayer].update = true
-      } else {
-        childrenInlayer[child.layer].update ||= child.drawAction === DRAW_ACTIONS.UPDATE
-      }
+      child.getUpdatedLayers().forEach((layer) => {
+        childrenInlayer[layer].update = true
+      })
     })
 
     if (beforeDrawCallback) {
       beforeDrawCallback()
     }
 
-    for (const layerIndex in childrenInlayer) {
+    for (let layerIndex = 0; layerIndex < childrenInlayer.length; layerIndex++) {
       const particalChildren = childrenInlayer[layerIndex]
 
       const canvas = this.root.layers[layerIndex]
@@ -246,35 +246,26 @@ class Stay<EventName extends string> {
         this.root.clear(context)
       }
 
-      if (this.zIndexUpdated) {
-        particalChildren.members.sort((a, b) => {
-          return a.zIndex - b.zIndex
-        })
-      }
+      let layerDrawShapes: InstantShape[] = []
 
       for (let i = 0; i < particalChildren.members.length; i++) {
         const child = particalChildren.members[i]
-        if (!particalChildren.update && !child.drawAction && !forceDraw) {
+        if (!particalChildren.update && !forceDraw) {
           continue
         }
-        if (particalChildren.update) {
-          child.shape.contentUpdated = true
-        }
-        const updateNextFrame = child.draw({
-          props: {
-            context,
-            now,
-            width: this.width,
-            height: this.height,
-          },
-        })
-
-        if (updateNextFrame || forceDraw) {
-          this.forceUpdateLayer(child.layer)
-        }
-        child.drawAction = null
-        child.beforeLayer = child.layer
+        layerDrawShapes.push(...child.getShapes(layerIndex))
+        child.draw()
       }
+
+      layerDrawShapes = layerDrawShapes.sort((shape) => shape.zIndex)
+      layerDrawShapes.forEach((shape) => {
+        shape.draw({
+          context,
+          now,
+          width: this.width,
+          height: this.height,
+        })
+      })
     }
 
     if (afterDrawCallback) {
@@ -299,13 +290,13 @@ class Stay<EventName extends string> {
     return [...this.#children.values()].filter(filterCallback)
   }
 
-  findByClassName(className: string): StayChild[] {
+  findByClassName(className: string): StayInstantChild[] {
     return this.filterChildren(
       (child) => child.className.split(":")[0] === className || child.className === className
     )
   }
 
-  findBySimpleSelector(selector: string): StayChild[] {
+  findBySimpleSelector(selector: string): StayInstantChild[] {
     if (selector.startsWith(".")) {
       return this.findByClassName(selector.slice(1))
     } else if (selector.startsWith("#")) {
@@ -315,7 +306,7 @@ class Stay<EventName extends string> {
     throw new Error("selector must start with . or #")
   }
 
-  findChildById(id: string): StayChild | undefined {
+  findChildById(id: string): StayInstantChild | undefined {
     return this.getChildById(id)
   }
 
@@ -401,46 +392,29 @@ class Stay<EventName extends string> {
   }
 
   render() {
-    this.draw({
-      forceDraw: true,
-      now: Date.now(),
+    window.requestAnimationFrame(() => {
+      this.render()
     })
-    if (
-      ![...this.getChildren().values()].every((child) => {
-        return child.state === "idle"
-      })
-    ) {
-      window.requestAnimationFrame(() => {
-        this.render()
-      })
-    } else {
-      this.rendering = false
-      this.draw({
-        forceDraw: true,
-        now: Date.now(),
-      })
-    }
   }
   getTools(): StayTools {
     return {
-      timelineChild: ({ timeline, shape, layer, id = undefined, zIndex, className }) => {
-        layer = parseLayer(this.root.layers, layer)
-        this.checkName(className, [ROOTNAME])
-        const child = StayChild.timeline({
-          shape,
-          timeline,
-          id,
-          zIndex: zIndex === undefined ? 1 : zIndex,
-          className,
-          layer,
-          drawAction: DRAW_ACTIONS.APPEND,
-          afterRefresh: (fn) => this.nextTick(fn),
-        })
-        this.zIndexUpdated = true
-        this.pushToChildren(child)
-        this.unLogedChildrenIds.add(child.id)
-        return child
-      },
+      // timelineChild: ({ timeline, shape, layer, id = undefined, zIndex, className }) => {
+      //   layer = parseLayer(this.root.layers, layer)
+      //   this.checkName(className, [ROOTNAME])
+      //   const child = StayChild.timeline({
+      //     shape,
+      //     timeline,
+      //     id,
+      //     zIndex: zIndex === undefined ? 1 : zIndex,
+      //     className,
+      //     drawAction: DRAW_ACTIONS.APPEND,
+      //     afterRefresh: (fn) => this.nextTick(fn),
+      //   })
+      //   this.zIndexUpdated = true
+      //   this.pushToChildren(child)
+      //   this.unLogedChildrenIds.add(child.id)
+      //   return child
+      // },
 
       start: () => {
         if (this.autoRender) {
@@ -474,85 +448,45 @@ class Stay<EventName extends string> {
       hasChild: (id: string) => {
         return this.getChildren().has(id)
       },
-      createChild: <T extends Shape>({
-        id,
-        shape,
-        zIndex,
-        className,
-        layer = -1,
-        transition,
-        drawEndCallback,
-      }: createChildProps<T>) => {
-        layer = parseLayer(this.root.layers, layer)
+      createChild: ({ id, shape, className }) => {
         this.checkName(className, [ROOTNAME])
-        const child = new StayChild<typeof shape>({
+        const child = new StayInstantChild({
           id,
-          zIndex: zIndex === undefined ? 1 : zIndex,
           className,
-          layer,
           shape,
-          drawAction: DRAW_ACTIONS.APPEND,
-          afterRefresh: (fn) => this.nextTick(fn),
-          transition,
-          drawEndCallback,
+          canvas: this.root,
         })
         return child
       },
-      appendChild: <T extends Shape>({
-        shape,
-        className,
-        zIndex,
-        id = undefined,
-        layer = -1,
-        transition,
-      }: createChildProps<T>) => {
-        layer = parseLayer(this.root.layers, layer)
+      appendChild: ({ shape, className, id = undefined }) => {
         const child = this.tools.createChild({
           id,
           shape,
-          zIndex,
           className,
-          layer,
-          transition,
         })
         this.zIndexUpdated = true
         this.pushToChildren(child)
         this.unLogedChildrenIds.add(child.id)
         return child
       },
-      updateChild: ({ child, zIndex, shape, className, layer, transition }: updateChildProps) => {
+      updateChild: ({ child, shape, className }: updateChildProps) => {
         if (className === "") {
           throw new Error("className cannot be empty")
         }
-
-        if (zIndex === undefined) {
-          zIndex = child.zIndex
-        }
-        if (zIndex !== child.zIndex) {
-          this.zIndexUpdated = true
-        }
-        child._update({
+        child.update({
           shape,
-          zIndex: zIndex,
-          layer: layer === undefined ? child.layer : parseLayer(this.root.layers, layer),
           className,
-          transition,
         })
         this.unLogedChildrenIds.add(child.id)
         return child
       },
-      removeChild: (
-        childId: string,
-        soft: boolean = false,
-        removeTransition?: TransitionConfig
-      ): Promise<void> | void => {
+      removeChild: (childId: string): Promise<void> | void => {
         if (childId === this.rootChild.id) {
           throw new Error("root cannot be removed")
         }
         const child = this.getChildById(childId)
         if (!child) return
-        this.drawLayers[child.layer].forceUpdate = true
-        this.removeChildById(child.id, soft, removeTransition)
+        this.removeChildById(child.id)
         this.unLogedChildrenIds.add(child.id)
         return new Promise<void>((resolve) => {
           this.nextTick(resolve)
@@ -562,66 +496,33 @@ class Stay<EventName extends string> {
       getChildrenWithoutRoot: () => {
         return [...this.getChildren().values()].filter((child) => child.id !== this.rootChild.id)
       },
-      getChildById: <T extends Shape>(id: string): StayChild<T> | undefined => {
+      getChildById: <T extends InstantShape>(id: string): StayInstantChild<T> | undefined => {
         const child = this.getChildById(id)
-        return child as StayChild<T>
+        return child as StayInstantChild<T>
       },
-      getChildBySelector: <T extends Shape>(
+      getChildBySelector: <T extends InstantShape>(
         selector: string | SelectorFunc
-      ): StayChild<T> | void => {
+      ): StayInstantChild<T> | void => {
         const children = this.tools.getChildrenBySelector(selector)
         if (children.length !== 0) {
-          return children[0] as StayChild<T>
+          return children[0] as StayInstantChild<T>
         }
       },
       getChildrenByArea: (area: Area, selector?: string | SelectorFunc) => {
         const children = this.getChildrenBySelector(selector)
-        const selectedChildren: StayChild[] = []
+        const selectedChildren: StayInstantChild[] = []
         children.forEach((child) => {
-          const center = child.shape.getCenterPoint()
-          if (
-            center.x >= area.x &&
-            center.x <= area.x + area.width &&
-            center.y >= area.y &&
-            center.y <= area.y + area.height
-          ) {
+          if (child.inArea(area)) {
             selectedChildren.push(child)
           }
         })
         return selectedChildren
       },
-      getChildrenBySelector: (
-        selector: string | SelectorFunc,
-        sortBy = SORT_CHILDREN_METHODS.AREA_ASC
-      ): StayChild[] => {
+      getChildrenBySelector: (selector: string | SelectorFunc, sortBy): StayInstantChild[] => {
         const children = this.getChildrenBySelector(selector)
 
-        const sortMap = new Map<SortChildrenMethodsValues, [string, 1 | -1]>([
-          [SORT_CHILDREN_METHODS.AREA_ASC, ["area", 1]],
-          [SORT_CHILDREN_METHODS.AREA_DESC, ["area", -1]],
-          [SORT_CHILDREN_METHODS.X_ASC, ["x", 1]],
-          [SORT_CHILDREN_METHODS.X_DESC, ["x", -1]],
-          [SORT_CHILDREN_METHODS.Y_ASC, ["y", 1]],
-          [SORT_CHILDREN_METHODS.Y_DESC, ["y", -1]],
-          [SORT_CHILDREN_METHODS.WIDTH_ASC, ["width", 1]],
-          [SORT_CHILDREN_METHODS.WIDTH_DESC, ["width", -1]],
-          [SORT_CHILDREN_METHODS.HEIGHT_ASC, ["height", 1]],
-          [SORT_CHILDREN_METHODS.HEIGHT_DESC, ["height", -1]],
-        ])
-
         if (sortBy) {
-          if (typeof sortBy === "function") {
-            children.sort(sortBy)
-          } else {
-            const [sortKey, sortOrder] = sortMap.get(sortBy) || []
-            if (sortKey && sortOrder) {
-              children.sort((a, b) => {
-                const sortValue1 = (a.shape as any)[sortKey]
-                const sortValue2 = (b.shape as any)[sortKey]
-                return (sortValue1 - sortValue2) * sortOrder
-              })
-            }
-          }
+          children.sort(sortBy)
         }
 
         return children
@@ -653,7 +554,7 @@ class Stay<EventName extends string> {
         sortBy,
         returnFirst = false,
         withRoot = true,
-      }: getContainPointChildrenProps): StayChild[] => {
+      }: getContainPointChildrenProps): StayInstantChild[] => {
         let _selector = selector
 
         if (selector && Array.isArray(selector)) {
@@ -663,8 +564,8 @@ class Stay<EventName extends string> {
         assert(_selector, "no className or id")
         const selectorChildren = this.tools.getChildrenBySelector(_selector as string, sortBy)
 
-        let hitChildren: StayChild[] = selectorChildren.filter((c) =>
-          c.shape.contains(point, this.root.contexts[c.layer])
+        let hitChildren: StayInstantChild[] = selectorChildren.filter((c) =>
+          c.containsPointer(point)
         )
 
         if (!withRoot) {
@@ -677,13 +578,7 @@ class Stay<EventName extends string> {
         this.root.layers[this.root.layers.length - 1].style.cursor = cursor
       },
       fix: () => {
-        this.getChildren().forEach((child) => {
-          if (child.layer !== 0) {
-            child.beforeLayer = child.layer
-            child.layer = 0
-            child.drawAction = DRAW_ACTIONS.UPDATE
-          }
-        })
+        //deprecated
       },
       switchState: (state: string) => {
         this.checkName(state, [ALLSTATE])
@@ -695,7 +590,7 @@ class Stay<EventName extends string> {
       },
       log: () => {
         const steps = [...this.unLogedChildrenIds]
-          .map((id) => StayChild.diff(this.historyChildren.get(id), this.getChildById(id)))
+          .map((id) => StayInstantChild.diff(this.historyChildren.get(id), this.getChildById(id)))
           .filter((o) => o) as StepProps[]
         this.pushToStack({
           state: this.state,
@@ -705,20 +600,20 @@ class Stay<EventName extends string> {
       },
       moveStart: () => {
         this.getChildren().forEach((child) => {
-          child.shape.moveInit()
+          child.moveInit()
         })
       },
 
       move: (
         offsetX: number,
         offsetY: number,
-        filter: (child: StayChild) => boolean = () => true
+        filter: (child: StayInstantChild) => boolean = () => true
       ): Promise<void> => {
         this.getChildren().forEach((child) => {
           if (child.id !== this.rootId && !filter(child)) {
             return
           }
-          child.shape.move(...child.shape._move(offsetX, offsetY))
+          child.move(offsetX, offsetY)
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)
@@ -730,13 +625,13 @@ class Stay<EventName extends string> {
       zoom: (
         deltaY: number,
         center: PointType,
-        filter: (child: StayChild) => boolean = () => true
+        filter: (child: StayInstantChild) => boolean = () => true
       ): Promise<void> => {
         this.getChildren().forEach((child) => {
           if (child.id !== this.rootId && !filter(child)) {
             return
           }
-          child.shape.zoom(child.shape._zoom(deltaY, center))
+          child.zoom(deltaY, center)
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)
@@ -746,13 +641,13 @@ class Stay<EventName extends string> {
         })
       },
       reset: (): Promise<void> => {
-        const rootChildShape = this.rootChild.shape as Rectangle
+        const rootChildShape = this.rootChild.getShape() as Rectangle
         const [offsetX, offsetY] = [-rootChildShape.leftTop.x, -rootChildShape.leftTop.y]
 
         const scale = this.width / rootChildShape.width
         this.getChildren().forEach((child) => {
-          child.shape.move(offsetX, offsetY)
-          child.shape.zoom(child.shape._zoom((scale - 1) * -1000, { x: 0, y: 0 }))
+          child.move(offsetX, offsetY)
+          child.zoom((scale - 1) * -1000, { x: 0, y: 0 })
         })
         this.root.layers.forEach((_, i) => {
           this.forceUpdateLayer(i)
@@ -762,14 +657,14 @@ class Stay<EventName extends string> {
         })
       },
       exportChildren: ({ children, area }) => {
-        const rootChildShape = this.rootChild.shape as Rectangle
+        const rootChildShape = this.rootChild.getShape() as Rectangle
         area = area ?? { x: 0, y: 0, width: rootChildShape.width, height: rootChildShape.height }
         children = children.map((child) => child.copy())
 
         return { children, area }
       },
       importChildren: ({ children, area }, targetArea) => {
-        const rootChildShape = this.rootChild.shape as Rectangle
+        const rootChildShape = this.rootChild.getShape() as Rectangle
         targetArea = targetArea ?? {
           x: 0,
           y: 0,
@@ -784,20 +679,14 @@ class Stay<EventName extends string> {
 
         const [offsetX, offsetY] = [targetArea.x - area.x, targetArea.y - area.y]
         const scale = targetArea.width / area.width
-        const needUpdateLayers: number[] = []
 
         children.forEach((child) => {
-          child.shape.move(offsetX, offsetY)
-          child.shape.zoom(
-            child.shape._zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
-          )
+          child.move(offsetX, offsetY)
+          child.zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
           this.tools.appendChild({
-            shape: child.shape.copy(),
+            shape: child.copyShapeMap(),
             className: child.className,
-            layer: child.layer,
-            zIndex: child.zIndex,
           })
-          needUpdateLayers.push(child.layer)
         })
       },
       regionToTargetCanvas: ({ area, targetArea, children, progress }) => {
@@ -820,24 +709,23 @@ class Stay<EventName extends string> {
 
         const childrenReady = Promise.all(
           children.map(async (c) => {
-            if (progress) {
-              c.setCurrentTime({ time: progress })
-            }
-
-            await c.draw({
-              props: {
-                context: tempCtx,
-                now: Date.now(),
-                width: this.width,
-                height: this.height,
-              },
-              extraTransform: {
-                offsetX,
-                offsetY,
-                zoom: (scale - 1) * -1000,
-                zoomCenter: { x: targetArea.x, y: targetArea.y },
-              },
-            })
+            // if (progress) {
+            //   c.setCurrentTime({ time: progress })
+            // }
+            // await c.draw({
+            //   props: {
+            //     context: tempCtx,
+            //     now: Date.now(),
+            //     width: this.width,
+            //     height: this.height,
+            //   },
+            //   extraTransform: {
+            //     offsetX,
+            //     offsetY,
+            //     zoom: (scale - 1) * -1000,
+            //     zoomCenter: { x: targetArea.x, y: targetArea.y },
+            //   },
+            // })
           })
         )
 
@@ -862,7 +750,7 @@ class Stay<EventName extends string> {
           if (step.action === "append") {
             this.tools.appendChild({
               id: stepChild.id,
-              shape: stepChild.shape.copy(),
+              shape: stepChild.shape,
               className: stepChild.className,
             })
           } else if (step.action === "remove") {
@@ -872,7 +760,7 @@ class Stay<EventName extends string> {
             const child = this.findChildById(stepChild.id)!
             this.tools.updateChild({
               child,
-              shape: stepChild.shape.copy(),
+              shape: stepChild.shape,
             })
           }
         })
@@ -901,7 +789,7 @@ class Stay<EventName extends string> {
           } else if (step.action === "remove") {
             this.tools.appendChild({
               id: stepChild.id,
-              shape: stepChild.shape.copy(),
+              shape: stepChild.shape,
               className: stepChild.className,
             })
           } else if (step.action === "update") {
@@ -910,7 +798,7 @@ class Stay<EventName extends string> {
             this.tools.updateChild({
               child: this.getChildById(stepChild.id)!,
               className: stepChild.beforeName || stepChild.className,
-              shape: stepChild.beforeShape!.copy(),
+              shape: stepChild.beforeShape!,
             })
           }
         })
@@ -965,7 +853,7 @@ class Stay<EventName extends string> {
                 if (children.length === 0) {
                   return false
                 }
-                _actionEvent.target = children[0] as StayChild
+                _actionEvent.target = children[0] as StayInstantChild
               }
             }
 
@@ -1050,10 +938,10 @@ class Stay<EventName extends string> {
     const children =
       typeof selector === "function"
         ? fullSet.filter((child) => selector(child))
-        : infixExpressionParser<StayChild>({
+        : infixExpressionParser<StayInstantChild>({
             selector,
             fullSet,
-            elemntEqualFunc: (a: StayChild, b: StayChild) => a.id === b.id,
+            elemntEqualFunc: (a: StayInstantChild, b: StayInstantChild) => a.id === b.id,
             selectorConvertFunc: (s: string) => this.findBySimpleSelector(s),
           })
     return children
@@ -1063,8 +951,7 @@ class Stay<EventName extends string> {
     this.currentPressedKeys[key] = true
   }
 
-  pushToChildren(child: StayChild) {
-    child.shape.startTime = Date.now()
+  pushToChildren<T extends InstantShape>(child: StayInstantChild<T>) {
     this.#children.set(child.id, child)
   }
 
@@ -1089,15 +976,13 @@ class Stay<EventName extends string> {
     this.currentPressedKeys[key] = false
   }
 
-  removeChildById(id: string, soft: boolean, removeTransition?: TransitionConfig) {
+  removeChildById(id: string) {
     const child = this.getChildById(id)
     if (child) {
-      if (soft) {
-        child.hidden(removeTransition)
-      } else {
-        this.#children.delete(id)
-        this.forceUpdateLayer(child.layer)
-      }
+      this.#children.delete(id)
+      child.getLayers().forEach((layer) => {
+        this.forceUpdateLayer(layer)
+      })
     }
   }
 

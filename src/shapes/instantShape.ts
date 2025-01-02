@@ -1,7 +1,18 @@
+import { shapeUpdateEventEmitter } from "../ShapeUpdateEventEmitter"
+import { StayInstantChild } from "../stay/child/stayInstantChild"
 import { valueof } from "../stay/types"
 import { DrawCanvasContext } from "../types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { Dict, EasingFunction, ShapeDrawProps, ShapeProps, PointType, Font } from "../userTypes"
+import {
+  Dict,
+  EasingFunction,
+  ShapeDrawProps,
+  ShapeProps,
+  PointType,
+  Font,
+  Rect,
+  Coordinate,
+} from "../userTypes"
 import { applyEasing, isRGB, isRGBA } from "../utils"
 import W3Color, { RGB, RGBA, rgbaToString } from "../w3color"
 
@@ -15,7 +26,7 @@ export interface GetCurrentArgumentsProps {
   easeOut?: boolean
 }
 
-export abstract class Shape {
+export abstract class InstantShape {
   area: number
   color: CanvasGradient | RGBA
   gco: GlobalCompositeOperation
@@ -35,6 +46,10 @@ export abstract class Shape {
   lineDash: number[]
   lineDashOffset: number
   filter: string
+  layer: number
+  zIndex: number
+  parent?: StayInstantChild<InstantShape>
+
   constructor({
     color,
     lineWidth,
@@ -48,7 +63,11 @@ export abstract class Shape {
     lineDash,
     lineDashOffset,
     filter,
+    layer,
+    zIndex,
   }: ShapeProps) {
+    this.layer = layer ?? 0
+    this.zIndex = zIndex ?? 0
     this.lineWidth = lineWidth ?? 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
     this.type = type || SHAPE_DRAW_TYPES.STROKE // this is a placeholder for the type property that will be implemented in the subclasses
@@ -139,7 +158,11 @@ export abstract class Shape {
     hidden,
     filter,
     stateDrawFuncMap,
+    layer,
+    zIndex,
   }: ShapeProps) {
+    this.layer = layer ?? this.layer
+    this.zIndex = zIndex ?? this.zIndex
     this.lineWidth = lineWidth ?? this.lineWidth
     this.zoomY = zoomY ?? this.zoomY
     this.zoomCenter = zoomCenter ?? this.zoomCenter
@@ -154,6 +177,8 @@ export abstract class Shape {
     if (state) {
       this.switchState(state)
     }
+
+    this.parent?.onChildShapeChange(this)
     return this
   }
 
@@ -165,40 +190,8 @@ export abstract class Shape {
     return 1 + deltaY * -0.001
   }
 
-  get(key: keyof Shape) {
-    return this[key] // this will return the value of the property with the given key (e.g., this.get('color') will return the color of the shape)
-  }
-
-  pointOuterOfCanvas(canvas: HTMLCanvasElement, point: SimplePoint) {
+  pointOuterOfCanvas(canvas: HTMLCanvasElement, point: Coordinate) {
     return point.x < 0 || point.x > canvas.width || point.y < 0 || point.y > canvas.height
-  }
-
-  getCurrentArguments({
-    now,
-    startArguments,
-    endArguments,
-    duration,
-    ease = false,
-    easeOut = false,
-    easeIn = false,
-  }: GetCurrentArgumentsProps) {
-    if (easeOut) {
-      duration = duration * 2
-    }
-    const elapsed = (now - this.startTime) % duration
-    const progress = ease ? 1 - Math.pow(elapsed / duration, 2) : elapsed / duration
-    const currentArguments: Dict = {}
-    function getCurrentValue(startValue: number, endValue: number, progress: number) {
-      return startValue + (endValue - startValue) * progress
-    }
-
-    Object.keys(startArguments).forEach((key) => {
-      if (key in endArguments) {
-        currentArguments[key] = getCurrentValue(startArguments[key], endArguments[key], progress)
-      }
-    })
-
-    return currentArguments
   }
 
   getInitPoint(point: PointType) {
@@ -271,121 +264,8 @@ export abstract class Shape {
       y: point.y * scaleRatio + offsetY,
     }
   }
-  intermediateState(
-    before: Shape,
-    after: Shape,
-    ratio: number,
-    transitionType: EasingFunction
-  ): Shape {
-    return this
-  }
 
-  getIntermediateProps(
-    before: Shape,
-    after: Shape,
-    ratio: number,
-    transitionType: EasingFunction
-  ): ShapeProps {
-    return {
-      type: this.type,
-      gco: this.gco,
-      state: this.state,
-      stateDrawFuncMap: this.stateDrawFuncMap,
-      lineDash: this.lineDash,
-      lineDashOffset: this.getNumberIntermediateState(
-        before.lineDashOffset,
-        after.lineDashOffset,
-        ratio,
-        transitionType
-      ),
-      color: this.getColorIntermediateState(before.color, after.color, ratio, transitionType),
-      hidden: false,
-      lineWidth: this.getNumberIntermediateState(
-        before.lineWidth,
-        after.lineWidth,
-        ratio,
-        transitionType
-      ),
-      zoomY: this.getNumberIntermediateState(before.zoomY, after.zoomY, ratio, transitionType),
-      zoomCenter: {
-        x: this.getNumberIntermediateState(
-          before.zoomCenter.x,
-          after.zoomCenter.x,
-          ratio,
-          transitionType
-        ),
-        y: this.getNumberIntermediateState(
-          before.zoomCenter.y,
-          after.zoomCenter.y,
-          ratio,
-          transitionType
-        ),
-      },
-    }
-  }
-
-  getFontIntermediateState(
-    beforeFont: Required<Font>,
-    afterFont: Required<Font>,
-    ratio: number,
-    transitionType: EasingFunction
-  ): Required<Font> {
-    const size = this.getNumberIntermediateState(
-      beforeFont.size,
-      afterFont.size,
-      ratio,
-      transitionType
-    )
-    const fontWeight = this.getNumberIntermediateState(
-      beforeFont.fontWeight,
-      afterFont.fontWeight,
-      ratio,
-      transitionType
-    )
-    const backgroundColor = this.getColorIntermediateState(
-      this.tryConvertToRGBA(beforeFont.backgroundColor),
-      this.tryConvertToRGBA(afterFont.backgroundColor),
-      ratio,
-      transitionType
-    )
-
-    return {
-      fontFamily: afterFont.fontFamily,
-      fontWeight,
-      italic: afterFont.italic,
-      size,
-      backgroundColor,
-      underline: afterFont.underline,
-      strikethrough: afterFont.strikethrough,
-    }
-  }
-
-  getNumberIntermediateState(
-    before: number,
-    after: number,
-    ratio: number,
-    transitionType: EasingFunction
-  ) {
-    return before + (after - before) * applyEasing(transitionType, ratio)
-  }
-
-  getColorIntermediateState<T>(before: T, after: T, ratio: number, transitionType: EasingFunction) {
-    if (!isRGBA(before) || !isRGBA(after)) {
-      return after
-    }
-
-    const rgba: RGBA = {
-      r: Math.floor(this.getNumberIntermediateState(before.r, after.r, ratio, transitionType)),
-      g: Math.floor(this.getNumberIntermediateState(before.g, after.g, ratio, transitionType)),
-      b: Math.floor(this.getNumberIntermediateState(before.b, after.b, ratio, transitionType)),
-      a: this.getNumberIntermediateState(before.a, after.a, ratio, transitionType),
-    }
-    return rgba
-  }
-
-  abstract contains(point: PointType, cxt?: DrawCanvasContext): boolean
-
-  abstract copy(): Shape
+  abstract copy(): InstantShape
 
   abstract draw(props: ShapeDrawProps): void
 
@@ -395,20 +275,23 @@ export abstract class Shape {
 
   abstract zoom(zoomScale: number): void
 
-  abstract getCenterPoint(): SimplePoint
+  abstract getBound(): Rect
 
-  earlyStopIntermediateState(
-    before: Shape,
-    after: Shape,
-    ratio: number,
-    transitionType: EasingFunction,
-    containerWidth: number,
-    containerHeight: number
-  ) {
-    return false
+  contains(point: PointType): boolean {
+    const bound = this.getBound()
+    return (
+      point.x > bound.x &&
+      point.x < bound.x + bound.width &&
+      point.y > bound.y &&
+      point.y < bound.y + bound.height
+    )
   }
 
-  zeroShape(): Shape {
-    return this.copy()
+  getCenterPoint(): Coordinate {
+    const bound = this.getBound()
+    return {
+      x: bound.x + bound.width / 2,
+      y: bound.y + bound.height / 2,
+    }
   }
 }

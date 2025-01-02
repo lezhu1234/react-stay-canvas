@@ -1,3 +1,4 @@
+import { InstantShape } from "../shapes/instantShape"
 import { Shape } from "../shapes/shape"
 import { ExtraTransform, ProgressBound, ShapeDrawProps } from "../userTypes"
 
@@ -14,8 +15,8 @@ export interface StepChildProps {
   id: string
   className: string
   beforeName?: string
-  shape: Shape
-  beforeShape?: Shape
+  shape: Map<string, InstantShape>
+  beforeShape?: Map<string, InstantShape>
 }
 
 export interface StepRecorderProps {

@@ -1,27 +1,18 @@
 import { Line } from "./line"
 import { Shape } from "./shape"
-import { ShapeDrawProps, ShapeProps } from "../userTypes"
+import { Coordinate, ShapeDrawProps, ShapeProps } from "../userTypes"
 export interface PointProps {
   x: number
   y: number
   props?: ShapeProps
 }
 
-export class SimplePoint {
-  x: number
-  y: number
-  constructor(x: number, y: number) {
-    this.x = x
-    this.y = y
-  }
-  update({ x, y }: Partial<SimplePoint>) {
-    this.x = x ?? this.x
-    this.y = y ?? this.y
-  }
-}
 export class Point extends Shape {
-  getCenterPoint(): SimplePoint {
-    return new SimplePoint(this.x, this.y)
+  getCenterPoint(): Coordinate {
+    return {
+      x: this.x,
+      y: this.y,
+    }
   }
   x: number
   y: number

@@ -1,7 +1,7 @@
 import { Point } from "./point"
-import { Shape } from "./shape"
-import { Coordinate, ShapeDrawProps, ShapeProps } from "../userTypes"
+import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { Vector } from "./vector"
+import { InstantShape } from "./instantShape"
 export interface UpdateLineProps {
   x1?: number
   y1?: number
@@ -16,7 +16,10 @@ export interface LineProps {
   y2: number
   props?: ShapeProps
 }
-export class Line extends Shape {
+export class Line extends InstantShape {
+  getBound(): Rect {
+    throw new Error("Method not implemented.")
+  }
   endPoint: Point
   startPoint: Point
   vector: Vector

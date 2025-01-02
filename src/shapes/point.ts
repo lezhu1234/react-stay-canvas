@@ -1,13 +1,16 @@
 import { Line } from "./line"
-import { Shape } from "./shape"
-import { Coordinate, ShapeDrawProps, ShapeProps } from "../userTypes"
+import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
+import { InstantShape } from "./instantShape"
 export interface PointProps {
   x: number
   y: number
   props?: ShapeProps
 }
 
-export class Point extends Shape {
+export class Point extends InstantShape {
+  getBound(): Rect {
+    throw new Error("Method not implemented.")
+  }
   getCenterPoint(): Coordinate {
     return {
       x: this.x,
@@ -30,7 +33,7 @@ export class Point extends Shape {
   copy(): Point {
     return new Point(this.x, this.y, this._copy())
   }
-  distance(point: Point): number {
+  distance(point: Coordinate): number {
     const dx = point.x - this.x
     const dy = point.y - this.y
     return Math.sqrt(dx * dx + dy * dy)

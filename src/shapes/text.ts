@@ -7,15 +7,19 @@ import {
   EasingFunction,
   Font,
   FourrDirection,
+  Rect,
   ShapeDrawProps,
   TextAttr,
 } from "../userTypes"
 import { getDefaultFont, getRGBAStr, isRGB, isRGBA } from "../utils"
 import { rgbaToString } from "../w3color"
+import { InstantShape } from "./instantShape"
 import { Rectangle } from "./rectangle"
-import { Shape } from "./shape"
 
-export class StayText extends Shape {
+export class StayText extends InstantShape {
+  getBound(): Rect {
+    throw new Error("Method not implemented.")
+  }
   font: Required<Font>
   height: number
   leftBottom: Coordinate
@@ -79,7 +83,7 @@ export class StayText extends Shape {
     return false
   }
 
-  copy(): Shape {
+  copy(): StayText {
     return new StayText({
       x: this.x,
       y: this.y,
@@ -274,123 +278,123 @@ export class StayText extends Shape {
     })
   }
 
-  earlyStopIntermediateState(
-    before: StayText,
-    after: StayText,
-    ratio: number,
-    transitionType: EasingFunction,
-    containerWidth: number,
-    containerHeight: number
-  ) {
-    const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
-    const width = this.getNumberIntermediateState(before.width, after.width, ratio, transitionType)
+  // earlyStopIntermediateState(
+  //   before: StayText,
+  //   after: StayText,
+  //   ratio: number,
+  //   transitionType: EasingFunction,
+  //   containerWidth: number,
+  //   containerHeight: number
+  // ) {
+  //   const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
+  //   const width = this.getNumberIntermediateState(before.width, after.width, ratio, transitionType)
 
-    if (x < -width || x > containerWidth) {
-      return true
-    }
+  //   if (x < -width || x > containerWidth) {
+  //     return true
+  //   }
 
-    const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
-    const height = this.getNumberIntermediateState(
-      before.height,
-      after.height,
-      ratio,
-      transitionType
-    )
+  //   const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
+  //   const height = this.getNumberIntermediateState(
+  //     before.height,
+  //     after.height,
+  //     ratio,
+  //     transitionType
+  //   )
 
-    if (y < -height || y > containerHeight) {
-      return true
-    }
-    return false
-  }
+  //   if (y < -height || y > containerHeight) {
+  //     return true
+  //   }
+  //   return false
+  // }
 
-  zeroShape(): StayText {
-    return new StayText({
-      x: this.x,
-      y: this.y,
-      text: this.text,
-      font: this.font,
-      border: this.border,
-      textBaseline: this.textBaseline,
-      textAlign: this.textAlign,
-      offsetXRatio: this.offsetXRatio,
-      offsetYRatio: this.offsetYRatio,
-      props: { ...this._copy(), color: { ...this.color, a: 0 } },
-    })
-  }
+  // zeroShape(): StayText {
+  //   return new StayText({
+  //     x: this.x,
+  //     y: this.y,
+  //     text: this.text,
+  //     font: this.font,
+  //     border: this.border,
+  //     textBaseline: this.textBaseline,
+  //     textAlign: this.textAlign,
+  //     offsetXRatio: this.offsetXRatio,
+  //     offsetYRatio: this.offsetYRatio,
+  //     props: { ...this._copy(), color: { ...this.color, a: 0 } },
+  //   })
+  // }
 
-  intermediateState(
-    before: StayText,
-    after: StayText,
-    ratio: number,
-    transitionType: EasingFunction
-  ) {
-    const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
-    const width = this.getNumberIntermediateState(before.width, after.width, ratio, transitionType)
+  // intermediateState(
+  //   before: StayText,
+  //   after: StayText,
+  //   ratio: number,
+  //   transitionType: EasingFunction
+  // ) {
+  //   const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
+  //   const width = this.getNumberIntermediateState(before.width, after.width, ratio, transitionType)
 
-    const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
-    const height = this.getNumberIntermediateState(
-      before.height,
-      after.height,
-      ratio,
-      transitionType
-    )
+  //   const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
+  //   const height = this.getNumberIntermediateState(
+  //     before.height,
+  //     after.height,
+  //     ratio,
+  //     transitionType
+  //   )
 
-    const font = this.getFontIntermediateState(before.font, after.font, ratio, transitionType)
-    const props = this.getIntermediateProps(before, after, ratio, transitionType)
-    let text = after.text
+  //   const font = this.getFontIntermediateState(before.font, after.font, ratio, transitionType)
+  //   const props = this.getIntermediateProps(before, after, ratio, transitionType)
+  //   let text = after.text
 
-    if (
-      before.text !== after.text &&
-      isRGBA(before.color) &&
-      isRGBA(after.color) &&
-      isRGBA(props.color) &&
-      this.autoTransitionDiffText
-    ) {
-      let color = props.color
-      if (ratio > 0.5) {
-        const opacity = this.getNumberIntermediateState(
-          0,
-          after.color.a,
-          (ratio - 0.5) * 2,
-          transitionType
-        )
-        color = { ...color, a: opacity }
-      } else {
-        text = before.text
-        const opacity = this.getNumberIntermediateState(
-          0,
-          before.color.a,
-          (0.5 - ratio) * 2,
-          transitionType
-        )
-        color = { ...color, a: opacity }
-      }
-      props.color = color
-    }
+  //   if (
+  //     before.text !== after.text &&
+  //     isRGBA(before.color) &&
+  //     isRGBA(after.color) &&
+  //     isRGBA(props.color) &&
+  //     this.autoTransitionDiffText
+  //   ) {
+  //     let color = props.color
+  //     if (ratio > 0.5) {
+  //       const opacity = this.getNumberIntermediateState(
+  //         0,
+  //         after.color.a,
+  //         (ratio - 0.5) * 2,
+  //         transitionType
+  //       )
+  //       color = { ...color, a: opacity }
+  //     } else {
+  //       text = before.text
+  //       const opacity = this.getNumberIntermediateState(
+  //         0,
+  //         before.color.a,
+  //         (0.5 - ratio) * 2,
+  //         transitionType
+  //       )
+  //       color = { ...color, a: opacity }
+  //     }
+  //     props.color = color
+  //   }
 
-    return new StayText({
-      x,
-      y,
-      text,
-      font,
-      width,
-      height,
-      border: after.border,
-      offsetXRatio: this.getNumberIntermediateState(
-        before.offsetXRatio,
-        after.offsetXRatio,
-        ratio,
-        transitionType
-      ),
-      offsetYRatio: this.getNumberIntermediateState(
-        before.offsetYRatio,
-        after.offsetYRatio,
-        ratio,
-        transitionType
-      ),
-      textAlign: after.textAlign,
-      textBaseline: after.textBaseline,
-      props: { ...props },
-    })
-  }
+  //   return new StayText({
+  //     x,
+  //     y,
+  //     text,
+  //     font,
+  //     width,
+  //     height,
+  //     border: after.border,
+  //     offsetXRatio: this.getNumberIntermediateState(
+  //       before.offsetXRatio,
+  //       after.offsetXRatio,
+  //       ratio,
+  //       transitionType
+  //     ),
+  //     offsetYRatio: this.getNumberIntermediateState(
+  //       before.offsetYRatio,
+  //       after.offsetYRatio,
+  //       ratio,
+  //       transitionType
+  //     ),
+  //     textAlign: after.textAlign,
+  //     textBaseline: after.textBaseline,
+  //     props: { ...props },
+  //   })
+  // }
 }

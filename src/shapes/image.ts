@@ -1,5 +1,5 @@
 import { Rectangle } from "./rectangle"
-import { Shape } from "./shape"
+
 import { EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { isRGBA } from "../utils"
 import { DrawCanvasContext } from "../types"

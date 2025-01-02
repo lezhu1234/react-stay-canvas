@@ -1,5 +1,4 @@
 import { InstantShape } from "../shapes/instantShape"
-import { Shape } from "../shapes/shape"
 import { ExtraTransform, ProgressBound, ShapeDrawProps } from "../userTypes"
 
 export interface StackItem {

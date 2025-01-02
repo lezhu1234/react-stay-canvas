@@ -17,13 +17,4 @@ export class Root extends Rectangle {
     return this
   }
   draw() {}
-
-  contains(point: Point): boolean {
-    return (
-      point.x > this.initX &&
-      point.x < this.initX + this.initWidth &&
-      point.y > this.initY &&
-      point.y < this.initY + this.initHeight
-    )
-  }
 }

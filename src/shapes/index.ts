@@ -1,4 +1,3 @@
-export * from "./shape"
 export * from "./circle"
 export * from "./image"
 export * from "./line"

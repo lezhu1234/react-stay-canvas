@@ -2,11 +2,13 @@ import { Point } from "./shapes/point"
 import { EventProps } from "./types"
 import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
 import {
+  Coordinate,
   PredefinedEventName,
   PredefinedKeyEventName,
   PredefinedMouseEventName,
   PredefinedWheelEventName,
 } from "./userTypes"
+import { distance } from "./utils"
 
 export const mouseDownEvent: EventProps<PredefinedMouseEventName> = {
   name: "mousedown",
@@ -85,10 +87,10 @@ const DragEvent: EventProps<PredefinedMouseEventName> = {
   name: "drag",
   trigger: MOUSE_EVENTS.MOUSE_MOVE,
   conditionCallback: ({ e, store }) => {
-    const dragStartPosition: Point = store.get("dragStartPosition")
+    const dragStartPosition: Coordinate = store.get("dragStartPosition")
     return (
       e.pressedKeys.has("mouse0") &&
-      (dragStartPosition.distance(e.point) >= 10 || store.get("dragging")) &&
+      (distance(dragStartPosition, e.point) >= 10 || store.get("dragging")) &&
       !e.pressedKeys.has("Control")
     )
   },

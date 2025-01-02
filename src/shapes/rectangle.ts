@@ -3,7 +3,6 @@ import { Coordinate, EasingFunction, Rect, ShapeDrawProps, ShapeProps } from "..
 import { InstantShape } from "./instantShape"
 import { Line } from "./line"
 import { Point } from "./point"
-import { Shape } from "./shape"
 
 export interface RectShapeAttr {
   x: number
@@ -115,15 +114,6 @@ export class Rectangle extends InstantShape {
       offsetX,
       offsetY,
     }
-  }
-
-  contains(point: Point): boolean {
-    return (
-      point.x > this.x &&
-      point.x < this.x + this.width &&
-      point.y > this.y &&
-      point.y < this.y + this.height
-    )
   }
 
   copy(): Rectangle {

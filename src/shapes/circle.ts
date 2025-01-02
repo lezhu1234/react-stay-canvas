@@ -1,7 +1,8 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { Point } from "./point"
-import { Shape } from "./shape"
-import { Coordinate, ShapeDrawProps, ShapeProps } from "../userTypes"
+
+import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
+import { InstantShape } from "./instantShape"
 
 export interface CircleAttr {
   x: number
@@ -10,7 +11,15 @@ export interface CircleAttr {
   props?: ShapeProps
 }
 
-export class Circle extends Shape {
+export class Circle extends InstantShape {
+  getBound(): Rect {
+    return {
+      x: this.x - this.radius,
+      y: this.y - this.radius,
+      width: this.radius * 2,
+      height: this.radius * 2,
+    }
+  }
   getCenterPoint(): Coordinate {
     return { x: this.x, y: this.y }
   }

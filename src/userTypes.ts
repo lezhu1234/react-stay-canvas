@@ -1,5 +1,5 @@
 import Canvas from "./canvas"
-import { GetCurrentArgumentsProps, Shape } from "./shapes"
+import { AnimatedShape } from "./shapes/animatedShape"
 import { InstantShape } from "./shapes/instantShape"
 import { Point } from "./shapes/point"
 import { StayInstantChild } from "./stay/child/stayInstantChild"
@@ -38,7 +38,7 @@ export interface MouseActionEvent<EventName extends PredefinedMouseEventName> {
   name: EventName
   x: number
   y: number
-  point: Point
+  point: Coordinate
   target: StayInstantChild
   isMouseEvent: true
 }
@@ -68,15 +68,15 @@ export type ActionEvent<EventName extends string | string[]> =
     ? MouseActionEvent<EventName>
     : never
 
-export interface TimelineChildProps<T extends Shape> {
-  id?: string
-  zIndex?: number
-  shape: T
-  className: string
-  layer?: number
-  transition?: Omit<StayChildTransitions, "update">
-  timeline: TimeLineProps<T>[]
-}
+// export interface TimelineChildProps<T extends Shape> {
+//   id?: string
+//   zIndex?: number
+//   shape: T
+//   className: string
+//   layer?: number
+//   transition?: Omit<StayChildTransitions, "update">
+//   timeline: TimeLineProps<T>[]
+// }
 
 export interface createChildProps<T> {
   id?: string
@@ -86,15 +86,15 @@ export interface createChildProps<T> {
 
 export type updateChildProps<T = InstantShape> = {
   child: StayInstantChild
-  transition?: Omit<TransitionConfig, "effect">
-} & Partial<Omit<createChildProps<T>, "transition">>
+  transition?: StayShapeTransitionConfig
+} & Partial<createChildProps<T>>
 
 export interface UpdateStayChildProps<T> {
   id?: string
   className?: string
   shape?: T | undefined
   zIndex?: number
-  transition?: Omit<TransitionConfig, "effect">
+  transition?: StayShapeTransitionConfig
 }
 
 export type ChildSortFunction = (a: StayInstantChild, b: StayInstantChild) => number
@@ -124,7 +124,7 @@ export interface Coordinate {
   y: number
 }
 
-export type StayChildShapes = Shape[]
+// export type StayChildShapes = Shape[]
 
 export interface Area {
   x: number
@@ -278,19 +278,6 @@ export interface StayShapeTransitionConfig {
   delayMs?: number
 }
 
-export interface TransitionConfig {
-  effect: Effects[] | ShapeConfig
-  type?: EasingFunction
-  duration: number
-  delay?: number
-}
-
-export interface StayChildTransitions {
-  enter?: TransitionConfig
-  leave?: TransitionConfig
-  update?: Omit<TransitionConfig, "effect">
-}
-
 export interface StayInstantChildUpdateProps<T extends InstantShape> {
   id?: string
   className?: string
@@ -304,29 +291,35 @@ export interface StayInstantChildProps<T extends InstantShape> {
   canvas: Canvas
 }
 
+export interface StayAnimatedChildProps<T extends AnimatedShape> {
+  id?: string
+  className: string
+  canvas: Canvas
+}
+
 export interface StayChildProps<T> {
   id?: string
   zIndex?: number
   className: string
 
-  transition?: Omit<StayChildTransitions, "update">
+  transition?: StayShapeTransitionConfig
 
   shape: T
   drawAction?: DrawActionsValuesType | null
 }
 
-export interface StayChildTimeLineProps<T extends Shape> {
-  id?: string
-  zIndex?: number
-  className: string
+// export interface StayChildTimeLineProps<T extends Shape> {
+//   id?: string
+//   zIndex?: number
+//   className: string
 
-  shape: T
+//   shape: T
 
-  timeline: TimeLineProps<T>[]
-  drawAction?: DrawActionsValuesType | null
-  afterRefresh?: (fn: () => void) => void
-  drawEndCallback?: (child: StayInstantChild) => void
-}
+//   timeline: TimeLineProps<T>[]
+//   drawAction?: DrawActionsValuesType | null
+//   afterRefresh?: (fn: () => void) => void
+//   drawEndCallback?: (child: StayInstantChild) => void
+// }
 export interface RegionToTargetCanvasProps {
   area: Area
   targetArea?: Area
@@ -494,22 +487,22 @@ export interface ExtraTransform {
   offsetY: number
 }
 
-export interface TimeLineProps<T extends Shape> {
-  start: number
-  duration: number
-  type?: EasingFunction
-  props: Parameters<T["update"]>[0]
-}
+// export interface TimeLineProps<T extends Shape> {
+//   start: number
+//   duration: number
+//   type?: EasingFunction
+//   props: Parameters<T["update"]>[0]
+// }
 
-export interface IntermediateShapeInfo {
-  before: Shape
-  after: Shape
-  ratio: number
-  type: EasingFunction
-  intermediate: boolean
-  beforeIndex: number
-  afterIndex: number
-}
+// export interface IntermediateShapeInfo {
+//   before: Shape
+//   after: Shape
+//   ratio: number
+//   type: EasingFunction
+//   intermediate: boolean
+//   beforeIndex: number
+//   afterIndex: number
+// }
 
 export interface ShapeBound {
   beforeIndex: number
@@ -524,16 +517,11 @@ export interface CurrentShapeInfo<T> extends ShapeBound {
   currentTime: number
 }
 
-export function isIntermediateShapeInfo<T extends Shape>(
-  shape: IntermediateShapeInfo | T
-): shape is IntermediateShapeInfo {
-  return (shape as IntermediateShapeInfo).intermediate === true
-}
-
-export interface ShapeStackElement<T> {
-  shape: T
-  transition: TransitionConfig | Omit<TransitionConfig, "effect"> | undefined
-}
+// export function isIntermediateShapeInfo<T extends Shape>(
+//   shape: IntermediateShapeInfo | T
+// ): shape is IntermediateShapeInfo {
+//   return (shape as IntermediateShapeInfo).intermediate === true
+// }
 
 export type PredefinedWheelEventName = "wheel" | "zoomout" | "zoomin"
 

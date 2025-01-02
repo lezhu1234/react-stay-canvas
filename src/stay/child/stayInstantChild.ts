@@ -1,36 +1,14 @@
-import { Shape } from "../../shapes/shape"
+import { InstantShape } from "../../shapes/instantShape"
 import {
   Area,
   Coordinate,
-  CurrentShapeInfo,
-  ExtraTransform,
-  IntermediateShapeInfo,
-  isIntermediateShapeInfo,
   PointType,
-  ProgressBound,
   Rect,
-  ShapeBound,
-  ShapeDrawProps,
-  ShapeProps,
-  ShapeStackElement,
-  StayChildTimeLineProps,
-  StayChildTransitions,
   StayInstantChildProps,
-  StayInstantChildShapes,
   StayInstantChildUpdateProps,
-  TimeLineProps,
-  TransitionConfig,
 } from "../../userTypes"
-import { DRAW_ACTIONS } from "../../userConstants"
-import {
-  DrawActionsValuesType,
-  EasingFunction,
-  StayChildProps,
-  UpdateStayChildProps,
-} from "../../userTypes"
-import { assert, getShapeByEffect, uuid4 } from "../../utils"
-import { DrawChildProps, SetShapeChildCurrentTime, StepProps } from "../types"
-import { InstantShape } from "../../shapes/instantShape"
+import { parseLayer, uuid4 } from "../../utils"
+import { StepProps } from "../types"
 
 import { Canvas } from "../../canvas"
 
@@ -115,6 +93,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
 
     shapeMap.forEach((shape) => {
       shape.parent = this
+      shape.layer = parseLayer(this.canvas.layers, shape.layer)
     })
 
     return shapeMap
@@ -197,11 +176,12 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   }
 
   onChildShapeChange(shape: T) {
+    shape.layer = parseLayer(this.canvas.layers, shape.layer)
     this.updatedLayers.add(shape.layer)
   }
 
-  draw() {
-    this.updatedLayers.clear()
+  layerDraw(layer: number) {
+    this.updatedLayers.delete(layer)
   }
 
   copy(): StayInstantChild<T> {

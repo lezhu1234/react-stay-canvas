@@ -1,7 +1,7 @@
-import { Line, Point, Shape } from "./shapes"
-import { NumberInRangeZeroOne, NumericString, Positive, ShapeConfig } from "./types"
+import { Line, Point } from "./shapes"
+import { NumericString, Positive } from "./types"
 import { SUPPORT_OPRATOR } from "./userConstants"
-import { EasingFunction, EasingFunctionMap, Effects, Font, StayChildTransitions } from "./userTypes"
+import { Coordinate, EasingFunction, EasingFunctionMap, Font } from "./userTypes"
 import { RGB, RGBA } from "./w3color"
 
 export type InfixExpressionParserProps<T> = {
@@ -20,6 +20,12 @@ export function assert(condition: any, message: string = "") {
   if (!condition) {
     throw new Error(message)
   }
+}
+
+export function distance(point1: Coordinate, point2: Coordinate): number {
+  const dx = point1.x - point2.x
+  const dy = point1.y - point2.y
+  return Math.sqrt(dx * dx + dy * dy)
 }
 export function infixExpressionParser<T>({
   selector,
@@ -424,91 +430,91 @@ export function isRelativeNumericString<T extends NumericString>(value: T) {
   return typeof value === "string" && (value.startsWith("+") || value.startsWith("-"))
 }
 
-export function getShapeByConfig<Q extends Shape>(config: ShapeConfig, shape: Q) {
-  const { offsetX, offsetY, scale, opacity } = config
-  const center = shape.getCenterPoint()
+// export function getShapeByConfig<Q extends Shape>(config: ShapeConfig, shape: Q) {
+//   const { offsetX, offsetY, scale, opacity } = config
+//   const center = shape.getCenterPoint()
 
-  let ox = validateNumericString(offsetX ?? 0)
-  let oy = validateNumericString(offsetY ?? 0)
-  const s = ensureNotNegative(scale ?? 1)
-  const o = ensureInRangeZeroOne(opacity ?? 1) // 0 for hidden and 1 for visible
+//   let ox = validateNumericString(offsetX ?? 0)
+//   let oy = validateNumericString(offsetY ?? 0)
+//   const s = ensureNotNegative(scale ?? 1)
+//   const o = ensureInRangeZeroOne(opacity ?? 1) // 0 for hidden and 1 for visible
 
-  if (!isRelativeNumericString(ox)) {
-    ox = Number(ox)
-    ox = ox - center.x
-  }
-  if (!isRelativeNumericString(oy)) {
-    oy = Number(oy)
-    oy = oy - center.y
-  }
+//   if (!isRelativeNumericString(ox)) {
+//     ox = Number(ox)
+//     ox = ox - center.x
+//   }
+//   if (!isRelativeNumericString(oy)) {
+//     oy = Number(oy)
+//     oy = oy - center.y
+//   }
 
-  ox = Number(ox)
-  oy = Number(oy)
+//   ox = Number(ox)
+//   oy = Number(oy)
 
-  shape.move(ox, oy)
-  shape.zoom(
-    shape._zoom(((s ?? 1) - 1) * -1000, {
-      x: center.x + ox,
-      y: center.y + oy,
-    })
-  )
+//   shape.move(ox, oy)
+//   shape.zoom(
+//     shape._zoom(((s ?? 1) - 1) * -1000, {
+//       x: center.x + ox,
+//       y: center.y + oy,
+//     })
+//   )
 
-  if (isRGBA(shape.color)) {
-    const color: RGBA = { ...shape.color, a: o }
-    shape.update({ props: { color } })
-  }
+//   if (isRGBA(shape.color)) {
+//     const color: RGBA = { ...shape.color, a: o }
+//     shape.update({ props: { color } })
+//   }
 
-  return shape
-}
+//   return shape
+// }
 
-export function getShapeByEffect<T extends Shape>(
-  effects: Effects[] | ShapeConfig,
-  shape: T,
-  type: "enter" | "leave"
-) {
-  if (!Array.isArray(effects)) {
-    return getShapeByConfig(effects, shape)
-  }
-  let offsetX: number = 0,
-    offsetY: number = 0,
-    scale = 1,
-    opacity = 1
-  effects.forEach((effect) => {
-    switch (effect) {
-      case "left10px":
-        offsetX -= 10
-        break
-      case "right10px":
-        offsetX += 10
-        break
-      case "up10px":
-        offsetY -= 10
-        break
-      case "down10px":
-        offsetY += 10
-        break
-      case "fade100%":
-        opacity = 0
-        break
-      case "zoomIn100%":
-        scale = 2
-        break
-      case "zoomOut100%":
-        scale = 0
-        break
-    }
-  })
+// export function getShapeByEffect<T extends Shape>(
+//   effects: Effects[] | ShapeConfig,
+//   shape: T,
+//   type: "enter" | "leave"
+// ) {
+//   if (!Array.isArray(effects)) {
+//     return getShapeByConfig(effects, shape)
+//   }
+//   let offsetX: number = 0,
+//     offsetY: number = 0,
+//     scale = 1,
+//     opacity = 1
+//   effects.forEach((effect) => {
+//     switch (effect) {
+//       case "left10px":
+//         offsetX -= 10
+//         break
+//       case "right10px":
+//         offsetX += 10
+//         break
+//       case "up10px":
+//         offsetY -= 10
+//         break
+//       case "down10px":
+//         offsetY += 10
+//         break
+//       case "fade100%":
+//         opacity = 0
+//         break
+//       case "zoomIn100%":
+//         scale = 2
+//         break
+//       case "zoomOut100%":
+//         scale = 0
+//         break
+//     }
+//   })
 
-  return getShapeByConfig(
-    {
-      offsetX: (offsetX >= 0 ? "+" + offsetX : offsetX.toString()) as NumericString,
-      offsetY: (offsetY >= 0 ? "+" + offsetY : offsetY.toString()) as NumericString,
-      scale,
-      opacity,
-    },
-    shape
-  )
-}
+//   return getShapeByConfig(
+//     {
+//       offsetX: (offsetX >= 0 ? "+" + offsetX : offsetX.toString()) as NumericString,
+//       offsetY: (offsetY >= 0 ? "+" + offsetY : offsetY.toString()) as NumericString,
+//       scale,
+//       opacity,
+//     },
+//     shape
+//   )
+// }
 
 export function getDefaultFont(font?: Font): Required<Font> {
   return {

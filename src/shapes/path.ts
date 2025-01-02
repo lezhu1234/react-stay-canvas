@@ -2,9 +2,9 @@ import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { getCornersByCenterLine } from "../utils"
 import { Line } from "./line"
 import { Point } from "./point"
-import { Shape } from "./shape"
-import { Coordinate, ShapeDrawProps, ShapeProps } from "../userTypes"
+import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { DrawCanvasContext } from "../types"
+import { InstantShape } from "./instantShape"
 
 export interface PathAttr {
   points: Point[]
@@ -12,7 +12,13 @@ export interface PathAttr {
   props?: ShapeProps
 }
 
-export class Path extends Shape {
+export class Path extends InstantShape {
+  copy(): Path {
+    throw new Error("Method not implemented.")
+  }
+  getBound(): Rect {
+    throw new Error("Method not implemented.")
+  }
   points: Point[]
   radius: number
   constructor({ points, radius, props }: PathAttr) {
@@ -61,16 +67,16 @@ export class Path extends Shape {
     })
     return { x: x / this.points.length, y: y / this.points.length }
   }
-  contains(point: Point, ctx: DrawCanvasContext): boolean {
-    return ctx.isPointInPath(this.path, point.x, point.y)
-  }
-  copy(): Path {
-    return new Path({
-      radius: this.radius,
-      points: this.points.map((point) => point.copy()),
-      props: this._copy(),
-    })
-  }
+  // contains(point: Point, ctx: DrawCanvasContext): boolean {
+  //   return ctx.isPointInPath(this.path, point.x, point.y)
+  // }
+  // copy(): Path {
+  //   return new Path({
+  //     radius: this.radius,
+  //     points: this.points.map((point) => point.copy()),
+  //     props: this._copy(),
+  //   })
+  // }
   draw({ context }: ShapeDrawProps): void {
     if (this.type === SHAPE_DRAW_TYPES.FILL) {
       context.fill(this.path)

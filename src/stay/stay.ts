@@ -16,41 +16,27 @@ import {
   mouseup,
   wheel,
 } from "../rawEvents"
-import { Point, Rectangle, Root, Shape } from "../shapes"
+import { Point, Rectangle, Root } from "../shapes"
 import { InstantShape } from "../shapes/instantShape"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
 import { EventProps, StayEventMap, StayEventProps } from "../types"
-import {
-  ALLSTATE,
-  DEFAULTSTATE,
-  DRAW_ACTIONS,
-  MOUSE_EVENTS,
-  ROOTNAME,
-  SORT_CHILDREN_METHODS,
-  SUPPORT_OPRATOR,
-} from "../userConstants"
+import { ALLSTATE, DEFAULTSTATE, MOUSE_EVENTS, ROOTNAME, SUPPORT_OPRATOR } from "../userConstants"
 import {
   ActionCallbackProps,
   ActionEvent,
-  createChildProps,
+  Area,
   Dict,
   getContainPointChildrenProps,
+  ListenerNamePayloadPair,
   ListenerProps,
-  SelectorFunc,
   PointType,
-  SortChildrenMethodsValues,
+  PredefinedMouseEventName,
+  PredefinedWheelEventName,
+  SelectorFunc,
+  StayDrawProps,
   StayTools,
   updateChildProps,
-  Area,
-  TransitionConfig,
-  ProgressBound,
-  StayDrawProps,
-  PredefinedMouseEventName,
-  PredefinedEventName,
-  PredefinedWheelEventName,
-  ListenerNamePayloadPair,
-  PredefinedEventListenerProps,
 } from "../userTypes"
 import { assert, infixExpressionParser, numberAlmostEqual, parseLayer, uuid4 } from "../utils"
 
@@ -213,22 +199,22 @@ class Stay<EventName extends string> {
     afterDrawCallback,
   }: StayDrawProps) {
     interface ChildLayer {
-      update: boolean
-      members: StayInstantChild[]
+      updateCurrentLayer: boolean
     }
 
     const childrenInlayer: ChildLayer[] = this.drawLayers.map((layer) => {
       const childInLayer = {
-        update: layer.forceUpdate,
-        members: [],
+        updateCurrentLayer: layer.forceUpdate,
       }
       layer.forceUpdate = false
       return childInLayer
     })
 
-    this.getChildren().forEach((child) => {
+    const children = this.tools.getChildrenWithoutRoot()
+
+    children.forEach((child) => {
       child.getUpdatedLayers().forEach((layer) => {
-        childrenInlayer[layer].update = true
+        childrenInlayer[layer].updateCurrentLayer = true
       })
     })
 
@@ -237,27 +223,25 @@ class Stay<EventName extends string> {
     }
 
     for (let layerIndex = 0; layerIndex < childrenInlayer.length; layerIndex++) {
-      const particalChildren = childrenInlayer[layerIndex]
+      const { updateCurrentLayer } = childrenInlayer[layerIndex]
 
       const canvas = this.root.layers[layerIndex]
       const context = this.root.contexts[layerIndex]
 
-      if (particalChildren.update || forceDraw) {
+      if (updateCurrentLayer) {
         this.root.clear(context)
       }
 
       let layerDrawShapes: InstantShape[] = []
 
-      for (let i = 0; i < particalChildren.members.length; i++) {
-        const child = particalChildren.members[i]
-        if (!particalChildren.update && !forceDraw) {
-          continue
-        }
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i]
         layerDrawShapes.push(...child.getShapes(layerIndex))
-        child.draw()
+        child.layerDraw(layerIndex)
       }
 
       layerDrawShapes = layerDrawShapes.sort((shape) => shape.zIndex)
+
       layerDrawShapes.forEach((shape) => {
         shape.draw({
           context,
@@ -337,7 +321,7 @@ class Stay<EventName extends string> {
         const mouseE = e as MouseEvent
         actionEvent.x = mouseE.clientX - this.root.x
         actionEvent.y = mouseE.clientY - this.root.y
-        actionEvent.point = new Point(actionEvent.x, actionEvent.y)
+        actionEvent.point = { x: actionEvent.x, y: actionEvent.y }
         if (event.trigger === MOUSE_EVENTS.WHEEL) {
           const wheelE = e as WheelEvent
           const _actionEvent = actionEvent as ActionEvent<PredefinedWheelEventName>
@@ -839,11 +823,11 @@ class Stay<EventName extends string> {
 
             if (isMouseEvent) {
               const _actionEvent = actionEvent as ActionEvent<PredefinedMouseEventName>
+
               const children = this.tools.getContainPointChildren({
                 point: _actionEvent.point,
                 selector: selector,
                 sortBy: sortBy,
-                withRoot: false,
               })
 
               // 特殊处理 mouseleave 事件

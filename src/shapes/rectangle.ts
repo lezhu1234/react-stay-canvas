@@ -165,7 +165,6 @@ export class Rectangle extends AnimatedShape {
   }
 
   draw({ context }: ShapeDrawProps) {
-    console.log("draw rect")
     if (this.type === SHAPE_DRAW_TYPES.STROKE) {
       context.strokeRect(this.x, this.y, this.width, this.height)
     } else if (this.type === SHAPE_DRAW_TYPES.FILL) {

@@ -165,22 +165,22 @@ export class StayAnimatedChild<
       if (!lastInfo) return true
 
       // Check if both time AND shape changed for the "before" state
-      const beforeStateChanged =
+      const beforeStateChanged = () =>
         lastInfo.beforeTime !== currentInfo.beforeTime &&
         !lastInfo.beforeShape.sameAs(currentInfo.beforeShape)
 
       // Check if both time AND shape changed for the "after" state
-      const afterStateChanged =
+      const afterStateChanged = () =>
         lastInfo.afterTime !== currentInfo.afterTime &&
         !lastInfo.afterShape.sameAs(currentInfo.afterShape)
 
       // Check if ratio changed when before and after shapes are different
-      const ratioChanged =
+      const ratioChanged = () =>
         !lastInfo.beforeShape.sameAs(lastInfo.afterShape) && lastInfo.ratio !== currentInfo.ratio
 
-      const inView = !lastInfo.shape.outOfWindow() || !currentInfo.shape.outOfWindow()
+      const inView = () => !lastInfo.shape.outOfWindow() || !currentInfo.shape.outOfWindow()
       // Update is needed if any of these conditions are true
-      return (beforeStateChanged || afterStateChanged || ratioChanged) && inView
+      return inView() && (beforeStateChanged() || afterStateChanged() || ratioChanged())
     }
     const updateCurrentShape = (name: string, shape: T, frameBoundInfo: FrameBoundInfo<T>) => {
       frameBoundInfo.shape = shape

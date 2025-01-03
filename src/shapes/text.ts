@@ -84,7 +84,10 @@ export class StayText extends AnimatedShape {
     transitionType: EasingFunction
   ): StayText {
     const obj = this.getIntermediateObj(before, after, ratio, transitionType)
-    return new StayText(obj)
+    return new StayText({
+      ...this,
+      ...obj,
+    })
   }
   zeroShape(): StayText {
     return new StayText({
@@ -151,15 +154,6 @@ export class StayText extends AnimatedShape {
   }
 
   draw({ context, width, height }: ShapeDrawProps): void {
-    if (
-      this.leftTop.x > width ||
-      this.leftTop.y > height ||
-      this.rightBottom.x < 0 ||
-      this.rightBottom.y < 0
-    ) {
-      return
-    }
-
     context.font = this.fontStr
     context.textBaseline = this.textBaseline
     context.textAlign = this.textAlign

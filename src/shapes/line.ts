@@ -2,42 +2,41 @@ import { Point } from "./point"
 import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { Vector } from "./vector"
 import { InstantShape } from "./instantShape"
-export interface UpdateLineProps {
+export interface UpdateLineProps extends ShapeProps {
   x1?: number
   y1?: number
   x2?: number
   y2?: number
-  props?: ShapeProps
 }
-export interface LineProps {
+export interface LineProps extends ShapeProps {
   x1: number
   y1: number
   x2: number
   y2: number
-  props?: ShapeProps
 }
 export class Line extends InstantShape {
   getBound(): Rect {
     throw new Error("Method not implemented.")
   }
-  endPoint: Point
-  startPoint: Point
+  endPoint: Coordinate
+  startPoint: Coordinate
   vector: Vector
   x1: number
   x2: number
   y1: number
   y2: number
 
-  constructor({ x1, y1, x2, y2, props }: LineProps) {
-    super(props || {})
+  constructor(props: LineProps) {
+    super(props)
+    const { x1, y1, x2, y2 } = props
     this.x1 = x1
     this.y1 = y1
     this.x2 = x2
     this.y2 = y2
 
     this.vector = new Vector(this.x2 - this.x1, this.y2 - this.y1)
-    this.startPoint = new Point(this.x1, this.y1)
-    this.endPoint = new Point(this.x2, this.y2)
+    this.startPoint = { x: this.x1, y: this.y1 }
+    this.endPoint = { x: this.x2, y: this.y2 }
 
     this.updateRelatedValue()
   }
@@ -56,7 +55,7 @@ export class Line extends InstantShape {
       y1: this.y1,
       x2: this.x2,
       y2: this.y2,
-      props: this._copy(),
+      ...this.copyProps(),
     })
   }
 
@@ -100,20 +99,23 @@ export class Line extends InstantShape {
     return this.distanceToPoint(point)
   }
 
-  update({ x1, y1, x2, y2, props }: UpdateLineProps) {
+  update(props: UpdateLineProps) {
+    const { x1, y1, x2, y2 } = props
     this.x1 = x1 ?? this.x1
     this.y1 = y1 ?? this.y1
     this.x2 = x2 ?? this.x2
     this.y2 = y2 ?? this.y2
-    this._update(props || {})
+    this._update(props)
     this.updateRelatedValue()
     return this
   }
 
   updateRelatedValue() {
     this.vector = new Vector(this.x2 - this.x1, this.y2 - this.y1)
-    this.startPoint.update({ x: this.x1, y: this.y1 })
-    this.endPoint.update({ x: this.x2, y: this.y2 })
+    this.startPoint.x = this.x1
+    this.startPoint.y = this.y1
+    this.endPoint.x = this.x2
+    this.endPoint.y = this.y2
   }
 
   zoom(zoomScale: number): void {

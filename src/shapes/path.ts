@@ -6,10 +6,9 @@ import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { DrawCanvasContext } from "../types"
 import { InstantShape } from "./instantShape"
 
-export interface PathAttr {
+export interface PathAttr extends ShapeProps {
   points: Point[]
   radius: number
-  props?: ShapeProps
 }
 
 export class Path extends InstantShape {
@@ -21,8 +20,9 @@ export class Path extends InstantShape {
   }
   points: Point[]
   radius: number
-  constructor({ points, radius, props }: PathAttr) {
-    super(props || {})
+  constructor(props: PathAttr) {
+    super(props)
+    const { points, radius } = props
     this.points = points
     this.radius = radius
   }
@@ -93,7 +93,8 @@ export class Path extends InstantShape {
       }),
     })
   }
-  update({ points, radius, props }: Partial<PathAttr>) {
+  update(props: Partial<PathAttr>) {
+    const { points, radius } = props
     this.points = points || this.points
     this.radius = radius === undefined ? this.radius : radius
     this._update(props || {})

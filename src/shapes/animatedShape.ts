@@ -1,21 +1,17 @@
-import {
-  AnimatedShapeProps,
-  AnimatedShapeTransitionConfig,
-  EasingFunction,
-  StayShapeTransitionConfig,
-} from "../userTypes"
+import { AnimatedShapeProps, EasingFunction, StayShapeTransitionConfig } from "../userTypes"
 import { applyEasing } from "../utils"
-import { InstantShape } from "./instantShape"
+import { RGBA } from "../w3color"
+import { InstantShape, ZeroColor } from "./instantShape"
 
-export const DefaultTransitionConfig: Required<AnimatedShapeTransitionConfig> = {
-  enter: {
-    type: "easeInOutSine",
-    durationMs: 300,
-    delayMs: 0,
-  },
-  leave: { type: "easeInOutSine", durationMs: 300, delayMs: 0 },
-  update: { type: "easeInOutSine", durationMs: 300, delayMs: 0 },
-}
+// export const DefaultTransitionConfig: Required<AnimatedShapeTransitionConfig> = {
+//   enter: {
+//     type: "easeInOutSine",
+//     durationMs: 300,
+//     delayMs: 0,
+//   },
+//   leave: { type: "easeInOutSine", durationMs: 300, delayMs: 0 },
+//   update: { type: "easeInOutSine", durationMs: 300, delayMs: 0 },
+// }
 
 export const DefaultStayShapeTransitionConfig: Required<StayShapeTransitionConfig> = {
   type: "easeInOutSine",
@@ -25,9 +21,11 @@ export const DefaultStayShapeTransitionConfig: Required<StayShapeTransitionConfi
 
 export abstract class AnimatedShape extends InstantShape {
   transition: Required<StayShapeTransitionConfig>
+  color: RGBA
   constructor(props: AnimatedShapeProps) {
     super(props)
     this.transition = { ...DefaultStayShapeTransitionConfig, ...props.transition }
+    this.color = props.color ?? ZeroColor
   }
 
   getNumberIntermediateState(
@@ -77,6 +75,41 @@ export abstract class AnimatedShape extends InstantShape {
     return state
   }
 
+  getIntermediateObj(
+    before: AnimatedShape,
+    after: AnimatedShape,
+    ratio: number,
+    transitionType: EasingFunction
+  ) {
+    const getTransObj = (shape: AnimatedShape) => {
+      const transProps = shape.getTransProps()
+      const transObj: any = {
+        lineWidth: shape.lineWidth,
+        lineDash: shape.lineDash,
+        lineDashOffset: shape.lineDashOffset,
+        color: shape.color,
+      }
+
+      transProps.forEach((prop) => {
+        transObj[prop] = shape[prop as keyof AnimatedShape]
+      })
+
+      return transObj
+    }
+    const beforeTransObj = getTransObj(before)
+    const afterTransObj = getTransObj(after)
+
+    const intermediateObj = this.recursiveIntermidateState(
+      beforeTransObj,
+      afterTransObj,
+      ratio,
+      transitionType
+    )
+
+    return intermediateObj
+  }
+  abstract getTransProps(): string[]
+
   abstract intermediateState(
     before: AnimatedShape,
     after: AnimatedShape,
@@ -84,7 +117,31 @@ export abstract class AnimatedShape extends InstantShape {
     transitionType: EasingFunction
   ): AnimatedShape
 
-  abstract zeroShape(shape: AnimatedShape): AnimatedShape
+  _zeroShape(): AnimatedShape {
+    const zeroShape = this.zeroShape()
+    zeroShape.transition.delayMs = 0
+    zeroShape.transition.durationMs = 0
+    zeroShape.parent
+    return zeroShape
+  }
+  abstract zeroShape(): AnimatedShape
 
-  abstract sameAs(shape: AnimatedShape): boolean
+  abstract childsSameAs(shape: AnimatedShape): boolean
+
+  sameAs(shape: AnimatedShape): boolean {
+    return this.childsSameAs(shape) && this.propsSameAs(shape)
+  }
+
+  propsSameAs(shape: AnimatedShape): boolean {
+    return (
+      this.color.a === shape.color.a &&
+      this.color.r === shape.color.r &&
+      this.color.g === shape.color.g &&
+      this.color.b === shape.color.b &&
+      this.lineWidth === shape.lineWidth &&
+      this.lineDash.length === shape.lineDash.length &&
+      this.lineDash.every((v, i) => v === shape.lineDash[i]) &&
+      this.lineDashOffset === shape.lineDashOffset
+    )
+  }
 }

@@ -26,8 +26,8 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     this.id = id ?? uuid4()
     this.shape = shape
     this.className = className
-    this.shapeMap = this.assignShapes(shape)
     this.canvas = canvas
+    this.shapeMap = this.assignShapes(shape)
   }
 
   getShape() {

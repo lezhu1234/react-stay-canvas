@@ -1,7 +1,8 @@
 import { Line, Point } from "./shapes"
+import { StayAnimatedChild } from "./stay/child/stayAnimatedChild"
 import { NumericString, Positive } from "./types"
 import { SUPPORT_OPRATOR } from "./userConstants"
-import { Coordinate, EasingFunction, EasingFunctionMap, Font } from "./userTypes"
+import { Coordinate, EasingFunction, EasingFunctionMap, Font, Rect } from "./userTypes"
 import { RGB, RGBA } from "./w3color"
 
 export type InfixExpressionParserProps<T> = {
@@ -146,6 +147,10 @@ export function parseLayer(layers: any[], layer: number | undefined) {
   return layer
 }
 
+export function isStayAnimatedChild(child: any): child is StayAnimatedChild {
+  return (child as StayAnimatedChild).setCurrentTime !== undefined
+}
+
 export function getCornersByCenterLine(centerLine: Line, width: number) {
   const l = centerLine.len()
   const r = width / 2
@@ -156,17 +161,22 @@ export function getCornersByCenterLine(centerLine: Line, width: number) {
   const x2 = 2 * centerLine.x1 - x1
   const y2 = 2 * centerLine.y1 - y1
 
-  const midllePoint = new Point(
-    (centerLine.x1 + centerLine.x2) / 2,
-    (centerLine.y1 + centerLine.y2) / 2
-  )
+  const midllePoint = {
+    x: (centerLine.x1 + centerLine.x2) / 2,
+    y: (centerLine.y1 + centerLine.y2) / 2,
+  }
   const x3 = 2 * midllePoint.x - x1
   const y3 = 2 * midllePoint.y - y1
 
   const x4 = 2 * midllePoint.x - x2
   const y4 = 2 * midllePoint.y - y2
 
-  return [new Point(x1, y1), new Point(x2, y2), new Point(x3, y3), new Point(x4, y4)]
+  return [
+    { x: x1, y: y1 },
+    { x: x2, y: y2 },
+    { x: x3, y: y3 },
+    { x: x4, y: y4 },
+  ]
 }
 
 export function numberAlmostEqual(a: number, b: number, epsilon = 0.0001): boolean {
@@ -540,4 +550,19 @@ export function getRGBAStr(color?: string | RGB | RGBA): string {
     return `rgba(${color.r}, ${color.g}, ${color.b}, 1)`
   }
   return `rgba(0,0,0,0)`
+}
+
+export function hasIntersection(rect1: Rect, rect2: Rect): boolean {
+  return !(
+    // rect1 is completely to the left of rect2
+    (
+      rect1.x + rect1.width < rect2.x ||
+      // rect1 is completely to the right of rect2
+      rect1.x > rect2.x + rect2.width ||
+      // rect1 is completely above rect2
+      rect1.y + rect1.height < rect2.y ||
+      // rect1 is completely below rect2
+      rect1.y > rect2.y + rect2.height
+    )
+  )
 }

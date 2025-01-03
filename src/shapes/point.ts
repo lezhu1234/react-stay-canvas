@@ -1,10 +1,9 @@
 import { Line } from "./line"
 import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { InstantShape } from "./instantShape"
-export interface PointProps {
+export interface PointProps extends ShapeProps {
   x: number
   y: number
-  props?: ShapeProps
 }
 
 export class Point extends InstantShape {
@@ -20,8 +19,9 @@ export class Point extends InstantShape {
   x: number
   y: number
 
-  constructor(x: number, y: number, props: ShapeProps = {}) {
+  constructor(props: PointProps) {
     super({ ...props, type: "fill" })
+    const { x, y } = props
     this.x = x
     this.y = y
   }
@@ -31,7 +31,11 @@ export class Point extends InstantShape {
   }
 
   copy(): Point {
-    return new Point(this.x, this.y, this._copy())
+    return new Point({
+      x: this.x,
+      y: this.y,
+      ...this.copyProps(),
+    })
   }
   distance(point: Coordinate): number {
     const dx = point.x - this.x
@@ -51,7 +55,8 @@ export class Point extends InstantShape {
     return line.nearPoint(this, offset)
   }
 
-  update({ x, y, props }: PointProps) {
+  update(props: PointProps) {
+    const { x, y } = props
     this.x = x === undefined ? this.x : x
     this.y = y === undefined ? this.y : y
     this._update(props || {})

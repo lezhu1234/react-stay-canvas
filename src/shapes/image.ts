@@ -3,8 +3,9 @@ import { Rectangle } from "./rectangle"
 import { EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { isRGBA } from "../utils"
 import { DrawCanvasContext } from "../types"
+import { RGBA } from "../w3color"
 
-export interface ImageProps {
+export interface ImageProps extends ShapeProps {
   src: string | HTMLImageElement
   x: number
   y: number
@@ -15,7 +16,7 @@ export interface ImageProps {
   swidth?: number
   sheight?: number
   imageLoaded?: (image: StayImage) => void
-  props?: ShapeProps
+  color: RGBA
 }
 type ImageLoadState = "wait" | "loading" | "loaded"
 
@@ -32,25 +33,16 @@ export class StayImage extends Rectangle {
   sx: number
   sy: number
   opacity: number
-  constructor({
-    src,
-    x,
-    y,
-    width,
-    height,
-    sx = 0,
-    sy = 0,
-    swidth,
-    sheight,
-    imageLoaded,
-    props,
-  }: ImageProps) {
-    super({ x, y, width, height, props })
+  color: RGBA
+  constructor(props: ImageProps) {
+    super(props)
+    const { src, x, y, width, height, color, sx = 0, sy = 0, swidth, sheight, imageLoaded } = props
     this.sx = sx || 0
     this.sy = sy || 0
     this.swidth = swidth
     this.sheight = sheight
     this.src = src
+    this.color = color
     if (typeof src === "string") {
       this.image = new Image()
       this.loadState = "loading"
@@ -95,7 +87,8 @@ export class StayImage extends Rectangle {
       imageLoaded: this.imageLoaded,
       width: this.width,
       height: this.height,
-      props: this._copy(),
+      color: this.color,
+      ...this.copyProps(),
     })
   }
 
@@ -117,7 +110,8 @@ export class StayImage extends Rectangle {
         },
         width: this.width,
         height: this.height,
-        props: this._copy(),
+        color: this.color,
+        ...this.copyProps(),
       })
 
       if (typeof this.src !== "string") {
@@ -190,26 +184,15 @@ export class StayImage extends Rectangle {
   //   })
   // }
 
-  update({
-    src,
-    x,
-    y,
-    width,
-    sx,
-    sy,
-    swidth,
-    sheight,
-    height,
-    imageLoaded,
-    props,
-  }: Partial<ImageProps>) {
+  update(props: Partial<ImageProps>) {
+    const { src, x, y, width, sx, sy, swidth, sheight, height, imageLoaded } = props
     this.src = src ?? this.src
     this.sx = sx ?? this.sx
     this.sy = sy ?? this.sy
     this.swidth = swidth ?? this.swidth
     this.sheight = sheight ?? this.sheight
     this.imageLoaded = imageLoaded ?? this.imageLoaded
-    super.update({ x, y, width, height, props })
+    super.update({ x, y, width, height })
 
     if (src === undefined) {
       // do nothing
@@ -236,7 +219,8 @@ export class StayImage extends Rectangle {
       sy: this.sy,
       swidth: this.swidth,
       sheight: this.sheight,
-      props: { ...this._copy(), color: { ...this.color, a: 0 } },
+      ...this.copyProps(),
+      color: { ...this.color, a: 0 },
     })
   }
 }

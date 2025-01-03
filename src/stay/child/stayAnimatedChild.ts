@@ -5,7 +5,9 @@ import { StayInstantChild } from "./stayInstantChild"
 import { Canvas } from "../../canvas"
 import { SetShapeChildCurrentTime } from "../types"
 
-export class StayAnimatedChild<T extends AnimatedShape> extends StayInstantChild<T> {
+export class StayAnimatedChild<
+  T extends AnimatedShape = AnimatedShape
+> extends StayInstantChild<T> {
   canvas: Canvas
   id: any
   className: string
@@ -140,10 +142,10 @@ export class StayAnimatedChild<T extends AnimatedShape> extends StayInstantChild
   }
 
   setCurrentTime({ time, bound }: SetShapeChildCurrentTime) {
-    if (bound && bound.afterTime < bound.beforeTime) {
-      const temp = bound.afterTime
-      bound.afterTime = bound.beforeTime
-      bound.beforeTime = temp
+    if (bound && bound.afterMs < bound.beforeMs) {
+      const temp = bound.afterMs
+      bound.afterMs = bound.beforeMs
+      bound.beforeMs = temp
     }
 
     const currentShapeMap = new Map<string, T>()
@@ -170,10 +172,14 @@ export class StayAnimatedChild<T extends AnimatedShape> extends StayInstantChild
       const ratioChanged =
         !lastInfo.beforeShape.sameAs(lastInfo.afterShape) && lastInfo.ratio !== currentInfo.ratio
 
+      const inView = !lastInfo.shape.outOfWindow() || !currentInfo.shape.outOfWindow()
       // Update is needed if any of these conditions are true
-      return beforeStateChanged || afterStateChanged || ratioChanged
+      return (beforeStateChanged || afterStateChanged || ratioChanged) && inView
     }
     const updateCurrentShape = (name: string, shape: T, frameBoundInfo: FrameBoundInfo<T>) => {
+      frameBoundInfo.shape = shape
+
+      shape.parent = this
       currentShapeMap.set(name, shape)
 
       const lastFrameBoundInfo = this.frameMapInfo.get(name)
@@ -195,12 +201,12 @@ export class StayAnimatedChild<T extends AnimatedShape> extends StayInstantChild
 
       if (bound) {
         const _bound = bound as Required<ProgressBound>
-        const beforeBound = this.getTimelineIndexBound(slice, _bound.beforeTime)
+        const beforeBound = this.getTimelineIndexBound(slice, _bound.beforeMs)
         beforeShape = this.getTimelineShapeByBound(slice, beforeBound)
-        beforeTime = _bound.beforeTime
-        const afterBound = this.getTimelineIndexBound(slice, _bound.afterTime)
+        beforeTime = _bound.beforeMs
+        const afterBound = this.getTimelineIndexBound(slice, _bound.afterMs)
         afterShape = this.getTimelineShapeByBound(slice, afterBound)
-        afterTime = _bound.afterTime
+        afterTime = _bound.afterMs
         const afterTransitionType = slice[afterBound.afterIndex].transition.type
 
         if (afterTransitionType) {
@@ -216,6 +222,7 @@ export class StayAnimatedChild<T extends AnimatedShape> extends StayInstantChild
         beforeShape,
         afterShape,
         ratio,
+        shape: beforeShape,
       }
 
       if (beforeTime > afterTime) {
@@ -247,7 +254,6 @@ export class StayAnimatedChild<T extends AnimatedShape> extends StayInstantChild
         ratio,
         transitionType
       ) as T
-
       return updateCurrentShape(name, currentShape, frameBoundInfo)
     })
 
@@ -255,7 +261,13 @@ export class StayAnimatedChild<T extends AnimatedShape> extends StayInstantChild
   }
 
   appendKeyFrame(name: string, shape: T) {
+    shape.parent = this
     const shapeFrames: T[] = this.shapeFramesMap.get(name) ?? []
+    if (shapeFrames.length === 0) {
+      const zs = shape._zeroShape() as T
+      zs.parent = this
+      shapeFrames.push(zs)
+    }
     shapeFrames.push(shape)
     this.shapeFramesMap.set(name, shapeFrames)
     this.totalDurationMs = Math.max(this.totalDurationMs, this.getSliceTotalDurationMs(shapeFrames))

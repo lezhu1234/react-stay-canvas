@@ -11,8 +11,9 @@ import {
   PredefinedMouseEventName,
   PredefinedWheelEventName,
   StayMode,
-  StayTools,
+  BasicTools,
   storeType,
+  StayTools,
 } from "./userTypes"
 
 export interface composeProps {
@@ -59,8 +60,8 @@ export type CallbackFuncMap<
   [key in T["e"]["name"]]?: () => { [key: string]: any } | void | undefined
 }
 
-export type UserCallback<T, EventName extends string | string[]> = (
-  p: ActionCallbackProps<T, EventName>
+export type UserCallback<T, EventName extends string | string[], Mode extends StayMode> = (
+  p: ActionCallbackProps<T, EventName, Mode>
 ) => CallbackFuncMap<ActionCallbackProps<T, EventName>, T, EventName> | void
 
 // export interface StayAction {
@@ -97,7 +98,7 @@ export type EventProps<EventName extends string> = StayEventRequiredProps<EventN
 export interface ContextLayerSetFunction {
   (layer: HTMLCanvasElement): DrawCanvasContext | null
 }
-export interface StayCanvasProps<EventName extends string = string> {
+export interface StayCanvasProps<Mode extends StayMode, EventName extends string = string> {
   className?: string
   width?: number
   height?: number
@@ -110,8 +111,8 @@ export interface StayCanvasProps<EventName extends string = string> {
     | PredefinedEventListenerProps<PredefinedKeyEventName>
   )[]
   passive?: boolean
-  mode?: StayMode
-  mounted?: (tools: StayTools) => void
+  mode: Mode
+  mounted?: (tools: StayTools<Mode>) => void
   recreateOnResize?: boolean
   focusOnInit?: boolean
 }

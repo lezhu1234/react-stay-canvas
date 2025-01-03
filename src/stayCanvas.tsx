@@ -12,10 +12,10 @@ import React, {
 import * as PredefinedEventList from "./predefinedEvents"
 import StayStage from "./stay/stayStage"
 import { ContextLayerSetFunction, StayCanvasProps } from "./types"
-import { PredefinedEventName, StayCanvasRefType } from "./userTypes"
+import { PredefinedEventName, StayCanvasRefType, StayMode } from "./userTypes"
 
 const StayCanvas = forwardRef(
-  <EventName extends string>(
+  <EventName extends string, Mode extends StayMode>(
     {
       width = 500,
       height = 500,
@@ -25,13 +25,13 @@ const StayCanvas = forwardRef(
       layers = 2,
       className = "",
       passive = true,
-      mode = "instant",
+      mode,
       recreateOnResize = false,
       focusOnInit = true,
-    }: StayCanvasProps<EventName>,
+    }: StayCanvasProps<"instant", EventName> | StayCanvasProps<"animated", EventName>,
     ref: Ref<StayCanvasRefType>
   ) => {
-    const [initialized, setInitialized] = useState(false)
+    const initialized = useRef(false)
     let contextLayerSetFunctionList: ContextLayerSetFunction[] = []
 
     if (typeof layers === "number") {
@@ -66,7 +66,7 @@ const StayCanvas = forwardRef(
       : never
 
     const canvasLayers = useRef<HTMLCanvasElement[]>([])
-    const stay = useRef<StayStage>()
+    const stay = useRef<StayStage<Mode>>()
 
     eventList = useMemo(() => eventList || [], [eventList])
     listenerList = useMemo(() => listenerList || [], [listenerList])
@@ -79,6 +79,7 @@ const StayCanvas = forwardRef(
     type ListenerNames = GetListenerPairName<ListenerPair>
 
     const init = () => {
+      //@ts-ignore i cannot understand
       stay.current = new StayStage(
         canvasLayers.current,
         contextLayerSetFunctionList,
@@ -94,9 +95,9 @@ const StayCanvas = forwardRef(
         stay.current!.addEventListener(listener)
       })
 
-      if (mounted) {
+      if (mounted && stay.current) {
+        //@ts-ignore i cannot understand
         mounted(stay.current.tools)
-        stay.current.draw({})
       }
 
       if (focusOnInit) {
@@ -150,12 +151,9 @@ const StayCanvas = forwardRef(
     }, [listenerList])
 
     useEffect(() => {
-      if (width > 0 && height > 0 && (!initialized || recreateOnResize)) {
+      if (width > 0 && height > 0 && (!initialized.current || recreateOnResize)) {
         init()
-        setInitialized(true)
-      }
-      if (stay.current) {
-        stay.current.refresh()
+        initialized.current = true
       }
     }, [width, height])
 

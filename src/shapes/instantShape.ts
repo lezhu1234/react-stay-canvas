@@ -13,9 +13,10 @@ import {
   Rect,
   Coordinate,
 } from "../userTypes"
-import { applyEasing, isRGB, isRGBA } from "../utils"
+import { applyEasing, hasIntersection, isRGB, isRGBA } from "../utils"
 import W3Color, { RGB, RGBA, rgbaToString } from "../w3color"
 
+export const ZeroColor: RGBA = { a: 0, r: 0, g: 0, b: 0 }
 export interface GetCurrentArgumentsProps {
   startArguments: Dict
   endArguments: Dict
@@ -42,7 +43,7 @@ export abstract class InstantShape {
   zoomCenter: PointType
   zoomY: number
   updateNextFrame: boolean
-  hidden: boolean
+
   lineDash: number[]
   lineDashOffset: number
   filter: string
@@ -58,7 +59,7 @@ export abstract class InstantShape {
     zoomCenter,
     zoomY,
     state = "default",
-    hidden = false,
+
     stateDrawFuncMap = {},
     lineDash,
     lineDashOffset,
@@ -87,8 +88,7 @@ export abstract class InstantShape {
     }
     this.filter = filter ?? "none"
     this.startTime = 0
-    this.updateNextFrame = false
-    this.hidden = hidden
+    this.updateNextFrame = true
     this.color = this.tryConvertToRGBA(color ?? "white")
   }
 
@@ -111,11 +111,23 @@ export abstract class InstantShape {
     return this.color
   }
 
-  _copy() {
-    return { ...this }
+  copyProps() {
+    return {
+      parent: this.parent,
+    }
+  }
+
+  outOfWindow() {
+    return this.parent && !hasIntersection(this.getBound(), this.parent.canvas.bound)
   }
 
   _draw({ context, now, width, height }: ShapeDrawProps): boolean {
+    if (!this.parent) {
+      return true
+    }
+    if (this.outOfWindow()) {
+      return true
+    }
     context.lineWidth = this.lineWidth
     context.globalCompositeOperation = this.gco
     context.setLineDash(this.lineDash)
@@ -124,15 +136,13 @@ export abstract class InstantShape {
     context.filter = this.filter
     // this.draw({ context, canvas, now })
     if (this.updateNextFrame) {
-      if (!this.hidden) {
-        const drawStateResult = this.stateDrawFuncMap[this.state].bind(this)({
-          context,
-          now,
-          width,
-          height,
-        })
-        this.updateNextFrame = drawStateResult || false
-      }
+      const drawStateResult = this.stateDrawFuncMap[this.state].bind(this)({
+        context,
+        now,
+        width,
+        height,
+      })
+      // this.updateNextFrame = drawStateResult || false
     }
     return this.updateNextFrame
   }
@@ -155,7 +165,6 @@ export abstract class InstantShape {
     type,
     gco,
     state,
-    hidden,
     filter,
     stateDrawFuncMap,
     layer,
@@ -168,7 +177,6 @@ export abstract class InstantShape {
     this.zoomCenter = zoomCenter ?? this.zoomCenter
     this.type = type ?? this.type
     this.gco = gco ?? this.gco
-    this.hidden = hidden ?? this.hidden
     this.filter = filter ?? this.filter
     this.color = this.tryConvertToRGBA(color ?? this.color)
 
@@ -271,7 +279,7 @@ export abstract class InstantShape {
 
   abstract move(offsetX: number, offsetY: number): void
 
-  abstract update(props: { props?: ShapeProps }): this
+  abstract update(props: ShapeProps): InstantShape
 
   abstract zoom(zoomScale: number): void
 

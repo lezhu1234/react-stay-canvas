@@ -4,11 +4,10 @@ import { Point } from "./point"
 import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { InstantShape } from "./instantShape"
 
-export interface CircleAttr {
+export interface CircleAttr extends ShapeProps {
   x: number
   y: number
   radius: number
-  props?: ShapeProps
 }
 
 export class Circle extends InstantShape {
@@ -23,12 +22,13 @@ export class Circle extends InstantShape {
   getCenterPoint(): Coordinate {
     return { x: this.x, y: this.y }
   }
-  center!: Point
+  center!: Coordinate
   radius: number
   x: number
   y: number
-  constructor({ x, y, radius, props }: CircleAttr) {
-    super(props || {})
+  constructor(props: CircleAttr) {
+    super(props)
+    const { x, y, radius } = props
     this.x = x
     this.y = y
     this.radius = radius
@@ -38,7 +38,12 @@ export class Circle extends InstantShape {
   }
 
   copy(): Circle {
-    return new Circle({ ...this, props: this._copy() })
+    return new Circle({
+      x: this.x,
+      y: this.y,
+      radius: this.radius,
+      ...this.copyProps(),
+    })
   }
 
   draw({ context }: ShapeDrawProps): void {
@@ -51,7 +56,7 @@ export class Circle extends InstantShape {
     }
   }
   init() {
-    this.center = new Point(this.x, this.y)
+    this.center = { x: this.x, y: this.y }
   }
   move(offsetX: number, offsetY: number): void {
     this.update({
@@ -59,7 +64,8 @@ export class Circle extends InstantShape {
       y: this.y + offsetY,
     })
   }
-  update({ x, y, radius, props }: Partial<CircleAttr>) {
+  update(props: Partial<CircleAttr>) {
+    const { x, y, radius } = props
     this.x = x === undefined ? this.x : x
     this.y = y === undefined ? this.y : y
     this.radius = radius === undefined ? this.radius : radius

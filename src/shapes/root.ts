@@ -6,8 +6,9 @@ export class Root extends Rectangle {
   initY: number
   initWidth: number
   initHeight: number
-  constructor({ x, y, width, height, props = {} }: RectangleAttr) {
-    super({ x, y, width, height, props })
+  constructor(props: RectangleAttr) {
+    super(props)
+    const { x, y, width, height } = props
     this.initX = x
     this.initY = y
     this.initWidth = width

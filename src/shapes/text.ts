@@ -94,7 +94,7 @@ export class StayText extends InstantShape {
       textAlign: this.textAlign,
       offsetXRatio: this.offsetXRatio,
       offsetYRatio: this.offsetYRatio,
-      props: this._copy(),
+      props: this.copyProps(),
     })
   }
 

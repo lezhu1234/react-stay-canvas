@@ -1,5 +1,11 @@
 import { AnimatedShape } from "../../shapes/animatedShape"
-import { FrameBoundInfo, ProgressBound, ShapeBound, StayAnimatedChildProps } from "../../userTypes"
+import {
+  FrameBoundInfo,
+  ProgressBound,
+  ShapeBound,
+  StayAnimatedChildProps,
+  StayShapeTransitionConfig,
+} from "../../userTypes"
 import { parseLayer, uuid4 } from "../../utils"
 import { StayInstantChild } from "./stayInstantChild"
 import { Canvas } from "../../canvas"
@@ -285,5 +291,33 @@ export class StayAnimatedChild<
     frameMap.forEach((shape, name) => {
       this.appendKeyFrame(name, shape)
     })
+  }
+  appendDefaultFrame(shape: T) {
+    this.appendKeyFrame("default", shape)
+  }
+
+  disappear(transition?: StayShapeTransitionConfig, mode: "afterEach" | "afterAll" = "afterEach") {
+    const keys = this.shapeFramesMap.keys()
+
+    for (const key of keys) {
+      const slice = this.shapeFramesMap.get(key)!
+      const lastShape = slice[slice.length - 1]
+      const zs = lastShape._zeroShape() as T
+
+      const _transition = {
+        ...zs.transition,
+        ...transition,
+      }
+
+      if (mode === "afterEach") {
+        zs.transition = _transition
+      }
+
+      if (mode === "afterAll") {
+        const sliceDuration = this.getSliceTotalDurationMs(slice)
+        _transition.delayMs += this.totalDurationMs - sliceDuration
+      }
+      this.appendKeyFrame(key, lastShape.zeroShape() as T)
+    }
   }
 }

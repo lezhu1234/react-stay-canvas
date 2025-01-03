@@ -1,11 +1,11 @@
 import { Rectangle } from "./rectangle"
 
-import { EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
+import { AnimatedShapeProps, EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { isRGBA } from "../utils"
 import { DrawCanvasContext } from "../types"
 import { RGBA } from "../w3color"
 
-export interface ImageProps extends ShapeProps {
+export interface ImageProps extends AnimatedShapeProps {
   src: string | HTMLImageElement
   x: number
   y: number

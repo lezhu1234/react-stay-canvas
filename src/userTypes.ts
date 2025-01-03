@@ -424,15 +424,21 @@ export type PermutationsOfTuple<T extends unknown[], R extends unknown[] = []> =
 export type DisOrderArr<T> = PermutationsOfTuple<Union2Tuple<T>>
 export type UnionListenerProps<
   T extends ListenerNamePayloadPair[],
-  EventName extends string = string
+  EventName extends string = string,
+  Mode extends StayMode = StayMode
 > = {
-  [key in keyof T]: ListenerProps<T[key], EventName>
+  [key in keyof T]: ListenerProps<T[key], EventName, Mode>
 }
 
 export type ListenerArrayProps<
   T extends ListenerNamePayloadPairOrName[],
-  EventName extends string = string
-> = UnionListenerProps<ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>, EventName>
+  EventName extends string = string,
+  Mode extends StayMode = StayMode
+> = UnionListenerProps<
+  ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>,
+  EventName,
+  Mode
+>
 
 export type Tuple2Union<T extends unknown[]> = T extends [infer F, ...infer L]
   ? F | Tuple2Union<L>
@@ -478,21 +484,19 @@ export interface TextDecoration {
   position: number
   color?: string
 }
-export interface TextAttr {
+export interface TextAttr extends AnimatedShapeProps {
   x: number
   y: number
   text: string
   font?: Font
-  color?: string | CanvasGradient
+  color?: RGBA
   decoration?: TextDecoration
   border?: Border[]
   offsetXRatio?: number
   offsetYRatio?: number
   textBaseline?: CanvasTextBaseline
   textAlign?: CanvasTextAlign
-  props?: ShapeProps
-  width?: number
-  height?: number
+
   autoTransitionDiffText?: boolean
 }
 

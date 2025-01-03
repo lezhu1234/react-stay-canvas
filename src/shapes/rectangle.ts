@@ -102,7 +102,7 @@ export class Rectangle extends AnimatedShape {
       color: ZeroColor,
     })
   }
-  childsSameAs(shape: Rectangle): boolean {
+  childSameAs(shape: Rectangle): boolean {
     return (
       this.x === shape.x &&
       this.y === shape.y &&

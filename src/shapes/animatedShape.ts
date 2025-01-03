@@ -1,4 +1,4 @@
-import { AnimatedShapeProps, EasingFunction, StayShapeTransitionConfig } from "../userTypes"
+import { AnimatedShapeProps, Border, EasingFunction, StayShapeTransitionConfig } from "../userTypes"
 import { applyEasing } from "../utils"
 import { RGBA } from "../w3color"
 import { InstantShape, ZeroColor } from "./instantShape"
@@ -126,22 +126,41 @@ export abstract class AnimatedShape extends InstantShape {
   }
   abstract zeroShape(): AnimatedShape
 
-  abstract childsSameAs(shape: AnimatedShape): boolean
+  abstract childSameAs(shape: AnimatedShape): boolean
 
   sameAs(shape: AnimatedShape): boolean {
-    return this.childsSameAs(shape) && this.propsSameAs(shape)
+    return this.childSameAs(shape) && this.propsSameAs(shape)
   }
 
   propsSameAs(shape: AnimatedShape): boolean {
     return (
-      this.color.a === shape.color.a &&
-      this.color.r === shape.color.r &&
-      this.color.g === shape.color.g &&
-      this.color.b === shape.color.b &&
+      this.colorSame(this.color, shape.color) &&
       this.lineWidth === shape.lineWidth &&
       this.lineDash.length === shape.lineDash.length &&
       this.lineDash.every((v, i) => v === shape.lineDash[i]) &&
       this.lineDashOffset === shape.lineDashOffset
     )
+  }
+
+  colorSame(c1: RGBA, c2: RGBA) {
+    return c1.a === c2.a && c1.r === c2.r && c1.g === c2.g && c1.b === c2.b
+  }
+
+  borderSame(b1?: Border[], b2?: Border[]) {
+    if (!b1 && !b2) {
+      return true
+    }
+    if (!b1 || !b2) {
+      return false
+    }
+    if (b1.length !== b2.length) return false
+    return b1.every((b, i) => {
+      return (
+        b.color === b2[i].color &&
+        b.size === b2[i].size &&
+        b.type === b2[i].type &&
+        b.direction === b2[i].direction
+      )
+    })
   }
 }

@@ -13,13 +13,11 @@ import {
 } from "../userTypes"
 import { getDefaultFont, getRGBAStr, isRGB, isRGBA } from "../utils"
 import { rgbaToString } from "../w3color"
-import { InstantShape } from "./instantShape"
+import { AnimatedShape } from "./animatedShape"
+import { InstantShape, ZeroColor } from "./instantShape"
 import { Rectangle } from "./rectangle"
 
-export class StayText extends InstantShape {
-  getBound(): Rect {
-    throw new Error("Method not implemented.")
-  }
+export class StayText extends AnimatedShape {
   font: Required<Font>
   height: number
   leftBottom: Coordinate
@@ -39,22 +37,20 @@ export class StayText extends InstantShape {
   textObj: TextMetrics | undefined
   autoTransitionDiffText: boolean
 
-  constructor({
-    x,
-    y,
-    text,
-    font,
-    border,
-    textBaseline,
-    textAlign,
-    offsetXRatio,
-    offsetYRatio,
-    props,
-    width,
-    height,
-    autoTransitionDiffText,
-  }: TextAttr) {
-    super(props || { type: SHAPE_DRAW_TYPES.FILL })
+  constructor(props: TextAttr) {
+    super(props)
+    const {
+      x,
+      y,
+      text,
+      font,
+      border,
+      textBaseline,
+      textAlign,
+      offsetXRatio,
+      offsetYRatio,
+      autoTransitionDiffText,
+    } = props
     this.text = text
     this.font = getDefaultFont(font)
     this.x = x
@@ -70,12 +66,63 @@ export class StayText extends InstantShape {
     this.leftTop = { x: 0, y: 0 }
     this.rightBottom = { x: 0, y: 0 }
     this.rightTop = { x: 0, y: 0 }
-    const size = this.getSize(width, height)
+    const size = this.getSize()
     this.width = size.width
     this.height = size.height
     this.autoTransitionDiffText = autoTransitionDiffText ?? true
 
     this.init()
+  }
+
+  getTransProps(): string[] {
+    return ["x", "y", "font", "offsetXRatio", "offsetYRatio"]
+  }
+  intermediateState(
+    before: StayText,
+    after: StayText,
+    ratio: number,
+    transitionType: EasingFunction
+  ): StayText {
+    const obj = this.getIntermediateObj(before, after, ratio, transitionType)
+    return new StayText(obj)
+  }
+  zeroShape(): StayText {
+    return new StayText({
+      ...this,
+      x: this.x,
+      y: this.y,
+      font: this.font,
+      color: ZeroColor,
+    })
+  }
+  childSameAs(shape: StayText): boolean {
+    return (
+      this.x === shape.x &&
+      this.y === shape.y &&
+      this.text === shape.text &&
+      this.font.backgroundColor === shape.font.backgroundColor &&
+      this.font.fontFamily === shape.font.fontFamily &&
+      this.font.fontWeight === shape.font.fontWeight &&
+      this.font.italic === shape.font.italic &&
+      this.font.underline === shape.font.underline &&
+      this.font.strikethrough === shape.font.strikethrough &&
+      this.font.size === shape.font.size &&
+      this.offsetXRatio === shape.offsetXRatio &&
+      this.offsetYRatio === shape.offsetYRatio &&
+      this.textBaseline === shape.textBaseline &&
+      this.textAlign === shape.textAlign &&
+      this.autoTransitionDiffText === shape.autoTransitionDiffText &&
+      this.borderSame(this.border, shape.border)
+      // this.font.backgroundColor === shape.font.backgroundColor
+    )
+  }
+  getBound(): Rect {
+    return {
+      x: this.leftTop.x,
+      y: this.leftTop.y,
+      width: this.width,
+      height: this.height,
+    }
   }
 
   contains(point: Coordinate): boolean {
@@ -94,7 +141,7 @@ export class StayText extends InstantShape {
       textAlign: this.textAlign,
       offsetXRatio: this.offsetXRatio,
       offsetYRatio: this.offsetYRatio,
-      props: this.copyProps(),
+      ...this.copyProps(),
     })
   }
 
@@ -231,20 +278,8 @@ export class StayText extends InstantShape {
     this.update({ x: this.x + offsetX, y: this.y + offsetY })
   }
 
-  update({
-    x,
-    y,
-    font,
-    text,
-    border,
-    textBaseline,
-    textAlign,
-    offsetXRatio,
-    offsetYRatio,
-    props,
-    width,
-    height,
-  }: Partial<TextAttr>) {
+  update(props: Partial<TextAttr>) {
+    const { x, y, font, text, border, textBaseline, textAlign, offsetXRatio, offsetYRatio } = props
     this.x = x ?? this.x
     this.y = y ?? this.y
     this.font = { ...this.font, ...font }
@@ -254,10 +289,10 @@ export class StayText extends InstantShape {
     this.textAlign = textAlign ?? this.textAlign
     this.offsetXRatio = offsetXRatio ?? this.offsetXRatio
     this.offsetYRatio = offsetYRatio ?? this.offsetYRatio
-    const size = this.getSize(width, height)
+    const size = this.getSize()
     this.width = size.width
     this.height = size.height
-    this._update(props || {})
+    this._update(props)
     this.init()
     return this
   }

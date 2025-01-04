@@ -242,7 +242,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
       layerDrawShapes = layerDrawShapes.sort((shape) => shape.zIndex)
 
       layerDrawShapes.forEach((shape) => {
-        shape._draw({
+        shape.draw({
           context,
           now,
           width: this.width,

@@ -295,7 +295,6 @@ export interface Rect {
 
 export interface AnimatedShapeProps extends ShapeProps {
   transition?: StayShapeTransitionConfig
-  color?: RGBA
 }
 
 export interface StayShapeTransitionConfig {
@@ -453,21 +452,26 @@ export interface ShapeDrawProps {
   width: number
   height: number
 }
+export interface Size {
+  width: number
+  height: number
+}
+
 export interface ShapeProps {
-  color?: string | CanvasGradient | RGB | RGBA
-  lineWidth?: number
   zoomY?: number
   zoomCenter?: PointType
-  type?: valueof<typeof SHAPE_DRAW_TYPES>
-  gco?: GlobalCompositeOperation
-  stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void>
+  stateDrawFuncMap?: Dict<{
+    commonDraw?: (props: ShapeDrawProps) => void | boolean
+    stroke?: (props: ShapeDrawProps) => void | boolean
+    fill?: (props: ShapeDrawProps) => void | boolean
+    afterDraw?: (props: ShapeDrawProps) => void | boolean
+  }>
   state?: string
-
-  lineDash?: number[]
-  lineDashOffset?: number
-  filter?: string
   layer?: number
   zIndex?: number
+  strokeConfig?: CanvasStrokeProps
+  fillConfig?: CanvasFillProps
+  shapeStore?: Map<string, any>
 }
 
 export type FourrDirection = "top" | "right" | "bottom" | "left"
@@ -484,19 +488,33 @@ export interface TextDecoration {
   position: number
   color?: string
 }
+
+export interface CanvasStrokeProps {
+  color?: RGBA
+  lineWidth?: number
+  dash?: number[]
+  dashOffset?: number
+  lineCap?: CanvasLineCap
+  lineJoin?: CanvasLineJoin
+  miterLimit?: number
+}
+
+export interface CanvasFillProps {
+  color?: RGBA
+}
+
 export interface TextAttr extends AnimatedShapeProps {
   x: number
   y: number
   text: string
   font?: Font
-  color?: RGBA
+
   decoration?: TextDecoration
   border?: Border[]
   offsetXRatio?: number
   offsetYRatio?: number
   textBaseline?: CanvasTextBaseline
   textAlign?: CanvasTextAlign
-
   autoTransitionDiffText?: boolean
 }
 
@@ -509,7 +527,6 @@ export interface Font {
   fontFamily?: string
   fontWeight?: number
   italic?: boolean
-  backgroundColor?: string | RGBA | CanvasGradient
   underline?: boolean
   strikethrough?: boolean
 }

@@ -1,9 +1,20 @@
+import { globalStore } from "./globalStore"
 import { Line, Point } from "./shapes"
 import { StayAnimatedChild } from "./stay/child/stayAnimatedChild"
 import { NumericString, Positive } from "./types"
 import { SUPPORT_OPRATOR } from "./userConstants"
-import { Coordinate, EasingFunction, EasingFunctionMap, Font, Rect } from "./userTypes"
-import { RGB, RGBA } from "./w3color"
+import {
+  Border,
+  CanvasFillProps,
+  CanvasStrokeProps,
+  Coordinate,
+  EasingFunction,
+  EasingFunctionMap,
+  Font,
+  Rect,
+  Size,
+} from "./userTypes"
+import W3Color, { RGB, RGBA } from "./w3color"
 
 export type InfixExpressionParserProps<T> = {
   selector: string
@@ -17,6 +28,45 @@ export function uuid4() {
     (+c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (+c / 4)))).toString(16)
   )
 }
+
+export function getFontStr(font: Font) {
+  const { size, fontFamily, fontWeight, italic } = font
+  return `${fontWeight ?? 400} ${italic ? "italic" : ""} ${size ?? 16}px ${
+    fontFamily ?? "monospace"
+  }`
+}
+
+export function stringToRgba(color: string): RGBA {
+  return new W3Color(color).toRgba()
+}
+
+export function getSize(text: string, font: Font): Size {
+  const fontStr = getFontStr(font)
+
+  const cacheKey = `${text}-${fontStr}`
+
+  const cacheSize = globalStore.getFontSizeCache(cacheKey)
+
+  if (!cacheSize) {
+    const context = globalStore.getOffscreenCanvas("getSize")
+    context.font = getFontStr(font)
+    context.textBaseline = "bottom"
+    context.textAlign = "start"
+
+    const textObj = context!.measureText(text) // TextMetrics object
+    const size = {
+      width: textObj.width,
+      height: textObj.fontBoundingBoxAscent + textObj.fontBoundingBoxDescent,
+    }
+
+    globalStore.setFontSizeCache(cacheKey, size)
+
+    return size
+  }
+
+  return cacheSize
+}
+
 export function assert(condition: any, message: string = "") {
   if (!condition) {
     throw new Error(message)
@@ -532,7 +582,6 @@ export function getDefaultFont(font?: Font): Required<Font> {
     fontFamily: "monospace",
     fontWeight: 400,
     italic: false,
-    backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
     strikethrough: false,
     underline: false,
     ...font,
@@ -565,4 +614,58 @@ export function hasIntersection(rect1: Rect, rect2: Rect): boolean {
       rect1.y > rect2.y + rect2.height
     )
   )
+}
+
+export function colorSame(c1?: RGBA, c2?: RGBA) {
+  if (!c1 && !c2) {
+    return true
+  }
+  if (!c1 || !c2) {
+    return false
+  }
+  return c1.a === c2.a && c1.r === c2.r && c1.g === c2.g && c1.b === c2.b
+}
+
+export function borderSame(b1?: Border[], b2?: Border[]) {
+  if (!b1 && !b2) {
+    return true
+  }
+  if (!b1 || !b2) {
+    return false
+  }
+  if (b1.length !== b2.length) return false
+  return b1.every((b, i) => {
+    return (
+      b.color === b2[i].color &&
+      b.size === b2[i].size &&
+      b.type === b2[i].type &&
+      b.direction === b2[i].direction
+    )
+  })
+}
+
+export function basicArraySame(a1?: any[], a2?: any[]) {
+  if (!a1 && !a2) {
+    return true
+  }
+  if (!a1 || !a2) {
+    return false
+  }
+  return a1.length === a2.length && a1.every((v, i) => v === a2[i])
+}
+
+export function strokeSame(s1: CanvasStrokeProps, s2: CanvasStrokeProps) {
+  return (
+    colorSame(s1.color, s2.color) &&
+    s1.lineWidth === s2.lineWidth &&
+    basicArraySame(s1.dash, s2.dash) &&
+    s1.dashOffset === s2.dashOffset &&
+    s1.lineCap === s2.lineCap &&
+    s1.lineJoin === s2.lineJoin &&
+    s1.miterLimit === s2.miterLimit
+  )
+}
+
+export function fillSame(f1: CanvasFillProps, f2: CanvasFillProps) {
+  return colorSame(f1.color, f2.color)
 }

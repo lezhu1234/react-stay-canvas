@@ -1,13 +1,23 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { Point } from "./point"
 
-import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
-import { InstantShape } from "./instantShape"
+import {
+  CanvasFillProps,
+  CanvasStrokeProps,
+  Coordinate,
+  Rect,
+  ShapeDrawProps,
+  ShapeProps,
+} from "../userTypes"
+import { BlackColor, InstantShape, ZeroColor } from "./instantShape"
+import { rgbaToString } from "../w3color"
 
 export interface CircleAttr extends ShapeProps {
   x: number
   y: number
   radius: number
+  stroke?: CanvasStrokeProps
+  fill?: CanvasFillProps
 }
 
 export class Circle extends InstantShape {
@@ -26,9 +36,10 @@ export class Circle extends InstantShape {
   radius: number
   x: number
   y: number
+
   constructor(props: CircleAttr) {
     super(props)
-    const { x, y, radius } = props
+    const { x, y, radius, stroke, fill } = props
     this.x = x
     this.y = y
     this.radius = radius
@@ -46,14 +57,16 @@ export class Circle extends InstantShape {
     })
   }
 
-  draw({ context }: ShapeDrawProps): void {
+  commonDraw({ context }: ShapeDrawProps): void {
     context.beginPath()
     context.arc(this.x, this.y, this.radius, 0, 2 * Math.PI)
-    if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      context.fill()
-    } else {
-      context.stroke()
-    }
+  }
+
+  fill({ context }: ShapeDrawProps): void {
+    context.fill()
+  }
+  stroke({ context }: ShapeDrawProps): void {
+    context.stroke()
   }
   init() {
     this.center = { x: this.x, y: this.y }

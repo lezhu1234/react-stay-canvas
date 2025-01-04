@@ -12,6 +12,10 @@ export interface PathAttr extends ShapeProps {
 }
 
 export class Path extends InstantShape {
+  commonDraw(props: ShapeDrawProps): void {}
+  fill({ context }: ShapeDrawProps): void {
+    context.fill(this.path)
+  }
   copy(): Path {
     throw new Error("Method not implemented.")
   }
@@ -77,12 +81,8 @@ export class Path extends InstantShape {
   //     props: this._copy(),
   //   })
   // }
-  draw({ context }: ShapeDrawProps): void {
-    if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      context.fill(this.path)
-    } else {
-      context.stroke(this.path)
-    }
+  stroke({ context }: ShapeDrawProps): void {
+    context.stroke(this.path)
   }
 
   move(offsetX: number, offsetY: number): void {

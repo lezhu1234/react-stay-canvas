@@ -12,11 +12,14 @@ import {
   Font,
   Rect,
   Coordinate,
+  CanvasStrokeProps,
+  CanvasFillProps,
 } from "../userTypes"
 import { applyEasing, hasIntersection, isRGB, isRGBA } from "../utils"
 import W3Color, { RGB, RGBA, rgbaToString } from "../w3color"
 
 export const ZeroColor: RGBA = { a: 0, r: 0, g: 0, b: 0 }
+export const BlackColor: RGBA = { a: 1, r: 0, g: 0, b: 0 }
 export interface GetCurrentArgumentsProps {
   startArguments: Dict
   endArguments: Dict
@@ -29,67 +32,85 @@ export interface GetCurrentArgumentsProps {
 
 export abstract class InstantShape {
   area: number
-  color: CanvasGradient | RGBA
-  gco: GlobalCompositeOperation
-  lineWidth: number
+
   offsetX: number
   offsetY: number
   startTime: number
   state: string
-  stateDrawFuncMap: Dict<(props: ShapeDrawProps) => void | boolean>
-  type: valueof<typeof SHAPE_DRAW_TYPES>
+  stateDrawFuncMap: Dict<{
+    commonDraw?: (props: ShapeDrawProps) => void | boolean
+    stroke?: (props: ShapeDrawProps) => void | boolean
+    fill?: (props: ShapeDrawProps) => void | boolean
+    afterDraw?: (props: ShapeDrawProps) => void | boolean
+  }>
+
   zeroPoint: PointType
   zeroPointCopy: PointType
   zoomCenter: PointType
   zoomY: number
   updateNextFrame: boolean
 
-  lineDash: number[]
-  lineDashOffset: number
-  filter: string
   layer: number
   zIndex: number
   parent?: StayInstantChild<InstantShape>
+  strokeConfig: Required<CanvasStrokeProps>
+  fillConfig: Required<CanvasFillProps>
+  shapeStore: Map<string, any>
 
   constructor({
-    color,
-    lineWidth,
-    type,
-    gco,
     zoomCenter,
     zoomY,
     state = "default",
-
+    strokeConfig,
+    fillConfig,
     stateDrawFuncMap = {},
-    lineDash,
-    lineDashOffset,
-    filter,
     layer,
     zIndex,
+    shapeStore = new Map(),
   }: ShapeProps) {
     this.layer = layer ?? 0
     this.zIndex = zIndex ?? 0
-    this.lineWidth = lineWidth ?? 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
-    this.type = type || SHAPE_DRAW_TYPES.STROKE // this is a placeholder for the type property that will be implemented in the subclasses
+
+    this.strokeConfig = {
+      color: ZeroColor,
+      lineWidth: 1,
+      dash: [],
+      dashOffset: 0,
+      lineCap: "butt",
+      lineJoin: "miter",
+      miterLimit: 10,
+      ...strokeConfig,
+    }
+    this.fillConfig = {
+      color: ZeroColor,
+      ...fillConfig,
+    }
+
     this.zoomY = zoomY ?? 1
     this.zoomCenter = zoomCenter ?? { x: 0, y: 0 }
-    this.gco = gco ?? "source-over"
+
     this.offsetX = 0
     this.offsetY = 0
     this.zeroPoint = { x: 0, y: 0 }
     this.zeroPointCopy = { x: 0, y: 0 }
     this.state = state
-    this.lineDash = lineDash ?? []
-    this.lineDashOffset = lineDashOffset ?? 0
     this.stateDrawFuncMap = {
-      default: this.draw,
+      default: {
+        commonDraw: this.commonDraw,
+        stroke: this.stroke,
+        fill: this.fill,
+        afterDraw: this.afterDraw,
+      },
       ...stateDrawFuncMap,
     }
-    this.filter = filter ?? "none"
     this.startTime = 0
     this.updateNextFrame = true
-    this.color = this.tryConvertToRGBA(color ?? "white")
+    this.shapeStore = shapeStore
+  }
+
+  isUnvisible(color: RGBA) {
+    return color.a === 0
   }
 
   tryConvertToRGBA(color: string | CanvasGradient | RGB | RGBA): RGBA | CanvasGradient {
@@ -104,16 +125,11 @@ export abstract class InstantShape {
     return color as CanvasGradient
   }
 
-  get colorStringOrCanvasGradient() {
-    if (isRGBA(this.color)) {
-      return rgbaToString(this.color)
-    }
-    return this.color
-  }
-
   copyProps() {
     return {
       parent: this.parent,
+      strokeConfig: this.strokeConfig,
+      fillConfig: this.fillConfig,
     }
   }
 
@@ -121,27 +137,34 @@ export abstract class InstantShape {
     return this.parent && !hasIntersection(this.getBound(), this.parent.canvas.bound)
   }
 
-  _draw({ context, now, width, height }: ShapeDrawProps): boolean {
+  draw(props: ShapeDrawProps): boolean {
     if (!this.parent) {
       return true
     }
     if (this.outOfWindow()) {
       return true
     }
-    context.lineWidth = this.lineWidth
-    context.globalCompositeOperation = this.gco
-    context.setLineDash(this.lineDash)
-    context.lineDashOffset = this.lineDashOffset
-    this.setColor(context, this.color)
-    context.filter = this.filter
+
+    const { context, now, width, height } = props
     // this.draw({ context, canvas, now })
     if (this.updateNextFrame) {
-      const drawStateResult = this.stateDrawFuncMap[this.state].bind(this)({
-        context,
-        now,
-        width,
-        height,
-      })
+      const drawFunction = this.stateDrawFuncMap[this.state]
+
+      let updateNextFrame = false
+
+      drawFunction.commonDraw?.bind(this)(props)
+
+      if (!this.isUnvisible(this.strokeConfig.color)) {
+        this.setStroke(context, this.strokeConfig)
+        updateNextFrame ||= drawFunction.stroke?.bind(this)(props) ?? false
+      }
+      if (!this.isUnvisible(this.fillConfig.color)) {
+        this.setFill(context, this.fillConfig)
+        updateNextFrame ||= drawFunction.fill?.bind(this)(props) ?? false
+      }
+
+      drawFunction.afterDraw?.bind(this)(props)
+
       // this.updateNextFrame = drawStateResult || false
     }
     return this.updateNextFrame
@@ -158,29 +181,29 @@ export abstract class InstantShape {
   }
 
   _update({
-    color,
-    lineWidth,
     zoomY,
     zoomCenter,
-    type,
-    gco,
     state,
-    filter,
     stateDrawFuncMap,
     layer,
     zIndex,
+    strokeConfig,
+    fillConfig,
   }: ShapeProps) {
     this.layer = layer ?? this.layer
     this.zIndex = zIndex ?? this.zIndex
-    this.lineWidth = lineWidth ?? this.lineWidth
     this.zoomY = zoomY ?? this.zoomY
     this.zoomCenter = zoomCenter ?? this.zoomCenter
-    this.type = type ?? this.type
-    this.gco = gco ?? this.gco
-    this.filter = filter ?? this.filter
-    this.color = this.tryConvertToRGBA(color ?? this.color)
 
     this.stateDrawFuncMap = stateDrawFuncMap ?? this.stateDrawFuncMap
+    this.strokeConfig = {
+      ...this.strokeConfig,
+      ...strokeConfig,
+    }
+    this.fillConfig = {
+      ...this.fillConfig,
+      ...fillConfig,
+    }
 
     if (state) {
       this.switchState(state)
@@ -231,30 +254,6 @@ export abstract class InstantShape {
     }
   }
 
-  setColor(context: DrawCanvasContext, color: CanvasGradient | RGBA) {
-    this.color = color
-
-    let c: string | CanvasGradient
-    if (isRGBA(color)) {
-      c = rgbaToString(color)
-    } else {
-      c = color
-    }
-    this.setContextColor(context, c, this.type)
-  }
-
-  setContextColor(
-    context: DrawCanvasContext,
-    color: string | CanvasGradient,
-    type: valueof<typeof SHAPE_DRAW_TYPES>
-  ) {
-    if (type === SHAPE_DRAW_TYPES.STROKE) {
-      context.strokeStyle = color
-    } else if (type === SHAPE_DRAW_TYPES.FILL) {
-      context.fillStyle = color
-    }
-  }
-
   switchState(state: string) {
     if (!(state in this.stateDrawFuncMap)) {
       throw new Error(`state ${state} not found`)
@@ -275,7 +274,10 @@ export abstract class InstantShape {
 
   abstract copy(): InstantShape
 
-  abstract draw(props: ShapeDrawProps): void
+  abstract commonDraw(props: ShapeDrawProps): void
+  abstract stroke(props: ShapeDrawProps): void
+  abstract fill(props: ShapeDrawProps): void
+  afterDraw(props: ShapeDrawProps) {}
 
   abstract move(offsetX: number, offsetY: number): void
 
@@ -300,6 +302,51 @@ export abstract class InstantShape {
     return {
       x: bound.x + bound.width / 2,
       y: bound.y + bound.height / 2,
+    }
+  }
+
+  getZeroConfig() {
+    return {
+      strokeConfig: this.zeroStroke(this.strokeConfig),
+      fillConfig: this.zeroFill(this.fillConfig),
+    }
+  }
+
+  setStroke(context: DrawCanvasContext, stroke: Required<CanvasStrokeProps>) {
+    context.strokeStyle = rgbaToString(stroke.color)
+    context.lineWidth = stroke.lineWidth
+    context.lineCap = stroke.lineCap
+    context.lineJoin = stroke.lineJoin
+    context.miterLimit = stroke.miterLimit
+    context.lineDashOffset = stroke.dashOffset
+    context.setLineDash(stroke.dash)
+  }
+
+  setFill(context: DrawCanvasContext, fill: Required<CanvasFillProps>) {
+    context.fillStyle = rgbaToString(fill.color)
+  }
+
+  zeroRGBA(rgba?: RGBA): RGBA {
+    return {
+      r: 0,
+      g: 0,
+      b: 0,
+      ...rgba,
+      a: 0,
+    }
+  }
+
+  zeroStroke(stroke: CanvasStrokeProps): CanvasStrokeProps {
+    return {
+      ...stroke,
+      color: this.zeroRGBA(stroke.color),
+    }
+  }
+
+  zeroFill(fill: CanvasFillProps): CanvasFillProps {
+    return {
+      ...fill,
+      color: this.zeroRGBA(fill.color),
     }
   }
 }

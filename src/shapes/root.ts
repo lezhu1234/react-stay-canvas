@@ -17,5 +17,5 @@ export class Root extends Rectangle {
   copy() {
     return this
   }
-  draw() {}
+  stroke() {}
 }

@@ -40,7 +40,6 @@ export class StayImage extends Rectangle {
       y,
       width,
       height,
-      color,
       sx = 0,
       sy = 0,
       swidth,
@@ -80,34 +79,6 @@ export class StayImage extends Rectangle {
     })
   }
 
-  awaitCopy() {
-    return new Promise<StayImage>((resolve) => {
-      new StayImage({
-        image: this.image,
-        x: this.x,
-        y: this.y,
-        sx: this.sx,
-        sy: this.sy,
-        swidth: this.swidth,
-        sheight: this.sheight,
-        imageLoaded: (image) => {
-          if (this.imageLoaded) {
-            this.imageLoaded(image)
-          }
-          resolve(image)
-        },
-        width: this.width,
-        height: this.height,
-        opacity: this.opacity,
-        ...this.copyProps(),
-      })
-
-      if (typeof this.image !== "string") {
-        resolve(this)
-      }
-    })
-  }
-
   /**
    * 在画布上绘制图像。
    *
@@ -125,7 +96,7 @@ export class StayImage extends Rectangle {
    *
    * @returns void
    */
-  draw({ context }: ShapeDrawProps): void {
+  commonDraw({ context }: ShapeDrawProps): void {
     if (this.loadState === "loading") {
       this.ctx = context
       return
@@ -145,32 +116,9 @@ export class StayImage extends Rectangle {
     )
     context.globalAlpha = originOpacity
   }
+  fill(props: ShapeDrawProps): void {}
 
-  // intermediateState(
-  //   before: StayImage,
-  //   after: StayImage,
-  //   ratio: number,
-  //   transitionType: EasingFunction
-  // ) {
-  //   return new StayImage({
-  //     src: after.src,
-  //     x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
-  //     y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),
-  //     width: this.getNumberIntermediateState(before.width, after.width, ratio, transitionType),
-  //     height: this.getNumberIntermediateState(before.height, after.height, ratio, transitionType),
-  //     sx: this.getNumberIntermediateState(before.sx, after.sx, ratio, transitionType),
-  //     sy: this.getNumberIntermediateState(before.sy, after.sy, ratio, transitionType),
-  //     swidth:
-  //       before.swidth && after.swidth
-  //         ? this.getNumberIntermediateState(before.swidth, after.swidth, ratio, transitionType)
-  //         : after.swidth,
-  //     sheight:
-  //       before.sheight && after.sheight
-  //         ? this.getNumberIntermediateState(before.sheight, after.sheight, ratio, transitionType)
-  //         : after.sheight,
-  //     props: this.getIntermediateProps(before, after, ratio, transitionType),
-  //   })
-  // }
+  stroke({ context }: ShapeDrawProps): void {}
 
   intermediateState(
     before: StayImage,

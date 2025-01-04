@@ -1,5 +1,5 @@
 import { AnimatedShapeProps, Border, EasingFunction, StayShapeTransitionConfig } from "../userTypes"
-import { applyEasing } from "../utils"
+import { applyEasing, fillSame, strokeSame } from "../utils"
 import { RGBA } from "../w3color"
 import { InstantShape, ZeroColor } from "./instantShape"
 
@@ -21,11 +21,10 @@ export const DefaultStayShapeTransitionConfig: Required<StayShapeTransitionConfi
 
 export abstract class AnimatedShape extends InstantShape {
   transition: Required<StayShapeTransitionConfig>
-  color: RGBA
+
   constructor(props: AnimatedShapeProps) {
     super(props)
     this.transition = { ...DefaultStayShapeTransitionConfig, ...props.transition }
-    this.color = props.color ?? ZeroColor
   }
 
   getNumberIntermediateState(
@@ -82,13 +81,8 @@ export abstract class AnimatedShape extends InstantShape {
     transitionType: EasingFunction
   ) {
     const getTransObj = (shape: AnimatedShape) => {
-      const transProps = shape.getTransProps()
-      const transObj: any = {
-        lineWidth: shape.lineWidth,
-        lineDash: shape.lineDash,
-        lineDashOffset: shape.lineDashOffset,
-        color: shape.color,
-      }
+      const transProps = ["strokeConfig", "fillConfig", ...shape.getTransProps()]
+      const transObj: any = {}
 
       transProps.forEach((prop) => {
         transObj[prop] = shape[prop as keyof AnimatedShape]
@@ -128,21 +122,23 @@ export abstract class AnimatedShape extends InstantShape {
 
   abstract childSameAs(shape: AnimatedShape): boolean
 
+  propsSameAs(shape: AnimatedShape): boolean {
+    return (
+      strokeSame(this.strokeConfig, shape.strokeConfig) &&
+      fillSame(this.fillConfig, shape.fillConfig)
+    )
+  }
   sameAs(shape: AnimatedShape): boolean {
     return this.childSameAs(shape) && this.propsSameAs(shape)
   }
 
-  propsSameAs(shape: AnimatedShape): boolean {
-    return (
-      this.colorSame(this.color, shape.color) &&
-      this.lineWidth === shape.lineWidth &&
-      this.lineDash.length === shape.lineDash.length &&
-      this.lineDash.every((v, i) => v === shape.lineDash[i]) &&
-      this.lineDashOffset === shape.lineDashOffset
-    )
-  }
-
-  colorSame(c1: RGBA, c2: RGBA) {
+  colorSame(c1?: RGBA, c2?: RGBA) {
+    if (!c1 && !c2) {
+      return true
+    }
+    if (!c1 || !c2) {
+      return false
+    }
     return c1.a === c2.a && c1.r === c2.r && c1.g === c2.g && c1.b === c2.b
   }
 

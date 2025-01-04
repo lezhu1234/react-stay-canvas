@@ -2,6 +2,8 @@ import { DrawCanvasContext } from "../types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import {
   Border,
+  CanvasFillProps,
+  CanvasStrokeProps,
   Coordinate,
   DiagonalDirection,
   EasingFunction,
@@ -11,10 +13,19 @@ import {
   ShapeDrawProps,
   TextAttr,
 } from "../userTypes"
-import { getDefaultFont, getRGBAStr, isRGB, isRGBA } from "../utils"
-import { rgbaToString } from "../w3color"
+import {
+  borderSame,
+  fillSame,
+  getDefaultFont,
+  getRGBAStr,
+  getSize,
+  isRGB,
+  isRGBA,
+  strokeSame,
+} from "../utils"
+import { RGBA, rgbaToString } from "../w3color"
 import { AnimatedShape } from "./animatedShape"
-import { InstantShape, ZeroColor } from "./instantShape"
+import { BlackColor, InstantShape, ZeroColor } from "./instantShape"
 import { Rectangle } from "./rectangle"
 
 export class StayText extends AnimatedShape {
@@ -66,7 +77,7 @@ export class StayText extends AnimatedShape {
     this.leftTop = { x: 0, y: 0 }
     this.rightBottom = { x: 0, y: 0 }
     this.rightTop = { x: 0, y: 0 }
-    const size = this.getSize()
+    const size = getSize(text, this.font)
     this.width = size.width
     this.height = size.height
     this.autoTransitionDiffText = autoTransitionDiffText ?? true
@@ -95,7 +106,7 @@ export class StayText extends AnimatedShape {
       x: this.x,
       y: this.y,
       font: this.font,
-      color: ZeroColor,
+      ...this.getZeroConfig(),
     })
   }
   childSameAs(shape: StayText): boolean {
@@ -103,7 +114,6 @@ export class StayText extends AnimatedShape {
       this.x === shape.x &&
       this.y === shape.y &&
       this.text === shape.text &&
-      this.font.backgroundColor === shape.font.backgroundColor &&
       this.font.fontFamily === shape.font.fontFamily &&
       this.font.fontWeight === shape.font.fontWeight &&
       this.font.italic === shape.font.italic &&
@@ -115,8 +125,7 @@ export class StayText extends AnimatedShape {
       this.textBaseline === shape.textBaseline &&
       this.textAlign === shape.textAlign &&
       this.autoTransitionDiffText === shape.autoTransitionDiffText &&
-      this.borderSame(this.border, shape.border)
-      // this.font.backgroundColor === shape.font.backgroundColor
+      borderSame(this.border, shape.border)
     )
   }
   getBound(): Rect {
@@ -153,32 +162,21 @@ export class StayText extends AnimatedShape {
     return `${fontWeight} ${italic ? "italic" : ""} ${size ?? 16}px ${fontFamily ?? "monospace"}`
   }
 
-  draw({ context, width, height }: ShapeDrawProps): void {
+  commonDraw({ context }: ShapeDrawProps): void {
     context.font = this.fontStr
     context.textBaseline = this.textBaseline
     context.textAlign = this.textAlign
-    // this.init(context)
+  }
 
-    let c: string | CanvasGradient
-    if (isRGBA(this.font.backgroundColor)) {
-      c = rgbaToString(this.font.backgroundColor)
-    } else {
-      c = this.font.backgroundColor
-    }
+  fill({ context }: ShapeDrawProps): void {
+    context.fillText(this.text, this.leftBottom.x, this.leftBottom.y)
+  }
 
-    this.setContextColor(context, c, SHAPE_DRAW_TYPES.FILL)
-    context.fillRect(this.leftTop.x, this.leftTop.y, this.width, this.height)
-    this.setContextColor(context, this.colorStringOrCanvasGradient, this.type)
-
-    if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      context.fillText(this.text, this.leftBottom.x, this.leftBottom.y)
-    } else if (this.type === SHAPE_DRAW_TYPES.STROKE) {
-      context.strokeText(this.text, this.leftBottom.x, this.leftBottom.y)
-    }
+  stroke({ context, width, height }: ShapeDrawProps): void {
+    context.strokeText(this.text, this.leftBottom.x, this.leftBottom.y)
 
     if (this.font.strikethrough) {
       context.lineWidth = this.height / 10
-      context.strokeStyle = this.colorStringOrCanvasGradient
       context.beginPath()
       context.moveTo(this.leftTop.x, this.leftTop.y + this.height / 2)
       context.lineTo(this.rightBottom.x, this.leftTop.y + this.height / 2)
@@ -186,7 +184,6 @@ export class StayText extends AnimatedShape {
     }
     if (this.font.underline) {
       context.lineWidth = this.height / 10
-      context.strokeStyle = this.colorStringOrCanvasGradient
       context.beginPath()
       context.moveTo(this.leftBottom.x, this.leftBottom.y)
       context.lineTo(this.rightBottom.x, this.leftBottom.y)
@@ -221,31 +218,8 @@ export class StayText extends AnimatedShape {
         }
       })
     }
-    // this.rect.update({ props: { color: "red" } })
-    // this.rect.draw(ctx)
   }
 
-  // static get tempContext() {
-  //   return document.createElement("canvas").getContext("2d")
-  // }
-  static tempContext =
-    typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null
-
-  getSize(width?: number, height?: number) {
-    if (width !== undefined && height !== undefined) {
-      return { width, height }
-    }
-    const context = StayText.tempContext!
-    context.font = this.fontStr
-    context.textBaseline = this.textBaseline
-    context.textAlign = this.textAlign
-
-    const textObj = context!.measureText(this.text) // TextMetrics object
-    return {
-      width: textObj.width,
-      height: textObj.fontBoundingBoxAscent + textObj.fontBoundingBoxDescent,
-    }
-  }
   init(ctx?: DrawCanvasContext | undefined) {
     const offsetX = -this.width / 2 + this.width * this.offsetXRatio
     const offsetY = this.height * this.offsetYRatio
@@ -283,7 +257,7 @@ export class StayText extends AnimatedShape {
     this.textAlign = textAlign ?? this.textAlign
     this.offsetXRatio = offsetXRatio ?? this.offsetXRatio
     this.offsetYRatio = offsetYRatio ?? this.offsetYRatio
-    const size = this.getSize()
+    const size = getSize(this.text, this.font)
     this.width = size.width
     this.height = size.height
     this._update(props)
@@ -306,124 +280,4 @@ export class StayText extends AnimatedShape {
       font: { size: this.font.size * zoomScale },
     })
   }
-
-  // earlyStopIntermediateState(
-  //   before: StayText,
-  //   after: StayText,
-  //   ratio: number,
-  //   transitionType: EasingFunction,
-  //   containerWidth: number,
-  //   containerHeight: number
-  // ) {
-  //   const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
-  //   const width = this.getNumberIntermediateState(before.width, after.width, ratio, transitionType)
-
-  //   if (x < -width || x > containerWidth) {
-  //     return true
-  //   }
-
-  //   const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
-  //   const height = this.getNumberIntermediateState(
-  //     before.height,
-  //     after.height,
-  //     ratio,
-  //     transitionType
-  //   )
-
-  //   if (y < -height || y > containerHeight) {
-  //     return true
-  //   }
-  //   return false
-  // }
-
-  // zeroShape(): StayText {
-  //   return new StayText({
-  //     x: this.x,
-  //     y: this.y,
-  //     text: this.text,
-  //     font: this.font,
-  //     border: this.border,
-  //     textBaseline: this.textBaseline,
-  //     textAlign: this.textAlign,
-  //     offsetXRatio: this.offsetXRatio,
-  //     offsetYRatio: this.offsetYRatio,
-  //     props: { ...this._copy(), color: { ...this.color, a: 0 } },
-  //   })
-  // }
-
-  // intermediateState(
-  //   before: StayText,
-  //   after: StayText,
-  //   ratio: number,
-  //   transitionType: EasingFunction
-  // ) {
-  //   const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
-  //   const width = this.getNumberIntermediateState(before.width, after.width, ratio, transitionType)
-
-  //   const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
-  //   const height = this.getNumberIntermediateState(
-  //     before.height,
-  //     after.height,
-  //     ratio,
-  //     transitionType
-  //   )
-
-  //   const font = this.getFontIntermediateState(before.font, after.font, ratio, transitionType)
-  //   const props = this.getIntermediateProps(before, after, ratio, transitionType)
-  //   let text = after.text
-
-  //   if (
-  //     before.text !== after.text &&
-  //     isRGBA(before.color) &&
-  //     isRGBA(after.color) &&
-  //     isRGBA(props.color) &&
-  //     this.autoTransitionDiffText
-  //   ) {
-  //     let color = props.color
-  //     if (ratio > 0.5) {
-  //       const opacity = this.getNumberIntermediateState(
-  //         0,
-  //         after.color.a,
-  //         (ratio - 0.5) * 2,
-  //         transitionType
-  //       )
-  //       color = { ...color, a: opacity }
-  //     } else {
-  //       text = before.text
-  //       const opacity = this.getNumberIntermediateState(
-  //         0,
-  //         before.color.a,
-  //         (0.5 - ratio) * 2,
-  //         transitionType
-  //       )
-  //       color = { ...color, a: opacity }
-  //     }
-  //     props.color = color
-  //   }
-
-  //   return new StayText({
-  //     x,
-  //     y,
-  //     text,
-  //     font,
-  //     width,
-  //     height,
-  //     border: after.border,
-  //     offsetXRatio: this.getNumberIntermediateState(
-  //       before.offsetXRatio,
-  //       after.offsetXRatio,
-  //       ratio,
-  //       transitionType
-  //     ),
-  //     offsetYRatio: this.getNumberIntermediateState(
-  //       before.offsetYRatio,
-  //       after.offsetYRatio,
-  //       ratio,
-  //       transitionType
-  //     ),
-  //     textAlign: after.textAlign,
-  //     textBaseline: after.textBaseline,
-  //     props: { ...props },
-  //   })
-  // }
 }

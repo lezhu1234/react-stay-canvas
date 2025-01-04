@@ -7,6 +7,10 @@ export interface PointProps extends ShapeProps {
 }
 
 export class Point extends InstantShape {
+  commonDraw(props: ShapeDrawProps): void {}
+  fill({ context }: ShapeDrawProps): void {
+    context.fillRect(this.x, this.y, 1, 1)
+  }
   getBound(): Rect {
     throw new Error("Method not implemented.")
   }
@@ -20,7 +24,7 @@ export class Point extends InstantShape {
   y: number
 
   constructor(props: PointProps) {
-    super({ ...props, type: "fill" })
+    super(props)
     const { x, y } = props
     this.x = x
     this.y = y
@@ -42,9 +46,7 @@ export class Point extends InstantShape {
     const dy = point.y - this.y
     return Math.sqrt(dx * dx + dy * dy)
   }
-  draw({ context }: ShapeDrawProps): void {
-    context.fillRect(this.x, this.y, 1, 1)
-  }
+  stroke({ context }: ShapeDrawProps): void {}
   move(offsetX: number, offsetY: number): void {
     this.update({ x: this.x + offsetX, y: this.y + offsetY })
   }

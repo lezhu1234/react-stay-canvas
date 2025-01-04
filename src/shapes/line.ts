@@ -15,6 +15,12 @@ export interface LineProps extends ShapeProps {
   y2: number
 }
 export class Line extends InstantShape {
+  commonDraw(props: ShapeDrawProps): void {
+    throw new Error("Method not implemented.")
+  }
+  fill(props: ShapeDrawProps): void {
+    throw new Error("Method not implemented.")
+  }
   getBound(): Rect {
     throw new Error("Method not implemented.")
   }
@@ -65,7 +71,7 @@ export class Line extends InstantShape {
     return Math.abs(Math.sin(angle) * pointVector.norm())
   }
 
-  draw({ context }: ShapeDrawProps) {
+  stroke({ context }: ShapeDrawProps) {
     context.beginPath()
     context.moveTo(this.x1, this.y1)
     context.lineTo(this.x2, this.y2)

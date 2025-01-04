@@ -266,20 +266,21 @@ export class StayAnimatedChild<
     this.shapeMap = currentShapeMap
   }
 
-  appendKeyFrame(name: string, shape: T) {
+  appendKeyFrame(name: string, shape: T, prependZeroShape: boolean = true) {
     shape.parent = this
     const shapeFrames: T[] = this.shapeFramesMap.get(name) ?? []
-    if (shapeFrames.length === 0) {
+    if (shapeFrames.length === 0 && prependZeroShape) {
       const zs = shape._zeroShape() as T
       zs.parent = this
       shapeFrames.push(zs)
     }
     shapeFrames.push(shape)
     this.shapeFramesMap.set(name, shapeFrames)
-    this.totalDurationMs = Math.max(this.totalDurationMs, this.getSliceTotalDurationMs(shapeFrames))
+    this.totalDurationMs = Math.max(this.totalDurationMs, this.getSliceTotalDurationMs(name))
   }
 
-  getSliceTotalDurationMs(slice: T[]) {
+  getSliceTotalDurationMs(name: string) {
+    const slice = this.shapeFramesMap.get(name) ?? []
     return slice.reduce((acc, cur) => {
       const duration = cur.transition?.durationMs ?? 0
       const delay = cur.transition?.delayMs ?? 0
@@ -287,13 +288,22 @@ export class StayAnimatedChild<
     }, 0)
   }
 
-  appendKeyFrames(frameMap: Map<string, T>) {
-    frameMap.forEach((shape, name) => {
-      this.appendKeyFrame(name, shape)
+  hasSlice(name: string) {
+    return this.shapeFramesMap.has(name)
+  }
+
+  appendKeyFrames(frameMap: Map<string, T | T[]>, prependZeroShape: boolean = true) {
+    frameMap.forEach((frames, name) => {
+      if (!Array.isArray(frames)) {
+        frames = [frames]
+      }
+      frames.forEach((frame) => {
+        this.appendKeyFrame(name, frame, prependZeroShape)
+      })
     })
   }
-  appendDefaultFrame(shape: T) {
-    this.appendKeyFrame("default", shape)
+  appendDefaultFrame(shape: T, prependZeroShape: boolean = true) {
+    this.appendKeyFrame("default", shape, prependZeroShape)
   }
 
   disappear(transition?: StayShapeTransitionConfig, mode: "afterEach" | "afterAll" = "afterEach") {
@@ -314,7 +324,7 @@ export class StayAnimatedChild<
       }
 
       if (mode === "afterAll") {
-        const sliceDuration = this.getSliceTotalDurationMs(slice)
+        const sliceDuration = this.getSliceTotalDurationMs(key)
         _transition.delayMs += this.totalDurationMs - sliceDuration
       }
       this.appendKeyFrame(key, lastShape.zeroShape() as T)

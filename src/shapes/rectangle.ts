@@ -19,6 +19,7 @@ export interface RectangleAttr extends AnimatedShapeProps {
   y: number
   width: number
   height: number
+  filter?: string
 }
 
 export class Rectangle extends AnimatedShape {
@@ -37,14 +38,16 @@ export class Rectangle extends AnimatedShape {
   x: number
   y: number
   center: Coordinate
+  filter?: string
   constructor(props: RectangleAttr) {
     super(props)
-    const { x, y, width, height } = props
+    const { x, y, width, height, filter } = props
     this.x = x
     this.y = y
     this.width = width
     this.height = height
     this.stepZoomY = 1
+    this.filter = filter
 
     this.leftTop = { x: this.x, y: this.y }
     this.rightTop = { x: this.x + this.width, y: this.y }
@@ -80,6 +83,17 @@ export class Rectangle extends AnimatedShape {
     this.updateRelatedValue()
   }
 
+  commonDraw(props: ShapeDrawProps): void {
+    props.context.filter = this.filter ?? "none"
+  }
+  fill({ context }: ShapeDrawProps): void {
+    context.fillRect(this.x, this.y, this.width, this.height)
+  }
+
+  afterDraw(props: ShapeDrawProps): void {
+    props.context.filter = "none"
+  }
+
   getTransProps() {
     return ["x", "y", "width", "height"]
   }
@@ -99,7 +113,8 @@ export class Rectangle extends AnimatedShape {
       y: this.y,
       width: this.width,
       height: this.height,
-      color: ZeroColor,
+      filter: this.filter,
+      ...this.getZeroConfig(),
     })
   }
   childSameAs(shape: Rectangle): boolean {
@@ -160,16 +175,13 @@ export class Rectangle extends AnimatedShape {
       y: this.y,
       width: this.width,
       height: this.height,
+      filter: this.filter,
       ...this.copyProps(),
     })
   }
 
-  draw({ context }: ShapeDrawProps) {
-    if (this.type === SHAPE_DRAW_TYPES.STROKE) {
-      context.strokeRect(this.x, this.y, this.width, this.height)
-    } else if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      context.fillRect(this.x, this.y, this.width, this.height)
-    }
+  stroke({ context }: ShapeDrawProps) {
+    context.strokeRect(this.x, this.y, this.width, this.height)
   }
 
   move(offsetX: number, offsetY: number) {
@@ -205,6 +217,7 @@ export class Rectangle extends AnimatedShape {
     this.y = props.y ?? this.y
     this.width = props.width ?? this.width
     this.height = props.height ?? this.height
+    this.filter = props.filter ?? this.filter
     this._update(props)
     this.updateRelatedValue()
 

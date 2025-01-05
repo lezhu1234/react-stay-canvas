@@ -105,7 +105,7 @@ export interface UpdateStayChildProps<T> {
 
 export type ChildSortFunction = (a: StayInstantChild, b: StayInstantChild) => number
 export interface getContainPointChildrenProps {
-  selector: string | string[]
+  selector: string | string[] | ((child: StayInstantChild) => boolean)
   point: PointType
   returnFirst?: boolean | undefined
   sortBy?: ChildSortFunction
@@ -266,8 +266,16 @@ export interface BasicTools {
   // timelineChild: <T extends InstantShape>(props: TimelineChildProps<T>) => StayInstantChild<T>
 }
 
+export interface DrawReturn {
+  updatedLayers: number[]
+  updatedChilds: {
+    child: StayInstantChild
+    shapes: InstantShape[]
+  }[]
+}
+
 export interface AnimatedTools {
-  progress: (props: ProgressProps) => void
+  progress: (props: ProgressProps) => DrawReturn
   createChild: (props: CreateChildProps) => StayAnimatedChild
 }
 

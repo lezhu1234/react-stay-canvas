@@ -59,7 +59,7 @@ export function stayTools<Mode extends StayMode>(
         )
       }
       this.updateChildrenTime({ time, bound })
-      this.draw({
+      return this.draw({
         forceDraw: true,
         now: Date.now(),
         beforeDrawCallback,
@@ -291,7 +291,10 @@ export function stayTools<Mode extends StayMode>(
       }
 
       assert(_selector, "no className or id")
-      const selectorChildren = this.tools.getChildrenBySelector(_selector as string, sortBy)
+      const selectorChildren = this.tools.getChildrenBySelector(
+        _selector as string | SelectorFunc,
+        sortBy
+      )
 
       let hitChildren: StayInstantChild[] = selectorChildren.filter((c: StayInstantChild) =>
         c.containsPointer(point)

@@ -24,6 +24,7 @@ import { EventProps, StayEventMap, StayEventProps } from "../types"
 import { DEFAULTSTATE, MOUSE_EVENTS, ROOTNAME, SUPPORT_OPRATOR } from "../userConstants"
 import {
   ActionEvent,
+  DrawReturn,
   ListenerNamePayloadPair,
   ListenerProps,
   PredefinedWheelEventName,
@@ -192,7 +193,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
     now = Date.now(),
     beforeDrawCallback,
     afterDrawCallback,
-  }: StayDrawProps) {
+  }: StayDrawProps): DrawReturn {
     interface ChildLayer {
       updateCurrentLayer: boolean
     }
@@ -213,6 +214,12 @@ class Stay<EventName extends string, Mode extends StayMode> {
       })
     })
 
+    const updatedLayers: number[] = []
+    const updatedChilds: {
+      child: StayInstantChild
+      shapes: InstantShape[]
+    }[] = []
+
     if (beforeDrawCallback) {
       beforeDrawCallback()
     }
@@ -223,6 +230,8 @@ class Stay<EventName extends string, Mode extends StayMode> {
       if (!updateCurrentLayer) {
         continue
       }
+
+      updatedLayers.push(layerIndex)
 
       const canvas = this.root.layers[layerIndex]
       const context = this.root.contexts[layerIndex]
@@ -235,11 +244,18 @@ class Stay<EventName extends string, Mode extends StayMode> {
 
       for (let i = 0; i < children.length; i++) {
         const child = children[i]
-        layerDrawShapes.push(...child.getShapes(layerIndex))
+        const shapes = child.getShapes(layerIndex)
+        layerDrawShapes.push(...shapes)
         child.layerDraw(layerIndex)
+        if (shapes.length > 0) {
+          updatedChilds.push({
+            child,
+            shapes,
+          })
+        }
       }
 
-      layerDrawShapes = layerDrawShapes.sort((shape) => shape.zIndex)
+      layerDrawShapes = layerDrawShapes.sort((s1, s2) => s1.zIndex - s2.zIndex)
 
       layerDrawShapes.forEach((shape) => {
         shape.draw({
@@ -265,6 +281,8 @@ class Stay<EventName extends string, Mode extends StayMode> {
       },
       { timeout: 1000 }
     )
+
+    return { updatedLayers, updatedChilds }
   }
 
   filterChildren(filterCallback: (...args: any) => boolean) {

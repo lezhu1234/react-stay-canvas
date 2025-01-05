@@ -69,7 +69,7 @@ export abstract class InstantShape {
     shapeStore = new Map(),
   }: ShapeProps) {
     this.layer = layer ?? 0
-    this.zIndex = zIndex ?? 0
+    this.zIndex = zIndex ?? 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
 
     this.strokeConfig = {
@@ -113,6 +113,14 @@ export abstract class InstantShape {
     return color.a === 0
   }
 
+  drawStroke(): boolean {
+    return !this.isUnvisible(this.strokeConfig.color)
+  }
+
+  drawFill(): boolean {
+    return !this.isUnvisible(this.fillConfig.color)
+  }
+
   tryConvertToRGBA(color: string | CanvasGradient | RGB | RGBA): RGBA | CanvasGradient {
     if (isRGBA(color)) {
       return { ...color }
@@ -154,11 +162,11 @@ export abstract class InstantShape {
 
       drawFunction.commonDraw?.bind(this)(props)
 
-      if (!this.isUnvisible(this.strokeConfig.color)) {
+      if (this.drawStroke()) {
         this.setStroke(context, this.strokeConfig)
         updateNextFrame ||= drawFunction.stroke?.bind(this)(props) ?? false
       }
-      if (!this.isUnvisible(this.fillConfig.color)) {
+      if (this.drawFill()) {
         this.setFill(context, this.fillConfig)
         updateNextFrame ||= drawFunction.fill?.bind(this)(props) ?? false
       }

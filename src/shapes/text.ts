@@ -260,7 +260,7 @@ export class StayText extends AnimatedShape {
     const size = getSize(this.text, this.font)
     this.width = size.width
     this.height = size.height
-    this._update(props)
+    this.applyUpdate(props)
     this.init()
     return this
   }

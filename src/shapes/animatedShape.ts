@@ -1,5 +1,5 @@
 import { AnimatedShapeProps, Border, EasingFunction, StayShapeTransitionConfig } from "../userTypes"
-import { applyEasing, fillSame, strokeSame } from "../utils"
+import { applyEasing, fillSame, isBasicType, strokeSame } from "../utils"
 import { RGBA } from "../w3color"
 import { InstantShape, ZeroColor } from "./instantShape"
 
@@ -33,6 +33,12 @@ export abstract class AnimatedShape extends InstantShape {
     ratio: number,
     transitionType: EasingFunction
   ) {
+    if (ratio === 0) {
+      return before
+    }
+    if (ratio === 1) {
+      return after
+    }
     return before + (after - before) * applyEasing(transitionType, ratio)
   }
 
@@ -41,13 +47,13 @@ export abstract class AnimatedShape extends InstantShape {
     after: any,
     ratio: number,
     transitionType: EasingFunction
-  ) {
-    let state: any = structuredClone(after)
+  ): any {
+    let state: any = isBasicType(after) ? after : { ...after }
     if (typeof before === "number" && typeof after === "number") {
-      state = this.getNumberIntermediateState(before, after, ratio, transitionType)
+      return this.getNumberIntermediateState(before, after, ratio, transitionType)
     }
     if (Array.isArray(before) && Array.isArray(after) && before.length === after.length) {
-      state = before.map((b, i) => {
+      return before.map((b, i) => {
         return this.recursiveIntermidateState(b, after[i], ratio, transitionType)
       })
     }
@@ -100,7 +106,17 @@ export abstract class AnimatedShape extends InstantShape {
       transitionType
     )
 
-    return intermediateObj
+    return {
+      ...intermediateObj,
+      ...this.getNonTransitionState(),
+    }
+  }
+
+  override getNonTransitionState() {
+    return {
+      ...super.getNonTransitionState(),
+      transition: { ...this.transition },
+    }
   }
   abstract getTransProps(): string[]
 

@@ -61,7 +61,7 @@ export class Point extends InstantShape {
     const { x, y } = props
     this.x = x === undefined ? this.x : x
     this.y = y === undefined ? this.y : y
-    this._update(props || {})
+    this.applyUpdate(props || {})
     return this
   }
 

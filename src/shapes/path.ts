@@ -97,7 +97,7 @@ export class Path extends InstantShape {
     const { points, radius } = props
     this.points = points || this.points
     this.radius = radius === undefined ? this.radius : radius
-    this._update(props || {})
+    this.applyUpdate(props || {})
     return this
   }
 

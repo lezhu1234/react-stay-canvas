@@ -82,7 +82,7 @@ export class Circle extends InstantShape {
     this.x = x === undefined ? this.x : x
     this.y = y === undefined ? this.y : y
     this.radius = radius === undefined ? this.radius : radius
-    this._update(props || {})
+    this.applyUpdate(props || {})
     this.init()
     return this
   }

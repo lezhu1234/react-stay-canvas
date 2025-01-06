@@ -14,6 +14,7 @@ import {
   Coordinate,
   CanvasStrokeProps,
   CanvasFillProps,
+  CanvasGlobalProps,
 } from "../userTypes"
 import { applyEasing, hasIntersection, isRGB, isRGBA } from "../utils"
 import W3Color, { RGB, RGBA, rgbaToString } from "../w3color"
@@ -32,7 +33,6 @@ export interface GetCurrentArgumentsProps {
 
 export abstract class InstantShape {
   area: number
-
   offsetX: number
   offsetY: number
   startTime: number
@@ -55,6 +55,7 @@ export abstract class InstantShape {
   parent?: StayInstantChild<InstantShape>
   strokeConfig: Required<CanvasStrokeProps>
   fillConfig: Required<CanvasFillProps>
+  globalConfig: Required<CanvasGlobalProps>
   shapeStore: Map<string, any>
 
   constructor({
@@ -67,6 +68,7 @@ export abstract class InstantShape {
     layer,
     zIndex,
     shapeStore = new Map(),
+    globalConfig,
   }: ShapeProps) {
     this.layer = layer ?? 0
     this.zIndex = zIndex ?? 1
@@ -85,6 +87,10 @@ export abstract class InstantShape {
     this.fillConfig = {
       color: ZeroColor,
       ...fillConfig,
+    }
+    this.globalConfig = {
+      gco: "source-over",
+      ...globalConfig,
     }
 
     this.zoomY = zoomY ?? 1
@@ -109,19 +115,19 @@ export abstract class InstantShape {
     this.shapeStore = shapeStore
   }
 
-  isUnvisible(color: RGBA) {
+  isTransparent(color: RGBA) {
     return color.a === 0
   }
 
-  drawStroke(): boolean {
-    return !this.isUnvisible(this.strokeConfig.color)
+  shouldStroke(): boolean {
+    return !this.isTransparent(this.strokeConfig.color)
   }
 
-  drawFill(): boolean {
-    return !this.isUnvisible(this.fillConfig.color)
+  shouldFill(): boolean {
+    return !this.isTransparent(this.fillConfig.color)
   }
 
-  tryConvertToRGBA(color: string | CanvasGradient | RGB | RGBA): RGBA | CanvasGradient {
+  normalizeColor(color: string | CanvasGradient | RGB | RGBA): RGBA | CanvasGradient {
     if (isRGBA(color)) {
       return { ...color }
     } else if (isRGB(color)) {
@@ -141,7 +147,7 @@ export abstract class InstantShape {
     }
   }
 
-  outOfWindow() {
+  isOutOfViewport() {
     return this.parent && !hasIntersection(this.getBound(), this.parent.canvas.bound)
   }
 
@@ -149,7 +155,7 @@ export abstract class InstantShape {
     if (!this.parent) {
       return true
     }
-    if (this.outOfWindow()) {
+    if (this.isOutOfViewport()) {
       return true
     }
 
@@ -160,13 +166,15 @@ export abstract class InstantShape {
 
       let updateNextFrame = false
 
+      context.globalCompositeOperation = this.globalConfig.gco
+
       drawFunction.commonDraw?.bind(this)(props)
 
-      if (this.drawStroke()) {
+      if (this.shouldStroke()) {
         this.setStroke(context, this.strokeConfig)
         updateNextFrame ||= drawFunction.stroke?.bind(this)(props) ?? false
       }
-      if (this.drawFill()) {
+      if (this.shouldFill()) {
         this.setFill(context, this.fillConfig)
         updateNextFrame ||= drawFunction.fill?.bind(this)(props) ?? false
       }
@@ -178,7 +186,7 @@ export abstract class InstantShape {
     return this.updateNextFrame
   }
 
-  _move(offsetX: number, offsetY: number): [number, number] {
+  applyMove(offsetX: number, offsetY: number): [number, number] {
     const ox = this.zeroPointCopy.x + offsetX - this.zeroPoint.x
     const oy = this.zeroPointCopy.y + offsetY - this.zeroPoint.y
     this.zeroPoint = {
@@ -188,7 +196,7 @@ export abstract class InstantShape {
     return [ox, oy]
   }
 
-  _update({
+  applyUpdate({
     zoomY,
     zoomCenter,
     state,
@@ -229,7 +237,7 @@ export abstract class InstantShape {
     return 1 + deltaY * -0.001
   }
 
-  pointOuterOfCanvas(canvas: HTMLCanvasElement, point: Coordinate) {
+  isPointOutsideCanvas(canvas: HTMLCanvasElement, point: Coordinate) {
     return point.x < 0 || point.x > canvas.width || point.y < 0 || point.y > canvas.height
   }
 
@@ -313,10 +321,19 @@ export abstract class InstantShape {
     }
   }
 
+  getNonTransitionState() {
+    return {
+      layer: this.layer,
+      zIndex: this.zIndex,
+      globalConfig: this.globalConfig,
+    }
+  }
+
   getZeroConfig() {
     return {
       strokeConfig: this.zeroStroke(this.strokeConfig),
       fillConfig: this.zeroFill(this.fillConfig),
+      ...this.getNonTransitionState(),
     }
   }
 

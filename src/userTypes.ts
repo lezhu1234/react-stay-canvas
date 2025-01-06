@@ -479,6 +479,7 @@ export interface ShapeProps {
   zIndex?: number
   strokeConfig?: CanvasStrokeProps
   fillConfig?: CanvasFillProps
+  globalConfig?: CanvasGlobalProps
   shapeStore?: Map<string, any>
 }
 
@@ -509,6 +510,10 @@ export interface CanvasStrokeProps {
 
 export interface CanvasFillProps {
   color?: RGBA
+}
+
+export interface CanvasGlobalProps {
+  gco?: GlobalCompositeOperation
 }
 
 export interface TextAttr extends AnimatedShapeProps {

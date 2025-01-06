@@ -669,3 +669,16 @@ export function strokeSame(s1: CanvasStrokeProps, s2: CanvasStrokeProps) {
 export function fillSame(f1: CanvasFillProps, f2: CanvasFillProps) {
   return colorSame(f1.color, f2.color)
 }
+
+export function isBasicType(
+  value: any
+): value is string | number | boolean | null | undefined | bigint {
+  return (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint" ||
+    value === null ||
+    value === undefined
+  )
+}

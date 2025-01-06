@@ -56,7 +56,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
 
   move(offsetX: number, offsetY: number) {
     this.shapeMap.forEach((shape) => {
-      shape.move(...shape._move(offsetX, offsetY))
+      shape.move(...shape.applyMove(offsetX, offsetY))
     })
   }
 

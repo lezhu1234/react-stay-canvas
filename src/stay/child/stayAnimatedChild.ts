@@ -178,7 +178,7 @@ export class StayAnimatedChild<
       const ratioChanged = () =>
         !lastInfo.beforeShape.sameAs(lastInfo.afterShape) && lastInfo.ratio !== currentInfo.ratio
 
-      const inView = () => !lastInfo.shape.outOfWindow() || !currentInfo.shape.outOfWindow()
+      const inView = () => !lastInfo.shape.isOutOfViewport() || !currentInfo.shape.isOutOfViewport()
       // Update is needed if any of these conditions are true
       return inView() && (beforeStateChanged() || afterStateChanged() || ratioChanged())
     }
@@ -266,15 +266,21 @@ export class StayAnimatedChild<
     this.shapeMap = currentShapeMap
   }
 
+  checkShape(shape: T) {
+    if (isNaN(shape.transition.delayMs) || isNaN(shape.transition.durationMs)) {
+      throw new Error("transition delayMs or durationMs is NaN")
+    }
+    return shape
+  }
   appendKeyFrame(name: string, shape: T, prependZeroShape: boolean = true) {
     shape.parent = this
     const shapeFrames: T[] = this.shapeFramesMap.get(name) ?? []
     if (shapeFrames.length === 0 && prependZeroShape) {
       const zs = shape._zeroShape() as T
       zs.parent = this
-      shapeFrames.push(zs)
+      shapeFrames.push(this.checkShape(zs))
     }
-    shapeFrames.push(shape)
+    shapeFrames.push(this.checkShape(shape))
     this.shapeFramesMap.set(name, shapeFrames)
     this.totalDurationMs = Math.max(this.totalDurationMs, this.getSliceTotalDurationMs(name))
   }
@@ -309,6 +315,7 @@ export class StayAnimatedChild<
   disappear(transition?: StayShapeTransitionConfig, mode: "afterEach" | "afterAll" = "afterEach") {
     const keys = this.shapeFramesMap.keys()
 
+    const totalDurationMs = this.totalDurationMs
     for (const key of keys) {
       const slice = this.shapeFramesMap.get(key)!
       const lastShape = slice[slice.length - 1]
@@ -319,15 +326,13 @@ export class StayAnimatedChild<
         ...transition,
       }
 
-      if (mode === "afterEach") {
-        zs.transition = _transition
-      }
-
       if (mode === "afterAll") {
         const sliceDuration = this.getSliceTotalDurationMs(key)
-        _transition.delayMs += this.totalDurationMs - sliceDuration
+        _transition.delayMs += totalDurationMs - sliceDuration
       }
-      this.appendKeyFrame(key, lastShape.zeroShape() as T)
+
+      zs.transition = _transition
+      this.appendKeyFrame(key, zs)
     }
   }
 }

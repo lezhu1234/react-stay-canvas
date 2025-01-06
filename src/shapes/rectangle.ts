@@ -218,7 +218,7 @@ export class Rectangle extends AnimatedShape {
     this.width = props.width ?? this.width
     this.height = props.height ?? this.height
     this.filter = props.filter ?? this.filter
-    this._update(props)
+    this.applyUpdate(props)
     this.updateRelatedValue()
 
     return this

@@ -1,7 +1,9 @@
 import Canvas from "./canvas"
-import { GetCurrentArgumentsProps, Shape } from "./shapes"
+import { AnimatedShape } from "./shapes/animatedShape"
+import { InstantShape } from "./shapes/instantShape"
 import { Point } from "./shapes/point"
-import { StayChild } from "./stay/stayChild"
+import { StayAnimatedChild } from "./stay/child/stayAnimatedChild"
+import { StayInstantChild } from "./stay/child/stayInstantChild"
 import { valueof } from "./stay/types"
 import {
   DrawCanvasContext,
@@ -14,7 +16,7 @@ import { DRAW_ACTIONS, SHAPE_DRAW_TYPES, SORT_CHILDREN_METHODS } from "./userCon
 import { RGB, RGBA } from "./w3color"
 
 type SortChildrenMethodsKeys = keyof typeof SORT_CHILDREN_METHODS
-export type StayChildren = Record<string, StayChild>
+export type StayChildren = Record<string, StayInstantChild>
 export type DrawActionsValuesType = valueof<typeof DRAW_ACTIONS>
 
 export type storeType = Map<string, any>
@@ -37,8 +39,8 @@ export interface MouseActionEvent<EventName extends PredefinedMouseEventName> {
   name: EventName
   x: number
   y: number
-  point: Point
-  target: StayChild
+  point: Coordinate
+  target: StayInstantChild
   isMouseEvent: true
 }
 
@@ -67,62 +69,72 @@ export type ActionEvent<EventName extends string | string[]> =
     ? MouseActionEvent<EventName>
     : never
 
-export interface TimelineChildProps<T extends Shape> {
+// export interface TimelineChildProps<T extends Shape> {
+//   id?: string
+//   zIndex?: number
+//   shape: T
+//   className: string
+//   layer?: number
+//   transition?: Omit<StayChildTransitions, "update">
+//   timeline: TimeLineProps<T>[]
+// }
+
+export interface AppendChildProps<T> {
   id?: string
-  zIndex?: number
-  shape: T
+  shape: T | T[] | Map<string, T>
   className: string
-  layer?: number
-  transition?: Omit<StayChildTransitions, "update">
-  timeline: TimeLineProps<T>[]
 }
 
-export interface createChildProps<T> {
+export interface CreateChildProps {
   id?: string
-  zIndex?: number
-  shape: T
   className: string
-  layer?: number
-  transition?: Omit<StayChildTransitions, "update">
-  drawEndCallback?: (child: StayChild) => void
 }
 
-export type updateChildProps<T = Shape> = {
-  child: StayChild
-  transition?: Omit<TransitionConfig, "effect">
-} & Partial<Omit<createChildProps<T>, "transition">>
+export type updateChildProps<T extends StayInstantChild = StayInstantChild> = {
+  child: T
+  transition?: StayShapeTransitionConfig
+}
 
 export interface UpdateStayChildProps<T> {
   id?: string
   className?: string
-  layer?: number | undefined
   shape?: T | undefined
   zIndex?: number
-  transition?: Omit<TransitionConfig, "effect">
-  drawEndCallback?: (c: StayChild) => void
+  transition?: StayShapeTransitionConfig
 }
 
-export type ChildSortFunction = (a: StayChild, b: StayChild) => number
+export type ChildSortFunction = (a: StayInstantChild, b: StayInstantChild) => number
 export interface getContainPointChildrenProps {
-  selector: string | string[]
+  selector: string | string[] | ((child: StayInstantChild) => boolean)
   point: PointType
   returnFirst?: boolean | undefined
-  sortBy?: SortChildrenMethodsValues | ChildSortFunction
+  sortBy?: ChildSortFunction
   withRoot?: boolean
 }
 
 export type SortChildrenMethodsValues = valueof<typeof SORT_CHILDREN_METHODS>
 
-export interface ActionCallbackProps<T = Dict, EventName extends string | string[] = string> {
+export interface ActionCallbackProps<
+  T = Dict,
+  EventName extends string | string[] = string,
+  Mode extends StayMode = StayMode
+> {
   originEvent: Event
   e: ActionEvent<EventName>
   store: storeType
   stateStore: storeType
   composeStore: Record<string, any>
   canvas: Canvas
-  tools: StayTools
+  tools: StayTools<Mode>
   payload: T
 }
+
+export interface Coordinate {
+  x: number
+  y: number
+}
+
+// export type StayChildShapes = Shape[]
 
 export interface Area {
   x: number
@@ -131,12 +143,12 @@ export interface Area {
   height: number
 }
 export interface ImportChildrenProps {
-  children: StayChild[]
+  children: StayInstantChild[]
   area?: Area
 }
 
 export interface ExportChildrenProps {
-  children: StayChild[]
+  children: StayInstantChild[]
   area: Area
 }
 
@@ -163,32 +175,34 @@ export type ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<
 
 export interface ListenerProps<
   T extends ListenerNamePayloadPair = ListenerNamePayloadPair,
-  EventName extends string = string
+  EventName extends string = string,
+  Mode extends StayMode = StayMode
 > {
   name: T["name"]
   state?: string
   selector?: string
   event: EventName | EventName[]
-  sortBy?: SortChildrenMethodsValues | ChildSortFunction
-  callback: UserCallback<T["payload"], EventName | EventName[]>
+  sortBy?: ChildSortFunction
+  callback: UserCallback<T["payload"], EventName | EventName[], Mode>
 }
 
 export interface PredefinedEventListenerProps<
-  EventName extends PredefinedEventName = PredefinedEventName
+  EventName extends PredefinedEventName = PredefinedEventName,
+  Mode extends StayMode = StayMode
 > {
   name: string
   state?: string
   selector?: string
   event: EventName | EventName[]
-  sortBy?: SortChildrenMethodsValues | ChildSortFunction
-  callback: UserCallback<Dict, EventName | EventName[]>
+  sortBy?: ChildSortFunction
+  callback: UserCallback<Dict, EventName | EventName[], Mode>
 }
 
-export type SelectorFunc = (child: StayChild) => boolean
+export type SelectorFunc = (child: StayInstantChild) => boolean
 
 export interface ProgressBound {
-  beforeTime: number
-  afterTime: number
+  beforeMs: number
+  afterMs: number
 }
 
 export interface StayDrawProps {
@@ -199,94 +213,150 @@ export interface StayDrawProps {
 }
 
 export interface ProgressProps {
-  time: number
+  timeMs: number
   bound?: ProgressBound
   beforeDrawCallback?: () => void
   afterDrawCallback?: (canvas: Canvas) => void
 }
-export interface StayTools {
-  createChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
-  appendChild: <T extends Shape>(props: createChildProps<T>) => StayChild<T>
-  updateChild: (props: updateChildProps) => StayChild
-  removeChild: (
-    childId: string,
-    soft?: boolean,
-    removeTransition?: TransitionConfig
-  ) => Promise<void> | void
-  getContainPointChildren: (props: getContainPointChildrenProps) => StayChild[]
+
+export type StayTools<Mode extends StayMode> = (Mode extends InstantMode
+  ? InstantTools
+  : AnimatedTools) &
+  BasicTools
+export interface BasicTools {
+  // createChild: <T extends InstantShape>(props: createChildProps<T>) => StayInstantChild<T>
+  // updateChild: (props: updateChildProps) => StayInstantChild
+  removeChild: (childId: string) => Promise<void> | void
+  getContainPointChildren: (props: getContainPointChildrenProps) => StayInstantChild[]
   hasChild: (id: string) => boolean
-  fix: () => void
+  // fix: () => void
   switchState: (state: string) => void
-  getChildrenWithoutRoot: () => StayChild[]
-  getChildById: <T extends Shape>(id: string) => StayChild<T> | void
-  getChildBySelector: <T extends Shape>(selector: string | SelectorFunc) => StayChild<T> | void
-  getChildrenByArea: (area: Area, selector?: string | SelectorFunc) => StayChild[]
+  getChildrenWithoutRoot: () => StayInstantChild[]
+  getChildById: <T extends InstantShape>(id: string) => StayInstantChild<T> | void
+  getChildBySelector: <T extends InstantShape>(
+    selector: string | SelectorFunc
+  ) => StayInstantChild<T> | void
+  getChildrenByArea: (area: Area, selector?: string | SelectorFunc) => StayInstantChild[]
   getChildrenBySelector: (
     selector: string | SelectorFunc,
-    sortBy?: SortChildrenMethodsValues | ChildSortFunction
-  ) => StayChild[]
+    sortBy?: ChildSortFunction
+  ) => StayInstantChild[]
   getAvailiableStates: (selector: string) => string[]
   changeCursor: (cursor: string) => void
   moveStart: () => void
-  move: (offsetX: number, offsetY: number, filter?: (child: StayChild) => boolean) => Promise<void>
-  zoom: (deltaY: number, center: PointType, filter?: (child: StayChild) => boolean) => Promise<void>
+  move: (
+    offsetX: number,
+    offsetY: number,
+    filter?: (child: StayInstantChild) => boolean
+  ) => Promise<void>
+  zoom: (
+    deltaY: number,
+    center: PointType,
+    filter?: (child: StayInstantChild) => boolean
+  ) => Promise<void>
   reset: () => Promise<void>
   exportChildren: (props: ImportChildrenProps) => ExportChildrenProps
   importChildren: (props: ExportChildrenProps, targetArea?: Area) => void
   regionToTargetCanvas: (props: RegionToTargetCanvasProps) => Promise<HTMLCanvasElement>
+  // start: () => void
+  refresh: () => void
+
+  triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
+  deleteListener: (name: string) => void
+  // timelineChild: <T extends InstantShape>(props: TimelineChildProps<T>) => StayInstantChild<T>
+}
+
+export interface DrawReturn {
+  updatedLayers: number[]
+  updatedChilds: {
+    child: StayInstantChild
+    shapes: InstantShape[]
+  }[]
+}
+
+export interface AnimatedTools {
+  progress: (props: ProgressProps) => DrawReturn
+  createChild: (props: CreateChildProps) => StayAnimatedChild
+}
+
+export interface InstantTools {
+  appendChild: <T extends InstantShape>(props: AppendChildProps<T>) => StayInstantChild<T>
   log: () => void
   redo: () => void
   undo: () => void
-  start: () => void
-  refresh: () => void
-  progress: (props: ProgressProps) => void
-  triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
-  deleteListener: (name: string) => void
-  timelineChild: <T extends Shape>(props: TimelineChildProps<T>) => StayChild<T>
 }
 
-export interface TransitionConfig {
-  effect: Effects[] | ShapeConfig
+export type StayInstantChildShapes = Map<string, InstantShape>
+
+export interface Rect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+// export interface AnimatedShapeTransitionConfig {
+//   enter?: StayShapeTransitionConfig
+//   leave?: StayShapeTransitionConfig
+//   update?: StayShapeTransitionConfig
+// }
+
+export interface AnimatedShapeProps extends ShapeProps {
+  transition?: StayShapeTransitionConfig
+}
+
+export interface StayShapeTransitionConfig {
   type?: EasingFunction
-  duration: number
-  delay?: number
+  durationMs?: number
+  delayMs?: number
 }
 
-export interface StayChildTransitions {
-  enter?: TransitionConfig
-  leave?: TransitionConfig
-  update?: Omit<TransitionConfig, "effect">
+export interface StayInstantChildUpdateProps<T extends InstantShape> {
+  id?: string
+  className?: string
+  shape?: T | T[] | Map<string, T>
+}
+
+export interface StayInstantChildProps<T extends InstantShape> {
+  id?: string
+  className: string
+  shape: T | T[] | Map<string, T>
+  canvas: Canvas
+}
+
+export interface StayAnimatedChildProps<T extends AnimatedShape> {
+  id?: string
+  className: string
+  canvas: Canvas
 }
 
 export interface StayChildProps<T> {
   id?: string
   zIndex?: number
   className: string
-  layer: number
-  transition?: Omit<StayChildTransitions, "update">
-  beforeLayer?: number | null
+
+  transition?: StayShapeTransitionConfig
+
   shape: T
   drawAction?: DrawActionsValuesType | null
-  afterRefresh?: (fn: () => void) => void
-  drawEndCallback?: (child: StayChild) => void
 }
 
-export interface StayChildTimeLineProps<T extends Shape> {
-  id?: string
-  zIndex?: number
-  className: string
-  layer: number
-  shape: T
-  beforeLayer?: number | null
-  timeline: TimeLineProps<T>[]
-  drawAction?: DrawActionsValuesType | null
-  afterRefresh?: (fn: () => void) => void
-  drawEndCallback?: (child: StayChild) => void
-}
+// export interface StayChildTimeLineProps<T extends Shape> {
+//   id?: string
+//   zIndex?: number
+//   className: string
+
+//   shape: T
+
+//   timeline: TimeLineProps<T>[]
+//   drawAction?: DrawActionsValuesType | null
+//   afterRefresh?: (fn: () => void) => void
+//   drawEndCallback?: (child: StayInstantChild) => void
+// }
 export interface RegionToTargetCanvasProps {
   area: Area
   targetArea?: Area
-  children: StayChild[]
+  children: StayInstantChild[]
   progress?: number
 }
 
@@ -361,15 +431,21 @@ export type PermutationsOfTuple<T extends unknown[], R extends unknown[] = []> =
 export type DisOrderArr<T> = PermutationsOfTuple<Union2Tuple<T>>
 export type UnionListenerProps<
   T extends ListenerNamePayloadPair[],
-  EventName extends string = string
+  EventName extends string = string,
+  Mode extends StayMode = StayMode
 > = {
-  [key in keyof T]: ListenerProps<T[key], EventName>
+  [key in keyof T]: ListenerProps<T[key], EventName, Mode>
 }
 
 export type ListenerArrayProps<
   T extends ListenerNamePayloadPairOrName[],
-  EventName extends string = string
-> = UnionListenerProps<ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>, EventName>
+  EventName extends string = string,
+  Mode extends StayMode = StayMode
+> = UnionListenerProps<
+  ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>,
+  EventName,
+  Mode
+>
 
 export type Tuple2Union<T extends unknown[]> = T extends [infer F, ...infer L]
   ? F | Tuple2Union<L>
@@ -384,19 +460,27 @@ export interface ShapeDrawProps {
   width: number
   height: number
 }
+export interface Size {
+  width: number
+  height: number
+}
+
 export interface ShapeProps {
-  color?: string | CanvasGradient | RGB | RGBA
-  lineWidth?: number
   zoomY?: number
   zoomCenter?: PointType
-  type?: valueof<typeof SHAPE_DRAW_TYPES>
-  gco?: GlobalCompositeOperation
-  stateDrawFuncMap?: Dict<(props: ShapeDrawProps) => void>
+  stateDrawFuncMap?: Dict<{
+    commonDraw?: (props: ShapeDrawProps) => void | boolean
+    stroke?: (props: ShapeDrawProps) => void | boolean
+    fill?: (props: ShapeDrawProps) => void | boolean
+    afterDraw?: (props: ShapeDrawProps) => void | boolean
+  }>
   state?: string
-  hidden?: boolean
-  lineDash?: number[]
-  lineDashOffset?: number
-  filter?: string
+  layer?: number
+  zIndex?: number
+  strokeConfig?: CanvasStrokeProps
+  fillConfig?: CanvasFillProps
+  globalConfig?: CanvasGlobalProps
+  shapeStore?: Map<string, any>
 }
 
 export type FourrDirection = "top" | "right" | "bottom" | "left"
@@ -413,30 +497,49 @@ export interface TextDecoration {
   position: number
   color?: string
 }
-export interface TextAttr {
+
+export interface CanvasStrokeProps {
+  color?: RGBA
+  lineWidth?: number
+  dash?: number[]
+  dashOffset?: number
+  lineCap?: CanvasLineCap
+  lineJoin?: CanvasLineJoin
+  miterLimit?: number
+}
+
+export interface CanvasFillProps {
+  color?: RGBA
+}
+
+export interface CanvasGlobalProps {
+  gco?: GlobalCompositeOperation
+}
+
+export interface TextAttr extends AnimatedShapeProps {
   x: number
   y: number
   text: string
   font?: Font
-  color?: string | CanvasGradient
+
   decoration?: TextDecoration
   border?: Border[]
   offsetXRatio?: number
   offsetYRatio?: number
   textBaseline?: CanvasTextBaseline
   textAlign?: CanvasTextAlign
-  props?: ShapeProps
-  width?: number
-  height?: number
   autoTransitionDiffText?: boolean
 }
+
+export type StayMode = InstantMode | AnimatedMode
+export type InstantMode = "instant"
+export type AnimatedMode = "animated"
 
 export interface Font {
   size?: number
   fontFamily?: string
   fontWeight?: number
   italic?: boolean
-  backgroundColor?: string | RGBA | CanvasGradient
   underline?: boolean
   strikethrough?: boolean
 }
@@ -448,22 +551,31 @@ export interface ExtraTransform {
   offsetY: number
 }
 
-export interface TimeLineProps<T extends Shape> {
-  start: number
-  duration: number
-  type?: EasingFunction
-  props: Parameters<T["update"]>[0]
+export interface FrameBoundInfo<T extends AnimatedShape> {
+  beforeTime: number
+  afterTime: number
+  beforeShape: T
+  afterShape: T
+  shape: T
+  ratio: number
 }
 
-export interface IntermediateShapeInfo {
-  before: Shape
-  after: Shape
-  ratio: number
-  type: EasingFunction
-  intermediate: boolean
-  beforeIndex: number
-  afterIndex: number
-}
+// export interface TimeLineProps<T extends Shape> {
+//   start: number
+//   duration: number
+//   type?: EasingFunction
+//   props: Parameters<T["update"]>[0]
+// }
+
+// export interface IntermediateShapeInfo {
+//   before: Shape
+//   after: Shape
+//   ratio: number
+//   type: EasingFunction
+//   intermediate: boolean
+//   beforeIndex: number
+//   afterIndex: number
+// }
 
 export interface ShapeBound {
   beforeIndex: number
@@ -478,16 +590,11 @@ export interface CurrentShapeInfo<T> extends ShapeBound {
   currentTime: number
 }
 
-export function isIntermediateShapeInfo<T extends Shape>(
-  shape: IntermediateShapeInfo | T
-): shape is IntermediateShapeInfo {
-  return (shape as IntermediateShapeInfo).intermediate === true
-}
-
-export interface ShapeStackElement<T> {
-  shape: T
-  transition: TransitionConfig | Omit<TransitionConfig, "effect"> | undefined
-}
+// export function isIntermediateShapeInfo<T extends Shape>(
+//   shape: IntermediateShapeInfo | T
+// ): shape is IntermediateShapeInfo {
+//   return (shape as IntermediateShapeInfo).intermediate === true
+// }
 
 export type PredefinedWheelEventName = "wheel" | "zoomout" | "zoomin"
 

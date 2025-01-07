@@ -1,46 +1,54 @@
-import { Point, SimplePoint } from "./point"
-import { Shape } from "./shape"
-import { ShapeDrawProps, ShapeProps } from "../userTypes"
+import { Point } from "./point"
+import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { Vector } from "./vector"
-export interface UpdateLineProps {
+import { InstantShape } from "./instantShape"
+export interface UpdateLineProps extends ShapeProps {
   x1?: number
   y1?: number
   x2?: number
   y2?: number
-  props?: ShapeProps
 }
-export interface LineProps {
+export interface LineProps extends ShapeProps {
   x1: number
   y1: number
   x2: number
   y2: number
-  props?: ShapeProps
 }
-export class Line extends Shape {
-  endPoint: Point
-  startPoint: Point
+export class Line extends InstantShape {
+  commonDraw(props: ShapeDrawProps): void {
+    throw new Error("Method not implemented.")
+  }
+  fill(props: ShapeDrawProps): void {
+    throw new Error("Method not implemented.")
+  }
+  getBound(): Rect {
+    throw new Error("Method not implemented.")
+  }
+  endPoint: Coordinate
+  startPoint: Coordinate
   vector: Vector
   x1: number
   x2: number
   y1: number
   y2: number
 
-  constructor({ x1, y1, x2, y2, props }: LineProps) {
-    super(props || {})
+  constructor(props: LineProps) {
+    super(props)
+    const { x1, y1, x2, y2 } = props
     this.x1 = x1
     this.y1 = y1
     this.x2 = x2
     this.y2 = y2
 
     this.vector = new Vector(this.x2 - this.x1, this.y2 - this.y1)
-    this.startPoint = new Point(this.x1, this.y1)
-    this.endPoint = new Point(this.x2, this.y2)
+    this.startPoint = { x: this.x1, y: this.y1 }
+    this.endPoint = { x: this.x2, y: this.y2 }
 
     this.updateRelatedValue()
   }
 
-  getCenterPoint(): SimplePoint {
-    return new SimplePoint((this.x1 + this.x2) / 2, (this.y1 + this.y2) / 2)
+  getCenterPoint(): Coordinate {
+    return { x: (this.x1 + this.x2) / 2, y: (this.y1 + this.y2) / 2 }
   }
 
   contains(point: Point): boolean {
@@ -53,7 +61,7 @@ export class Line extends Shape {
       y1: this.y1,
       x2: this.x2,
       y2: this.y2,
-      props: this._copy(),
+      ...this.copyProps(),
     })
   }
 
@@ -63,7 +71,7 @@ export class Line extends Shape {
     return Math.abs(Math.sin(angle) * pointVector.norm())
   }
 
-  draw({ context }: ShapeDrawProps) {
+  stroke({ context }: ShapeDrawProps) {
     context.beginPath()
     context.moveTo(this.x1, this.y1)
     context.lineTo(this.x2, this.y2)
@@ -97,20 +105,23 @@ export class Line extends Shape {
     return this.distanceToPoint(point)
   }
 
-  update({ x1, y1, x2, y2, props }: UpdateLineProps) {
+  update(props: UpdateLineProps) {
+    const { x1, y1, x2, y2 } = props
     this.x1 = x1 ?? this.x1
     this.y1 = y1 ?? this.y1
     this.x2 = x2 ?? this.x2
     this.y2 = y2 ?? this.y2
-    this._update(props || {})
+    this.applyUpdate(props)
     this.updateRelatedValue()
     return this
   }
 
   updateRelatedValue() {
     this.vector = new Vector(this.x2 - this.x1, this.y2 - this.y1)
-    this.startPoint.update({ x: this.x1, y: this.y1 })
-    this.endPoint.update({ x: this.x2, y: this.y2 })
+    this.startPoint.x = this.x1
+    this.startPoint.y = this.y1
+    this.endPoint.x = this.x2
+    this.endPoint.y = this.y2
   }
 
   zoom(zoomScale: number): void {

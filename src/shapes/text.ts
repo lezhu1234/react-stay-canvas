@@ -2,32 +2,45 @@ import { DrawCanvasContext } from "../types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import {
   Border,
+  CanvasFillProps,
+  CanvasStrokeProps,
+  Coordinate,
   DiagonalDirection,
   EasingFunction,
   Font,
   FourrDirection,
+  Rect,
   ShapeDrawProps,
   TextAttr,
 } from "../userTypes"
-import { getDefaultFont, getRGBAStr, isRGB, isRGBA } from "../utils"
-import { rgbaToString } from "../w3color"
-import { SimplePoint } from "./point"
+import {
+  borderSame,
+  fillSame,
+  getDefaultFont,
+  getRGBAStr,
+  getSize,
+  isRGB,
+  isRGBA,
+  strokeSame,
+} from "../utils"
+import { RGBA, rgbaToString } from "../w3color"
+import { AnimatedShape } from "./animatedShape"
+import { BlackColor, InstantShape, ZeroColor } from "./instantShape"
 import { Rectangle } from "./rectangle"
-import { Shape } from "./shape"
 
-export class StayText extends Shape {
+export class StayText extends AnimatedShape {
   font: Required<Font>
   height: number
-  leftBottom: SimplePoint
-  leftTop: SimplePoint
+  leftBottom: Coordinate
+  leftTop: Coordinate
   // rect: Rectangle
   text: string
   width: number
   x: number
   y: number
   border: Border[] | undefined
-  rightBottom: SimplePoint
-  rightTop: SimplePoint
+  rightBottom: Coordinate
+  rightTop: Coordinate
   textBaseline: CanvasTextBaseline
   textAlign: CanvasTextAlign
   offsetXRatio: number
@@ -35,22 +48,20 @@ export class StayText extends Shape {
   textObj: TextMetrics | undefined
   autoTransitionDiffText: boolean
 
-  constructor({
-    x,
-    y,
-    text,
-    font,
-    border,
-    textBaseline,
-    textAlign,
-    offsetXRatio,
-    offsetYRatio,
-    props,
-    width,
-    height,
-    autoTransitionDiffText,
-  }: TextAttr) {
-    super(props || { type: SHAPE_DRAW_TYPES.FILL })
+  constructor(props: TextAttr) {
+    super(props)
+    const {
+      x,
+      y,
+      text,
+      font,
+      border,
+      textBaseline,
+      textAlign,
+      offsetXRatio,
+      offsetYRatio,
+      autoTransitionDiffText,
+    } = props
     this.text = text
     this.font = getDefaultFont(font)
     this.x = x
@@ -62,11 +73,11 @@ export class StayText extends Shape {
     this.textBaseline = textBaseline ?? "alphabetic"
     this.textAlign = textAlign ?? "start"
     // this.rect = new Rectangle({ x: 0, y: 0, width: 0, height: 0 })
-    this.leftBottom = new SimplePoint(0, 0)
-    this.leftTop = new SimplePoint(0, 0)
-    this.rightBottom = new SimplePoint(0, 0)
-    this.rightTop = new SimplePoint(0, 0)
-    const size = this.getSize(width, height)
+    this.leftBottom = { x: 0, y: 0 }
+    this.leftTop = { x: 0, y: 0 }
+    this.rightBottom = { x: 0, y: 0 }
+    this.rightTop = { x: 0, y: 0 }
+    const size = getSize(text, this.font)
     this.width = size.width
     this.height = size.height
     this.autoTransitionDiffText = autoTransitionDiffText ?? true
@@ -74,12 +85,64 @@ export class StayText extends Shape {
     this.init()
   }
 
-  contains(point: SimplePoint): boolean {
+  getTransProps(): string[] {
+    return ["x", "y", "font", "offsetXRatio", "offsetYRatio"]
+  }
+  intermediateState(
+    before: StayText,
+    after: StayText,
+    ratio: number,
+    transitionType: EasingFunction
+  ): StayText {
+    const obj = this.getIntermediateObj(before, after, ratio, transitionType)
+    return new StayText({
+      ...this,
+      ...obj,
+    })
+  }
+  zeroShape(): StayText {
+    return new StayText({
+      ...this,
+      x: this.x,
+      y: this.y,
+      font: this.font,
+      ...this.getZeroConfig(),
+    })
+  }
+  childSameAs(shape: StayText): boolean {
+    return (
+      this.x === shape.x &&
+      this.y === shape.y &&
+      this.text === shape.text &&
+      this.font.fontFamily === shape.font.fontFamily &&
+      this.font.fontWeight === shape.font.fontWeight &&
+      this.font.italic === shape.font.italic &&
+      this.font.underline === shape.font.underline &&
+      this.font.strikethrough === shape.font.strikethrough &&
+      this.font.size === shape.font.size &&
+      this.offsetXRatio === shape.offsetXRatio &&
+      this.offsetYRatio === shape.offsetYRatio &&
+      this.textBaseline === shape.textBaseline &&
+      this.textAlign === shape.textAlign &&
+      this.autoTransitionDiffText === shape.autoTransitionDiffText &&
+      borderSame(this.border, shape.border)
+    )
+  }
+  getBound(): Rect {
+    return {
+      x: this.leftTop.x,
+      y: this.leftTop.y,
+      width: this.width,
+      height: this.height,
+    }
+  }
+
+  contains(point: Coordinate): boolean {
     // return this.rect.contains(point)
     return false
   }
 
-  copy(): Shape {
+  copy(): StayText {
     return new StayText({
       x: this.x,
       y: this.y,
@@ -90,7 +153,7 @@ export class StayText extends Shape {
       textAlign: this.textAlign,
       offsetXRatio: this.offsetXRatio,
       offsetYRatio: this.offsetYRatio,
-      props: this._copy(),
+      ...this.copyProps(),
     })
   }
 
@@ -99,41 +162,21 @@ export class StayText extends Shape {
     return `${fontWeight} ${italic ? "italic" : ""} ${size ?? 16}px ${fontFamily ?? "monospace"}`
   }
 
-  draw({ context, width, height }: ShapeDrawProps): void {
-    if (
-      this.leftTop.x > width ||
-      this.leftTop.y > height ||
-      this.rightBottom.x < 0 ||
-      this.rightBottom.y < 0
-    ) {
-      return
-    }
-
+  commonDraw({ context }: ShapeDrawProps): void {
     context.font = this.fontStr
     context.textBaseline = this.textBaseline
     context.textAlign = this.textAlign
-    // this.init(context)
+  }
 
-    let c: string | CanvasGradient
-    if (isRGBA(this.font.backgroundColor)) {
-      c = rgbaToString(this.font.backgroundColor)
-    } else {
-      c = this.font.backgroundColor
-    }
+  fill({ context }: ShapeDrawProps): void {
+    context.fillText(this.text, this.leftBottom.x, this.leftBottom.y)
+  }
 
-    this.setContextColor(context, c, SHAPE_DRAW_TYPES.FILL)
-    context.fillRect(this.leftTop.x, this.leftTop.y, this.width, this.height)
-    this.setContextColor(context, this.colorStringOrCanvasGradient, this.type)
-
-    if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      context.fillText(this.text, this.leftBottom.x, this.leftBottom.y)
-    } else if (this.type === SHAPE_DRAW_TYPES.STROKE) {
-      context.strokeText(this.text, this.leftBottom.x, this.leftBottom.y)
-    }
+  stroke({ context, width, height }: ShapeDrawProps): void {
+    context.strokeText(this.text, this.leftBottom.x, this.leftBottom.y)
 
     if (this.font.strikethrough) {
       context.lineWidth = this.height / 10
-      context.strokeStyle = this.colorStringOrCanvasGradient
       context.beginPath()
       context.moveTo(this.leftTop.x, this.leftTop.y + this.height / 2)
       context.lineTo(this.rightBottom.x, this.leftTop.y + this.height / 2)
@@ -141,7 +184,6 @@ export class StayText extends Shape {
     }
     if (this.font.underline) {
       context.lineWidth = this.height / 10
-      context.strokeStyle = this.colorStringOrCanvasGradient
       context.beginPath()
       context.moveTo(this.leftBottom.x, this.leftBottom.y)
       context.lineTo(this.rightBottom.x, this.leftBottom.y)
@@ -176,39 +218,21 @@ export class StayText extends Shape {
         }
       })
     }
-    // this.rect.update({ props: { color: "red" } })
-    // this.rect.draw(ctx)
   }
 
-  // static get tempContext() {
-  //   return document.createElement("canvas").getContext("2d")
-  // }
-  static tempContext =
-    typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null
-
-  getSize(width?: number, height?: number) {
-    if (width !== undefined && height !== undefined) {
-      return { width, height }
-    }
-    const context = StayText.tempContext!
-    context.font = this.fontStr
-    context.textBaseline = this.textBaseline
-    context.textAlign = this.textAlign
-
-    const textObj = context!.measureText(this.text) // TextMetrics object
-    return {
-      width: textObj.width,
-      height: textObj.fontBoundingBoxAscent + textObj.fontBoundingBoxDescent,
-    }
-  }
   init(ctx?: DrawCanvasContext | undefined) {
     const offsetX = -this.width / 2 + this.width * this.offsetXRatio
     const offsetY = this.height * this.offsetYRatio
 
-    this.leftTop.update({ x: this.x + offsetX, y: this.y + offsetY })
-    this.leftBottom.update({ x: this.x + offsetX, y: this.y + this.height + offsetY })
-    this.rightTop.update({ x: this.x + this.width + offsetX, y: this.y + offsetY })
-    this.rightBottom.update({ x: this.x + this.width + offsetX, y: this.y + this.height + offsetY })
+    this.leftTop.x = this.x + offsetX
+    this.leftTop.y = this.y + offsetY
+    this.leftBottom.x = this.x + offsetX
+    this.leftBottom.y = this.y + this.height + offsetY
+    this.rightTop.x = this.x + this.width + offsetX
+    this.rightTop.y = this.y + offsetY
+
+    this.rightBottom.x = this.x + this.width + offsetX
+    this.rightBottom.y = this.y + this.height + offsetY
 
     // this.rect.update({
     //   x: this.leftTop.x,
@@ -222,20 +246,8 @@ export class StayText extends Shape {
     this.update({ x: this.x + offsetX, y: this.y + offsetY })
   }
 
-  update({
-    x,
-    y,
-    font,
-    text,
-    border,
-    textBaseline,
-    textAlign,
-    offsetXRatio,
-    offsetYRatio,
-    props,
-    width,
-    height,
-  }: Partial<TextAttr>) {
+  update(props: Partial<TextAttr>) {
+    const { x, y, font, text, border, textBaseline, textAlign, offsetXRatio, offsetYRatio } = props
     this.x = x ?? this.x
     this.y = y ?? this.y
     this.font = { ...this.font, ...font }
@@ -245,147 +257,27 @@ export class StayText extends Shape {
     this.textAlign = textAlign ?? this.textAlign
     this.offsetXRatio = offsetXRatio ?? this.offsetXRatio
     this.offsetYRatio = offsetYRatio ?? this.offsetYRatio
-    const size = this.getSize(width, height)
+    const size = getSize(this.text, this.font)
     this.width = size.width
     this.height = size.height
-    this._update(props || {})
+    this.applyUpdate(props)
     this.init()
     return this
   }
 
   getCenterPoint() {
-    return new SimplePoint(
-      (this.leftBottom.x + this.rightBottom.x) / 2,
-      (this.leftTop.y + this.leftBottom.y) / 2
-    )
+    return {
+      x: (this.leftBottom.x + this.rightBottom.x) / 2,
+      y: (this.leftTop.y + this.leftBottom.y) / 2,
+    }
   }
 
   zoom(zoomScale: number): void {
-    const center = this.getZoomPoint(zoomScale, new SimplePoint(this.x, this.y))
+    const center = this.getZoomPoint(zoomScale, { x: this.x, y: this.y })
     this.update({
       x: center.x,
       y: center.y,
       font: { size: this.font.size * zoomScale },
-    })
-  }
-
-  earlyStopIntermediateState(
-    before: StayText,
-    after: StayText,
-    ratio: number,
-    transitionType: EasingFunction,
-    containerWidth: number,
-    containerHeight: number
-  ) {
-    const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
-    const width = this.getNumberIntermediateState(before.width, after.width, ratio, transitionType)
-
-    if (x < -width || x > containerWidth) {
-      return true
-    }
-
-    const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
-    const height = this.getNumberIntermediateState(
-      before.height,
-      after.height,
-      ratio,
-      transitionType
-    )
-
-    if (y < -height || y > containerHeight) {
-      return true
-    }
-    return false
-  }
-
-  zeroShape(): StayText {
-    return new StayText({
-      x: this.x,
-      y: this.y,
-      text: this.text,
-      font: this.font,
-      border: this.border,
-      textBaseline: this.textBaseline,
-      textAlign: this.textAlign,
-      offsetXRatio: this.offsetXRatio,
-      offsetYRatio: this.offsetYRatio,
-      props: { ...this._copy(), color: { ...this.color, a: 0 } },
-    })
-  }
-
-  intermediateState(
-    before: StayText,
-    after: StayText,
-    ratio: number,
-    transitionType: EasingFunction
-  ) {
-    const x = this.getNumberIntermediateState(before.x, after.x, ratio, transitionType)
-    const width = this.getNumberIntermediateState(before.width, after.width, ratio, transitionType)
-
-    const y = this.getNumberIntermediateState(before.y, after.y, ratio, transitionType)
-    const height = this.getNumberIntermediateState(
-      before.height,
-      after.height,
-      ratio,
-      transitionType
-    )
-
-    const font = this.getFontIntermediateState(before.font, after.font, ratio, transitionType)
-    const props = this.getIntermediateProps(before, after, ratio, transitionType)
-    let text = after.text
-
-    if (
-      before.text !== after.text &&
-      isRGBA(before.color) &&
-      isRGBA(after.color) &&
-      isRGBA(props.color) &&
-      this.autoTransitionDiffText
-    ) {
-      let color = props.color
-      if (ratio > 0.5) {
-        const opacity = this.getNumberIntermediateState(
-          0,
-          after.color.a,
-          (ratio - 0.5) * 2,
-          transitionType
-        )
-        color = { ...color, a: opacity }
-      } else {
-        text = before.text
-        const opacity = this.getNumberIntermediateState(
-          0,
-          before.color.a,
-          (0.5 - ratio) * 2,
-          transitionType
-        )
-        color = { ...color, a: opacity }
-      }
-      props.color = color
-    }
-
-    return new StayText({
-      x,
-      y,
-      text,
-      font,
-      width,
-      height,
-      border: after.border,
-      offsetXRatio: this.getNumberIntermediateState(
-        before.offsetXRatio,
-        after.offsetXRatio,
-        ratio,
-        transitionType
-      ),
-      offsetYRatio: this.getNumberIntermediateState(
-        before.offsetYRatio,
-        after.offsetYRatio,
-        ratio,
-        transitionType
-      ),
-      textAlign: after.textAlign,
-      textBaseline: after.textBaseline,
-      props: { ...props },
     })
   }
 }

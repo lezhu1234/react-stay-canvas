@@ -1,49 +1,59 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
+import {
+  AnimatedShapeProps,
+  Coordinate,
+  EasingFunction,
+  Rect,
+  ShapeDrawProps,
+  ShapeProps,
+} from "../userTypes"
+import { isRGBA } from "../utils"
+import { RGBA } from "../w3color"
+import { AnimatedShape } from "./animatedShape"
+import { InstantShape, ZeroColor } from "./instantShape"
 import { Line } from "./line"
-import { Point, SimplePoint } from "./point"
-import { Shape } from "./shape"
+import { Point } from "./point"
 
-export interface RectShapeAttr {
+export interface RectangleAttr extends AnimatedShapeProps {
   x: number
   y: number
   width: number
   height: number
+  filter?: string
 }
 
-export interface RectangleAttr extends RectShapeAttr {
-  props?: ShapeProps
-}
-
-export class Rectangle extends Shape {
+export class Rectangle extends AnimatedShape {
   area: number
   bottomBorder: Line
   height: number
   leftBorder: Line
-  leftBottom: Point
-  leftTop: Point
+  leftBottom: Coordinate
+  leftTop: Coordinate
   rightBorder: Line
-  rightBottom: Point
-  rightTop: Point
+  rightBottom: Coordinate
+  rightTop: Coordinate
   stepZoomY: number
   topBorder: Line
   width: number
   x: number
   y: number
-  center: Point
-  constructor({ x, y, width, height, props = {} }: RectangleAttr) {
+  center: Coordinate
+  filter?: string
+  constructor(props: RectangleAttr) {
     super(props)
+    const { x, y, width, height, filter } = props
     this.x = x
     this.y = y
     this.width = width
     this.height = height
     this.stepZoomY = 1
+    this.filter = filter
 
-    this.leftTop = new Point(this.x, this.y)
-    this.rightTop = new Point(this.x + this.width, this.y)
-    this.rightBottom = new Point(this.x + this.width, this.y + this.height)
-    this.leftBottom = new Point(this.x, this.y + this.height)
-    this.center = new Point(this.x + this.width / 2, this.y + this.height / 2)
+    this.leftTop = { x: this.x, y: this.y }
+    this.rightTop = { x: this.x + this.width, y: this.y }
+    this.rightBottom = { x: this.x + this.width, y: this.y + this.height }
+    this.leftBottom = { x: this.x, y: this.y + this.height }
+    this.center = { x: this.x + this.width / 2, y: this.y + this.height / 2 }
     this.leftBorder = new Line({
       x1: this.x,
       y1: this.y,
@@ -73,8 +83,62 @@ export class Rectangle extends Shape {
     this.updateRelatedValue()
   }
 
-  getCenterPoint(): SimplePoint {
-    return new SimplePoint(this.x + this.width / 2, this.y + this.height / 2)
+  commonDraw(props: ShapeDrawProps): void {
+    props.context.filter = this.filter ?? "none"
+  }
+  fill({ context }: ShapeDrawProps): void {
+    context.fillRect(this.x, this.y, this.width, this.height)
+  }
+
+  afterDraw(props: ShapeDrawProps): void {
+    props.context.filter = "none"
+  }
+
+  getTransProps() {
+    return ["x", "y", "width", "height"]
+  }
+
+  intermediateState(
+    before: Rectangle,
+    after: Rectangle,
+    ratio: number,
+    transitionType: EasingFunction
+  ): Rectangle {
+    const obj = this.getIntermediateObj(before, after, ratio, transitionType)
+    return new Rectangle(obj)
+  }
+  zeroShape(): Rectangle {
+    return new Rectangle({
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+      filter: this.filter,
+      ...this.getZeroConfig(),
+    })
+  }
+  childSameAs(shape: Rectangle): boolean {
+    return (
+      this.x === shape.x &&
+      this.y === shape.y &&
+      this.width === shape.width &&
+      this.height === shape.height
+    )
+  }
+  getBound(): Rect {
+    return {
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+    }
+  }
+
+  getCenterPoint(): Coordinate {
+    return {
+      x: this.x + this.width / 2,
+      y: this.y + this.height / 2,
+    }
   }
 
   computeFitInfo(width: number, height: number) {
@@ -105,28 +169,19 @@ export class Rectangle extends Shape {
     }
   }
 
-  contains(point: Point): boolean {
-    return (
-      point.x > this.x &&
-      point.x < this.x + this.width &&
-      point.y > this.y &&
-      point.y < this.y + this.height
-    )
-  }
-
   copy(): Rectangle {
     return new Rectangle({
-      ...this,
-      props: this._copy(),
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+      filter: this.filter,
+      ...this.copyProps(),
     })
   }
 
-  draw({ context }: ShapeDrawProps) {
-    if (this.type === SHAPE_DRAW_TYPES.STROKE) {
-      context.strokeRect(this.x, this.y, this.width, this.height)
-    } else if (this.type === SHAPE_DRAW_TYPES.FILL) {
-      context.fillRect(this.x, this.y, this.width, this.height)
-    }
+  stroke({ context }: ShapeDrawProps) {
+    context.strokeRect(this.x, this.y, this.width, this.height)
   }
 
   move(offsetX: number, offsetY: number) {
@@ -139,7 +194,7 @@ export class Rectangle extends Shape {
   reset() {
     this.zoomY = 1
     this.stepZoomY = 1
-    this.zoomCenter = new Point(0, 0)
+    this.zoomCenter = { x: 0, y: 0 }
   }
 
   screenToWorld(offsetX: number, offsetY: number, scaleRatio: number) {
@@ -157,29 +212,33 @@ export class Rectangle extends Shape {
     }
   }
 
-  update({
-    x = this.x,
-    y = this.y,
-    width = this.width,
-    height = this.height,
-    props,
-  }: Partial<RectangleAttr>): this {
-    this.x = x
-    this.y = y
-    this.width = width
-    this.height = height
-    this._update(props ?? {})
+  update(props: Partial<RectangleAttr>): this {
+    this.x = props.x ?? this.x
+    this.y = props.y ?? this.y
+    this.width = props.width ?? this.width
+    this.height = props.height ?? this.height
+    this.filter = props.filter ?? this.filter
+    this.applyUpdate(props)
     this.updateRelatedValue()
 
     return this
   }
 
   updateRelatedValue() {
-    this.leftTop.update({ x: this.x, y: this.y })
-    this.rightTop.update({ x: this.x + this.width, y: this.y })
-    this.rightBottom.update({ x: this.x + this.width, y: this.y + this.height })
-    this.leftBottom.update({ x: this.x, y: this.y + this.height })
+    this.leftTop.x = this.x
+    this.leftTop.y = this.y
+
+    this.rightTop.x = this.x + this.width
+    this.rightTop.y = this.y
+
+    this.rightBottom.x = this.x + this.width
+    this.rightBottom.y = this.y + this.height
+
+    this.leftBottom.x = this.x
+    this.leftBottom.y = this.y + this.height
+
     this.leftBorder.update({ x1: this.x, y1: this.y, x2: this.x, y2: this.y + this.height })
+
     this.rightBorder.update({
       x1: this.x + this.width,
       y1: this.y,
@@ -193,10 +252,9 @@ export class Rectangle extends Shape {
       x2: this.x + this.width,
       y2: this.y + this.height,
     })
-    this.center.update({
-      x: this.x + this.width / 2,
-      y: this.y + this.height / 2,
-    })
+
+    this.center.x = this.x + this.width / 2
+    this.center.y = this.y + this.height / 2
     this.area = this.width * this.height
   }
 
@@ -223,21 +281,6 @@ export class Rectangle extends Shape {
       y: leftTop.y,
       width: this.width * zoomScale,
       height: this.height * zoomScale,
-    })
-  }
-
-  intermediateState(
-    before: Rectangle,
-    after: Rectangle,
-    ratio: number,
-    transitionType: EasingFunction
-  ) {
-    return new Rectangle({
-      x: this.getNumberIntermediateState(before.x, after.x, ratio, transitionType),
-      y: this.getNumberIntermediateState(before.y, after.y, ratio, transitionType),
-      width: this.getNumberIntermediateState(before.width, after.width, ratio, transitionType),
-      height: this.getNumberIntermediateState(before.height, after.height, ratio, transitionType),
-      props: this.getIntermediateProps(before, after, ratio, transitionType),
     })
   }
 }

@@ -1,24 +1,25 @@
 import Canvas from "../canvas"
 import { ContextLayerSetFunction } from "../types"
-import { StayTools } from "../userTypes"
+import { StayMode, StayTools } from "../userTypes"
 import Stay from "./stay"
+import { isInstantMode } from "./stayTools"
 
 type Args<T> = T extends (...args: infer R) => any ? R : never
-export default class StayStage {
-  #stay: Stay<string>
-  tools: StayTools
+export default class StayStage<Mode extends StayMode> {
+  #stay: Stay<string, Mode>
+  tools: StayTools<Mode>
   constructor(
     canvasLayers: HTMLCanvasElement[],
     contextLayerSetFunctionList: ContextLayerSetFunction[],
     width: number,
     height: number,
     passive: boolean,
-    autoRender: boolean = true
+    mode: Mode
   ) {
     this.#stay = new Stay(
       new Canvas(canvasLayers, contextLayerSetFunctionList, width, height),
       passive,
-      autoRender
+      mode
     )
     this.tools = this.#stay.getTools()
   }
@@ -28,7 +29,10 @@ export default class StayStage {
   }
 
   backward() {
-    return this.#stay.tools.undo()
+    if (isInstantMode(this.#stay.mode)) {
+      // @ts-ignore  i cannot understand
+      return this.#stay.tools.undo()
+    }
   }
 
   clearEventListeners(...args: Args<typeof Stay.prototype.clearEventListeners>) {
@@ -55,7 +59,10 @@ export default class StayStage {
   }
 
   redo() {
-    return this.#stay.tools.redo()
+    if (isInstantMode(this.#stay.mode)) {
+      // @ts-ignore  i cannot understand
+      return this.#stay.tools.redo()
+    }
   }
 
   move(...args: Args<typeof Stay.prototype.tools.move>) {

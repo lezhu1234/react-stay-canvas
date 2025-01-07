@@ -1,4 +1,5 @@
 import { ContextLayerSetFunction, DrawCanvasContext } from "./types"
+import { Rect } from "./userTypes"
 
 function dprScale(
   canvas: HTMLCanvasElement,
@@ -21,12 +22,13 @@ function dprScale(
   canvas.style.height = `${height}px`
 }
 
-class Canvas {
+export class Canvas {
   contexts: DrawCanvasContext[]
   height: number
   layers: HTMLCanvasElement[]
   status: string
   width: number
+  bound: Rect
   constructor(
     layers: HTMLCanvasElement[],
     contextLayerSetFunctionList: ContextLayerSetFunction[],
@@ -43,6 +45,13 @@ class Canvas {
     this.contexts = layers.map((layer, i) => {
       return contextLayerSetFunctionList[i](layer) as DrawCanvasContext
     })
+
+    this.bound = {
+      x: 0,
+      y: 0,
+      width: this.width,
+      height: this.height,
+    }
 
     this.init()
   }

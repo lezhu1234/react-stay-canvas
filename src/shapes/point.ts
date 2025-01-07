@@ -1,33 +1,31 @@
 import { Line } from "./line"
-import { Shape } from "./shape"
-import { ShapeDrawProps, ShapeProps } from "../userTypes"
-export interface PointProps {
+import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
+import { InstantShape } from "./instantShape"
+export interface PointProps extends ShapeProps {
   x: number
   y: number
-  props?: ShapeProps
 }
 
-export class SimplePoint {
-  x: number
-  y: number
-  constructor(x: number, y: number) {
-    this.x = x
-    this.y = y
+export class Point extends InstantShape {
+  commonDraw(props: ShapeDrawProps): void {}
+  fill({ context }: ShapeDrawProps): void {
+    context.fillRect(this.x, this.y, 1, 1)
   }
-  update({ x, y }: Partial<SimplePoint>) {
-    this.x = x ?? this.x
-    this.y = y ?? this.y
+  getBound(): Rect {
+    throw new Error("Method not implemented.")
   }
-}
-export class Point extends Shape {
-  getCenterPoint(): SimplePoint {
-    return new SimplePoint(this.x, this.y)
+  getCenterPoint(): Coordinate {
+    return {
+      x: this.x,
+      y: this.y,
+    }
   }
   x: number
   y: number
 
-  constructor(x: number, y: number, props: ShapeProps = {}) {
-    super({ ...props, type: "fill" })
+  constructor(props: PointProps) {
+    super(props)
+    const { x, y } = props
     this.x = x
     this.y = y
   }
@@ -37,16 +35,18 @@ export class Point extends Shape {
   }
 
   copy(): Point {
-    return new Point(this.x, this.y, this._copy())
+    return new Point({
+      x: this.x,
+      y: this.y,
+      ...this.copyProps(),
+    })
   }
-  distance(point: Point): number {
+  distance(point: Coordinate): number {
     const dx = point.x - this.x
     const dy = point.y - this.y
     return Math.sqrt(dx * dx + dy * dy)
   }
-  draw({ context }: ShapeDrawProps): void {
-    context.fillRect(this.x, this.y, 1, 1)
-  }
+  stroke({ context }: ShapeDrawProps): void {}
   move(offsetX: number, offsetY: number): void {
     this.update({ x: this.x + offsetX, y: this.y + offsetY })
   }
@@ -57,10 +57,11 @@ export class Point extends Shape {
     return line.nearPoint(this, offset)
   }
 
-  update({ x, y, props }: PointProps) {
+  update(props: PointProps) {
+    const { x, y } = props
     this.x = x === undefined ? this.x : x
     this.y = y === undefined ? this.y : y
-    this._update(props || {})
+    this.applyUpdate(props || {})
     return this
   }
 

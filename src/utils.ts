@@ -1,8 +1,20 @@
-import { Line, Point, Shape } from "./shapes"
-import { NumberInRangeZeroOne, NumericString, Positive, ShapeConfig } from "./types"
+import { globalStore } from "./globalStore"
+import { Line, Point } from "./shapes"
+import { StayAnimatedChild } from "./stay/child/stayAnimatedChild"
+import { NumericString, Positive } from "./types"
 import { SUPPORT_OPRATOR } from "./userConstants"
-import { EasingFunction, EasingFunctionMap, Effects, Font, StayChildTransitions } from "./userTypes"
-import { RGB, RGBA } from "./w3color"
+import {
+  Border,
+  CanvasFillProps,
+  CanvasStrokeProps,
+  Coordinate,
+  EasingFunction,
+  EasingFunctionMap,
+  Font,
+  Rect,
+  Size,
+} from "./userTypes"
+import W3Color, { RGB, RGBA } from "./w3color"
 
 export type InfixExpressionParserProps<T> = {
   selector: string
@@ -16,10 +28,55 @@ export function uuid4() {
     (+c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (+c / 4)))).toString(16)
   )
 }
+
+export function getFontStr(font: Font) {
+  const { size, fontFamily, fontWeight, italic } = font
+  return `${fontWeight ?? 400} ${italic ? "italic" : ""} ${size ?? 16}px ${
+    fontFamily ?? "monospace"
+  }`
+}
+
+export function stringToRgba(color: string): RGBA {
+  return new W3Color(color).toRgba()
+}
+
+export function getSize(text: string, font: Font): Size {
+  const fontStr = getFontStr(font)
+
+  const cacheKey = `${text}-${fontStr}`
+
+  const cacheSize = globalStore.getFontSizeCache(cacheKey)
+
+  if (!cacheSize) {
+    const context = globalStore.getOffscreenCanvas("getSize")
+    context.font = getFontStr(font)
+    context.textBaseline = "bottom"
+    context.textAlign = "start"
+
+    const textObj = context!.measureText(text) // TextMetrics object
+    const size = {
+      width: textObj.width,
+      height: textObj.fontBoundingBoxAscent + textObj.fontBoundingBoxDescent,
+    }
+
+    globalStore.setFontSizeCache(cacheKey, size)
+
+    return size
+  }
+
+  return cacheSize
+}
+
 export function assert(condition: any, message: string = "") {
   if (!condition) {
     throw new Error(message)
   }
+}
+
+export function distance(point1: Coordinate, point2: Coordinate): number {
+  const dx = point1.x - point2.x
+  const dy = point1.y - point2.y
+  return Math.sqrt(dx * dx + dy * dy)
 }
 export function infixExpressionParser<T>({
   selector,
@@ -140,6 +197,10 @@ export function parseLayer(layers: any[], layer: number | undefined) {
   return layer
 }
 
+export function isStayAnimatedChild(child: any): child is StayAnimatedChild {
+  return (child as StayAnimatedChild).setCurrentTime !== undefined
+}
+
 export function getCornersByCenterLine(centerLine: Line, width: number) {
   const l = centerLine.len()
   const r = width / 2
@@ -150,17 +211,22 @@ export function getCornersByCenterLine(centerLine: Line, width: number) {
   const x2 = 2 * centerLine.x1 - x1
   const y2 = 2 * centerLine.y1 - y1
 
-  const midllePoint = new Point(
-    (centerLine.x1 + centerLine.x2) / 2,
-    (centerLine.y1 + centerLine.y2) / 2
-  )
+  const midllePoint = {
+    x: (centerLine.x1 + centerLine.x2) / 2,
+    y: (centerLine.y1 + centerLine.y2) / 2,
+  }
   const x3 = 2 * midllePoint.x - x1
   const y3 = 2 * midllePoint.y - y1
 
   const x4 = 2 * midllePoint.x - x2
   const y4 = 2 * midllePoint.y - y2
 
-  return [new Point(x1, y1), new Point(x2, y2), new Point(x3, y3), new Point(x4, y4)]
+  return [
+    { x: x1, y: y1 },
+    { x: x2, y: y2 },
+    { x: x3, y: y3 },
+    { x: x4, y: y4 },
+  ]
 }
 
 export function numberAlmostEqual(a: number, b: number, epsilon = 0.0001): boolean {
@@ -424,91 +490,91 @@ export function isRelativeNumericString<T extends NumericString>(value: T) {
   return typeof value === "string" && (value.startsWith("+") || value.startsWith("-"))
 }
 
-export function getShapeByConfig<Q extends Shape>(config: ShapeConfig, shape: Q) {
-  const { offsetX, offsetY, scale, opacity } = config
-  const center = shape.getCenterPoint()
+// export function getShapeByConfig<Q extends Shape>(config: ShapeConfig, shape: Q) {
+//   const { offsetX, offsetY, scale, opacity } = config
+//   const center = shape.getCenterPoint()
 
-  let ox = validateNumericString(offsetX ?? 0)
-  let oy = validateNumericString(offsetY ?? 0)
-  const s = ensureNotNegative(scale ?? 1)
-  const o = ensureInRangeZeroOne(opacity ?? 1) // 0 for hidden and 1 for visible
+//   let ox = validateNumericString(offsetX ?? 0)
+//   let oy = validateNumericString(offsetY ?? 0)
+//   const s = ensureNotNegative(scale ?? 1)
+//   const o = ensureInRangeZeroOne(opacity ?? 1) // 0 for hidden and 1 for visible
 
-  if (!isRelativeNumericString(ox)) {
-    ox = Number(ox)
-    ox = ox - center.x
-  }
-  if (!isRelativeNumericString(oy)) {
-    oy = Number(oy)
-    oy = oy - center.y
-  }
+//   if (!isRelativeNumericString(ox)) {
+//     ox = Number(ox)
+//     ox = ox - center.x
+//   }
+//   if (!isRelativeNumericString(oy)) {
+//     oy = Number(oy)
+//     oy = oy - center.y
+//   }
 
-  ox = Number(ox)
-  oy = Number(oy)
+//   ox = Number(ox)
+//   oy = Number(oy)
 
-  shape.move(ox, oy)
-  shape.zoom(
-    shape._zoom(((s ?? 1) - 1) * -1000, {
-      x: center.x + ox,
-      y: center.y + oy,
-    })
-  )
+//   shape.move(ox, oy)
+//   shape.zoom(
+//     shape._zoom(((s ?? 1) - 1) * -1000, {
+//       x: center.x + ox,
+//       y: center.y + oy,
+//     })
+//   )
 
-  if (isRGBA(shape.color)) {
-    const color: RGBA = { ...shape.color, a: o }
-    shape.update({ props: { color } })
-  }
+//   if (isRGBA(shape.color)) {
+//     const color: RGBA = { ...shape.color, a: o }
+//     shape.update({ props: { color } })
+//   }
 
-  return shape
-}
+//   return shape
+// }
 
-export function getShapeByEffect<T extends Shape>(
-  effects: Effects[] | ShapeConfig,
-  shape: T,
-  type: "enter" | "leave"
-) {
-  if (!Array.isArray(effects)) {
-    return getShapeByConfig(effects, shape)
-  }
-  let offsetX: number = 0,
-    offsetY: number = 0,
-    scale = 1,
-    opacity = 1
-  effects.forEach((effect) => {
-    switch (effect) {
-      case "left10px":
-        offsetX -= 10
-        break
-      case "right10px":
-        offsetX += 10
-        break
-      case "up10px":
-        offsetY -= 10
-        break
-      case "down10px":
-        offsetY += 10
-        break
-      case "fade100%":
-        opacity = 0
-        break
-      case "zoomIn100%":
-        scale = 2
-        break
-      case "zoomOut100%":
-        scale = 0
-        break
-    }
-  })
+// export function getShapeByEffect<T extends Shape>(
+//   effects: Effects[] | ShapeConfig,
+//   shape: T,
+//   type: "enter" | "leave"
+// ) {
+//   if (!Array.isArray(effects)) {
+//     return getShapeByConfig(effects, shape)
+//   }
+//   let offsetX: number = 0,
+//     offsetY: number = 0,
+//     scale = 1,
+//     opacity = 1
+//   effects.forEach((effect) => {
+//     switch (effect) {
+//       case "left10px":
+//         offsetX -= 10
+//         break
+//       case "right10px":
+//         offsetX += 10
+//         break
+//       case "up10px":
+//         offsetY -= 10
+//         break
+//       case "down10px":
+//         offsetY += 10
+//         break
+//       case "fade100%":
+//         opacity = 0
+//         break
+//       case "zoomIn100%":
+//         scale = 2
+//         break
+//       case "zoomOut100%":
+//         scale = 0
+//         break
+//     }
+//   })
 
-  return getShapeByConfig(
-    {
-      offsetX: (offsetX >= 0 ? "+" + offsetX : offsetX.toString()) as NumericString,
-      offsetY: (offsetY >= 0 ? "+" + offsetY : offsetY.toString()) as NumericString,
-      scale,
-      opacity,
-    },
-    shape
-  )
-}
+//   return getShapeByConfig(
+//     {
+//       offsetX: (offsetX >= 0 ? "+" + offsetX : offsetX.toString()) as NumericString,
+//       offsetY: (offsetY >= 0 ? "+" + offsetY : offsetY.toString()) as NumericString,
+//       scale,
+//       opacity,
+//     },
+//     shape
+//   )
+// }
 
 export function getDefaultFont(font?: Font): Required<Font> {
   return {
@@ -516,7 +582,6 @@ export function getDefaultFont(font?: Font): Required<Font> {
     fontFamily: "monospace",
     fontWeight: 400,
     italic: false,
-    backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
     strikethrough: false,
     underline: false,
     ...font,
@@ -534,4 +599,86 @@ export function getRGBAStr(color?: string | RGB | RGBA): string {
     return `rgba(${color.r}, ${color.g}, ${color.b}, 1)`
   }
   return `rgba(0,0,0,0)`
+}
+
+export function hasIntersection(rect1: Rect, rect2: Rect): boolean {
+  return !(
+    // rect1 is completely to the left of rect2
+    (
+      rect1.x + rect1.width < rect2.x ||
+      // rect1 is completely to the right of rect2
+      rect1.x > rect2.x + rect2.width ||
+      // rect1 is completely above rect2
+      rect1.y + rect1.height < rect2.y ||
+      // rect1 is completely below rect2
+      rect1.y > rect2.y + rect2.height
+    )
+  )
+}
+
+export function colorSame(c1?: RGBA, c2?: RGBA) {
+  if (!c1 && !c2) {
+    return true
+  }
+  if (!c1 || !c2) {
+    return false
+  }
+  return c1.a === c2.a && c1.r === c2.r && c1.g === c2.g && c1.b === c2.b
+}
+
+export function borderSame(b1?: Border[], b2?: Border[]) {
+  if (!b1 && !b2) {
+    return true
+  }
+  if (!b1 || !b2) {
+    return false
+  }
+  if (b1.length !== b2.length) return false
+  return b1.every((b, i) => {
+    return (
+      b.color === b2[i].color &&
+      b.size === b2[i].size &&
+      b.type === b2[i].type &&
+      b.direction === b2[i].direction
+    )
+  })
+}
+
+export function basicArraySame(a1?: any[], a2?: any[]) {
+  if (!a1 && !a2) {
+    return true
+  }
+  if (!a1 || !a2) {
+    return false
+  }
+  return a1.length === a2.length && a1.every((v, i) => v === a2[i])
+}
+
+export function strokeSame(s1: CanvasStrokeProps, s2: CanvasStrokeProps) {
+  return (
+    colorSame(s1.color, s2.color) &&
+    s1.lineWidth === s2.lineWidth &&
+    basicArraySame(s1.dash, s2.dash) &&
+    s1.dashOffset === s2.dashOffset &&
+    s1.lineCap === s2.lineCap &&
+    s1.lineJoin === s2.lineJoin &&
+    s1.miterLimit === s2.miterLimit
+  )
+}
+
+export function fillSame(f1: CanvasFillProps, f2: CanvasFillProps) {
+  return colorSame(f1.color, f2.color)
+}
+
+export function isBasicType(
+  value: any
+): value is string | number | boolean | null | undefined | bigint {
+  return (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint" ||
+    value === null ||
+    value === undefined
+  )
 }

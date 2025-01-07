@@ -16,51 +16,35 @@ import {
   mouseup,
   wheel,
 } from "../rawEvents"
-import { Point, Rectangle, Root, Shape } from "../shapes"
+import { Root } from "../shapes"
+import { InstantShape } from "../shapes/instantShape"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
 import { EventProps, StayEventMap, StayEventProps } from "../types"
+import { DEFAULTSTATE, MOUSE_EVENTS, ROOTNAME, SUPPORT_OPRATOR } from "../userConstants"
 import {
-  ALLSTATE,
-  DEFAULTSTATE,
-  DRAW_ACTIONS,
-  MOUSE_EVENTS,
-  ROOTNAME,
-  SORT_CHILDREN_METHODS,
-  SUPPORT_OPRATOR,
-} from "../userConstants"
-import {
-  ActionCallbackProps,
   ActionEvent,
-  createChildProps,
-  Dict,
-  getContainPointChildrenProps,
-  ListenerProps,
-  SelectorFunc,
-  PointType,
-  SortChildrenMethodsValues,
-  StayTools,
-  updateChildProps,
-  Area,
-  TransitionConfig,
-  ProgressBound,
-  StayDrawProps,
-  PredefinedMouseEventName,
-  PredefinedEventName,
-  PredefinedWheelEventName,
+  DrawReturn,
   ListenerNamePayloadPair,
-  PredefinedEventListenerProps,
+  ListenerProps,
+  PredefinedWheelEventName,
+  SelectorFunc,
+  StayDrawProps,
+  StayMode,
+  StayTools,
 } from "../userTypes"
-import { assert, infixExpressionParser, numberAlmostEqual, parseLayer, uuid4 } from "../utils"
-import { StayChild } from "./stayChild"
-import { SetShapeChildCurrentTime, StackItem, StepProps } from "./types"
+import { infixExpressionParser, isStayAnimatedChild, uuid4 } from "../utils"
+
+import { StayInstantChild } from "./child/stayInstantChild"
+import { stayTools } from "./stayTools"
+import { SetShapeChildCurrentTime, StackItem } from "./types"
 
 interface drawLayer {
   forceUpdate: boolean
 }
 
-class Stay<EventName extends string> {
-  #children: Map<string, StayChild>
+class Stay<EventName extends string, Mode extends StayMode> {
+  #children: Map<string, StayInstantChild<InstantShape>>
   composeStore: Record<string, any>
   currentPressedKeys: {
     [key: string]: boolean
@@ -68,7 +52,7 @@ class Stay<EventName extends string> {
   drawLayers: drawLayer[]
   events: StayEventMap<EventName>
   height: number
-  historyChildren: Map<string, StayChild>
+  historyChildren: Map<string, StayInstantChild>
   listeners: Map<string, Required<ListenerProps<ListenerNamePayloadPair, EventName>>>
   root: Canvas
   stack: StackItem[]
@@ -77,40 +61,37 @@ class Stay<EventName extends string> {
   stateSet: Set<string>
   stateStore: Map<string, any>
   store: Map<string, any>
-  tools!: StayTools
+
   unLogedChildrenIds: Set<string>
   width: number
   x: number
   y: number
-  zIndexUpdated: boolean
-  rootChild: StayChild<Root>
+  rootChild: StayInstantChild<Root>
   passive: boolean
   nextTickFunctions: (() => void)[]
-  autoRender: boolean
-  rendering: boolean
+  mode: Mode
   rootId: string
+  tools: StayTools<Mode>
 
-  constructor(root: Canvas, passive: boolean, autoRender: boolean = true) {
+  constructor(root: Canvas, passive: boolean, mode: Mode) {
     this.root = root
     this.passive = passive
     this.x = 0
     this.y = 0
     this.width = this.root.width
     this.height = this.root.height
-    this.#children = new Map<string, StayChild>()
+    this.#children = new Map<string, StayInstantChild>()
     this.rootId = `${ROOTNAME}-${uuid4()}`
-    this.rootChild = new StayChild({
+    this.rootChild = new StayInstantChild({
       id: this.rootId,
-      zIndex: -1,
       shape: new Root({
         x: this.x,
         y: this.y,
         width: this.width,
         height: this.height,
       }),
-
+      canvas: this.root,
       className: ROOTNAME,
-      layer: 0,
     })
     this.#children.set(this.rootChild.id, this.rootChild)
     this.events = {} as StayEventMap<EventName>
@@ -126,8 +107,8 @@ class Stay<EventName extends string> {
     this.unLogedChildrenIds = new Set()
     this.stack = []
     this.stackIndex = 0
-    this.zIndexUpdated = false
-    this.tools = this.getTools()
+
+    this.tools = stayTools.bind(this)(mode) as any as StayTools<Mode>
     this.drawLayers = this.root.layers.map(() => ({
       forceUpdate: false,
     }))
@@ -135,11 +116,10 @@ class Stay<EventName extends string> {
 
     this.initEvents()
 
-    this.autoRender = autoRender
-    if (autoRender) {
+    this.mode = mode
+    if (mode === "instant") {
       this.startRender()
     }
-    this.rendering = autoRender
   }
 
   addEventListener({
@@ -148,7 +128,10 @@ class Stay<EventName extends string> {
     callback,
     state = DEFAULTSTATE,
     selector = `.${ROOTNAME}`,
-    sortBy = SORT_CHILDREN_METHODS.AREA_ASC,
+    sortBy = (child) => {
+      const { width, height } = child.getBound()
+      return width * height
+    },
   }: ListenerProps<ListenerNamePayloadPair, EventName>) {
     let eventList = event
     if (!Array.isArray(event)) {
@@ -186,8 +169,8 @@ class Stay<EventName extends string> {
     this.events = {} as StayEventMap<EventName>
   }
 
-  cloneChildren(): Map<string, StayChild> {
-    const newChildren = new Map<string, StayChild>()
+  cloneChildren(): Map<string, StayInstantChild> {
+    const newChildren = new Map<string, StayInstantChild>()
     this.getChildren().forEach((child, id) => {
       newChildren.set(id, child.copy())
     })
@@ -200,7 +183,9 @@ class Stay<EventName extends string> {
 
   updateChildrenTime(props: SetShapeChildCurrentTime) {
     this.getChildren().forEach((child) => {
-      child.setCurrentTime(props)
+      if (isStayAnimatedChild(child)) {
+        child.setCurrentTime(props)
+      }
     })
   }
   draw({
@@ -208,80 +193,83 @@ class Stay<EventName extends string> {
     now = Date.now(),
     beforeDrawCallback,
     afterDrawCallback,
-  }: StayDrawProps) {
+  }: StayDrawProps): DrawReturn {
     interface ChildLayer {
-      update: boolean
-      members: StayChild[]
+      updateCurrentLayer: boolean
     }
 
     const childrenInlayer: ChildLayer[] = this.drawLayers.map((layer) => {
       const childInLayer = {
-        update: layer.forceUpdate,
-        members: [],
+        updateCurrentLayer: layer.forceUpdate,
       }
       layer.forceUpdate = false
       return childInLayer
     })
 
-    this.getChildren().forEach((child) => {
-      childrenInlayer[child.layer].members.push(child)
-      if (child.beforeLayer && child.beforeLayer !== child.layer) {
-        childrenInlayer[child.beforeLayer].update = true
-      } else {
-        childrenInlayer[child.layer].update ||= child.drawAction === DRAW_ACTIONS.UPDATE
-      }
+    const children = this.tools.getChildrenWithoutRoot()
+
+    children.forEach((child) => {
+      child.getUpdatedLayers().forEach((layer) => {
+        childrenInlayer[layer].updateCurrentLayer = true
+      })
     })
+
+    const updatedLayers: number[] = []
+    const updatedChilds: {
+      child: StayInstantChild
+      shapes: InstantShape[]
+    }[] = []
 
     if (beforeDrawCallback) {
       beforeDrawCallback()
     }
 
-    for (const layerIndex in childrenInlayer) {
-      const particalChildren = childrenInlayer[layerIndex]
+    for (let layerIndex = 0; layerIndex < childrenInlayer.length; layerIndex++) {
+      const { updateCurrentLayer } = childrenInlayer[layerIndex]
+
+      if (!updateCurrentLayer) {
+        continue
+      }
+
+      updatedLayers.push(layerIndex)
 
       const canvas = this.root.layers[layerIndex]
       const context = this.root.contexts[layerIndex]
 
-      if (particalChildren.update || forceDraw) {
+      if (updateCurrentLayer) {
         this.root.clear(context)
       }
 
-      if (this.zIndexUpdated) {
-        particalChildren.members.sort((a, b) => {
-          return a.zIndex - b.zIndex
-        })
+      let layerDrawShapes: InstantShape[] = []
+
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i]
+        const shapes = child.getShapes(layerIndex)
+        layerDrawShapes.push(...shapes)
+        child.layerDraw(layerIndex)
+        if (shapes.length > 0) {
+          updatedChilds.push({
+            child,
+            shapes,
+          })
+        }
       }
 
-      for (let i = 0; i < particalChildren.members.length; i++) {
-        const child = particalChildren.members[i]
-        if (!particalChildren.update && !child.drawAction && !forceDraw) {
-          continue
-        }
-        if (particalChildren.update) {
-          child.shape.contentUpdated = true
-        }
-        const updateNextFrame = child.draw({
-          props: {
-            context,
-            now,
-            width: this.width,
-            height: this.height,
-          },
-        })
+      layerDrawShapes = layerDrawShapes.sort((s1, s2) => s1.zIndex - s2.zIndex)
 
-        if (updateNextFrame || forceDraw) {
-          this.forceUpdateLayer(child.layer)
-        }
-        child.drawAction = null
-        child.beforeLayer = child.layer
-      }
+      layerDrawShapes.forEach((shape) => {
+        shape.draw({
+          context,
+          now,
+          width: this.width,
+          height: this.height,
+        })
+      })
     }
 
     if (afterDrawCallback) {
       afterDrawCallback(this.root)
     }
-
-    this.zIndexUpdated = false
 
     // run next tick function
     requestIdleCallback(
@@ -293,19 +281,21 @@ class Stay<EventName extends string> {
       },
       { timeout: 1000 }
     )
+
+    return { updatedLayers, updatedChilds }
   }
 
   filterChildren(filterCallback: (...args: any) => boolean) {
     return [...this.#children.values()].filter(filterCallback)
   }
 
-  findByClassName(className: string): StayChild[] {
+  findByClassName(className: string): StayInstantChild[] {
     return this.filterChildren(
       (child) => child.className.split(":")[0] === className || child.className === className
     )
   }
 
-  findBySimpleSelector(selector: string): StayChild[] {
+  findBySimpleSelector(selector: string): StayInstantChild[] {
     if (selector.startsWith(".")) {
       return this.findByClassName(selector.slice(1))
     } else if (selector.startsWith("#")) {
@@ -315,10 +305,13 @@ class Stay<EventName extends string> {
     throw new Error("selector must start with . or #")
   }
 
-  findChildById(id: string): StayChild | undefined {
+  findChildById(id: string): StayInstantChild | undefined {
     return this.getChildById(id)
   }
 
+  getTools() {
+    return this.tools
+  }
   fireEvent(e: KeyboardEvent | MouseEvent | WheelEvent | DragEvent, trigger: string) {
     const isMouseEvent = e instanceof MouseEvent
     const triggerEvents: { [key: string]: ActionEvent<EventName> } = {}
@@ -346,7 +339,7 @@ class Stay<EventName extends string> {
         const mouseE = e as MouseEvent
         actionEvent.x = mouseE.clientX - this.root.x
         actionEvent.y = mouseE.clientY - this.root.y
-        actionEvent.point = new Point(actionEvent.x, actionEvent.y)
+        actionEvent.point = { x: actionEvent.x, y: actionEvent.y }
         if (event.trigger === MOUSE_EVENTS.WHEEL) {
           const wheelE = e as WheelEvent
           const _actionEvent = actionEvent as ActionEvent<PredefinedWheelEventName>
@@ -401,615 +394,9 @@ class Stay<EventName extends string> {
   }
 
   render() {
-    this.draw({
-      forceDraw: true,
-      now: Date.now(),
+    window.requestAnimationFrame(() => {
+      this.render()
     })
-    if (
-      ![...this.getChildren().values()].every((child) => {
-        return child.state === "idle"
-      })
-    ) {
-      window.requestAnimationFrame(() => {
-        this.render()
-      })
-    } else {
-      this.rendering = false
-      this.draw({
-        forceDraw: true,
-        now: Date.now(),
-      })
-    }
-  }
-  getTools(): StayTools {
-    return {
-      timelineChild: ({ timeline, shape, layer, id = undefined, zIndex, className }) => {
-        layer = parseLayer(this.root.layers, layer)
-        this.checkName(className, [ROOTNAME])
-        const child = StayChild.timeline({
-          shape,
-          timeline,
-          id,
-          zIndex: zIndex === undefined ? 1 : zIndex,
-          className,
-          layer,
-          drawAction: DRAW_ACTIONS.APPEND,
-          afterRefresh: (fn) => this.nextTick(fn),
-        })
-        this.zIndexUpdated = true
-        this.pushToChildren(child)
-        this.unLogedChildrenIds.add(child.id)
-        return child
-      },
-
-      start: () => {
-        if (this.autoRender) {
-          throw new Error("autoRender is true, you can't call start")
-        }
-
-        this.rendering = true
-
-        this.render()
-      },
-      progress: ({ time, bound, beforeDrawCallback, afterDrawCallback }) => {
-        if (this.rendering) {
-          throw new Error(
-            "rendering is true, you can't call progress, you need to set autoRender to false and wait canvas render over if you called start() method"
-          )
-        }
-        this.updateChildrenTime({ time, bound })
-        this.draw({
-          forceDraw: true,
-          now: Date.now(),
-          beforeDrawCallback,
-          afterDrawCallback,
-        })
-      },
-      refresh: () => {
-        this.draw({
-          forceDraw: true,
-          now: Date.now(),
-        })
-      },
-      hasChild: (id: string) => {
-        return this.getChildren().has(id)
-      },
-      createChild: <T extends Shape>({
-        id,
-        shape,
-        zIndex,
-        className,
-        layer = -1,
-        transition,
-        drawEndCallback,
-      }: createChildProps<T>) => {
-        layer = parseLayer(this.root.layers, layer)
-        this.checkName(className, [ROOTNAME])
-        const child = new StayChild<typeof shape>({
-          id,
-          zIndex: zIndex === undefined ? 1 : zIndex,
-          className,
-          layer,
-          shape,
-          drawAction: DRAW_ACTIONS.APPEND,
-          afterRefresh: (fn) => this.nextTick(fn),
-          transition,
-          drawEndCallback,
-        })
-        return child
-      },
-      appendChild: <T extends Shape>({
-        shape,
-        className,
-        zIndex,
-        id = undefined,
-        layer = -1,
-        transition,
-      }: createChildProps<T>) => {
-        layer = parseLayer(this.root.layers, layer)
-        const child = this.tools.createChild({
-          id,
-          shape,
-          zIndex,
-          className,
-          layer,
-          transition,
-        })
-        this.zIndexUpdated = true
-        this.pushToChildren(child)
-        this.unLogedChildrenIds.add(child.id)
-        return child
-      },
-      updateChild: ({ child, zIndex, shape, className, layer, transition }: updateChildProps) => {
-        if (className === "") {
-          throw new Error("className cannot be empty")
-        }
-
-        if (zIndex === undefined) {
-          zIndex = child.zIndex
-        }
-        if (zIndex !== child.zIndex) {
-          this.zIndexUpdated = true
-        }
-        child._update({
-          shape,
-          zIndex: zIndex,
-          layer: layer === undefined ? child.layer : parseLayer(this.root.layers, layer),
-          className,
-          transition,
-        })
-        this.unLogedChildrenIds.add(child.id)
-        return child
-      },
-      removeChild: (
-        childId: string,
-        soft: boolean = false,
-        removeTransition?: TransitionConfig
-      ): Promise<void> | void => {
-        if (childId === this.rootChild.id) {
-          throw new Error("root cannot be removed")
-        }
-        const child = this.getChildById(childId)
-        if (!child) return
-        this.drawLayers[child.layer].forceUpdate = true
-        this.removeChildById(child.id, soft, removeTransition)
-        this.unLogedChildrenIds.add(child.id)
-        return new Promise<void>((resolve) => {
-          this.nextTick(resolve)
-        })
-      },
-
-      getChildrenWithoutRoot: () => {
-        return [...this.getChildren().values()].filter((child) => child.id !== this.rootChild.id)
-      },
-      getChildById: <T extends Shape>(id: string): StayChild<T> | undefined => {
-        const child = this.getChildById(id)
-        return child as StayChild<T>
-      },
-      getChildBySelector: <T extends Shape>(
-        selector: string | SelectorFunc
-      ): StayChild<T> | void => {
-        const children = this.tools.getChildrenBySelector(selector)
-        if (children.length !== 0) {
-          return children[0] as StayChild<T>
-        }
-      },
-      getChildrenByArea: (area: Area, selector?: string | SelectorFunc) => {
-        const children = this.getChildrenBySelector(selector)
-        const selectedChildren: StayChild[] = []
-        children.forEach((child) => {
-          const center = child.shape.getCenterPoint()
-          if (
-            center.x >= area.x &&
-            center.x <= area.x + area.width &&
-            center.y >= area.y &&
-            center.y <= area.y + area.height
-          ) {
-            selectedChildren.push(child)
-          }
-        })
-        return selectedChildren
-      },
-      getChildrenBySelector: (
-        selector: string | SelectorFunc,
-        sortBy = SORT_CHILDREN_METHODS.AREA_ASC
-      ): StayChild[] => {
-        const children = this.getChildrenBySelector(selector)
-
-        const sortMap = new Map<SortChildrenMethodsValues, [string, 1 | -1]>([
-          [SORT_CHILDREN_METHODS.AREA_ASC, ["area", 1]],
-          [SORT_CHILDREN_METHODS.AREA_DESC, ["area", -1]],
-          [SORT_CHILDREN_METHODS.X_ASC, ["x", 1]],
-          [SORT_CHILDREN_METHODS.X_DESC, ["x", -1]],
-          [SORT_CHILDREN_METHODS.Y_ASC, ["y", 1]],
-          [SORT_CHILDREN_METHODS.Y_DESC, ["y", -1]],
-          [SORT_CHILDREN_METHODS.WIDTH_ASC, ["width", 1]],
-          [SORT_CHILDREN_METHODS.WIDTH_DESC, ["width", -1]],
-          [SORT_CHILDREN_METHODS.HEIGHT_ASC, ["height", 1]],
-          [SORT_CHILDREN_METHODS.HEIGHT_DESC, ["height", -1]],
-        ])
-
-        if (sortBy) {
-          if (typeof sortBy === "function") {
-            children.sort(sortBy)
-          } else {
-            const [sortKey, sortOrder] = sortMap.get(sortBy) || []
-            if (sortKey && sortOrder) {
-              children.sort((a, b) => {
-                const sortValue1 = (a.shape as any)[sortKey]
-                const sortValue2 = (b.shape as any)[sortKey]
-                return (sortValue1 - sortValue2) * sortOrder
-              })
-            }
-          }
-        }
-
-        return children
-      },
-      getAvailiableStates: (selector: string): string[] => {
-        const stateSelectors = selector
-          .split(new RegExp(`([${Object.values(SUPPORT_OPRATOR).join("")}])`))
-          .map((s) => (s === ALLSTATE ? `(${[...this.stateSet].join(SUPPORT_OPRATOR.OR)})` : s))
-          .join("")
-        try {
-          return infixExpressionParser<string>({
-            selector: stateSelectors,
-            fullSet: [...this.stateSet],
-            elemntEqualFunc: (a: string, b: string) => a === b,
-            selectorConvertFunc: (s: string) => [s],
-          })
-        } catch (e) {
-          throw new Error(
-            "please check your selector, support oprators: " +
-              Object.values(SUPPORT_OPRATOR).join(",") +
-              "here is your selector: " +
-              selector
-          )
-        }
-      },
-      getContainPointChildren: ({
-        point,
-        selector,
-        sortBy,
-        returnFirst = false,
-        withRoot = true,
-      }: getContainPointChildrenProps): StayChild[] => {
-        let _selector = selector
-
-        if (selector && Array.isArray(selector)) {
-          _selector = selector.join("|")
-        }
-
-        assert(_selector, "no className or id")
-        const selectorChildren = this.tools.getChildrenBySelector(_selector as string, sortBy)
-
-        let hitChildren: StayChild[] = selectorChildren.filter((c) =>
-          c.shape.contains(point, this.root.contexts[c.layer])
-        )
-
-        if (!withRoot) {
-          hitChildren = hitChildren.filter((c) => c.id !== this.rootId)
-        }
-
-        return returnFirst && hitChildren.length > 0 ? [hitChildren[0]] : hitChildren
-      },
-      changeCursor: (cursor: string) => {
-        this.root.layers[this.root.layers.length - 1].style.cursor = cursor
-      },
-      fix: () => {
-        this.getChildren().forEach((child) => {
-          if (child.layer !== 0) {
-            child.beforeLayer = child.layer
-            child.layer = 0
-            child.drawAction = DRAW_ACTIONS.UPDATE
-          }
-        })
-      },
-      switchState: (state: string) => {
-        this.checkName(state, [ALLSTATE])
-        if (!this.stateSet.has(state)) {
-          this.stateSet.add(state)
-        }
-        this.state = state
-        this.stateStore.clear()
-      },
-      log: () => {
-        const steps = [...this.unLogedChildrenIds]
-          .map((id) => StayChild.diff(this.historyChildren.get(id), this.getChildById(id)))
-          .filter((o) => o) as StepProps[]
-        this.pushToStack({
-          state: this.state,
-          steps,
-        })
-        this.snapshotChildren()
-      },
-      moveStart: () => {
-        this.getChildren().forEach((child) => {
-          child.shape.moveInit()
-        })
-      },
-
-      move: (
-        offsetX: number,
-        offsetY: number,
-        filter: (child: StayChild) => boolean = () => true
-      ): Promise<void> => {
-        this.getChildren().forEach((child) => {
-          if (child.id !== this.rootId && !filter(child)) {
-            return
-          }
-          child.shape.move(...child.shape._move(offsetX, offsetY))
-        })
-        this.root.layers.forEach((_, i) => {
-          this.forceUpdateLayer(i)
-        })
-        return new Promise<void>((resolve) => {
-          this.nextTick(resolve)
-        })
-      },
-      zoom: (
-        deltaY: number,
-        center: PointType,
-        filter: (child: StayChild) => boolean = () => true
-      ): Promise<void> => {
-        this.getChildren().forEach((child) => {
-          if (child.id !== this.rootId && !filter(child)) {
-            return
-          }
-          child.shape.zoom(child.shape._zoom(deltaY, center))
-        })
-        this.root.layers.forEach((_, i) => {
-          this.forceUpdateLayer(i)
-        })
-        return new Promise<void>((resolve) => {
-          this.nextTick(resolve)
-        })
-      },
-      reset: (): Promise<void> => {
-        const rootChildShape = this.rootChild.shape as Rectangle
-        const [offsetX, offsetY] = [-rootChildShape.leftTop.x, -rootChildShape.leftTop.y]
-
-        const scale = this.width / rootChildShape.width
-        this.getChildren().forEach((child) => {
-          child.shape.move(offsetX, offsetY)
-          child.shape.zoom(child.shape._zoom((scale - 1) * -1000, { x: 0, y: 0 }))
-        })
-        this.root.layers.forEach((_, i) => {
-          this.forceUpdateLayer(i)
-        })
-        return new Promise<void>((resolve) => {
-          this.nextTick(resolve)
-        })
-      },
-      exportChildren: ({ children, area }) => {
-        const rootChildShape = this.rootChild.shape as Rectangle
-        area = area ?? { x: 0, y: 0, width: rootChildShape.width, height: rootChildShape.height }
-        children = children.map((child) => child.copy())
-
-        return { children, area }
-      },
-      importChildren: ({ children, area }, targetArea) => {
-        const rootChildShape = this.rootChild.shape as Rectangle
-        targetArea = targetArea ?? {
-          x: 0,
-          y: 0,
-          width: rootChildShape.width,
-          height: rootChildShape.height,
-        }
-
-        assert(
-          numberAlmostEqual(targetArea.width / area.width, targetArea.height / area.height),
-          "area not match"
-        )
-
-        const [offsetX, offsetY] = [targetArea.x - area.x, targetArea.y - area.y]
-        const scale = targetArea.width / area.width
-        const needUpdateLayers: number[] = []
-
-        children.forEach((child) => {
-          child.shape.move(offsetX, offsetY)
-          child.shape.zoom(
-            child.shape._zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
-          )
-          this.tools.appendChild({
-            shape: child.shape.copy(),
-            className: child.className,
-            layer: child.layer,
-            zIndex: child.zIndex,
-          })
-          needUpdateLayers.push(child.layer)
-        })
-      },
-      regionToTargetCanvas: ({ area, targetArea, children, progress }) => {
-        targetArea = targetArea ?? {
-          x: 0,
-          y: 0,
-          width: area.width,
-          height: area.height,
-        }
-        const [offsetX, offsetY] = [targetArea.x - area.x, targetArea.y - area.y]
-        const scale = targetArea.width / area.width
-
-        const tempCanvas = document.createElement("canvas")
-        tempCanvas.width = targetArea.width
-        tempCanvas.height = targetArea.height
-        const tempCtx = tempCanvas.getContext("2d")
-        if (!tempCtx) {
-          throw new Error("Unable to get 2D context")
-        }
-
-        const childrenReady = Promise.all(
-          children.map(async (c) => {
-            if (progress) {
-              c.setCurrentTime({ time: progress })
-            }
-
-            await c.draw({
-              props: {
-                context: tempCtx,
-                now: Date.now(),
-                width: this.width,
-                height: this.height,
-              },
-              extraTransform: {
-                offsetX,
-                offsetY,
-                zoom: (scale - 1) * -1000,
-                zoomCenter: { x: targetArea.x, y: targetArea.y },
-              },
-            })
-          })
-        )
-
-        return new Promise((resolve) => {
-          childrenReady.then(() => {
-            resolve(tempCanvas)
-          })
-        })
-      },
-      redo: () => {
-        if (this.stackIndex >= this.stack.length) {
-          console.log("no more operations")
-          return
-        }
-        const stepItem = this.stack[this.stackIndex]
-        this.root.layers.forEach((_, i) => {
-          this.forceUpdateLayer(i)
-        })
-
-        stepItem.steps.forEach((step) => {
-          const stepChild = step.child
-          if (step.action === "append") {
-            this.tools.appendChild({
-              id: stepChild.id,
-              shape: stepChild.shape.copy(),
-              className: stepChild.className,
-            })
-          } else if (step.action === "remove") {
-            this.tools.removeChild(stepChild.id)
-          } else if (step.action === "update") {
-            assert(stepChild.beforeShape)
-            const child = this.findChildById(stepChild.id)!
-            this.tools.updateChild({
-              child,
-              shape: stepChild.shape.copy(),
-            })
-          }
-        })
-
-        this.tools.switchState(stepItem.state)
-        this.snapshotChildren()
-        this.stackIndex++
-      },
-
-      undo: () => {
-        if (this.stackIndex <= 0) {
-          console.log("no more operations")
-          return
-        }
-        this.stackIndex--
-        this.root.layers.forEach((_, i) => {
-          this.forceUpdateLayer(i)
-        })
-        const stepItem = this.stack[this.stackIndex]
-
-        stepItem.steps.forEach((step) => {
-          const stepChild = step.child
-
-          if (step.action === "append") {
-            this.tools.removeChild(stepChild.id)
-          } else if (step.action === "remove") {
-            this.tools.appendChild({
-              id: stepChild.id,
-              shape: stepChild.shape.copy(),
-              className: stepChild.className,
-            })
-          } else if (step.action === "update") {
-            assert(stepChild.beforeShape)
-
-            this.tools.updateChild({
-              child: this.getChildById(stepChild.id)!,
-              className: stepChild.beforeName || stepChild.className,
-              shape: stepChild.beforeShape!.copy(),
-            })
-          }
-        })
-        this.tools.switchState(stepItem.state)
-        this.snapshotChildren()
-      },
-      triggerAction: (
-        originEvent: Event,
-        triggerEvents: { [key: string]: ActionEvent<EventName> },
-        payload: Dict
-      ) => {
-        const isMouseEvent = originEvent instanceof MouseEvent
-        interface CallBackType {
-          callback:
-            | ((p: ActionCallbackProps<Dict<any>, EventName>) => any)
-            | Promise<(p: ActionCallbackProps<Dict<any>, EventName>) => any>
-          e: ActionEvent<EventName>
-          name: string
-        }
-        // let needUpdate = false
-        const callbackList: CallBackType[] = []
-        this.listeners.forEach(({ name, event, state, selector, sortBy, callback }) => {
-          if (!(name in this.composeStore)) {
-            this.composeStore[name] = {}
-          }
-
-          if (!Array.isArray(event)) {
-            event = [event]
-          }
-
-          event.forEach(async (actionEventName) => {
-            const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
-            if (!avaliableSet.includes(this.state) || !(actionEventName in triggerEvents)) {
-              return false
-            }
-
-            const actionEvent = triggerEvents[actionEventName]
-
-            if (isMouseEvent) {
-              const _actionEvent = actionEvent as ActionEvent<PredefinedMouseEventName>
-              const children = this.tools.getContainPointChildren({
-                point: _actionEvent.point,
-                selector: selector,
-                sortBy: sortBy,
-                withRoot: false,
-              })
-
-              // 特殊处理 mouseleave 事件
-              if (actionEventName === "mouseleave") {
-                _actionEvent.target = this.rootChild
-              } else {
-                if (children.length === 0) {
-                  return false
-                }
-                _actionEvent.target = children[0] as StayChild
-              }
-            }
-
-            // needUpdate = true
-            callbackList.push({
-              callback,
-              e: actionEvent,
-              name,
-            })
-
-            if (callback) {
-              const eventFuncMap = await callback({
-                originEvent,
-                e: actionEvent,
-                store: this.store,
-                stateStore: this.stateStore,
-                composeStore: this.composeStore[name],
-                tools: this.getTools(),
-                canvas: this.root,
-                payload,
-              })
-
-              if (eventFuncMap !== undefined && actionEvent.name in eventFuncMap) {
-                // TODO: type
-                const particalComposeStore = (eventFuncMap as any)[actionEvent.name]()
-                this.composeStore[name] = {
-                  ...this.composeStore[name],
-                  ...particalComposeStore,
-                }
-              }
-            }
-          })
-        })
-
-        // if (needUpdate) {
-        //   this.draw()
-        // }
-      },
-      deleteListener: (name: string) => {
-        if (this.listeners.has(name)) {
-          this.listeners.delete(name)
-        }
-      },
-    }
   }
 
   initEvents() {
@@ -1050,10 +437,10 @@ class Stay<EventName extends string> {
     const children =
       typeof selector === "function"
         ? fullSet.filter((child) => selector(child))
-        : infixExpressionParser<StayChild>({
+        : infixExpressionParser<StayInstantChild>({
             selector,
             fullSet,
-            elemntEqualFunc: (a: StayChild, b: StayChild) => a.id === b.id,
+            elemntEqualFunc: (a: StayInstantChild, b: StayInstantChild) => a.id === b.id,
             selectorConvertFunc: (s: string) => this.findBySimpleSelector(s),
           })
     return children
@@ -1063,8 +450,7 @@ class Stay<EventName extends string> {
     this.currentPressedKeys[key] = true
   }
 
-  pushToChildren(child: StayChild) {
-    child.shape.startTime = Date.now()
+  pushToChildren<T extends InstantShape>(child: StayInstantChild<T>) {
     this.#children.set(child.id, child)
   }
 
@@ -1089,15 +475,13 @@ class Stay<EventName extends string> {
     this.currentPressedKeys[key] = false
   }
 
-  removeChildById(id: string, soft: boolean, removeTransition?: TransitionConfig) {
+  removeChildById(id: string) {
     const child = this.getChildById(id)
     if (child) {
-      if (soft) {
-        child.hidden(removeTransition)
-      } else {
-        this.#children.delete(id)
-        this.forceUpdateLayer(child.layer)
-      }
+      this.#children.delete(id)
+      child.getLayers().forEach((layer) => {
+        this.forceUpdateLayer(layer)
+      })
     }
   }
 

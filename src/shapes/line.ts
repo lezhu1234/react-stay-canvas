@@ -1,7 +1,8 @@
 import { Point } from "./point"
-import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
+import { Coordinate, EasingFunction, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { Vector } from "./vector"
 import { InstantShape } from "./instantShape"
+import { AnimatedShape } from "."
 export interface UpdateLineProps extends ShapeProps {
   x1?: number
   y1?: number
@@ -14,15 +15,46 @@ export interface LineProps extends ShapeProps {
   x2: number
   y2: number
 }
-export class Line extends InstantShape {
+export class Line extends AnimatedShape {
+  getTransProps(): string[] {
+    return ["x1", "y1", "x2", "y2"]
+  }
+  intermediateState(
+    before: Line,
+    after: Line,
+    ratio: number,
+    transitionType: EasingFunction
+  ): Line {
+    const obj = this.getIntermediateObj(before, after, ratio, transitionType)
+    return new Line(obj)
+  }
+  zeroShape(): Line {
+    return new Line({
+      x1: this.x1,
+      y1: this.y1,
+      x2: this.x2,
+      y2: this.y2,
+      ...this.getZeroConfig(),
+    })
+  }
+  childSameAs(shape: Line): boolean {
+    return (
+      this.x1 === shape.x1 && this.y1 === shape.y1 && this.x2 === shape.x2 && this.y2 === shape.y2
+    )
+  }
   commonDraw(props: ShapeDrawProps): void {
-    throw new Error("Method not implemented.")
+    // throw new Error("Method not implemented.")
   }
   fill(props: ShapeDrawProps): void {
-    throw new Error("Method not implemented.")
+    // throw new Error("Method not implemented.")
   }
   getBound(): Rect {
-    throw new Error("Method not implemented.")
+    return {
+      x: Math.min(this.x1, this.x2),
+      y: Math.min(this.y1, this.y2),
+      width: Math.abs(this.x2 - this.x1),
+      height: Math.abs(this.y2 - this.y1),
+    }
   }
   endPoint: Coordinate
   startPoint: Coordinate
@@ -52,7 +84,7 @@ export class Line extends InstantShape {
   }
 
   contains(point: Point): boolean {
-    throw new Error("Method not implemented.")
+    return false
   }
 
   copy(): Line {

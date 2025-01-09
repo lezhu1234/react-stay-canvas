@@ -189,3 +189,9 @@ export const DragOverEvent: EventProps<PredefinedMouseEventName> = {
   trigger: MOUSE_EVENTS.DRAG_OVER,
   conditionCallback: () => true,
 }
+
+// export const HoverEvent: EventProps<PredefinedMouseEventName> = {
+//   name: "hover",
+//   trigger: MOUSE_EVENTS.MOUSE_MOVE,
+//   conditionCallback: ({ e }) => true,
+// }

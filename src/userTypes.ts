@@ -224,6 +224,7 @@ export type StayTools<Mode extends StayMode> = (Mode extends InstantMode
   : AnimatedTools) &
   BasicTools
 export interface BasicTools {
+  appendChild: <T extends InstantShape>(props: AppendChildProps<T>) => StayInstantChild<T>
   // createChild: <T extends InstantShape>(props: createChildProps<T>) => StayInstantChild<T>
   // updateChild: (props: updateChildProps) => StayInstantChild
   removeChild: (childId: string) => Promise<void> | void
@@ -242,7 +243,7 @@ export interface BasicTools {
     sortBy?: ChildSortFunction
   ) => StayInstantChild[]
   getAvailiableStates: (selector: string) => string[]
-  changeCursor: (cursor: string) => void
+  changeCursor: (cursor: Cursor) => void
   moveStart: () => void
   move: (
     offsetX: number,
@@ -280,7 +281,6 @@ export interface AnimatedTools {
 }
 
 export interface InstantTools {
-  appendChild: <T extends InstantShape>(props: AppendChildProps<T>) => StayInstantChild<T>
   log: () => void
   redo: () => void
   undo: () => void
@@ -613,7 +613,46 @@ export type PredefinedMouseEventName =
   | "mouseenter"
   | "mousemove"
   | "click"
+  | "hover"
   | PredefinedWheelEventName
 
 export type PredefinedKeyEventName = "keydown" | "keyup" | "undo" | "redo"
 export type PredefinedEventName = PredefinedMouseEventName | PredefinedKeyEventName
+
+export type Cursor =
+  | "auto"
+  | "default"
+  | "none"
+  | "context-menu"
+  | "help"
+  | "pointer"
+  | "progress"
+  | "wait"
+  | "cell"
+  | "crosshair"
+  | "text"
+  | "vertical-text"
+  | "alias"
+  | "copy"
+  | "move"
+  | "no-drop"
+  | "not-allowed"
+  | "grab"
+  | "grabbing"
+  | "all-scroll"
+  | "col-resize"
+  | "row-resize"
+  | "n-resize"
+  | "e-resize"
+  | "s-resize"
+  | "w-resize"
+  | "ne-resize"
+  | "nw-resize"
+  | "se-resize"
+  | "sw-resize"
+  | "ew-resize"
+  | "ns-resize"
+  | "nesw-resize"
+  | "nwse-resize"
+  | "zoom-in"
+  | "zoom-out"

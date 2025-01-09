@@ -26,6 +26,7 @@ import {
   AnimatedMode,
   AppendChildProps,
   CreateChildProps,
+  Cursor,
 } from "../userTypes"
 import { assert, infixExpressionParser, isStayAnimatedChild, numberAlmostEqual } from "../utils"
 import { StayAnimatedChild } from "./child/stayAnimatedChild"
@@ -90,28 +91,28 @@ export function stayTools<Mode extends StayMode>(
   }
 
   const instantTools = {
-    appendChild: ({ id, className, shape }: AppendChildProps<InstantShape>) => {
-      let child = new StayInstantChild({
-        id,
-        className,
-        shape,
-        canvas: this.root,
-      })
-      const childProxy = new Proxy(child, {
-        set: (target, prop, value) => {
-          if (prop === "update") {
-            target.update(value)
-            this.unLogedChildrenIds.add(child.id)
-          }
-          return Reflect.set(target, prop, value)
-        },
-      })
+    // appendChild: ({ id, className, shape }: AppendChildProps<InstantShape>) => {
+    //   let child = new StayInstantChild({
+    //     id,
+    //     className,
+    //     shape,
+    //     canvas: this.root,
+    //   })
+    //   const childProxy = new Proxy(child, {
+    //     set: (target, prop, value) => {
+    //       if (prop === "update") {
+    //         target.update(value)
+    //         this.unLogedChildrenIds.add(child.id)
+    //       }
+    //       return Reflect.set(target, prop, value)
+    //     },
+    //   })
 
-      this.pushToChildren(childProxy)
-      this.unLogedChildrenIds.add(childProxy.id)
+    //   this.pushToChildren(childProxy)
+    //   this.unLogedChildrenIds.add(childProxy.id)
 
-      return childProxy
-    },
+    //   return childProxy
+    // },
     log: () => {
       const steps = [...this.unLogedChildrenIds]
         .map((id) => StayInstantChild.diff(this.historyChildren.get(id), this.getChildById(id)))
@@ -202,6 +203,28 @@ export function stayTools<Mode extends StayMode>(
         forceDraw: true,
         now: Date.now(),
       })
+    },
+    appendChild: ({ id, className, shape }: AppendChildProps<InstantShape>) => {
+      let child = new StayInstantChild({
+        id,
+        className,
+        shape,
+        canvas: this.root,
+      })
+      const childProxy = new Proxy(child, {
+        set: (target, prop, value) => {
+          if (prop === "update") {
+            target.update(value)
+            this.unLogedChildrenIds.add(child.id)
+          }
+          return Reflect.set(target, prop, value)
+        },
+      })
+
+      this.pushToChildren(childProxy)
+      this.unLogedChildrenIds.add(childProxy.id)
+
+      return childProxy
     },
     hasChild: (id: string) => {
       return this.getChildren().has(id)
@@ -306,7 +329,7 @@ export function stayTools<Mode extends StayMode>(
 
       return returnFirst && hitChildren.length > 0 ? [hitChildren[0]] : hitChildren
     },
-    changeCursor: (cursor: string) => {
+    changeCursor: (cursor: Cursor) => {
       this.root.layers[this.root.layers.length - 1].style.cursor = cursor
     },
     switchState: (state: string) => {

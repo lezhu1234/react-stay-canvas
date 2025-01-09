@@ -43,6 +43,15 @@ export class StayAnimatedChild<
     this.totalDurationMs = 0
   }
 
+  getSlice(name: string): T[] {
+    if (!this.hasSlice(name)) {
+      return []
+    }
+
+    const slice = this.shapeFramesMap.get(name)
+    return slice!
+  }
+
   getTimelineShapeByBound(slice: T[], bound: ShapeBound): T {
     const ratio = bound.ratio
     const beforeShape = slice[bound.beforeIndex]

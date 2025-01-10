@@ -19,8 +19,8 @@ const StayCanvas = forwardRef(
     {
       width = 500,
       height = 500,
-      eventList,
-      listenerList,
+      eventList = [],
+      listenerList = [],
       mounted,
       layers = 2,
       className = "",
@@ -68,8 +68,8 @@ const StayCanvas = forwardRef(
     const canvasLayers = useRef<HTMLCanvasElement[]>([])
     const stay = useRef<StayStage<Mode>>()
 
-    eventList = useMemo(() => eventList || [], [eventList])
-    listenerList = useMemo(() => listenerList || [], [listenerList])
+    // eventList = useMemo(() => eventList || [], [eventList])
+    // listenerList = useMemo(() => listenerList || [], [listenerList])
 
     type ListenerPair = GetListenerPairProps<typeof listenerList>
     type GetListenerPairName<T> = T extends { name: infer U } ? U : never
@@ -89,7 +89,7 @@ const StayCanvas = forwardRef(
         mode
       )
       ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
-        stay.current!.registerEvent(event)
+        stay.current!.registerEvent(event as any)
       })
       listenerList.forEach((listener) => {
         stay.current!.addEventListener(listener)
@@ -114,7 +114,7 @@ const StayCanvas = forwardRef(
             if (stay.current) {
               stay.current.triggerAction(
                 customEvent,
-                { [name as string]: customEvent },
+                { [name as string]: { info: customEvent, event: customEvent } },
                 payload || {}
               )
             }
@@ -130,25 +130,25 @@ const StayCanvas = forwardRef(
       []
     )
 
-    useEffect(() => {
-      if (!stay.current) {
-        return
-      }
-      stay.current.clearEvents()
-      ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
-        stay.current!.registerEvent(event)
-      })
-    }, [eventList])
+    // useEffect(() => {
+    //   if (!stay.current) {
+    //     return
+    //   }
+    //   stay.current.clearEvents()
+    //   ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
+    //     stay.current!.registerEvent(event as any)
+    //   })
+    // }, [eventList])
 
-    useEffect(() => {
-      if (!stay.current) {
-        return
-      }
-      stay.current.clearEventListeners()
-      listenerList.forEach((listener) => {
-        stay.current!.addEventListener(listener)
-      })
-    }, [listenerList])
+    // useEffect(() => {
+    //   if (!stay.current) {
+    //     return
+    //   }
+    //   stay.current.clearEventListeners()
+    //   listenerList.forEach((listener) => {
+    //     stay.current!.addEventListener(listener)
+    //   })
+    // }, [listenerList])
 
     useEffect(() => {
       if (width > 0 && height > 0 && (!initialized.current || recreateOnResize)) {

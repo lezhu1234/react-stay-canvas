@@ -195,7 +195,11 @@ export class StayAnimatedChild<
       frameBoundInfo.shape = shape
 
       shape.parent = this
-      currentShapeMap.set(name, shape)
+
+      // ignore unvisiable shape
+      if (shape.shouldStroke() || shape.shouldFill()) {
+        currentShapeMap.set(name, shape)
+      }
 
       const lastFrameBoundInfo = this.frameMapInfo.get(name)
 

@@ -32,6 +32,7 @@ import {
   StayDrawProps,
   StayMode,
   StayTools,
+  TriggerEvents,
 } from "../userTypes"
 import { infixExpressionParser, isStayAnimatedChild, uuid4 } from "../utils"
 
@@ -314,7 +315,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
   }
   fireEvent(e: KeyboardEvent | MouseEvent | WheelEvent | DragEvent, trigger: string) {
     const isMouseEvent = e instanceof MouseEvent
-    const triggerEvents: { [key: string]: ActionEvent<EventName> } = {}
+    const triggerEvents: TriggerEvents<EventName> = {}
     Object.keys(this.events).forEach((_eventName) => {
       const eventName = _eventName as EventName
       // may be deleted by other event
@@ -359,7 +360,10 @@ class Stay<EventName extends string, Mode extends StayMode> {
           stateStore: this.stateStore,
         })
       ) {
-        triggerEvents[eventName] = actionEvent
+        triggerEvents[eventName] = {
+          info: actionEvent,
+          event,
+        }
         let linkEvent = event.successCallback({
           e: actionEvent,
           store: this.store,
@@ -460,7 +464,13 @@ class Stay<EventName extends string, Mode extends StayMode> {
     this.stackIndex++
   }
 
-  registerEvent({ name, trigger, conditionCallback, successCallback }: EventProps<EventName>) {
+  registerEvent({
+    name,
+    trigger,
+    conditionCallback,
+    successCallback,
+    withTargetConditionCallback,
+  }: EventProps<EventName>) {
     const defaultConditionCallback = () => true
     const defaultSuccessCallback = () => void 0
     this.events[name] = {
@@ -468,6 +478,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
       trigger,
       conditionCallback: conditionCallback || defaultConditionCallback,
       successCallback: successCallback || defaultSuccessCallback,
+      withTargetConditionCallback,
     }
   }
 

@@ -1,4 +1,6 @@
+import { InstantShape } from "./shapes"
 import { Rectangle } from "./shapes/rectangle"
+import { StayInstantChild } from "./stay/child/stayInstantChild"
 import { valueof } from "./stay/types"
 import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
 import {
@@ -90,10 +92,24 @@ export interface StayEventChooseProps<EventName extends string> {
 }
 
 export type StayEventProps<EventName extends string> = StayEventRequiredProps<EventName> &
-  StayEventChooseProps<EventName>
+  StayEventChooseProps<EventName> & {
+    withTargetConditionCallback?: (props: {
+      e: ActionEvent<EventName>
+      store: storeType
+      stateStore: storeType
+      target: StayInstantChild<InstantShape>
+    }) => boolean
+  }
 
 export type EventProps<EventName extends string> = StayEventRequiredProps<EventName> &
-  Partial<StayEventChooseProps<EventName>>
+  Partial<StayEventChooseProps<EventName>> & {
+    withTargetConditionCallback?: (props: {
+      e: ActionEvent<EventName>
+      store: storeType
+      stateStore: storeType
+      target: StayInstantChild<InstantShape>
+    }) => boolean
+  }
 
 export interface ContextLayerSetFunction {
   (layer: HTMLCanvasElement): DrawCanvasContext | null

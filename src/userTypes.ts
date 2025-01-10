@@ -10,6 +10,7 @@ import {
   EventProps,
   NumberInRangeZeroOne,
   ShapeConfig,
+  StayEventProps,
   UserCallback,
 } from "./types"
 import { DRAW_ACTIONS, SHAPE_DRAW_TYPES, SORT_CHILDREN_METHODS } from "./userConstants"
@@ -596,6 +597,13 @@ export interface CurrentShapeInfo<T> extends ShapeBound {
 //   return (shape as IntermediateShapeInfo).intermediate === true
 // }
 
+export type TriggerEvents<EventName extends string> = {
+  [key: string]: {
+    info: ActionEvent<EventName>
+    event: EventProps<EventName>
+  }
+}
+
 export type PredefinedWheelEventName = "wheel" | "zoomout" | "zoomin"
 
 export type PredefinedMouseEventName =
@@ -613,7 +621,6 @@ export type PredefinedMouseEventName =
   | "mouseenter"
   | "mousemove"
   | "click"
-  | "hover"
   | PredefinedWheelEventName
 
 export type PredefinedKeyEventName = "keydown" | "keyup" | "undo" | "redo"

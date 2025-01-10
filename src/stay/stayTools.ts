@@ -27,6 +27,7 @@ import {
   AppendChildProps,
   CreateChildProps,
   Cursor,
+  TriggerEvents,
 } from "../userTypes"
 import { assert, infixExpressionParser, isStayAnimatedChild, numberAlmostEqual } from "../utils"
 import { StayAnimatedChild } from "./child/stayAnimatedChild"
@@ -502,7 +503,7 @@ export function stayTools<Mode extends StayMode>(
     },
     triggerAction: <T extends string>(
       originEvent: Event,
-      triggerEvents: Record<string, any>,
+      triggerEvents: TriggerEvents<T>,
       payload: Dict
     ): void => {
       const isMouseEvent = originEvent instanceof MouseEvent
@@ -511,6 +512,7 @@ export function stayTools<Mode extends StayMode>(
         e: ActionEvent<T>
         name: string
       }
+
       // let needUpdate = false
       const callbackList: CallBackType[] = []
       this.listeners.forEach(({ name, event, state, selector, sortBy, callback }) => {
@@ -524,25 +526,45 @@ export function stayTools<Mode extends StayMode>(
 
         event.forEach(async (actionEventName: string) => {
           const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
+
           if (!avaliableSet.includes(this.state) || !(actionEventName in triggerEvents)) {
             return false
           }
 
-          const actionEvent = triggerEvents[actionEventName]
+          const { info: actionEvent, event: preEvent } = triggerEvents[actionEventName]
 
           if (isMouseEvent) {
             const _actionEvent = actionEvent as ActionEvent<PredefinedMouseEventName>
+            if (preEvent.withTargetConditionCallback) {
+              const children = this.tools.getChildrenBySelector(selector)
+              let flag = false
+              for (let index = 0; index < children.length; index++) {
+                const child = children[index]
 
-            const children = this.tools.getContainPointChildren({
-              point: _actionEvent.point,
-              selector: selector,
-              sortBy: sortBy,
-            })
+                if (
+                  preEvent.withTargetConditionCallback({
+                    e: _actionEvent as any,
+                    store: this.store,
+                    stateStore: this.stateStore,
+                    target: child,
+                  })
+                ) {
+                  _actionEvent.target = child
+                  flag = true
+                  break
+                }
+              }
 
-            // 特殊处理 mouseleave 事件
-            if (actionEventName === "mouseleave") {
-              _actionEvent.target = this.rootChild
+              if (!flag) {
+                return false
+              }
             } else {
+              const children = this.tools.getContainPointChildren({
+                point: _actionEvent.point,
+                selector: selector,
+                sortBy: sortBy,
+              })
+
               if (children.length === 0) {
                 return false
               }

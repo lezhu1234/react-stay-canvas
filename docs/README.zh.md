@@ -1,3 +1,9 @@
+# 警告
+
+经过多次迭代，react-stay-canvas 的 api 发生了很多变化，变得更加强大的同时， Readme 也变得过时了，目前正在更新 readme
+
+之前因为没人关注所以没管，如果你遇到任何问题，请直接 issue， 我看到会第一时间处理
+
 # react-stay-canvas
 
 stay-canvas for react
@@ -128,18 +134,19 @@ export function Demo() {
             child: dragChild,
             shape: dragChild.shape.update({ x, y, width, height }),
           })
-        }
+        },
       }
     },
   }
   return <StayCanvas className="border" width={500} height={500} listenerList={[DragListener]} />
 }
-``` 
+```
 
 <video src="videos/demo.mp4" controls="">
 </video>
 
 ## 更多示例
+
 https://github.com/lezhu1234/demo-react-stay-canvas
 
 ## 核心概念
@@ -229,7 +236,7 @@ export default function StayCanvas({
 
 ### Shape API
 
-#### 在react-stay-canvas中内置了一些简单的Shape，你可以通过继承Shape类来轻松的创建自定义的Shape
+#### 在 react-stay-canvas 中内置了一些简单的 Shape，你可以通过继承 Shape 类来轻松的创建自定义的 Shape
 
 - Image: 图片
 
@@ -317,7 +324,6 @@ export default function StayCanvas({
   - 该对象的以下几个方法在某些时候可能会比较有用
 
   ```typescript
-
   //该方法用来更新线段的属性 declare update({ x1, y1, x2, y2, props }: UpdateLineProps)this
 
   // 该方法用来计算点到直线的垂直距离 declare distanceToPoint(point: Point): number
@@ -327,7 +333,6 @@ export default function StayCanvas({
   // 与 Point 对象的 nearLine 计算方法相同 declare segmentDistanceToPoint(point: Point): number
 
   // 该方法可以判断一个点与线段的最小距离是否在指定距离内，调用 segmentDistanceToPoint 方法 declare nearPoint(point: Point, offset: number = 10): boolean
-
   ```
 
 - Rectangle: 矩形
@@ -449,7 +454,7 @@ export default function StayCanvas({
   // points: Point[] 路径上的点
   // radius: number 路径的半径
   constructor({ points, radius, props }: PathAttr)
-    ```
+  ```
 
 #### 自定义 Shape
 
@@ -561,71 +566,70 @@ export default function StayCanvas({
 
 ##### Shape 状态
 
-  - 区别于 react-stay-canvas 的状态，shape 本身也有一个状态字段，当你的Shape在不同状态下需要不同的绘制效果时，你可以使用 state 字段来控制，比如我们需要实现一个 Rectangle，默认情况下，状态为 default, Rectangle 为绘制一个空心矩形，当用户将鼠标移动到 Rectangle 上时，我们将 Rectangle 的状态改为 hover，并在绘制时，将 Rectangle 的颜色设置为红色，当用户将鼠标移出 Rectangle 时，我们将 Rectangle 的状态改为 default，并恢复其颜色
+- 区别于 react-stay-canvas 的状态，shape 本身也有一个状态字段，当你的 Shape 在不同状态下需要不同的绘制效果时，你可以使用 state 字段来控制，比如我们需要实现一个 Rectangle，默认情况下，状态为 default, Rectangle 为绘制一个空心矩形，当用户将鼠标移动到 Rectangle 上时，我们将 Rectangle 的状态改为 hover，并在绘制时，将 Rectangle 的颜色设置为红色，当用户将鼠标移出 Rectangle 时，我们将 Rectangle 的状态改为 default，并恢复其颜色
 
-  ```typescript
-  //定义一个自定义的 Rectangle，通过自定义 stateDrawFuncMap，用来控制不同状态下的绘制效果
-  export class CustomRectangle extends Rectangle {
-    constructor({ x, y, width, height, props = {} }: RectangleAttr) {
-      super({ x, y, width, height, props })
-      this.initStateDrawFuncMap()
-    }
-
-    initStateDrawFuncMap() {
-      this.stateDrawFuncMap = {
-        default: ({ context }) => {
-          this.setColor(context, "white")
-          context.strokeRect(this.x, this.y, this.width, this.height)
-        },
-        hover: ({ context }) => {
-          this.setColor(context, "red")
-          context.strokeRect(this.x, this.y, this.width, this.height)
-          return true // 注意， 当你需要实现动画效果时，你必须返回 true，否则动画不会生效
-        },
-      }
-    }
+```typescript
+//定义一个自定义的 Rectangle，通过自定义 stateDrawFuncMap，用来控制不同状态下的绘制效果
+export class CustomRectangle extends Rectangle {
+  constructor({ x, y, width, height, props = {} }: RectangleAttr) {
+    super({ x, y, width, height, props })
+    this.initStateDrawFuncMap()
   }
 
-  // 创建一个hover监听器，当鼠标移动到 Rectangle 上时，我们将其状态改为 hover，当鼠标移出 Rectangle 时，我们将其状态改为 default
-  export const HoverListener: ListenerProps = {
-    name: "hoverListener",
-    event: "mousemove",
-    callback: ({ e, tools: { getChildrenBySelector } }) => {
-      const labels = getChildrenBySelector(".label")
-      labels.forEach((label) => {
-        let rectState = label.shape.contains(e.point) ? "hover" : "default"
-        label.shape.switchState(rectState)
-      })
-    },
+  initStateDrawFuncMap() {
+    this.stateDrawFuncMap = {
+      default: ({ context }) => {
+        this.setColor(context, "white")
+        context.strokeRect(this.x, this.y, this.width, this.height)
+      },
+      hover: ({ context }) => {
+        this.setColor(context, "red")
+        context.strokeRect(this.x, this.y, this.width, this.height)
+        return true // 注意， 当你需要实现动画效果时，你必须返回 true，否则动画不会生效
+      },
+    }
   }
-  ```
+}
+
+// 创建一个hover监听器，当鼠标移动到 Rectangle 上时，我们将其状态改为 hover，当鼠标移出 Rectangle 时，我们将其状态改为 default
+export const HoverListener: ListenerProps = {
+  name: "hoverListener",
+  event: "mousemove",
+  callback: ({ e, tools: { getChildrenBySelector } }) => {
+    const labels = getChildrenBySelector(".label")
+    labels.forEach((label) => {
+      let rectState = label.shape.contains(e.point) ? "hover" : "default"
+      label.shape.switchState(rectState)
+    })
+  },
+}
+```
+
   <video src="videos/state-map.mp4" controls="">
   </video>
 
 ##### 动画
 
-  在创建自定义Shape时，需要实现 draw 方法，该方法中存在 now 时间戳参数，利用该参数可以创建动画效果
-  在上面的例子中，当 hover CustomRectangle 时，我们希望矩形拥有一个边框在 2s 内从白到红再到白的呼吸效果而不是直接变成红色，那么我们可以这么修改 stateDrawFuncMap 中的 hover 绘制函数
+在创建自定义 Shape 时，需要实现 draw 方法，该方法中存在 now 时间戳参数，利用该参数可以创建动画效果
+在上面的例子中，当 hover CustomRectangle 时，我们希望矩形拥有一个边框在 2s 内从白到红再到白的呼吸效果而不是直接变成红色，那么我们可以这么修改 stateDrawFuncMap 中的 hover 绘制函数
 
-
-  ```typescript
-  ...
-  hover: ({ context, now }) => {
-    const c = Math.abs(
-      Math.ceil((now % 1000) / 4) - 255 * (Math.floor((now % 10000) / 1000) % 2)
-    )
-    this.setColor(context, `rgb(255, ${c}, ${c})`)
-    context.strokeRect(this.x, this.y, this.width, this.height)
-    return true // 注意，当你需要实现动画效果时，你必须返回 true，否则，将不会执行下一次绘制
-  },
-  ...
-  ```
+```typescript
+...
+hover: ({ context, now }) => {
+  const c = Math.abs(
+    Math.ceil((now % 1000) / 4) - 255 * (Math.floor((now % 10000) / 1000) % 2)
+  )
+  this.setColor(context, `rgb(255, ${c}, ${c})`)
+  context.strokeRect(this.x, this.y, this.width, this.height)
+  return true // 注意，当你需要实现动画效果时，你必须返回 true，否则，将不会执行下一次绘制
+},
+...
+```
 
   <video src="videos/shape-anim.mp4" controls="">
     </video>
   
   你可以结合 [gsap](https://gsap.com/), [tween](https://github.com/tweenjs/tween.js) 等动画库来实现更多丰富的动画效果
-
 
 ### Listener API
 
@@ -760,8 +764,6 @@ export interface ActionEvent {
   deltaZ: number // 鼠标滚轮滑动时的 z 轴偏移
 }
 
-
-
 //example 1
 // 在该例中, callback 函数没有返回任何值, 该 listener 实现了鼠标移动时，根据鼠标是否在矩形内切换矩形的状态
 export const HoverListener: ListenerProps = {
@@ -775,7 +777,6 @@ export const HoverListener: ListenerProps = {
     })
   },
 }
-
 
 //example 2
 // 在该例中, callback 函数返回了一个 CallbackFuncMap 对象, 注意到该 listener 的 event 是一个数组，分别对应 callback 函数返回的对象中的 三个 key，每个 key 对应的值是一个函数，该函数将在 dragstart, drag, dragend 三个事件触发时分别执行，其返回的值将会被合并到 composeStore 中
@@ -1236,7 +1237,6 @@ type triggerEventsProps = { [key: string]: ActionEvent },
 
 deleteListener 函数用来删除监听器，该函数接受一个字符串参数 listenerName，该参数为监听器的名称，该函数会删除该监听器，如果监听器不存在，则不会进行任何操作
 
-
 ### Event API
 
 ```typescript
@@ -1373,6 +1373,7 @@ const eventList = [DragStartEvent]
 `DragEndEvent`：定义了结束拖拽的事件。当鼠标按钮释放时触发。其成功回调中将清除关于拖拽的所有事件（包括进行中和结束自己的事件），并设置拖拽状态为非进行中。
 
 ### trigger 函数 API
+
 使用 trigger 函数前，你需要使用 useRef 获取 react-tay-canvas 的引用
 
 你可以使用 trigger 函数来手动触发事件， 有时候你可能需要在 canvas 外部触发事件，比如更改整个 canvas 的状态， 加载一些数据，保存一些数据等等，你可能希望用户在点击 canvas 外面的按钮或者自动的触发，那么使用 trigger 函数就可以实现

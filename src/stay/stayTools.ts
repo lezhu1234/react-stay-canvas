@@ -441,14 +441,6 @@ export function stayTools<Mode extends StayMode>(
         width: area.width,
         height: area.height,
       }
-      const [offsetX, offsetY] = [-area.x, -area.y]
-      const scale = targetSize.width / area.width
-
-      this.tools.move(offsetX, offsetY)
-      this.tools.zoom((scale - 1) * -1000, {
-        x: 0,
-        y: 0,
-      })
 
       const tempCanvas = document.createElement("canvas")
       tempCanvas.width = targetSize.width
@@ -458,7 +450,6 @@ export function stayTools<Mode extends StayMode>(
         throw new Error("Unable to get 2D context")
       }
 
-      //   props: {
       let shapes: InstantShape[] = []
       const layerNumber = this.root.layers.length
 
@@ -470,21 +461,6 @@ export function stayTools<Mode extends StayMode>(
           for (let layerIndex = 0; layerIndex < layerNumber; layerIndex++) {
             shapes.push(...c.getShapes(layerIndex))
           }
-
-          // await c.draw({
-          //   props: {
-          //     context: tempCtx,
-          //     now: Date.now(),
-          //     width: this.width,
-          //     height: this.height,
-          //   },
-          //   extraTransform: {
-          //     offsetX,
-          //     offsetY,
-          //     zoom: (scale - 1) * -1000,
-          //     zoomCenter: { x: targetArea.x, y: targetArea.y },
-          //   },
-          // })
         })
       )
 
@@ -501,12 +477,6 @@ export function stayTools<Mode extends StayMode>(
               forchDraw: true,
             })
           })
-
-          this.tools.zoom((1 / scale - 1) * -1000, {
-            x: 0,
-            y: 0,
-          })
-          this.tools.move(-offsetX, -offsetY)
 
           resolve(tempCanvas)
         })

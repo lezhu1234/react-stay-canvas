@@ -433,22 +433,26 @@ export function stayTools<Mode extends StayMode>(
     },
     regionToTargetCanvas: ({
       area,
-      targetArea,
+      targetSize,
       children,
       progress,
     }: RegionToTargetCanvasProps): Promise<HTMLCanvasElement> => {
-      targetArea = targetArea ?? {
-        x: 0,
-        y: 0,
+      targetSize = targetSize ?? {
         width: area.width,
         height: area.height,
       }
-      const [offsetX, offsetY] = [targetArea.x - area.x, targetArea.y - area.y]
-      const scale = targetArea.width / area.width
+      const [offsetX, offsetY] = [-area.x, -area.y]
+      const scale = targetSize.width / area.width
+
+      this.tools.move(offsetX, offsetY)
+      this.tools.zoom((scale - 1) * -1000, {
+        x: 0,
+        y: 0,
+      })
 
       const tempCanvas = document.createElement("canvas")
-      tempCanvas.width = targetArea.width
-      tempCanvas.height = targetArea.height
+      tempCanvas.width = targetSize.width
+      tempCanvas.height = targetSize.height
       const tempCtx = tempCanvas.getContext("2d")
       if (!tempCtx) {
         throw new Error("Unable to get 2D context")
@@ -484,19 +488,26 @@ export function stayTools<Mode extends StayMode>(
         })
       )
 
-      shapes.sort((s1, s2) => s1.zIndex - s2.zIndex)
-      shapes.sort((s1, s2) => s1.layer - s2.layer)
-      shapes.forEach((shape) => {
-        shape.draw({
-          context: tempCtx,
-          now: Date.now(),
-          width: this.width,
-          height: this.height,
-        })
-      })
-
       return new Promise((resolve) => {
         childrenReady.then(() => {
+          shapes.sort((s1, s2) => s1.zIndex - s2.zIndex)
+          shapes.sort((s1, s2) => s1.layer - s2.layer)
+          shapes.forEach((shape) => {
+            shape.draw({
+              context: tempCtx,
+              now: Date.now(),
+              width: tempCanvas.width,
+              height: tempCanvas.height,
+              forchDraw: true,
+            })
+          })
+
+          this.tools.zoom((1 / scale - 1) * -1000, {
+            x: 0,
+            y: 0,
+          })
+          this.tools.move(-offsetX, -offsetY)
+
           resolve(tempCanvas)
         })
       })

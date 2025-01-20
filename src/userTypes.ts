@@ -356,7 +356,7 @@ export interface StayChildProps<T> {
 // }
 export interface RegionToTargetCanvasProps {
   area: Area
-  targetArea?: Area
+  targetSize?: Size
   children: StayInstantChild[]
   progress?: number
 }
@@ -460,6 +460,7 @@ export interface ShapeDrawProps {
   now: number
   width: number
   height: number
+  forchDraw?: boolean
 }
 export interface Size {
   width: number

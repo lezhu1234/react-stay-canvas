@@ -152,10 +152,11 @@ export abstract class InstantShape {
   }
 
   draw(props: ShapeDrawProps): boolean {
-    if (!this.parent) {
+    const forchDraw = props.forchDraw ?? false
+    if (!this.parent && !forchDraw) {
       return true
     }
-    if (this.isOutOfViewport()) {
+    if (this.isOutOfViewport() && !forchDraw) {
       return true
     }
 

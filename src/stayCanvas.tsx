@@ -130,26 +130,6 @@ const StayCanvas = forwardRef(
       []
     )
 
-    // useEffect(() => {
-    //   if (!stay.current) {
-    //     return
-    //   }
-    //   stay.current.clearEvents()
-    //   ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
-    //     stay.current!.registerEvent(event as any)
-    //   })
-    // }, [eventList])
-
-    // useEffect(() => {
-    //   if (!stay.current) {
-    //     return
-    //   }
-    //   stay.current.clearEventListeners()
-    //   listenerList.forEach((listener) => {
-    //     stay.current!.addEventListener(listener)
-    //   })
-    // }, [listenerList])
-
     useEffect(() => {
       if (width > 0 && height > 0 && (!initialized.current || recreateOnResize)) {
         init()

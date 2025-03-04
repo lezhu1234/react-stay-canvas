@@ -13,6 +13,7 @@ import {
   mouseenter,
   mouseleave,
   mousemove,
+  mouseover,
   mouseup,
   wheel,
 } from "../rawEvents"
@@ -21,7 +22,13 @@ import { InstantShape } from "../shapes/instantShape"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
 import { EventProps, StayEventMap, StayEventProps } from "../types"
-import { DEFAULTSTATE, MOUSE_EVENTS, ROOTNAME, SUPPORT_OPRATOR } from "../userConstants"
+import {
+  DEFAULTSTATE,
+  FRAME_EVENT_NAME,
+  MOUSE_EVENTS,
+  ROOTNAME,
+  SUPPORT_OPRATOR,
+} from "../userConstants"
 import {
   ActionEvent,
   DrawReturn,
@@ -313,7 +320,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
   getTools() {
     return this.tools
   }
-  fireEvent(e: KeyboardEvent | MouseEvent | WheelEvent | DragEvent, trigger: string) {
+  fireEvent(e: KeyboardEvent | MouseEvent | WheelEvent | DragEvent | Event, trigger: string) {
     const isMouseEvent = e instanceof MouseEvent
     const triggerEvents: TriggerEvents<EventName> = {}
     Object.keys(this.events).forEach((_eventName) => {
@@ -414,6 +421,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
     topLayer.onmousedown = (e: MouseEvent) =>
       mousedown(this.fireEvent.bind(this), this.pressKey.bind(this), e)
     topLayer.onmousemove = (e: MouseEvent) => mousemove(this.fireEvent.bind(this), e)
+    topLayer.onmouseover = (e: MouseEvent) => mouseover(this.fireEvent.bind(this), e)
     topLayer.onclick = (e: MouseEvent) => click(this.fireEvent.bind(this), e)
     topLayer.ondblclick = (e: MouseEvent) => dblclick(this.fireEvent.bind(this), e)
     topLayer.oncontextmenu = (e: MouseEvent) => contextmenu(this.fireEvent.bind(this), e)
@@ -431,6 +439,14 @@ class Stay<EventName extends string, Mode extends StayMode> {
     })
     topLayer.onmouseenter = (e: MouseEvent) => mouseenter(this.fireEvent.bind(this), e)
     topLayer.onmouseleave = (e: MouseEvent) => mouseleave(this.fireEvent.bind(this), e)
+
+    const frameEvent = new Event(FRAME_EVENT_NAME)
+    const triggerFrameEvent = () => {
+      this.fireEvent(frameEvent, FRAME_EVENT_NAME)
+      window.requestAnimationFrame(triggerFrameEvent)
+    }
+
+    window.requestAnimationFrame(triggerFrameEvent)
   }
 
   getChildrenBySelector(selector?: string | SelectorFunc) {

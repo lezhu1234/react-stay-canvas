@@ -289,7 +289,7 @@ export class StayAnimatedChild<
     shape.parent = this
     const shapeFrames: T[] = this.shapeFramesMap.get(name) ?? []
     if (shapeFrames.length === 0 && prependZeroShape) {
-      const zs = shape._zeroShape() as T
+      const zs = shape._zeroShape(this.shapeFramesMap) as T
       zs.parent = this
       shapeFrames.push(this.checkShape(zs))
     }
@@ -332,7 +332,7 @@ export class StayAnimatedChild<
     for (const key of keys) {
       const slice = this.shapeFramesMap.get(key)!
       const lastShape = slice[slice.length - 1]
-      const zs = lastShape._zeroShape() as T
+      const zs = lastShape._zeroShape(this.shapeFramesMap) as T
 
       const _transition = {
         ...zs.transition,

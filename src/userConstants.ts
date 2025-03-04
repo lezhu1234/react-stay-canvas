@@ -2,6 +2,7 @@ export const MOUSE_EVENTS = {
   MOUSE_DOWN: "mousedown", // 鼠标按下事件类型常量，用于鼠标按下事件监听器中使用。
   MOUSE_UP: "mouseup", // 鼠标松开事件类型常量，用于鼠标松开事件监听器中使用。
   MOUSE_MOVE: "mousemove", // 鼠标移动事件类型常量，用于鼠标移动事件监听器中使用。
+  MOUSE_OVER: "mouseover",
   WHEEL: "wheel", // 鼠标滚轮事件类型常量，用于鼠标滚轮事件监听器中使用。
   CLICK: "click", // 鼠标点击事件类型常量，用于鼠标点击事件监听器中使用。
   DB_CLICK: "dblclick", // 鼠标双击事件类型常量，用于鼠标双击事件监听器中使用。
@@ -18,6 +19,8 @@ export const KEYBOARRD_EVENTS = {
   KEY_DOWN: "keydown", // 键盘按下事件类型常量，用于键盘按下事件监听器中使用。
   KEY_UP: "keyup", // 键盘松开事件类型常量，用于键盘松开事件监听器中使用。
 } as const
+
+export const FRAME_EVENT_NAME = "frame" // 每次 frame 更新都会触发的事件名称。
 
 export const DRAW_ACTIONS = {
   APPEND: "append", // 追加绘制操作的常量，用于追加绘制操作的函数中使用。

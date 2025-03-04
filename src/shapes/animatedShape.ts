@@ -127,14 +127,14 @@ export abstract class AnimatedShape extends InstantShape {
     transitionType: EasingFunction
   ): AnimatedShape
 
-  _zeroShape(): AnimatedShape {
-    const zeroShape = this.zeroShape()
+  _zeroShape(shapeFramesMap: Map<string, AnimatedShape[]>): AnimatedShape {
+    const zeroShape = this.zeroShape(shapeFramesMap)
     zeroShape.transition.delayMs = 0
     zeroShape.transition.durationMs = 0
     zeroShape.parent
     return zeroShape
   }
-  abstract zeroShape(): AnimatedShape
+  abstract zeroShape(shapeFramesMap: Map<string, AnimatedShape[]>): AnimatedShape
 
   abstract childSameAs(shape: AnimatedShape): boolean
 

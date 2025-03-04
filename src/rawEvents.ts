@@ -20,6 +20,10 @@ export function mouseenter(fireEvent: FireEvent, e: MouseEvent) {
 export function mousemove(fireEvent: FireEvent, e: MouseEvent) {
   fireEvent(e, MOUSE_EVENTS.MOUSE_MOVE)
 }
+
+export function mouseover(fireEvent: FireEvent, e: MouseEvent) {
+  fireEvent(e, MOUSE_EVENTS.MOUSE_OVER)
+}
 export function mouseleave(fireEvent: FireEvent, e: MouseEvent) {
   fireEvent(e, MOUSE_EVENTS.MOUSE_LEAVE)
 }

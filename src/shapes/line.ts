@@ -2,7 +2,7 @@ import { Point } from "./point"
 import { Coordinate, EasingFunction, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
 import { Vector } from "./vector"
 import { InstantShape } from "./instantShape"
-import { AnimatedShape } from "."
+import { AnimatedShape } from "./animatedShape"
 export interface UpdateLineProps extends ShapeProps {
   x1?: number
   y1?: number

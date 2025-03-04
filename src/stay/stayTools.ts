@@ -514,43 +514,44 @@ export function stayTools<Mode extends StayMode>(
 
           const { info: actionEvent, event: preEvent } = triggerEvents[actionEventName]
 
-          if (isMouseEvent) {
-            const _actionEvent = actionEvent as ActionEvent<PredefinedMouseEventName>
-            if (preEvent.withTargetConditionCallback) {
-              const children = this.tools.getChildrenBySelector(selector)
-              let flag = false
-              for (let index = 0; index < children.length; index++) {
-                const child = children[index]
+          const _actionEvent = actionEvent as ActionEvent<PredefinedMouseEventName>
+          if (preEvent.withTargetConditionCallback) {
+            const children = this.tools.getChildrenBySelector(selector)
+            let flag = false
+            for (let index = 0; index < children.length; index++) {
+              const child = children[index]
 
-                if (
-                  preEvent.withTargetConditionCallback({
-                    e: _actionEvent as any,
-                    store: this.store,
-                    stateStore: this.stateStore,
-                    target: child,
-                  })
-                ) {
-                  _actionEvent.target = child
-                  flag = true
-                  break
-                }
+              if (
+                preEvent.withTargetConditionCallback({
+                  e: _actionEvent as any,
+                  store: this.store,
+                  stateStore: this.stateStore,
+                  target: child,
+                  originEvent,
+                })
+              ) {
+                _actionEvent.target = child
+                flag = true
+                break
               }
-
-              if (!flag) {
-                return false
-              }
-            } else {
-              const children = this.tools.getContainPointChildren({
-                point: _actionEvent.point,
-                selector: selector,
-                sortBy: sortBy,
-              })
-
-              if (children.length === 0) {
-                return false
-              }
-              _actionEvent.target = children[0] as StayInstantChild
             }
+
+            if (!flag) {
+              return false
+            }
+          }
+
+          if (isMouseEvent) {
+            const children = this.tools.getContainPointChildren({
+              point: _actionEvent.point,
+              selector: selector,
+              sortBy: sortBy,
+            })
+
+            if (children.length === 0) {
+              return false
+            }
+            _actionEvent.target = children[0] as StayInstantChild
           }
 
           // needUpdate = true

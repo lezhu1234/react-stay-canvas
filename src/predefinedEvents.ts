@@ -1,6 +1,6 @@
 import { Point } from "./shapes/point"
 import { EventProps } from "./types"
-import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
+import { FRAME_EVENT_NAME, KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
 import {
   Coordinate,
   PredefinedEventName,
@@ -56,7 +56,7 @@ export const ClickEvent: EventProps<PredefinedMouseEventName> = {
 export const MousemoveEvent: EventProps<PredefinedMouseEventName> = {
   name: "mousemove",
   trigger: MOUSE_EVENTS.MOUSE_MOVE,
-  conditionCallback: ({ e }) => {
+  conditionCallback: ({ e, store }) => {
     return !e.pressedKeys.has("mouse0")
   },
 }
@@ -198,3 +198,17 @@ export const DragOverEvent: EventProps<PredefinedMouseEventName> = {
   trigger: MOUSE_EVENTS.DRAG_OVER,
   conditionCallback: () => true,
 }
+
+// export const HoverEvent: EventProps<PredefinedMouseEventName> = {
+//   name: "hover",
+//   trigger: FRAME_EVENT_NAME,
+//   conditionCallback: () => true,
+//   withTargetConditionCallback: ({ target, e, store, originEvent }) => {
+//     const mousePoint = store.get("MOUSE_POINT")
+//     console.log(mousePoint)
+//     // console.log(target.containsPointer(e.point))
+//     // return target.containsPointer(e.point)
+//     // console.log(originEvent)
+//     return false
+//   },
+// }

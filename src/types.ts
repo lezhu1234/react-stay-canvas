@@ -2,7 +2,7 @@ import { InstantShape } from "./shapes"
 import { Rectangle } from "./shapes/rectangle"
 import { StayInstantChild } from "./stay/child/stayInstantChild"
 import { valueof } from "./stay/types"
-import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
+import { FRAME_EVENT_NAME, KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
 import {
   ActionCallbackProps,
   ActionEvent,
@@ -81,7 +81,7 @@ export type StayEventMap<EventName extends string> = {
 
 export interface StayEventRequiredProps<EventName extends string> {
   name: EventName
-  trigger: valueof<typeof MOUSE_EVENTS> | valueof<typeof KEYBOARRD_EVENTS>
+  trigger: valueof<typeof MOUSE_EVENTS> | valueof<typeof KEYBOARRD_EVENTS> | typeof FRAME_EVENT_NAME
 }
 
 export interface StayEventChooseProps<EventName extends string> {
@@ -94,6 +94,7 @@ export interface StayEventChooseProps<EventName extends string> {
 export type StayEventProps<EventName extends string> = StayEventRequiredProps<EventName> &
   StayEventChooseProps<EventName> & {
     withTargetConditionCallback?: (props: {
+      originEvent: Event
       e: ActionEvent<EventName>
       store: storeType
       stateStore: storeType
@@ -104,6 +105,7 @@ export type StayEventProps<EventName extends string> = StayEventRequiredProps<Ev
 export type EventProps<EventName extends string> = StayEventRequiredProps<EventName> &
   Partial<StayEventChooseProps<EventName>> & {
     withTargetConditionCallback?: (props: {
+      originEvent: Event
       e: ActionEvent<EventName>
       store: storeType
       stateStore: storeType

@@ -622,6 +622,7 @@ export type PredefinedMouseEventName =
   | "mouseenter"
   | "mousemove"
   | "click"
+  | "hover"
   | PredefinedWheelEventName
 
 export type PredefinedKeyEventName = "keydown" | "keyup" | "undo" | "redo"

@@ -440,13 +440,13 @@ class Stay<EventName extends string, Mode extends StayMode> {
     topLayer.onmouseenter = (e: MouseEvent) => mouseenter(this.fireEvent.bind(this), e)
     topLayer.onmouseleave = (e: MouseEvent) => mouseleave(this.fireEvent.bind(this), e)
 
-    const frameEvent = new Event(FRAME_EVENT_NAME)
-    const triggerFrameEvent = () => {
-      this.fireEvent(frameEvent, FRAME_EVENT_NAME)
-      window.requestAnimationFrame(triggerFrameEvent)
-    }
+    // const frameEvent = new Event(FRAME_EVENT_NAME)
+    // const triggerFrameEvent = () => {
+    //   this.fireEvent(frameEvent, FRAME_EVENT_NAME)
+    //   window.requestAnimationFrame(triggerFrameEvent)
+    // }
 
-    window.requestAnimationFrame(triggerFrameEvent)
+    // window.requestAnimationFrame(triggerFrameEvent)
   }
 
   getChildrenBySelector(selector?: string | SelectorFunc) {

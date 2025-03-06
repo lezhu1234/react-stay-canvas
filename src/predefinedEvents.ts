@@ -69,17 +69,8 @@ export const MouseEnterEvent: EventProps<PredefinedMouseEventName> = {
 
 export const MouseLeaveEvent: EventProps<PredefinedMouseEventName> = {
   name: "mouseleave",
-  trigger: MOUSE_EVENTS.MOUSE_MOVE,
+  trigger: MOUSE_EVENTS.MOUSE_LEAVE,
   conditionCallback: () => true,
-  withTargetConditionCallback: ({ target, store, e }) => {
-    const lastMouseMovePosition: Coordinate | undefined = store.get("lastMouseMovePosition")
-    store.set("lastMouseMovePosition", e.point)
-    if (!lastMouseMovePosition) {
-      return false
-    }
-
-    return target.containsPointer(lastMouseMovePosition) && !target.containsPointer(e.point)
-  },
 }
 
 const DragEndEvent: EventProps<PredefinedMouseEventName> = {

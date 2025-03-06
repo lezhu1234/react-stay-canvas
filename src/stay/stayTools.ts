@@ -542,16 +542,20 @@ export function stayTools<Mode extends StayMode>(
           }
 
           if (isMouseEvent) {
-            const children = this.tools.getContainPointChildren({
-              point: _actionEvent.point,
-              selector: selector,
-              sortBy: sortBy,
-            })
+            if (actionEventName === "mouseleave") {
+              _actionEvent.target = this.rootChild
+            } else {
+              const children = this.tools.getContainPointChildren({
+                point: _actionEvent.point,
+                selector: selector,
+                sortBy: sortBy,
+              })
 
-            if (children.length === 0) {
-              return false
+              if (children.length === 0) {
+                return false
+              }
+              _actionEvent.target = children[0] as StayInstantChild
             }
-            _actionEvent.target = children[0] as StayInstantChild
           }
 
           // needUpdate = true

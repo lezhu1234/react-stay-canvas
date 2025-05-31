@@ -280,15 +280,25 @@ class Stay<EventName extends string, Mode extends StayMode> {
     }
 
     // run next tick function
-    requestIdleCallback(
-      (idle) => {
-        while (this.nextTickFunctions.length > 0 && (idle.timeRemaining() > 0 || idle.didTimeout)) {
-          const fn = this.nextTickFunctions.shift()
-          if (fn) fn()
-        }
-      },
-      { timeout: 1000 }
-    )
+    try {
+      requestIdleCallback(
+        (idle) => {
+          while (
+            this.nextTickFunctions.length > 0 &&
+            (idle.timeRemaining() > 0 || idle.didTimeout)
+          ) {
+            const fn = this.nextTickFunctions.shift()
+            if (fn) fn()
+          }
+        },
+        { timeout: 1000 }
+      )
+    } catch (e) {
+      while (this.nextTickFunctions.length > 0) {
+        const fn = this.nextTickFunctions.shift()
+        if (fn) fn()
+      }
+    }
 
     return { updatedLayers, updatedChilds }
   }

@@ -1,0 +1,15 @@
+# Local dev for the demo playground.
+#   docker compose up          -> http://localhost:5173
+# Edit anything under src/ or demo/src/ and the browser hot-reloads.
+services:
+  demo:
+    image: node:20-alpine
+    working_dir: /app/demo
+    command: sh -c "npm install && npm run dev"
+    environment:
+      WATCH_POLL: "1" # reliable HMR over the bind mount
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./:/app # repo root, so demo/ can import ../src live
+      - /app/demo/node_modules # keep container deps off the host

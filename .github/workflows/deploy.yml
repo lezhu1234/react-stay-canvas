@@ -1,4 +1,4 @@
-name: Deploy demo to GitHub Pages
+name: Deploy examples to GitHub Pages
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: demo
+        working-directory: example
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +41,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: demo/dist
+          path: example/dist
 
   deploy:
     needs: build

@@ -5,11 +5,17 @@ services:
   demo:
     image: node:20-alpine
     working_dir: /app/demo
+    restart: unless-stopped # survive host/daemon reboot
     command: sh -c "npm install && npm run dev"
     environment:
       WATCH_POLL: "1" # reliable HMR over the bind mount
+      # Set to your public domain when fronting with Caddy/HTTPS; unset for pure local.
+      PUBLIC_HOST: ${PUBLIC_HOST:-}
     ports:
-      - "5173:5173"
+      # Bind to loopback only: never expose the raw dev server to the internet.
+      # Caddy (on the host) reverse-proxies to it. For plain local use, reach it
+      # at http://localhost:5173 as usual.
+      - "127.0.0.1:5173:5173"
     volumes:
       - ./:/app # repo root, so demo/ can import ../src live
       - /app/demo/node_modules # keep container deps off the host

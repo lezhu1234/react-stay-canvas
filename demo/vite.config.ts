@@ -10,6 +10,9 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url))
 // Vercel/Netlify serve from root, so leaving BASE_PATH unset is correct there too.
 const base = process.env.BASE_PATH ?? "/"
 
+// Public hostname when serving through a reverse proxy (Caddy) over HTTPS.
+const publicHost = process.env.PUBLIC_HOST
+
 export default defineConfig({
   base,
   plugins: [react()],
@@ -21,10 +24,19 @@ export default defineConfig({
     },
   },
   server: {
-    host: true, // listen on 0.0.0.0 so the Docker container is reachable
+    host: true, // listen on 0.0.0.0 *inside* the container (host maps to 127.0.0.1)
     port: 5173,
+    // When exposed through a public HTTPS domain (Caddy in front), Vite must
+    // whitelist that host and point HMR at the public wss endpoint. Set
+    // PUBLIC_HOST=dev.machunchun.com to enable; unset = plain local dev.
+    allowedHosts: publicHost ? [publicHost] : undefined,
+    hmr: publicHost
+      ? { host: publicHost, clientPort: 443, protocol: "wss" }
+      : undefined,
     fs: {
-      // Allow the dev server to read the library source outside demo/.
+      // demo/ imports ../src, so the dev server needs read access to the repo
+      // root. This repo is public on GitHub anyway; keep Vite updated for the
+      // occasional fs path-traversal CVE, and never widen this beyond the repo.
       allow: [path.resolve(rootDir, "..")],
     },
     watch: {

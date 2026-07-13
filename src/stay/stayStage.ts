@@ -52,10 +52,8 @@ export default class StayStage<Mode extends StayMode> {
   }
 
   refresh() {
-    return this.#stay.draw({
-      forceDraw: true,
-      now: Date.now(),
-    })
+    this.#stay.forceUpdateAllLayers()
+    return this.#stay.draw({ now: Date.now() })
   }
 
   redo() {

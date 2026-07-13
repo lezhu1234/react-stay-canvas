@@ -86,10 +86,10 @@ describe("real drawing (node-canvas ctx spy)", () => {
     expect(strokeRect).toHaveBeenCalledTimes(1)
   })
 
-  // KNOWN FOOTGUN (characterization tripwire): appendChild does NOT mark the
-  // layer dirty, so an appended-but-never-mutated shape never renders. The
-  // refactor should make append mark dirty — when it does, flip this test.
-  it("[known issue] appendChild alone does not paint", () => {
+  // Refactor cut 1: appendChild now marks the shape's layer dirty, so an
+  // appended-but-never-mutated shape paints on the next draw (no poke needed).
+  // (Was the "[known issue] appendChild alone does not paint" tripwire.)
+  it("appendChild alone paints on the next draw", () => {
     const { stage, layers } = createStage({ layers: 2 })
     const strokeRect = vi.spyOn(layers[0].getContext("2d")!, "strokeRect")
     stage.tools.appendChild({
@@ -103,6 +103,23 @@ describe("real drawing (node-canvas ctx spy)", () => {
       }),
     })
     stage.draw({})
+    expect(strokeRect).toHaveBeenCalledWith(0, 0, 4, 4)
+  })
+
+  // Refactor: refresh() used to be a silent no-op (it passed the now-deleted
+  // dead `draw({ forceDraw })` flag). It now forceUpdates every layer, so it
+  // repaints even when nothing is dirty — while a plain draw() still doesn't.
+  it("refresh() forces a repaint of all layers (and dirty-tracking still holds)", () => {
+    const { stage, layers } = createStage({ layers: 2 })
+    stage.tools.appendChild({
+      className: "r",
+      shape: new Rectangle({ x: 1, y: 1, width: 2, height: 2, strokeConfig: { color: rgba(1, 1, 1), lineWidth: 1 } }),
+    })
+    stage.draw({}) // paints once (append marked the layer dirty)
+    const strokeRect = vi.spyOn(layers[0].getContext("2d")!, "strokeRect")
+    stage.draw({}) // nothing dirty → no repaint
     expect(strokeRect).not.toHaveBeenCalled()
+    stage.tools.refresh() // forces all layers → repaints
+    expect(strokeRect).toHaveBeenCalledWith(1, 1, 2, 2)
   })
 })

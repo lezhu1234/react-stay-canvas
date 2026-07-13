@@ -61,39 +61,29 @@ export function stayTools<Mode extends StayMode>(
         )
       }
       this.updateChildrenTime({ time, bound })
+      this.forceUpdateAllLayers()
       return this.draw({
-        forceDraw: true,
         now: Date.now(),
         beforeDrawCallback,
         afterDrawCallback,
       })
     },
     createChild: ({ id, className }: CreateChildProps) => {
-      let child = new StayAnimatedChild({
+      const child = new StayAnimatedChild({
         id,
         className,
         canvas: this.root,
       })
-      const childProxy = new Proxy(child, {
-        set: (target, prop, value) => {
-          if (prop === "update") {
-            target.update(value)
-            this.unLogedChildrenIds.add(child.id)
-          }
-          return Reflect.set(target, prop, value)
-        },
-      })
+      this.pushToChildren(child)
+      this.unLogedChildrenIds.add(child.id)
 
-      this.pushToChildren(childProxy)
-      this.unLogedChildrenIds.add(childProxy.id)
-
-      return childProxy
+      return child
     },
   }
 
   const instantTools = {
     // appendChild: ({ id, className, shape }: AppendChildProps<InstantShape>) => {
-    //   let child = new StayInstantChild({
+    //   const child = new StayInstantChild({
     //     id,
     //     className,
     //     shape,
@@ -200,32 +190,20 @@ export function stayTools<Mode extends StayMode>(
 
   const stayTools = {
     refresh: () => {
-      this.draw({
-        forceDraw: true,
-        now: Date.now(),
-      })
+      this.forceUpdateAllLayers()
+      this.draw({ now: Date.now() })
     },
     appendChild: ({ id, className, shape }: AppendChildProps<InstantShape>) => {
-      let child = new StayInstantChild({
+      const child = new StayInstantChild({
         id,
         className,
         shape,
         canvas: this.root,
       })
-      const childProxy = new Proxy(child, {
-        set: (target, prop, value) => {
-          if (prop === "update") {
-            target.update(value)
-            this.unLogedChildrenIds.add(child.id)
-          }
-          return Reflect.set(target, prop, value)
-        },
-      })
+      this.pushToChildren(child)
+      this.unLogedChildrenIds.add(child.id)
 
-      this.pushToChildren(childProxy)
-      this.unLogedChildrenIds.add(childProxy.id)
-
-      return childProxy
+      return child
     },
     hasChild: (id: string) => {
       return this.getChildren().has(id)

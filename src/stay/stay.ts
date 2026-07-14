@@ -1,22 +1,4 @@
 import Canvas from "../canvas"
-import {
-  click,
-  contextmenu,
-  dblclick,
-  dragend,
-  dragover,
-  dragstart,
-  drop,
-  keydown,
-  keyup,
-  mousedown,
-  mouseenter,
-  mouseleave,
-  mousemove,
-  mouseover,
-  mouseup,
-  wheel,
-} from "../rawEvents"
 import { Root } from "../shapes"
 import { InstantShape } from "../shapes/instantShape"
 // import { Point } from "../shapes/point"
@@ -44,6 +26,7 @@ import {
 import { isStayAnimatedChild, uuid4 } from "../utils"
 
 import { ChildrenStore } from "./childrenStore"
+import { EventDispatcher } from "./eventDispatcher"
 import { StayInstantChild } from "./child/stayInstantChild"
 import { Renderer } from "./renderer"
 import { stayTools } from "./stayTools"
@@ -52,14 +35,10 @@ import { SetShapeChildCurrentTime, StackItem } from "./types"
 class Stay<EventName extends string, Mode extends StayMode> {
   readonly children = new ChildrenStore()
   composeStore: Record<string, any>
-  currentPressedKeys: {
-    [key: string]: boolean
-  }
   renderer: Renderer
-  events: StayEventMap<EventName>
+  eventDispatcher: EventDispatcher<EventName>
   height: number
   historyChildren: Map<string, StayInstantChild>
-  listeners: Map<string, Required<ListenerProps<ListenerNamePayloadPair, EventName>>>
   root: Canvas
   stack: StackItem[]
   stackIndex: number
@@ -98,12 +77,9 @@ class Stay<EventName extends string, Mode extends StayMode> {
       className: ROOTNAME,
     })
     this.children.add(this.rootChild)
-    this.events = {} as StayEventMap<EventName>
     this.store = new Map<string, any>()
     this.stateStore = new Map<string, any>()
     this.composeStore = {}
-    this.currentPressedKeys = {}
-    this.listeners = new Map()
     this.state = DEFAULTSTATE
     this.stateSet = new Set([DEFAULTSTATE])
 
@@ -116,8 +92,17 @@ class Stay<EventName extends string, Mode extends StayMode> {
     this.renderer = new Renderer(this.root, () =>
       this.children.values().filter((child) => child.id !== this.rootId)
     )
+    this.eventDispatcher = new EventDispatcher(
+      this.root,
+      this.passive,
+      this.store,
+      this.stateStore,
+      () => this.state,
+      (originEvent, triggerEvents, payload) =>
+        this.tools.triggerAction(originEvent, triggerEvents, payload)
+    )
 
-    this.initEvents()
+    this.eventDispatcher.initEvents()
 
     this.mode = mode
     if (mode === "instant") {
@@ -125,30 +110,8 @@ class Stay<EventName extends string, Mode extends StayMode> {
     }
   }
 
-  addEventListener({
-    name,
-    event,
-    callback,
-    state = DEFAULTSTATE,
-    selector = `.${ROOTNAME}`,
-    sortBy = (child) => {
-      const { width, height } = child.getBound()
-      return width * height
-    },
-  }: ListenerProps<ListenerNamePayloadPair, EventName>) {
-    let eventList = event
-    if (!Array.isArray(event)) {
-      eventList = [event]
-    }
-
-    this.listeners.set(name, {
-      name,
-      state,
-      selector,
-      event: eventList,
-      sortBy,
-      callback,
-    })
+  addEventListener(props: ListenerProps<ListenerNamePayloadPair, EventName>) {
+    this.eventDispatcher.addEventListener(props)
   }
   checkName(name: string, preserveNames: string[]) {
     if (name.length === 0) {
@@ -164,20 +127,20 @@ class Stay<EventName extends string, Mode extends StayMode> {
     }
   }
 
+  get listeners() {
+    return this.eventDispatcher.listeners
+  }
+
   clearEventListeners() {
-    this.listeners.clear()
+    this.eventDispatcher.clearEventListeners()
   }
 
   clearEvents() {
-    this.events = {} as StayEventMap<EventName>
+    this.eventDispatcher.clearEvents()
   }
 
   cloneChildren(): Map<string, StayInstantChild> {
     return this.children.clone()
-  }
-
-  deleteEvent(name: EventName) {
-    delete this.events[name]
   }
 
   updateChildrenTime(props: SetShapeChildCurrentTime) {
@@ -210,76 +173,6 @@ class Stay<EventName extends string, Mode extends StayMode> {
   getTools() {
     return this.tools
   }
-  fireEvent(e: KeyboardEvent | MouseEvent | WheelEvent | DragEvent | Event, trigger: string) {
-    const isMouseEvent = e instanceof MouseEvent
-    const triggerEvents: TriggerEvents<EventName> = {}
-    Object.keys(this.events).forEach((_eventName) => {
-      const eventName = _eventName as EventName
-      // may be deleted by other event
-      if (!this.events[eventName]) {
-        return
-      }
-      const event = this.events[eventName] as StayEventProps<EventName>
-      if (event.trigger !== trigger) return false
-
-      const actionEvent = {
-        state: this.state,
-        name: eventName,
-        pressedKeys: new Set(
-          Object.keys(this.currentPressedKeys).filter((key) => this.currentPressedKeys[key])
-        ),
-        isMouseEvent: isMouseEvent,
-      } as ActionEvent<EventName>
-
-      // actionEvent.isMouseEvent = isMouseEvent
-
-      if (actionEvent.isMouseEvent) {
-        const mouseE = e as MouseEvent
-        actionEvent.x = mouseE.clientX - this.root.x
-        actionEvent.y = mouseE.clientY - this.root.y
-        actionEvent.point = { x: actionEvent.x, y: actionEvent.y }
-        if (event.trigger === MOUSE_EVENTS.WHEEL) {
-          const wheelE = e as WheelEvent
-          const _actionEvent = actionEvent as ActionEvent<PredefinedWheelEventName>
-          _actionEvent.deltaX = wheelE.deltaX
-          _actionEvent.deltaY = wheelE.deltaY
-          _actionEvent.deltaZ = wheelE.deltaZ
-        }
-      } else {
-        const keyboardE = e as KeyboardEvent
-        actionEvent.key = keyboardE.key
-      }
-
-      if (
-        event.conditionCallback({
-          e: actionEvent,
-          store: this.store,
-          stateStore: this.stateStore,
-        })
-      ) {
-        triggerEvents[eventName] = {
-          info: actionEvent,
-          event,
-        }
-        let linkEvent = event.successCallback({
-          e: actionEvent,
-          store: this.store,
-          stateStore: this.stateStore,
-          deleteEvent: this.deleteEvent.bind(this),
-        })
-        if (linkEvent) {
-          if (!(linkEvent instanceof Array)) {
-            linkEvent = [linkEvent]
-          }
-          linkEvent.forEach((le) => {
-            this.registerEvent(le)
-          })
-        }
-      }
-    })
-
-    this.tools.triggerAction(e, triggerEvents, {})
-  }
   forceUpdateLayer(layerIndex: number) {
     this.renderer.forceUpdateLayer(layerIndex)
   }
@@ -298,51 +191,8 @@ class Stay<EventName extends string, Mode extends StayMode> {
     this.renderer.nextTick(fn)
   }
 
-  initEvents() {
-    const topLayer = this.root.layers[this.root.layers.length - 1]
-    topLayer.onkeyup = (e: KeyboardEvent) =>
-      keyup(this.fireEvent.bind(this), this.releaseKey.bind(this), e)
-    topLayer.onkeydown = (e: KeyboardEvent) =>
-      keydown(this.fireEvent.bind(this), this.pressKey.bind(this), e)
-    topLayer.onmouseup = (e: MouseEvent) =>
-      mouseup(this.fireEvent.bind(this), this.releaseKey.bind(this), e)
-    topLayer.onmousedown = (e: MouseEvent) =>
-      mousedown(this.fireEvent.bind(this), this.pressKey.bind(this), e)
-    topLayer.onmousemove = (e: MouseEvent) => mousemove(this.fireEvent.bind(this), e)
-    topLayer.onmouseover = (e: MouseEvent) => mouseover(this.fireEvent.bind(this), e)
-    topLayer.onclick = (e: MouseEvent) => click(this.fireEvent.bind(this), e)
-    topLayer.ondblclick = (e: MouseEvent) => dblclick(this.fireEvent.bind(this), e)
-    topLayer.oncontextmenu = (e: MouseEvent) => contextmenu(this.fireEvent.bind(this), e)
-    topLayer.ondragover = (e) => dragover(this.fireEvent.bind(this), e)
-    // topLayer.ondragstart = (e: DragEvent) => dragstart(this.fireEvent.bind(this), e)
-    topLayer.addEventListener(
-      "dragstart",
-      (e: DragEvent) => dragstart(this.fireEvent.bind(this), e),
-      false
-    )
-    topLayer.ondragend = (e: DragEvent) => dragend(this.fireEvent.bind(this), e)
-    topLayer.ondrop = (e: DragEvent) => drop(this.fireEvent.bind(this), e)
-    topLayer.addEventListener("wheel", (e: WheelEvent) => wheel(this.fireEvent.bind(this), e), {
-      passive: this.passive,
-    })
-    topLayer.onmouseenter = (e: MouseEvent) => mouseenter(this.fireEvent.bind(this), e)
-    topLayer.onmouseleave = (e: MouseEvent) => mouseleave(this.fireEvent.bind(this), e)
-
-    // const frameEvent = new Event(FRAME_EVENT_NAME)
-    // const triggerFrameEvent = () => {
-    //   this.fireEvent(frameEvent, FRAME_EVENT_NAME)
-    //   window.requestAnimationFrame(triggerFrameEvent)
-    // }
-
-    // window.requestAnimationFrame(triggerFrameEvent)
-  }
-
   getChildrenBySelector(selector?: string | SelectorFunc) {
     return this.children.bySelector(selector)
-  }
-
-  pressKey(key: string) {
-    this.currentPressedKeys[key] = true
   }
 
   pushToChildren<T extends InstantShape>(child: StayInstantChild<T>) {
@@ -355,26 +205,8 @@ class Stay<EventName extends string, Mode extends StayMode> {
     this.stackIndex++
   }
 
-  registerEvent({
-    name,
-    trigger,
-    conditionCallback,
-    successCallback,
-    withTargetConditionCallback,
-  }: EventProps<EventName>) {
-    const defaultConditionCallback = () => true
-    const defaultSuccessCallback = () => void 0
-    this.events[name] = {
-      name,
-      trigger,
-      conditionCallback: conditionCallback || defaultConditionCallback,
-      successCallback: successCallback || defaultSuccessCallback,
-      withTargetConditionCallback,
-    }
-  }
-
-  releaseKey(key: string) {
-    this.currentPressedKeys[key] = false
+  registerEvent(props: EventProps<EventName>) {
+    this.eventDispatcher.registerEvent(props)
   }
 
   removeChildById(id: string) {

@@ -61,6 +61,26 @@ export interface WheelActionEvent<EventName extends PredefinedWheelEventName>
   deltaZ: number
 }
 
+// Fallback for a listener whose EventName isn't a single known predefined event
+// (the common case: a listener on several events, or a custom event, declared as
+// `ListenerProps` without a generic). Instead of collapsing to `never` — which
+// makes `e.point`/`e.x`/`e.key`/`e.deltaY` all error and forces callers into
+// `any` — expose every field a callback might read across mouse/key/wheel events.
+export interface AnyActionEvent {
+  state: string
+  name: string
+  pressedKeys: Set<string>
+  isMouseEvent: boolean
+  x: number
+  y: number
+  point: Coordinate
+  key: string
+  deltaX: number
+  deltaY: number
+  deltaZ: number
+  target: StayInstantChild
+}
+
 export type ActionEvent<EventName extends string | string[]> =
   EventName extends PredefinedWheelEventName
     ? WheelActionEvent<EventName>
@@ -68,7 +88,7 @@ export type ActionEvent<EventName extends string | string[]> =
     ? KeyActionEvent<EventName>
     : EventName extends PredefinedMouseEventName
     ? MouseActionEvent<EventName>
-    : never
+    : AnyActionEvent
 
 // export interface TimelineChildProps<T extends Shape> {
 //   id?: string
@@ -118,7 +138,10 @@ export type SortChildrenMethodsValues = valueof<typeof SORT_CHILDREN_METHODS>
 export interface ActionCallbackProps<
   T = Dict,
   EventName extends string | string[] = string,
-  Mode extends StayMode = StayMode
+  // Default to instant mode: it's the common case, and StayMode (the union)
+  // makes instant-only tools (log/undo/redo) unavailable on `tools`, forcing
+  // callers into `any`. Animated consumers pass Mode explicitly.
+  Mode extends StayMode = InstantMode
 > {
   originEvent: Event
   e: ActionEvent<EventName>
@@ -177,7 +200,7 @@ export type ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<
 export interface ListenerProps<
   T extends ListenerNamePayloadPair = ListenerNamePayloadPair,
   EventName extends string = string,
-  Mode extends StayMode = StayMode
+  Mode extends StayMode = InstantMode
 > {
   name: T["name"]
   state?: string
@@ -189,7 +212,7 @@ export interface ListenerProps<
 
 export interface PredefinedEventListenerProps<
   EventName extends PredefinedEventName = PredefinedEventName,
-  Mode extends StayMode = StayMode
+  Mode extends StayMode = InstantMode
 > {
   name: string
   state?: string
@@ -207,7 +230,6 @@ export interface ProgressBound {
 }
 
 export interface StayDrawProps {
-  forceDraw?: boolean
   now?: number
   beforeDrawCallback?: () => void
   afterDrawCallback?: (canvas: Canvas) => void
@@ -229,7 +251,9 @@ export interface BasicTools {
   // createChild: <T extends InstantShape>(props: createChildProps<T>) => StayInstantChild<T>
   // updateChild: (props: updateChildProps) => StayInstantChild
   removeChild: (childId: string) => Promise<void> | void
-  getContainPointChildren: (props: getContainPointChildrenProps) => StayInstantChild[]
+  getContainPointChildren: <T extends InstantShape = InstantShape>(
+    props: getContainPointChildrenProps
+  ) => StayInstantChild<T>[]
   hasChild: (id: string) => boolean
   // fix: () => void
   switchState: (state: string) => void
@@ -239,10 +263,10 @@ export interface BasicTools {
     selector: string | SelectorFunc
   ) => StayInstantChild<T> | void
   getChildrenByArea: (area: Area, selector?: string | SelectorFunc) => StayInstantChild[]
-  getChildrenBySelector: (
+  getChildrenBySelector: <T extends InstantShape = InstantShape>(
     selector: string | SelectorFunc,
     sortBy?: ChildSortFunction
-  ) => StayInstantChild[]
+  ) => StayInstantChild<T>[]
   getAvailiableStates: (selector: string) => string[]
   changeCursor: (cursor: Cursor) => void
   moveStart: () => void

@@ -43,6 +43,7 @@ export class Circle extends InstantShape {
     this.x = x
     this.y = y
     this.radius = radius
+    this.init() // set derived `center` (update() does this too; the ctor forgot)
   }
   contains(point: Point): boolean {
     return point.distance(this.center) < this.radius

@@ -41,8 +41,9 @@ import {
   StayTools,
   TriggerEvents,
 } from "../userTypes"
-import { infixExpressionParser, isStayAnimatedChild, uuid4 } from "../utils"
+import { isStayAnimatedChild, uuid4 } from "../utils"
 
+import { ChildrenStore } from "./childrenStore"
 import { StayInstantChild } from "./child/stayInstantChild"
 import { stayTools } from "./stayTools"
 import { SetShapeChildCurrentTime, StackItem } from "./types"
@@ -52,7 +53,7 @@ interface drawLayer {
 }
 
 class Stay<EventName extends string, Mode extends StayMode> {
-  #children: Map<string, StayInstantChild<InstantShape>>
+  readonly children = new ChildrenStore()
   composeStore: Record<string, any>
   currentPressedKeys: {
     [key: string]: boolean
@@ -88,7 +89,6 @@ class Stay<EventName extends string, Mode extends StayMode> {
     this.y = 0
     this.width = this.root.width
     this.height = this.root.height
-    this.#children = new Map<string, StayInstantChild>()
     this.rootId = `${ROOTNAME}-${uuid4()}`
     this.rootChild = new StayInstantChild({
       id: this.rootId,
@@ -101,7 +101,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
       canvas: this.root,
       className: ROOTNAME,
     })
-    this.#children.set(this.rootChild.id, this.rootChild)
+    this.children.add(this.rootChild)
     this.events = {} as StayEventMap<EventName>
     this.store = new Map<string, any>()
     this.stateStore = new Map<string, any>()
@@ -178,11 +178,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
   }
 
   cloneChildren(): Map<string, StayInstantChild> {
-    const newChildren = new Map<string, StayInstantChild>()
-    this.getChildren().forEach((child, id) => {
-      newChildren.set(id, child.copy())
-    })
-    return newChildren
+    return this.children.clone()
   }
 
   deleteEvent(name: EventName) {
@@ -197,7 +193,6 @@ class Stay<EventName extends string, Mode extends StayMode> {
     })
   }
   draw({
-    forceDraw = false,
     now = Date.now(),
     beforeDrawCallback,
     afterDrawCallback,
@@ -303,28 +298,20 @@ class Stay<EventName extends string, Mode extends StayMode> {
     return { updatedLayers, updatedChilds }
   }
 
-  filterChildren(filterCallback: (...args: any) => boolean) {
-    return [...this.#children.values()].filter(filterCallback)
+  filterChildren(filterCallback: (child: StayInstantChild) => boolean) {
+    return this.children.filter(filterCallback)
   }
 
   findByClassName(className: string): StayInstantChild[] {
-    return this.filterChildren(
-      (child) => child.className.split(":")[0] === className || child.className === className
-    )
+    return this.children.findByClassName(className)
   }
 
   findBySimpleSelector(selector: string): StayInstantChild[] {
-    if (selector.startsWith(".")) {
-      return this.findByClassName(selector.slice(1))
-    } else if (selector.startsWith("#")) {
-      const child = this.findChildById(selector.slice(1))
-      return child ? [child] : []
-    }
-    throw new Error("selector must start with . or #")
+    return this.children.findBySimpleSelector(selector)
   }
 
   findChildById(id: string): StayInstantChild | undefined {
-    return this.getChildById(id)
+    return this.children.get(id)
   }
 
   getTools() {
@@ -403,12 +390,18 @@ class Stay<EventName extends string, Mode extends StayMode> {
   forceUpdateLayer(layerIndex: number) {
     this.drawLayers[layerIndex].forceUpdate = true
   }
+
+  // Force every layer to repaint on the next draw — the honest replacement for
+  // the old dead `draw({ forceDraw })` flag. Used by refresh()/progress().
+  forceUpdateAllLayers() {
+    this.root.layers.forEach((_, i) => this.forceUpdateLayer(i))
+  }
   getChildById(id: string) {
-    return this.#children.get(id)
+    return this.children.get(id)
   }
 
   getChildren() {
-    return this.#children
+    return this.children.map
   }
   nextTick(fn: () => void) {
     this.nextTickFunctions.push(fn)
@@ -460,20 +453,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
   }
 
   getChildrenBySelector(selector?: string | SelectorFunc) {
-    const fullSet = [...this.getChildren().values()]
-    if (!selector) {
-      return fullSet
-    }
-    const children =
-      typeof selector === "function"
-        ? fullSet.filter((child) => selector(child))
-        : infixExpressionParser<StayInstantChild>({
-            selector,
-            fullSet,
-            elemntEqualFunc: (a: StayInstantChild, b: StayInstantChild) => a.id === b.id,
-            selectorConvertFunc: (s: string) => this.findBySimpleSelector(s),
-          })
-    return children
+    return this.children.bySelector(selector)
   }
 
   pressKey(key: string) {
@@ -481,7 +461,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
   }
 
   pushToChildren<T extends InstantShape>(child: StayInstantChild<T>) {
-    this.#children.set(child.id, child)
+    this.children.add(child)
   }
 
   pushToStack(steps: StackItem) {
@@ -513,9 +493,8 @@ class Stay<EventName extends string, Mode extends StayMode> {
   }
 
   removeChildById(id: string) {
-    const child = this.getChildById(id)
+    const child = this.children.delete(id)
     if (child) {
-      this.#children.delete(id)
       child.getLayers().forEach((layer) => {
         this.forceUpdateLayer(layer)
       })
@@ -528,10 +507,9 @@ class Stay<EventName extends string, Mode extends StayMode> {
   }
 
   startRender() {
-    this.draw({
-      forceDraw: true,
-      now: Date.now(),
-    })
+    // Incremental: draw() only repaints layers flagged dirty (forceUpdate /
+    // updatedLayers). Forcing everything here would repaint all layers at 60fps.
+    this.draw({ now: Date.now() })
     window.requestAnimationFrame(this.startRender.bind(this))
   }
 }

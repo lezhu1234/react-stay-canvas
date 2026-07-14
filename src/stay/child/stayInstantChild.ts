@@ -16,7 +16,6 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   className: string
   id: string
 
-  private shape: T | Map<string, T> | T[]
   shapeMap: Map<string, T>
   canvas: Canvas
   protected updatedLayers = new Set<number>()
@@ -24,13 +23,20 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   //   history
   constructor({ id, className, shape, canvas }: StayInstantChildProps<T>) {
     this.id = id ?? uuid4()
-    this.shape = shape
     this.className = className
     this.canvas = canvas
     this.shapeMap = this.assignShapes(shape)
   }
 
-  getShape() {
+  // The child's shape. A child is almost always a single shape, so this returns
+  // it typed as T, derived from shapeMap — meaning it's never a Map/array (fixes
+  // the old footgun where `child.shape` came back as a Map after undo/import).
+  // Rare multi-shape children should read `shapeMap` directly.
+  get shape(): T {
+    return this.shapeMap.values().next().value as T
+  }
+
+  getShape(): T {
     return this.shape
   }
 
@@ -94,6 +100,10 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     shapeMap.forEach((shape) => {
       shape.parent = this
       shape.layer = parseLayer(this.canvas.layers, shape.layer)
+      // Mark the shape's layer dirty so an appended (or replaced) child paints on
+      // the next draw — without this, appendChild alone never renders until the
+      // shape is later mutated. See onChildShapeChange for the per-update path.
+      this.updatedLayers.add(shape.layer)
     })
 
     return shapeMap
@@ -198,10 +208,16 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     return shapes
   }
 
+  /**
+   * @internal Replaces the child's shape(s) wholesale. This is an internal
+   * primitive used by undo/redo (which force-repaint separately) and does NOT
+   * go through the normal per-shape dirty-tracking. Consumers should mutate the
+   * shape instead — `child.shape.update({ ... })` — which repaints correctly.
+   */
   update({ id, className, shape }: StayInstantChildUpdateProps<T>) {
     this.id = id ?? this.id
     this.className = className ?? this.className
     this.shapeMap = shape ? this.assignShapes(shape) : this.shapeMap
-    this.shape = shape ?? this.shape
+    // `shape` is now a getter derived from shapeMap — nothing else to assign.
   }
 }

@@ -27,6 +27,7 @@ import { isStayAnimatedChild, uuid4 } from "../utils"
 
 import { ChildrenStore } from "./childrenStore"
 import { EventDispatcher } from "./eventDispatcher"
+import { History } from "./history"
 import { StayInstantChild } from "./child/stayInstantChild"
 import { Renderer } from "./renderer"
 import { stayTools } from "./stayTools"
@@ -37,17 +38,14 @@ class Stay<EventName extends string, Mode extends StayMode> {
   composeStore: Record<string, any>
   renderer: Renderer
   eventDispatcher: EventDispatcher<EventName>
+  history: History
   height: number
-  historyChildren: Map<string, StayInstantChild>
   root: Canvas
-  stack: StackItem[]
-  stackIndex: number
   state: string
   stateSet: Set<string>
   stateStore: Map<string, any>
   store: Map<string, any>
 
-  unLogedChildrenIds: Set<string>
   width: number
   x: number
   y: number
@@ -83,10 +81,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
     this.state = DEFAULTSTATE
     this.stateSet = new Set([DEFAULTSTATE])
 
-    this.historyChildren = this.cloneChildren()
-    this.unLogedChildrenIds = new Set()
-    this.stack = []
-    this.stackIndex = 0
+    this.history = new History(() => this.cloneChildren())
 
     this.tools = stayTools.bind(this)(mode) as any as StayTools<Mode>
     this.renderer = new Renderer(this.root, () =>
@@ -129,6 +124,24 @@ class Stay<EventName extends string, Mode extends StayMode> {
 
   get listeners() {
     return this.eventDispatcher.listeners
+  }
+
+  // History state lives in `this.history`; these keep the old flat field API
+  // that stayTools' undo/redo/log still read and write.
+  get stack() {
+    return this.history.stack
+  }
+  get stackIndex() {
+    return this.history.stackIndex
+  }
+  set stackIndex(value: number) {
+    this.history.stackIndex = value
+  }
+  get historyChildren() {
+    return this.history.historyChildren
+  }
+  get unLogedChildrenIds() {
+    return this.history.unLogedChildrenIds
   }
 
   clearEventListeners() {
@@ -200,9 +213,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
   }
 
   pushToStack(steps: StackItem) {
-    while (this.stack.length > this.stackIndex) this.stack.pop()
-    this.stack.push(steps)
-    this.stackIndex++
+    this.history.pushToStack(steps)
   }
 
   registerEvent(props: EventProps<EventName>) {
@@ -219,8 +230,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
   }
 
   snapshotChildren() {
-    this.historyChildren = this.cloneChildren()
-    this.unLogedChildrenIds.clear()
+    this.history.snapshot()
   }
 
   startRender() {

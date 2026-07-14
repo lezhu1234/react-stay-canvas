@@ -1,7 +1,6 @@
 import { AnimatedShape } from "../shapes/animatedShape"
 import { InstantShape } from "../shapes/instantShape"
 import { Rectangle } from "../shapes/rectangle"
-import { UserCallback } from "../types"
 import { ALLSTATE, DEFAULTSTATE, SUPPORT_OPRATOR } from "../userConstants"
 import {
   ActionCallbackProps,
@@ -466,14 +465,6 @@ export function stayTools<Mode extends StayMode>(
       payload: Dict
     ): void => {
       const isMouseEvent = originEvent instanceof MouseEvent
-      interface CallBackType {
-        callback: UserCallback<any, any, Mode>
-        e: ActionEvent<T>
-        name: string
-      }
-
-      // let needUpdate = false
-      const callbackList: CallBackType[] = []
       this.listeners.forEach(({ name, event, state, selector, sortBy, callback }) => {
         if (!(name in this.composeStore)) {
           this.composeStore[name] = {}
@@ -483,7 +474,7 @@ export function stayTools<Mode extends StayMode>(
           event = [event]
         }
 
-        event.forEach(async (actionEventName: string) => {
+        event.forEach((actionEventName: string) => {
           const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
 
           if (!avaliableSet.includes(this.state) || !(actionEventName in triggerEvents)) {
@@ -536,15 +527,21 @@ export function stayTools<Mode extends StayMode>(
             }
           }
 
-          // needUpdate = true
-          callbackList.push({
-            callback,
-            e: actionEvent,
-            name,
-          })
-
           if (callback) {
-            const eventFuncMap = await callback({
+            // Merge the callback's returned partial into THIS listener's
+            // composeStore (keyed by listener name). Shared by the sync and the
+            // defensive async path below. TODO(2b): type eventFuncMap.
+            const mergeComposeStore = (eventFuncMap: any) => {
+              if (eventFuncMap !== undefined && actionEvent.name in eventFuncMap) {
+                const particalComposeStore = eventFuncMap[actionEvent.name]()
+                this.composeStore[name] = {
+                  ...this.composeStore[name],
+                  ...particalComposeStore,
+                }
+              }
+            }
+
+            const result = callback({
               originEvent,
               //@ts-ignore cannot understand
               e: actionEvent,
@@ -556,21 +553,24 @@ export function stayTools<Mode extends StayMode>(
               payload,
             })
 
-            if (eventFuncMap !== undefined && actionEvent.name in eventFuncMap) {
-              // TODO: type
-              const particalComposeStore = (eventFuncMap as any)[actionEvent.name]()
-              this.composeStore[name] = {
-                ...this.composeStore[name],
-                ...particalComposeStore,
-              }
+            // The callback type is synchronous (CallbackFuncMap | void), so the
+            // common path merges in the SAME tick — no microtask defer, no
+            // `await tick()` needed, and a synchronous throw keeps its real
+            // stack. A plain-JS caller could still hand back a Promise; handle
+            // that defensively rather than dropping it on the floor (the old
+            // `forEach(async …)` swallowed both the result and any rejection).
+            if (result instanceof Promise) {
+              result
+                .then((eventFuncMap) => mergeComposeStore(eventFuncMap))
+                .catch((err) =>
+                  console.error(`[stay] listener "${name}" async callback threw:`, err)
+                )
+            } else {
+              mergeComposeStore(result)
             }
           }
         })
       })
-
-      // if (needUpdate) {
-      //   this.draw()
-      // }
     },
     deleteListener: (name: string) => {
       if (this.listeners.has(name)) {

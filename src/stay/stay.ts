@@ -45,12 +45,9 @@ import { isStayAnimatedChild, uuid4 } from "../utils"
 
 import { ChildrenStore } from "./childrenStore"
 import { StayInstantChild } from "./child/stayInstantChild"
+import { Renderer } from "./renderer"
 import { stayTools } from "./stayTools"
 import { SetShapeChildCurrentTime, StackItem } from "./types"
-
-interface drawLayer {
-  forceUpdate: boolean
-}
 
 class Stay<EventName extends string, Mode extends StayMode> {
   readonly children = new ChildrenStore()
@@ -58,7 +55,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
   currentPressedKeys: {
     [key: string]: boolean
   }
-  drawLayers: drawLayer[]
+  renderer: Renderer
   events: StayEventMap<EventName>
   height: number
   historyChildren: Map<string, StayInstantChild>
@@ -77,7 +74,6 @@ class Stay<EventName extends string, Mode extends StayMode> {
   y: number
   rootChild: StayInstantChild<Root>
   passive: boolean
-  nextTickFunctions: (() => void)[]
   mode: Mode
   rootId: string
   tools: StayTools<Mode>
@@ -117,10 +113,9 @@ class Stay<EventName extends string, Mode extends StayMode> {
     this.stackIndex = 0
 
     this.tools = stayTools.bind(this)(mode) as any as StayTools<Mode>
-    this.drawLayers = this.root.layers.map(() => ({
-      forceUpdate: false,
-    }))
-    this.nextTickFunctions = []
+    this.renderer = new Renderer(this.root, () =>
+      this.children.values().filter((child) => child.id !== this.rootId)
+    )
 
     this.initEvents()
 
@@ -192,110 +187,8 @@ class Stay<EventName extends string, Mode extends StayMode> {
       }
     })
   }
-  draw({
-    now = Date.now(),
-    beforeDrawCallback,
-    afterDrawCallback,
-  }: StayDrawProps): DrawReturn {
-    interface ChildLayer {
-      updateCurrentLayer: boolean
-    }
-
-    const childrenInlayer: ChildLayer[] = this.drawLayers.map((layer) => {
-      const childInLayer = {
-        updateCurrentLayer: layer.forceUpdate,
-      }
-      layer.forceUpdate = false
-      return childInLayer
-    })
-
-    const children = this.tools.getChildrenWithoutRoot()
-
-    children.forEach((child) => {
-      child.getUpdatedLayers().forEach((layer) => {
-        childrenInlayer[layer].updateCurrentLayer = true
-      })
-    })
-
-    const updatedLayers: number[] = []
-    const updatedChilds: {
-      child: StayInstantChild
-      shapes: InstantShape[]
-    }[] = []
-
-    if (beforeDrawCallback) {
-      beforeDrawCallback()
-    }
-
-    for (let layerIndex = 0; layerIndex < childrenInlayer.length; layerIndex++) {
-      const { updateCurrentLayer } = childrenInlayer[layerIndex]
-
-      if (!updateCurrentLayer) {
-        continue
-      }
-
-      updatedLayers.push(layerIndex)
-
-      const canvas = this.root.layers[layerIndex]
-      const context = this.root.contexts[layerIndex]
-
-      if (updateCurrentLayer) {
-        this.root.clear(context)
-      }
-
-      let layerDrawShapes: InstantShape[] = []
-
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i]
-        const shapes = child.getShapes(layerIndex)
-        layerDrawShapes.push(...shapes)
-        child.layerDraw(layerIndex)
-        if (shapes.length > 0) {
-          updatedChilds.push({
-            child,
-            shapes,
-          })
-        }
-      }
-
-      layerDrawShapes = layerDrawShapes.sort((s1, s2) => s1.zIndex - s2.zIndex)
-
-      layerDrawShapes.forEach((shape) => {
-        shape.draw({
-          context,
-          now,
-          width: this.width,
-          height: this.height,
-        })
-      })
-    }
-
-    if (afterDrawCallback) {
-      afterDrawCallback(this.root)
-    }
-
-    // run next tick function
-    try {
-      requestIdleCallback(
-        (idle) => {
-          while (
-            this.nextTickFunctions.length > 0 &&
-            (idle.timeRemaining() > 0 || idle.didTimeout)
-          ) {
-            const fn = this.nextTickFunctions.shift()
-            if (fn) fn()
-          }
-        },
-        { timeout: 1000 }
-      )
-    } catch (e) {
-      while (this.nextTickFunctions.length > 0) {
-        const fn = this.nextTickFunctions.shift()
-        if (fn) fn()
-      }
-    }
-
-    return { updatedLayers, updatedChilds }
+  draw(props: StayDrawProps): DrawReturn {
+    return this.renderer.draw(props)
   }
 
   filterChildren(filterCallback: (child: StayInstantChild) => boolean) {
@@ -388,13 +281,11 @@ class Stay<EventName extends string, Mode extends StayMode> {
     this.tools.triggerAction(e, triggerEvents, {})
   }
   forceUpdateLayer(layerIndex: number) {
-    this.drawLayers[layerIndex].forceUpdate = true
+    this.renderer.forceUpdateLayer(layerIndex)
   }
 
-  // Force every layer to repaint on the next draw — the honest replacement for
-  // the old dead `draw({ forceDraw })` flag. Used by refresh()/progress().
   forceUpdateAllLayers() {
-    this.root.layers.forEach((_, i) => this.forceUpdateLayer(i))
+    this.renderer.forceUpdateAllLayers()
   }
   getChildById(id: string) {
     return this.children.get(id)
@@ -404,13 +295,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
     return this.children.map
   }
   nextTick(fn: () => void) {
-    this.nextTickFunctions.push(fn)
-  }
-
-  render() {
-    window.requestAnimationFrame(() => {
-      this.render()
-    })
+    this.renderer.nextTick(fn)
   }
 
   initEvents() {
@@ -507,10 +392,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
   }
 
   startRender() {
-    // Incremental: draw() only repaints layers flagged dirty (forceUpdate /
-    // updatedLayers). Forcing everything here would repaint all layers at 60fps.
-    this.draw({ now: Date.now() })
-    window.requestAnimationFrame(this.startRender.bind(this))
+    this.renderer.start()
   }
 }
 

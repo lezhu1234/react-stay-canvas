@@ -141,13 +141,17 @@ export interface ActionCallbackProps<
   // Default to instant mode: it's the common case, and StayMode (the union)
   // makes instant-only tools (log/undo/redo) unavailable on `tools`, forcing
   // callers into `any`. Animated consumers pass Mode explicitly.
-  Mode extends StayMode = InstantMode
+  Mode extends StayMode = InstantMode,
+  // CS = this listener's composeStore shape (the per-listener scratchpad that
+  // carries data across a gesture's phases). Defaults loose for backward
+  // compatibility; declare it on ListenerProps to get `composeStore` typed.
+  CS = Record<string, any>
 > {
   originEvent: Event
   e: ActionEvent<EventName>
   store: storeType
   stateStore: storeType
-  composeStore: Record<string, any>
+  composeStore: CS
   canvas: Canvas
   tools: StayTools<Mode>
   payload: T
@@ -200,26 +204,32 @@ export type ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<
 export interface ListenerProps<
   T extends ListenerNamePayloadPair = ListenerNamePayloadPair,
   EventName extends string = string,
-  Mode extends StayMode = InstantMode
+  Mode extends StayMode = InstantMode,
+  // CS = this listener's composeStore shape. Defaults loose (Record<string,any>)
+  // so existing `ListenerProps` usages are unchanged; pass it to type the
+  // `composeStore` param inside the callback, e.g.
+  // `ListenerProps<Pair, "dragstart" | "drag", InstantMode, { start: Coordinate }>`.
+  CS = Record<string, any>
 > {
   name: T["name"]
   state?: string
   selector?: string
   event: EventName | EventName[]
   sortBy?: ChildSortFunction
-  callback: UserCallback<T["payload"], EventName | EventName[], Mode>
+  callback: UserCallback<T["payload"], EventName | EventName[], Mode, CS>
 }
 
 export interface PredefinedEventListenerProps<
   EventName extends PredefinedEventName = PredefinedEventName,
-  Mode extends StayMode = InstantMode
+  Mode extends StayMode = InstantMode,
+  CS = Record<string, any>
 > {
   name: string
   state?: string
   selector?: string
   event: EventName | EventName[]
   sortBy?: ChildSortFunction
-  callback: UserCallback<Dict, EventName | EventName[], Mode>
+  callback: UserCallback<Dict, EventName | EventName[], Mode, CS>
 }
 
 export type SelectorFunc = (child: StayInstantChild) => boolean

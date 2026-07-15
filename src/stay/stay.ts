@@ -152,6 +152,12 @@ class Stay<EventName extends string, Mode extends StayMode> {
     this.eventDispatcher.clearEvents()
   }
 
+  // Delegator kept for StayStage.deleteEvent (public API). The EventDispatcher
+  // cut moved the implementation into eventDispatcher; this line was missed then.
+  deleteEvent(name: EventName) {
+    this.eventDispatcher.deleteEvent(name)
+  }
+
   cloneChildren(): Map<string, StayInstantChild> {
     return this.children.clone()
   }

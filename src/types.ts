@@ -57,14 +57,23 @@ export interface UserConditionCallbackFunction<EventName extends string> {
 export type CallbackFuncMap<
   T extends ActionCallbackProps<U, EventName>,
   U,
-  EventName extends string | string[]
+  EventName extends string | string[],
+  // CS = the shape of this listener's composeStore. Defaults loose so untyped
+  // callers are unaffected; a listener that declares CS gets its returned
+  // partials checked against it (the write side of composeStore).
+  CS = Record<string, any>
 > = {
-  [key in T["e"]["name"]]?: () => { [key: string]: any } | void | undefined
+  [key in T["e"]["name"]]?: () => Partial<CS> | void | undefined
 }
 
-export type UserCallback<T, EventName extends string | string[], Mode extends StayMode> = (
-  p: ActionCallbackProps<T, EventName, Mode>
-) => CallbackFuncMap<ActionCallbackProps<T, EventName>, T, EventName> | void
+export type UserCallback<
+  T,
+  EventName extends string | string[],
+  Mode extends StayMode,
+  CS = Record<string, any>
+> = (
+  p: ActionCallbackProps<T, EventName, Mode, CS>
+) => CallbackFuncMap<ActionCallbackProps<T, EventName>, T, EventName, CS> | void
 
 // export interface StayAction {
 //   name: string

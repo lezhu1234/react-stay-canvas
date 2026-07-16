@@ -138,6 +138,34 @@ describe("animated: intermediate-shape cache (getTimelineShapeByBound)", () => {
   })
 })
 
+describe("animated: progress({ bound }) sub-range seek (the seek path the merge keeps)", () => {
+  // GAP-3 from strategic review: the bound branch (setCurrentTime L221-234) was
+  // otherwise unexecuted. Lock that it runs + paints + normalizes a reversed
+  // bound; the exact sub-range interpolation value is intentionally NOT pinned
+  // here (brittle) — whichever later unit touches progress()'s signature owns
+  // deeper bound coverage.
+  it("the bound branch runs, paints, and swaps a reversed bound instead of throwing", () => {
+    const { stage, layers } = createStage({ mode: "animated" })
+    const strokeRect = vi.spyOn(layers[0].getContext("2d")!, "strokeRect")
+    // a rect that moves x 0 -> 300 across the second segment (linear)
+    const child = stage.tools.createChild({ className: "a" })
+    child.appendKeyFrame(
+      "default",
+      new Rectangle({ x: 0, y: 0, width: 10, height: 10, strokeConfig: stroke, transition: { durationMs: 300, delayMs: 0, type: "linear" } })
+    )
+    child.appendKeyFrame(
+      "default",
+      new Rectangle({ x: 300, y: 0, width: 10, height: 10, strokeConfig: stroke, transition: { durationMs: 300, delayMs: 0, type: "linear" } })
+    )
+    stage.tools.progress({ timeMs: 300, bound: { beforeMs: 150, afterMs: 450 } })
+    expect(strokeRect).toHaveBeenCalled() // bound branch executed and painted
+    // a reversed bound is swapped in place (setCurrentTime L160-164), not thrown
+    expect(() =>
+      stage.tools.progress({ timeMs: 300, bound: { beforeMs: 450, afterMs: 150 } })
+    ).not.toThrow()
+  })
+})
+
 // The instant/animated PARTITION as it stands today. The merge (item 3) is meant
 // to DISSOLVE this: after PR C/D `tools` should expose every tool in both modes,
 // `mode` becomes a deprecated no-op, and `progress` no longer throws in instant.

@@ -100,9 +100,15 @@ class Stay<EventName extends string, Mode extends StayMode> {
     this.eventDispatcher.initEvents()
 
     this.mode = mode
-    if (mode === "instant") {
-      this.startRender()
-    }
+    // Unified render lifecycle: the RAF loop runs in EVERY mode, not just
+    // instant. It is dirty-gated (idle frames paint nothing), so "animated" no
+    // longer has to stay loop-less — progress() stays the explicit time driver
+    // (seek / scrubbing / bound sub-range), it just no longer has to be the ONLY
+    // thing that repaints. This removes the last mode-gated runtime branch, a
+    // prerequisite for dropping the `mode` distinction entirely. (No auto-advance
+    // clock is introduced here — that would change animated semantics and is out
+    // of scope for this backward-compatible merge.)
+    this.startRender()
   }
 
   addEventListener(props: ListenerProps<ListenerNamePayloadPair, EventName>) {

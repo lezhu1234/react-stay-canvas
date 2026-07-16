@@ -9,12 +9,15 @@ export function createStage(opts: {
   height?: number
   layers?: number
   mode?: StayMode
+  // Override the RAF stub — e.g. a counter to assert the render loop engaged.
+  // Defaults to a no-op so tests draw on demand, not continuously.
+  raf?: (cb: FrameRequestCallback) => number
 } = {}) {
-  const { width = 500, height = 500, layers = 2, mode = "instant" } = opts
+  const { width = 500, height = 500, layers = 2, mode = "instant", raf = () => 0 } = opts
 
-  // Neutralise the RAF render loop so tests draw on demand, not continuously.
-  ;(globalThis as any).requestAnimationFrame = () => 0
-  if (typeof window !== "undefined") (window as any).requestAnimationFrame = () => 0
+  // Neutralise (or instrument) the RAF render loop so tests draw on demand.
+  ;(globalThis as any).requestAnimationFrame = raf
+  if (typeof window !== "undefined") (window as any).requestAnimationFrame = raf
 
   const canvasEls: HTMLCanvasElement[] = Array.from({ length: layers }, () => {
     const el = document.createElement("canvas")

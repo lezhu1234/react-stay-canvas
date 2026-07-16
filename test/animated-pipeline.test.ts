@@ -98,7 +98,12 @@ describe("animated: setCurrentTime / progress() drive the shapeMap + paint", () 
     expect(strokeRect).not.toHaveBeenCalled()
   })
 
-  it("progress() mid-transition paints the interpolated frame at its geometry", () => {
+  // Geometry is constant across this timeline (the zero-frame shares it), so what
+  // interpolates is stroke alpha (0→1), which strokeRect args don't carry — the
+  // interpolation math itself is covered by the dimension-7 intermediateState
+  // test. This test pins that a mid-fade frame IS painted at its geometry (vs t=0
+  // where the transparent zero-frame paints nothing).
+  it("progress() mid-transition paints the frame at its geometry once it fades in", () => {
     const { stage, layers } = createStage({ mode: "animated" })
     const strokeRect = vi.spyOn(layers[0].getContext("2d")!, "strokeRect")
     animatedRect(stage)
@@ -134,6 +139,9 @@ describe("animated: intermediate-shape cache (getTimelineShapeByBound)", () => {
     const bound = { beforeIndex: 0, afterIndex: 1, ratio: 0.5 }
     const first = child.getTimelineShapeByBound(slice, bound)
     const second = child.getTimelineShapeByBound(slice, bound)
+    // identity holds only because intermediateState builds a fresh instance each
+    // call (so a non-cached second call would NOT be ===) and the single entry
+    // never trips the size-10 eviction — both load-bearing for this assertion.
     expect(second).toBe(first) // cache hit returns the identical instance
   })
 })
@@ -158,7 +166,13 @@ describe("animated: progress({ bound }) sub-range seek (the seek path the merge 
       new Rectangle({ x: 300, y: 0, width: 10, height: 10, strokeConfig: stroke, transition: { durationMs: 300, delayMs: 0, type: "linear" } })
     )
     stage.tools.progress({ timeMs: 300, bound: { beforeMs: 150, afterMs: 450 } })
-    expect(strokeRect).toHaveBeenCalled() // bound branch executed and painted
+    // the bound REMAPS the interpolation window: composing interp(zero→rectA)@150
+    // (x=0) with interp(rectA→rectB)@450 (x=150) at ratio 0.5 lands x≈75. The
+    // no-bound fallback at t=300 would instead paint rectA at x=0 — so asserting
+    // x≈75 pins that the sub-range branch (setCurrentTime L221-234) shaped the
+    // output, which a bare toHaveBeenCalled() could not.
+    const paintedXs = strokeRect.mock.calls.map((c) => c[0] as number)
+    expect(paintedXs.some((x) => Math.abs(x - 75) < 0.5)).toBe(true)
     // a reversed bound is swapped in place (setCurrentTime L160-164), not thrown
     expect(() =>
       stage.tools.progress({ timeMs: 300, bound: { beforeMs: 450, afterMs: 150 } })

@@ -120,7 +120,7 @@ export function stayTools<Mode extends StayMode>(
       stepItem.steps.forEach((step) => {
         const stepChild = step.child
         if (step.action === "append") {
-          ;this.tools.appendChild({
+          this.tools.appendChild({
             id: stepChild.id,
             shape: stepChild.shape,
             className: stepChild.className,
@@ -157,7 +157,7 @@ export function stayTools<Mode extends StayMode>(
         if (step.action === "append") {
           this.tools.removeChild(stepChild.id)
         } else if (step.action === "remove") {
-          ;this.tools.appendChild({
+          this.tools.appendChild({
             id: stepChild.id,
             shape: stepChild.shape,
             className: stepChild.className,

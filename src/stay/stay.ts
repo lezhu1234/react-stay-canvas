@@ -83,7 +83,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
 
     this.history = new History(() => this.cloneChildren())
 
-    this.tools = stayTools.bind(this)(mode) as any as StayTools<Mode>
+    this.tools = stayTools.call(this, mode)
     this.renderer = new Renderer(this.root, () =>
       this.children.values().filter((child) => child.id !== this.rootId)
     )

@@ -120,7 +120,7 @@ export function stayTools<Mode extends StayMode>(
       stepItem.steps.forEach((step) => {
         const stepChild = step.child
         if (step.action === "append") {
-          ;(this.tools as StayTools<"instant">).appendChild({
+          ;this.tools.appendChild({
             id: stepChild.id,
             shape: stepChild.shape,
             className: stepChild.className,
@@ -157,7 +157,7 @@ export function stayTools<Mode extends StayMode>(
         if (step.action === "append") {
           this.tools.removeChild(stepChild.id)
         } else if (step.action === "remove") {
-          ;(this.tools as StayTools<"instant">).appendChild({
+          ;this.tools.appendChild({
             id: stepChild.id,
             shape: stepChild.shape,
             className: stepChild.className,
@@ -404,7 +404,7 @@ export function stayTools<Mode extends StayMode>(
       children.forEach((child) => {
         child.move(offsetX, offsetY)
         child.zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
-        ;(this.tools as StayTools<"instant">).appendChild({
+        ;this.tools.appendChild({
           shape: child.copyShapeMap(),
           className: child.className,
         })

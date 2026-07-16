@@ -138,7 +138,12 @@ export interface StayCanvasProps<Mode extends StayMode, EventName extends string
     | PredefinedEventListenerProps<PredefinedKeyEventName>
   )[]
   passive?: boolean
-  mode: Mode
+  /**
+   * @deprecated The instant/animated modes are merged — every mode now exposes
+   * the full tool surface and runs the same render loop. `mode` is ignored at
+   * runtime and kept only for backward compatibility; you can omit it.
+   */
+  mode?: Mode
   mounted?: (tools: StayTools<Mode>) => void
   recreateOnResize?: boolean
   focusOnInit?: boolean

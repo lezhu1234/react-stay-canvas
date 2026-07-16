@@ -138,9 +138,10 @@ export type SortChildrenMethodsValues = valueof<typeof SORT_CHILDREN_METHODS>
 export interface ActionCallbackProps<
   T = Dict,
   EventName extends string | string[] = string,
-  // Default to instant mode: it's the common case, and StayMode (the union)
-  // makes instant-only tools (log/undo/redo) unavailable on `tools`, forcing
-  // callers into `any`. Animated consumers pass Mode explicitly.
+  // @deprecated Vestigial since the instant/animated modes merged: `StayTools`
+  // now exposes every tool regardless of `Mode` (it no longer distributes over
+  // the union and hides mode-specific tools). Kept as a positional placeholder
+  // so existing 4-arg `ActionCallbackProps`/callback types don't shift `CS`.
   Mode extends StayMode = InstantMode,
   // CS = this listener's composeStore shape (the per-listener scratchpad that
   // carries data across a gesture's phases). Defaults loose for backward
@@ -574,6 +575,11 @@ export interface TextAttr extends AnimatedShapeProps {
   autoTransitionDiffText?: boolean
 }
 
+/**
+ * @deprecated The instant/animated modes are merged — a single mode exposes the
+ * full tool surface and runs one render loop. These types are kept only as
+ * backward-compatible aliases; new code doesn't need `mode`.
+ */
 export type StayMode = InstantMode | AnimatedMode
 export type InstantMode = "instant"
 export type AnimatedMode = "animated"

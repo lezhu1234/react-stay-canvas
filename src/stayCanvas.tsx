@@ -16,7 +16,7 @@ import { ContextLayerSetFunction, StayCanvasProps } from "./types"
 import { PredefinedEventName, StayCanvasRefType, StayMode } from "./userTypes"
 
 const StayCanvas = forwardRef(
-  <EventName extends string, Mode extends StayMode>(
+  <EventName extends string, Mode extends StayMode = StayMode>(
     {
       width = 500,
       height = 500,
@@ -29,7 +29,7 @@ const StayCanvas = forwardRef(
       mode,
       recreateOnResize = false,
       focusOnInit = true,
-    }: StayCanvasProps<"instant", EventName> | StayCanvasProps<"animated", EventName>,
+    }: StayCanvasProps<Mode, EventName>,
     ref: Ref<StayCanvasRefType>
   ) => {
     const initialized = useRef(false)
@@ -87,7 +87,7 @@ const StayCanvas = forwardRef(
         width,
         height,
         passive,
-        mode
+        mode ?? "instant"
       )
       ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
         stay.current!.registerEvent(event as any)

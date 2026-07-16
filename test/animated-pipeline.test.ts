@@ -180,28 +180,19 @@ describe("animated: progress({ bound }) sub-range seek (the seek path the merge 
   })
 })
 
-// The instant/animated PARTITION as it stands today. The merge (item 3) is meant
-// to DISSOLVE this: after PR C/D `tools` should expose every tool in both modes,
-// `mode` becomes a deprecated no-op, and `progress` no longer throws in instant.
-// When that lands these expectations flip — that flip is the intended diff, so
-// update them there rather than deleting the tests.
-describe("animated: instant/animated tool partition (MERGE WILL CHANGE)", () => {
-  it("instant mode exposes history tools (undo/redo/log) and NOT progress/createChild", () => {
-    const { stage } = createStage({ mode: "instant" })
-    const t = stage.tools as any
-    expect(typeof t.undo).toBe("function")
-    expect(typeof t.redo).toBe("function")
-    expect(typeof t.log).toBe("function")
-    expect(t.progress).toBeUndefined()
-    expect(t.createChild).toBeUndefined()
+// The instant/animated tool partition is now DISSOLVED (unit C merged the tool
+// factory). These were the "MERGE WILL CHANGE" tests: previously each mode
+// exposed only its half; now `tools` exposes EVERY tool in BOTH modes. This is
+// the intended flip — kept (not deleted) so the unified surface is pinned.
+describe("unified tool surface (item 3 unit C — every tool in every mode)", () => {
+  const allTools = ["undo", "redo", "log", "progress", "createChild", "appendChild"]
+  it("instant mode exposes the full tool surface (incl. progress/createChild)", () => {
+    const t = createStage({ mode: "instant" }).stage.tools as any
+    allTools.forEach((name) => expect(typeof t[name]).toBe("function"))
   })
 
-  it("animated mode exposes progress/createChild and NOT the history tools", () => {
-    const { stage } = createStage({ mode: "animated" })
-    const t = stage.tools as any
-    expect(typeof t.progress).toBe("function")
-    expect(typeof t.createChild).toBe("function")
-    expect(t.undo).toBeUndefined()
-    expect(t.log).toBeUndefined()
+  it("animated mode exposes the full tool surface (incl. undo/redo/log)", () => {
+    const t = createStage({ mode: "animated" }).stage.tools as any
+    allTools.forEach((name) => expect(typeof t[name]).toBe("function"))
   })
 })

@@ -2,7 +2,6 @@ import Canvas from "../canvas"
 import { ContextLayerSetFunction } from "../types"
 import { StayMode, StayTools } from "../userTypes"
 import Stay from "./stay"
-import { isInstantMode } from "./stayTools"
 
 type Args<T> = T extends (...args: infer R) => any ? R : never
 export default class StayStage<Mode extends StayMode> {
@@ -29,10 +28,7 @@ export default class StayStage<Mode extends StayMode> {
   }
 
   backward() {
-    if (isInstantMode(this.#stay.mode)) {
-      // @ts-ignore  i cannot understand
-      return this.#stay.tools.undo()
-    }
+    return this.#stay.tools.undo()
   }
 
   clearEventListeners(...args: Args<typeof Stay.prototype.clearEventListeners>) {
@@ -57,10 +53,7 @@ export default class StayStage<Mode extends StayMode> {
   }
 
   redo() {
-    if (isInstantMode(this.#stay.mode)) {
-      // @ts-ignore  i cannot understand
-      return this.#stay.tools.redo()
-    }
+    return this.#stay.tools.redo()
   }
 
   move(...args: Args<typeof Stay.prototype.tools.move>) {

@@ -252,10 +252,17 @@ export interface ProgressProps {
   afterDrawCallback?: (canvas: Canvas) => void
 }
 
-export type StayTools<Mode extends StayMode> = (Mode extends InstantMode
-  ? InstantTools
-  : AnimatedTools) &
-  BasicTools
+// The dual-mode merge: a single unified tool surface. Formerly this distributed
+// over StayMode (InstantTools for instant, AnimatedTools for animated) — and
+// because conditional types distribute over unions, `StayTools<StayMode>`
+// collapsed to just BasicTools, hiding BOTH tool sets (the root cause of the old
+// `as any` in the factory and the `@ts-ignore`s in StayStage). The three
+// interfaces have no name collisions, so a plain intersection exposes every tool
+// in every mode. `Mode` is now vestigial (kept until it is removed wholesale in
+// the next cut).
+export type StayTools<Mode extends StayMode = InstantMode> = BasicTools &
+  InstantTools &
+  AnimatedTools
 export interface BasicTools {
   appendChild: <T extends InstantShape>(props: AppendChildProps<T>) => StayInstantChild<T>
   // createChild: <T extends InstantShape>(props: createChildProps<T>) => StayInstantChild<T>

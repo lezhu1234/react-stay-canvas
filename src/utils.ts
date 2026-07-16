@@ -198,7 +198,9 @@ export function parseLayer(layers: any[], layer: number | undefined) {
 }
 
 export function isStayAnimatedChild(child: any): child is StayAnimatedChild {
-  return (child as StayAnimatedChild).setCurrentTime !== undefined
+  // Null-safe: a removed child looks up as undefined (its id can still be in
+  // unLogedChildrenIds), and a type guard must return false — not throw — for it.
+  return child != null && (child as StayAnimatedChild).setCurrentTime !== undefined
 }
 
 export function getCornersByCenterLine(centerLine: Line, width: number) {

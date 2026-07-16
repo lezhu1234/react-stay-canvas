@@ -38,27 +38,16 @@ export function isInstantMode(mode: StayMode): mode is InstantMode {
   return mode === "instant"
 }
 
-export function stayTools(
-  this: Stay<any, InstantMode>,
-  mode: InstantMode
-): InstantTools & BasicTools
-export function stayTools(
-  this: Stay<any, AnimatedMode>,
-  mode: AnimatedMode
-): AnimatedTools & BasicTools
-export function stayTools(this: Stay<any, StayMode>, mode: StayMode): StayTools<StayMode>
-
+// One factory, one unified tool surface — no more per-mode overloads. Every mode
+// gets all tools; `mode` is retained only for signature stability (it no longer
+// selects anything).
 export function stayTools<Mode extends StayMode>(
   this: Stay<any, Mode>,
   mode: Mode
-): StayTools<StayMode> {
+): StayTools<Mode> {
+  void mode
   const animatedTools = {
     progress: ({ timeMs: time, bound, beforeDrawCallback, afterDrawCallback }: ProgressProps) => {
-      if (this.mode === "instant") {
-        throw new Error(
-          "Instant Mode: you can't call progress, you need to switch to animated mode"
-        )
-      }
       this.updateChildrenTime({ time, bound })
       this.forceUpdateAllLayers()
       return this.draw({
@@ -74,8 +63,10 @@ export function stayTools<Mode extends StayMode>(
         canvas: this.root,
       })
       this.pushToChildren(child)
-      this.unLogedChildrenIds.add(child.id)
-
+      // Timeline (animated) children do NOT participate in undo/redo history:
+      // diff() would copyShapeMap() a frozen interpolated frame, and undo/redo
+      // would restore it as a plain instant child — destroying the timeline. So
+      // they are never tracked here; log() also filters them out defensively.
       return child
     },
   }
@@ -105,6 +96,9 @@ export function stayTools<Mode extends StayMode>(
     // },
     log: () => {
       const steps = [...this.unLogedChildrenIds]
+        // timeline children are excluded from history (see createChild) — belt
+        // and suspenders in case one ever reaches this set another way.
+        .filter((id) => !isStayAnimatedChild(this.getChildById(id)))
         .map((id) => StayInstantChild.diff(this.historyChildren.get(id), this.getChildById(id)))
         .filter((o) => o) as StepProps[]
       this.pushToStack({
@@ -192,8 +186,8 @@ export function stayTools<Mode extends StayMode>(
       this.forceUpdateAllLayers()
       this.draw({ now: Date.now() })
     },
-    appendChild: ({ id, className, shape }: AppendChildProps<InstantShape>) => {
-      const child = new StayInstantChild({
+    appendChild: <T extends InstantShape>({ id, className, shape }: AppendChildProps<T>) => {
+      const child = new StayInstantChild<T>({
         id,
         className,
         shape,
@@ -245,17 +239,17 @@ export function stayTools<Mode extends StayMode>(
       })
       return selectedChildren
     },
-    getChildrenBySelector: (
+    getChildrenBySelector: <T extends InstantShape = InstantShape>(
       selector: string | SelectorFunc,
       sortBy?: ChildSortFunction
-    ): StayInstantChild[] => {
+    ): StayInstantChild<T>[] => {
       const children = this.getChildrenBySelector(selector)
 
       if (sortBy) {
         children.sort(sortBy)
       }
 
-      return children
+      return children as StayInstantChild<T>[]
     },
     getAvailiableStates: (selector: string): string[] => {
       const stateSelectors = selector
@@ -278,13 +272,13 @@ export function stayTools<Mode extends StayMode>(
         )
       }
     },
-    getContainPointChildren: ({
+    getContainPointChildren: <T extends InstantShape = InstantShape>({
       point,
       selector,
       sortBy,
       returnFirst = false,
       withRoot = true,
-    }: getContainPointChildrenProps): StayInstantChild[] => {
+    }: getContainPointChildrenProps): StayInstantChild<T>[] => {
       let _selector = selector
 
       if (selector && Array.isArray(selector)) {
@@ -305,7 +299,9 @@ export function stayTools<Mode extends StayMode>(
         hitChildren = hitChildren.filter((c) => c.id !== this.rootId)
       }
 
-      return returnFirst && hitChildren.length > 0 ? [hitChildren[0]] : hitChildren
+      return (
+        returnFirst && hitChildren.length > 0 ? [hitChildren[0]] : hitChildren
+      ) as StayInstantChild<T>[]
     },
     changeCursor: (cursor: Cursor) => {
       this.root.layers[this.root.layers.length - 1].style.cursor = cursor
@@ -579,8 +575,11 @@ export function stayTools<Mode extends StayMode>(
     },
   }
 
+  // Unified surface: every mode gets all tools (see StayTools). The three groups
+  // have no overlapping keys, so the merge is unambiguous — no branch, no cast.
   return {
     ...stayTools,
-    ...(isInstantMode(mode) ? instantTools : animatedTools),
-  } as any
+    ...instantTools,
+    ...animatedTools,
+  }
 }

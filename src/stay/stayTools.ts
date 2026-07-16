@@ -209,7 +209,13 @@ export function stayTools<Mode extends StayMode>(
       const child = this.getChildById(childId)
       if (!child) return
       this.removeChildById(child.id)
-      this.unLogedChildrenIds.add(child.id)
+      // Timeline children stay out of history on the REMOVAL path too. `child`
+      // here is still the live animated instance, so isStayAnimatedChild is
+      // reliable — after removal getChildById()/the degraded snapshot clone can no
+      // longer tell it was animated, so this is the only place it can be excluded.
+      if (!isStayAnimatedChild(child)) {
+        this.unLogedChildrenIds.add(child.id)
+      }
       return new Promise<void>((resolve) => {
         this.nextTick(resolve)
       })

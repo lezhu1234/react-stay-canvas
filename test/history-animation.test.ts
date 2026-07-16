@@ -30,6 +30,26 @@ describe("history × animation (item 3 unit C)", () => {
     expect(() => t.progress({ timeMs: 300 })).not.toThrow() // still seekable
   })
 
+  it("removeChild of an animated child stays out of history — undo does NOT resurrect it (removal path)", () => {
+    // Without the removeChild guard: removeChild re-adds the id, and after
+    // removal neither getChildById nor the (degraded) snapshot clone can tell it
+    // was animated, so log() would emit a "remove" step and undo would re-append
+    // it as a plain instant child. The guard excludes it while it's still live.
+    const t = createStage({ mode: "animated" }).stage.tools as any
+    const child = t.createChild({ className: "a" })
+    child.appendKeyFrame(
+      "default",
+      new Rectangle({ x: 10, y: 10, width: 20, height: 20, strokeConfig: stroke, transition: { durationMs: 300, delayMs: 0 } })
+    )
+    t.log()
+    t.removeChild(child.id)
+    t.log()
+    const nonRootAfterRemove = t.getChildrenWithoutRoot().length
+    t.undo()
+    expect(t.getChildById(child.id)).toBeFalsy() // stays removed — not resurrected as an instant child
+    expect(t.getChildrenWithoutRoot().length).toBe(nonRootAfterRemove) // no phantom child
+  })
+
   it("regular (instant) children ARE still tracked by history (undo removes an appended child)", () => {
     // animated mode now also has appendChild/log/undo — the merge is symmetric
     const t = createStage({ mode: "animated" }).stage.tools as any

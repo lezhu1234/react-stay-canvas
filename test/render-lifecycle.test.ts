@@ -14,13 +14,16 @@ describe("unified render lifecycle (unit B)", () => {
     return n
   }
 
-  it("starts the render loop in instant mode (unchanged)", () => {
-    expect(rafCountFor("instant")).toBeGreaterThan(0)
+  // start() schedules exactly one RAF per construction (the stub returns without
+  // recursing), so `toBe(1)` both proves the loop engaged AND guards against a
+  // future accidental double-startRender.
+  it("starts the render loop exactly once in instant mode (unchanged)", () => {
+    expect(rafCountFor("instant")).toBe(1)
   })
 
   it("ALSO starts the render loop in animated mode (previously gated off)", () => {
     // Before unit B this was 0: the `mode === "instant"` gate skipped startRender
     // for animated, so animated had no loop at all (consumer had to pump progress).
-    expect(rafCountFor("animated")).toBeGreaterThan(0)
+    expect(rafCountFor("animated")).toBe(1)
   })
 })

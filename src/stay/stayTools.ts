@@ -404,7 +404,7 @@ export function stayTools<Mode extends StayMode>(
       children.forEach((child) => {
         child.move(offsetX, offsetY)
         child.zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
-        ;this.tools.appendChild({
+        this.tools.appendChild({
           shape: child.copyShapeMap(),
           className: child.className,
         })

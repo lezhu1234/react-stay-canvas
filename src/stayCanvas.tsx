@@ -11,7 +11,7 @@ import React, {
 } from "react"
 
 import * as PredefinedEventList from "./predefinedEvents"
-import StayStage from "./stay/stayStage"
+import Stay, { createStay } from "./stay/stay"
 import { ContextLayerSetFunction, StayCanvasProps } from "./types"
 import { PredefinedEventName, StayCanvasRefType } from "./userTypes"
 
@@ -66,7 +66,7 @@ const StayCanvas = forwardRef(
       : never
 
     const canvasLayers = useRef<HTMLCanvasElement[]>([])
-    const stay = useRef<StayStage>()
+    const stay = useRef<Stay<string>>()
 
     // eventList = useMemo(() => eventList || [], [eventList])
     // listenerList = useMemo(() => listenerList || [], [listenerList])
@@ -79,7 +79,7 @@ const StayCanvas = forwardRef(
     type ListenerNames = GetListenerPairName<ListenerPair>
 
     const init = () => {
-      stay.current = new StayStage(
+      stay.current = createStay(
         canvasLayers.current,
         contextLayerSetFunctionList,
         width,
@@ -90,7 +90,7 @@ const StayCanvas = forwardRef(
         stay.current!.registerEvent(event as any)
       })
       listenerList.forEach((listener) => {
-        stay.current!.addEventListener(listener)
+        stay.current!.addEventListener(listener as any)
       })
 
       if (mounted && stay.current) {
@@ -109,7 +109,7 @@ const StayCanvas = forwardRef(
           trigger<T extends ListenerNames>(name: T, payload?: GetListenerPayloadByName<T>) {
             const customEvent = new Event(name as string)
             if (stay.current) {
-              stay.current.triggerAction(
+              stay.current.tools.triggerAction(
                 customEvent,
                 { [name as string]: { info: customEvent, event: customEvent } },
                 payload || {}

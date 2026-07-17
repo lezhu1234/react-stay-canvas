@@ -3,7 +3,7 @@ import { Root } from "../shapes"
 import { InstantShape } from "../shapes/instantShape"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
-import { EventProps, StayEventMap, StayEventProps } from "../types"
+import { ContextLayerSetFunction, EventProps, StayEventMap, StayEventProps } from "../types"
 import {
   DEFAULTSTATE,
   FRAME_EVENT_NAME,
@@ -150,12 +150,6 @@ class Stay<EventName extends string> {
     this.eventDispatcher.clearEvents()
   }
 
-  // Delegator kept for StayStage.deleteEvent (public API). The EventDispatcher
-  // cut moved the implementation into eventDispatcher; this line was missed then.
-  deleteEvent(name: EventName) {
-    this.eventDispatcher.deleteEvent(name)
-  }
-
   cloneChildren(): Map<string, StayInstantChild> {
     return this.children.clone()
   }
@@ -237,6 +231,18 @@ class Stay<EventName extends string> {
   startRender() {
     this.renderer.start()
   }
+}
+
+// Single construction point for "a Stay wrapping a Canvas built from layers +
+// dimensions" — used by both StayCanvas and the test harness so they can't drift.
+export function createStay(
+  canvasLayers: HTMLCanvasElement[],
+  contextLayerSetFunctionList: ContextLayerSetFunction[],
+  width: number,
+  height: number,
+  passive: boolean
+): Stay<string> {
+  return new Stay(new Canvas(canvasLayers, contextLayerSetFunctionList, width, height), passive)
 }
 
 export default Stay

@@ -231,6 +231,17 @@ class Stay<EventName extends string> {
   startRender() {
     this.renderer.start()
   }
+
+  // Tear down: stop the RAF render loop and detach the DOM event handlers. Call
+  // before discarding a Stay — otherwise the old loop keeps running and handlers
+  // stack on the canvas. StayCanvas calls it on reCreate / resize (before
+  // rebuilding). NOTE: unmount teardown is a known follow-up — wiring a useEffect
+  // cleanup fights the one-shot `initialized` init guard under React StrictMode;
+  // the fix is to split StayCanvas's init into an empty-deps lifecycle effect.
+  destroy() {
+    this.renderer.stop()
+    this.eventDispatcher.destroy()
+  }
 }
 
 // Single construction point for "a Stay wrapping a Canvas built from layers +

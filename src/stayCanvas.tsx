@@ -79,6 +79,9 @@ const StayCanvas = forwardRef(
     type ListenerNames = GetListenerPairName<ListenerPair>
 
     const init = () => {
+      // tear down the previous Stay (reCreate / resize) so its RAF loop + DOM
+      // handlers don't leak and stack on the reused canvas
+      stay.current?.destroy()
       stay.current = createStay(
         canvasLayers.current,
         contextLayerSetFunctionList,

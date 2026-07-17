@@ -12,7 +12,6 @@ import {
   PredefinedKeyEventName,
   PredefinedMouseEventName,
   PredefinedWheelEventName,
-  StayMode,
   BasicTools,
   storeType,
   StayTools,
@@ -66,13 +65,8 @@ export type CallbackFuncMap<
   [key in T["e"]["name"]]?: () => Partial<CS> | void | undefined
 }
 
-export type UserCallback<
-  T,
-  EventName extends string | string[],
-  Mode extends StayMode,
-  CS = Record<string, any>
-> = (
-  p: ActionCallbackProps<T, EventName, Mode, CS>
+export type UserCallback<T, EventName extends string | string[], CS = Record<string, any>> = (
+  p: ActionCallbackProps<T, EventName, CS>
 ) => CallbackFuncMap<ActionCallbackProps<T, EventName>, T, EventName, CS> | void
 
 // export interface StayAction {
@@ -125,7 +119,7 @@ export type EventProps<EventName extends string> = StayEventRequiredProps<EventN
 export interface ContextLayerSetFunction {
   (layer: HTMLCanvasElement): DrawCanvasContext | null
 }
-export interface StayCanvasProps<Mode extends StayMode, EventName extends string = string> {
+export interface StayCanvasProps<EventName extends string = string> {
   className?: string
   width?: number
   height?: number
@@ -138,13 +132,7 @@ export interface StayCanvasProps<Mode extends StayMode, EventName extends string
     | PredefinedEventListenerProps<PredefinedKeyEventName>
   )[]
   passive?: boolean
-  /**
-   * @deprecated The instant/animated modes are merged — every mode now exposes
-   * the full tool surface and runs the same render loop. `mode` is ignored at
-   * runtime and kept only for backward compatibility; you can omit it.
-   */
-  mode?: Mode
-  mounted?: (tools: StayTools<Mode>) => void
+  mounted?: (tools: StayTools) => void
   recreateOnResize?: boolean
   focusOnInit?: boolean
 }

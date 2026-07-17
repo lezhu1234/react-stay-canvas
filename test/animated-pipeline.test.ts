@@ -29,14 +29,14 @@ function animatedRect(stage: any, geo = { x: 10, y: 20, width: 40, height: 30 })
 
 describe("animated: getTimelineIndexBound (the timeline cursor)", () => {
   it("t=0 sits on the zero-frame (before=after=0, ratio 0)", () => {
-    const { stage } = createStage({ mode: "animated" })
+    const { stage } = createStage({})
     const child = animatedRect(stage)
     const b = child.getTimelineIndexBound(child.getSlice("default"), 0)
     expect(b).toMatchObject({ beforeIndex: 0, afterIndex: 0, ratio: 0 })
   })
 
   it("mid-transition interpolates (before=0, after=1, ratio 0.5 at t=150 of 300)", () => {
-    const { stage } = createStage({ mode: "animated" })
+    const { stage } = createStage({})
     const child = animatedRect(stage)
     const b = child.getTimelineIndexBound(child.getSlice("default"), 150)
     expect(b.beforeIndex).toBe(0)
@@ -45,27 +45,27 @@ describe("animated: getTimelineIndexBound (the timeline cursor)", () => {
   })
 
   it("exact end lands on the frame (before=after=1, ratio 0 at t=300)", () => {
-    const { stage } = createStage({ mode: "animated" })
+    const { stage } = createStage({})
     const child = animatedRect(stage)
     const b = child.getTimelineIndexBound(child.getSlice("default"), 300)
     expect(b).toMatchObject({ beforeIndex: 1, afterIndex: 1, ratio: 0 })
   })
 
   it("past the end clamps to the last frame (ratio 0 at t=450)", () => {
-    const { stage } = createStage({ mode: "animated" })
+    const { stage } = createStage({})
     const child = animatedRect(stage)
     const b = child.getTimelineIndexBound(child.getSlice("default"), 450)
     expect(b).toMatchObject({ beforeIndex: 1, afterIndex: 1, ratio: 0 })
   })
 
   it("negative time throws", () => {
-    const { stage } = createStage({ mode: "animated" })
+    const { stage } = createStage({})
     const child = animatedRect(stage)
     expect(() => child.getTimelineIndexBound(child.getSlice("default"), -1)).toThrow(/negative/)
   })
 
   it("a delayed keyframe freezes on the prior frame during its delay window", () => {
-    const { stage } = createStage({ mode: "animated" })
+    const { stage } = createStage({})
     const child = animatedRect(stage) // slice: [zero, rect@dur300]
     // second frame: 200ms after a 100ms delay -> timeline 300..400 delay, 400..600 move
     child.appendKeyFrame(
@@ -82,7 +82,7 @@ describe("animated: getTimelineIndexBound (the timeline cursor)", () => {
 
 describe("animated: setCurrentTime / progress() drive the shapeMap + paint", () => {
   it("an animated child paints NOTHING until progress() populates its shapeMap", () => {
-    const { stage, layers } = createStage({ mode: "animated" })
+    const { stage, layers } = createStage({})
     const strokeRect = vi.spyOn(layers[0].getContext("2d")!, "strokeRect")
     const child = animatedRect(stage)
     expect(child.getShapes(0).length).toBe(0) // empty before any time is set
@@ -91,7 +91,7 @@ describe("animated: setCurrentTime / progress() drive the shapeMap + paint", () 
   })
 
   it("progress() at t=0 paints nothing (the zero-frame is transparent)", () => {
-    const { stage, layers } = createStage({ mode: "animated" })
+    const { stage, layers } = createStage({})
     const strokeRect = vi.spyOn(layers[0].getContext("2d")!, "strokeRect")
     animatedRect(stage)
     stage.tools.progress({ timeMs: 0 })
@@ -104,7 +104,7 @@ describe("animated: setCurrentTime / progress() drive the shapeMap + paint", () 
   // test. This test pins that a mid-fade frame IS painted at its geometry (vs t=0
   // where the transparent zero-frame paints nothing).
   it("progress() mid-transition paints the frame at its geometry once it fades in", () => {
-    const { stage, layers } = createStage({ mode: "animated" })
+    const { stage, layers } = createStage({})
     const strokeRect = vi.spyOn(layers[0].getContext("2d")!, "strokeRect")
     animatedRect(stage)
     stage.tools.progress({ timeMs: 150 })
@@ -113,7 +113,7 @@ describe("animated: setCurrentTime / progress() drive the shapeMap + paint", () 
   })
 
   it("progress() at the end paints the final opaque frame", () => {
-    const { stage, layers } = createStage({ mode: "animated" })
+    const { stage, layers } = createStage({})
     const strokeRect = vi.spyOn(layers[0].getContext("2d")!, "strokeRect")
     const child = animatedRect(stage)
     stage.tools.progress({ timeMs: 300 })
@@ -125,7 +125,7 @@ describe("animated: setCurrentTime / progress() drive the shapeMap + paint", () 
 
 describe("animated: intermediate-shape cache (getTimelineShapeByBound)", () => {
   it("ratio 0 / 1 return the boundary frames verbatim", () => {
-    const { stage } = createStage({ mode: "animated" })
+    const { stage } = createStage({})
     const child = animatedRect(stage)
     const slice = child.getSlice("default")
     expect(child.getTimelineShapeByBound(slice, { beforeIndex: 0, afterIndex: 1, ratio: 0 })).toBe(slice[0])
@@ -133,7 +133,7 @@ describe("animated: intermediate-shape cache (getTimelineShapeByBound)", () => {
   })
 
   it("an interpolated (before,after,ratio) is cached — same object on the second call", () => {
-    const { stage } = createStage({ mode: "animated" })
+    const { stage } = createStage({})
     const child = animatedRect(stage)
     const slice = child.getSlice("default")
     const bound = { beforeIndex: 0, afterIndex: 1, ratio: 0.5 }
@@ -153,7 +153,7 @@ describe("animated: progress({ bound }) sub-range seek (the seek path the merge 
   // here (brittle) — whichever later unit touches progress()'s signature owns
   // deeper bound coverage.
   it("the bound branch runs, paints, and swaps a reversed bound instead of throwing", () => {
-    const { stage, layers } = createStage({ mode: "animated" })
+    const { stage, layers } = createStage({})
     const strokeRect = vi.spyOn(layers[0].getContext("2d")!, "strokeRect")
     // a rect that moves x 0 -> 300 across the second segment (linear)
     const child = stage.tools.createChild({ className: "a" })
@@ -187,12 +187,12 @@ describe("animated: progress({ bound }) sub-range seek (the seek path the merge 
 describe("unified tool surface (item 3 unit C — every tool in every mode)", () => {
   const allTools = ["undo", "redo", "log", "progress", "createChild", "appendChild"]
   it("instant mode exposes the full tool surface (incl. progress/createChild)", () => {
-    const t = createStage({ mode: "instant" }).stage.tools as any
+    const t = createStage({}).stage.tools as any
     allTools.forEach((name) => expect(typeof t[name]).toBe("function"))
   })
 
   it("animated mode exposes the full tool surface (incl. undo/redo/log)", () => {
-    const t = createStage({ mode: "animated" }).stage.tools as any
+    const t = createStage({}).stage.tools as any
     allTools.forEach((name) => expect(typeof t[name]).toBe("function"))
   })
 })

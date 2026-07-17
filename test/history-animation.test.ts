@@ -13,7 +13,7 @@ const stroke = { color: { r: 1, g: 2, b: 3, a: 1 }, lineWidth: 2 }
 
 describe("history × animation (item 3 unit C)", () => {
   it("log/undo do NOT freeze or remove an animated child's timeline (GAP-2)", () => {
-    const t = createStage({ mode: "animated" }).stage.tools as any
+    const t = createStage({}).stage.tools as any
     const child = t.createChild({ className: "a" })
     child.appendKeyFrame(
       "default",
@@ -35,7 +35,7 @@ describe("history × animation (item 3 unit C)", () => {
     // removal neither getChildById nor the (degraded) snapshot clone can tell it
     // was animated, so log() would emit a "remove" step and undo would re-append
     // it as a plain instant child. The guard excludes it while it's still live.
-    const t = createStage({ mode: "animated" }).stage.tools as any
+    const t = createStage({}).stage.tools as any
     const child = t.createChild({ className: "a" })
     child.appendKeyFrame(
       "default",
@@ -52,7 +52,7 @@ describe("history × animation (item 3 unit C)", () => {
 
   it("regular (instant) children ARE still tracked by history (undo removes an appended child)", () => {
     // animated mode now also has appendChild/log/undo — the merge is symmetric
-    const t = createStage({ mode: "animated" }).stage.tools as any
+    const t = createStage({}).stage.tools as any
     const c = t.appendChild({
       className: "b",
       shape: new Rectangle({ x: 0, y: 0, width: 5, height: 5, strokeConfig: stroke }),
@@ -66,7 +66,7 @@ describe("history × animation (item 3 unit C)", () => {
   it("log() after removeChild does not throw (removed id still in the log set) (regression)", () => {
     // removeChild adds the id back to unLogedChildrenIds while getChildById()
     // becomes undefined; log()'s isStayAnimatedChild filter must be null-safe.
-    const t = createStage({ mode: "instant" }).stage.tools as any
+    const t = createStage({}).stage.tools as any
     const c = t.appendChild({
       className: "b",
       shape: new Rectangle({ x: 0, y: 0, width: 5, height: 5, strokeConfig: stroke }),
@@ -77,7 +77,7 @@ describe("history × animation (item 3 unit C)", () => {
   })
 
   it("progress() no longer throws in instant mode (the mode guard was removed)", () => {
-    const t = createStage({ mode: "instant" }).stage.tools as any
+    const t = createStage({}).stage.tools as any
     expect(() => t.progress({ timeMs: 0 })).not.toThrow()
   })
 })
@@ -86,7 +86,7 @@ describe("history × animation (item 3 unit C)", () => {
 // `isStayAnimatedChild(child)` checks at call sites. These pin that contract.
 describe("child polymorphism (instant/animated fork lives in the type)", () => {
   it("participatesInHistory: static child true, timeline child false", () => {
-    const t = createStage({ mode: "animated" }).stage.tools as any
+    const t = createStage({}).stage.tools as any
     const inst = t.appendChild({
       className: "i",
       shape: new Rectangle({ x: 0, y: 0, width: 1, height: 1, strokeConfig: stroke }),
@@ -97,7 +97,7 @@ describe("child polymorphism (instant/animated fork lives in the type)", () => {
   })
 
   it("setCurrentTime is a no-op on a static child (base), real on a timeline child", () => {
-    const t = createStage({ mode: "animated" }).stage.tools as any
+    const t = createStage({}).stage.tools as any
     const inst = t.appendChild({
       className: "i",
       shape: new Rectangle({ x: 0, y: 0, width: 1, height: 1, strokeConfig: stroke }),

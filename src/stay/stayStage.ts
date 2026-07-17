@@ -1,24 +1,22 @@
 import Canvas from "../canvas"
 import { ContextLayerSetFunction } from "../types"
-import { StayMode, StayTools } from "../userTypes"
+import { StayTools } from "../userTypes"
 import Stay from "./stay"
 
 type Args<T> = T extends (...args: infer R) => any ? R : never
-export default class StayStage<Mode extends StayMode> {
-  #stay: Stay<string, Mode>
-  tools: StayTools<Mode>
+export default class StayStage {
+  #stay: Stay<string>
+  tools: StayTools
   constructor(
     canvasLayers: HTMLCanvasElement[],
     contextLayerSetFunctionList: ContextLayerSetFunction[],
     width: number,
     height: number,
-    passive: boolean,
-    mode: Mode
+    passive: boolean
   ) {
     this.#stay = new Stay(
       new Canvas(canvasLayers, contextLayerSetFunctionList, width, height),
-      passive,
-      mode
+      passive
     )
     this.tools = this.#stay.getTools()
   }

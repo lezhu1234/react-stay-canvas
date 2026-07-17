@@ -68,7 +68,6 @@ function ShapesExample() {
 
   return (
     <StayCanvas
-      mode="instant"
       width={400}
       height={380}
       layers={2}

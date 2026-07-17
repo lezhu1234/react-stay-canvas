@@ -23,7 +23,7 @@ import {
   StayTools,
   TriggerEvents,
 } from "../userTypes"
-import { isStayAnimatedChild, uuid4 } from "../utils"
+import { uuid4 } from "../utils"
 
 import { ChildrenStore } from "./childrenStore"
 import { EventDispatcher } from "./eventDispatcher"
@@ -169,11 +169,8 @@ class Stay<EventName extends string, Mode extends StayMode> {
   }
 
   updateChildrenTime(props: SetShapeChildCurrentTime) {
-    this.getChildren().forEach((child) => {
-      if (isStayAnimatedChild(child)) {
-        child.setCurrentTime(props)
-      }
-    })
+    // Polymorphic: static children no-op setCurrentTime, timeline children advance.
+    this.getChildren().forEach((child) => child.setCurrentTime(props))
   }
   draw(props: StayDrawProps): DrawReturn {
     return this.renderer.draw(props)

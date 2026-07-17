@@ -81,3 +81,29 @@ describe("history × animation (item 3 unit C)", () => {
     expect(() => t.progress({ timeMs: 0 })).not.toThrow()
   })
 })
+
+// The instant/animated fork is now handled by POLYMORPHISM on the child, not by
+// `isStayAnimatedChild(child)` checks at call sites. These pin that contract.
+describe("child polymorphism (instant/animated fork lives in the type)", () => {
+  it("participatesInHistory: static child true, timeline child false", () => {
+    const t = createStage({ mode: "animated" }).stage.tools as any
+    const inst = t.appendChild({
+      className: "i",
+      shape: new Rectangle({ x: 0, y: 0, width: 1, height: 1, strokeConfig: stroke }),
+    })
+    const anim = t.createChild({ className: "a" })
+    expect(inst.participatesInHistory).toBe(true)
+    expect(anim.participatesInHistory).toBe(false)
+  })
+
+  it("setCurrentTime is a no-op on a static child (base), real on a timeline child", () => {
+    const t = createStage({ mode: "animated" }).stage.tools as any
+    const inst = t.appendChild({
+      className: "i",
+      shape: new Rectangle({ x: 0, y: 0, width: 1, height: 1, strokeConfig: stroke }),
+    })
+    // no-op: doesn't throw, doesn't grow a timeline
+    expect(() => inst.setCurrentTime({ time: 100 })).not.toThrow()
+    expect(inst.shapeFramesMap).toBeUndefined()
+  })
+})

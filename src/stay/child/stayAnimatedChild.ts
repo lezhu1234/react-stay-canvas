@@ -151,6 +151,13 @@ export class StayAnimatedChild<
     }
   }
 
+  // Timeline children are excluded from undo/redo history: a snapshot would
+  // freeze the current interpolated frame and undo/redo would restore it as a
+  // plain static child, destroying the timeline. (Overrides the base's `true`.)
+  get participatesInHistory(): boolean {
+    return false
+  }
+
   onChildShapeChange(shape: T) {
     shape.layer = parseLayer(this.canvas.layers, shape.layer)
     console.warn("change property of AnimatedShape may cause unexpected behavior")

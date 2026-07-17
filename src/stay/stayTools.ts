@@ -28,7 +28,7 @@ import {
   Cursor,
   TriggerEvents,
 } from "../userTypes"
-import { assert, infixExpressionParser, isStayAnimatedChild, numberAlmostEqual } from "../utils"
+import { assert, infixExpressionParser, numberAlmostEqual } from "../utils"
 import { StayAnimatedChild } from "./child/stayAnimatedChild"
 import { StayInstantChild } from "./child/stayInstantChild"
 import Stay from "./stay"
@@ -96,9 +96,10 @@ export function stayTools<Mode extends StayMode>(
     // },
     log: () => {
       const steps = [...this.unLogedChildrenIds]
-        // timeline children are excluded from history (see createChild) — belt
-        // and suspenders in case one ever reaches this set another way.
-        .filter((id) => !isStayAnimatedChild(this.getChildById(id)))
+        // Only history-participating children are diffed. Timeline children opt
+        // out (participatesInHistory === false); a removed child looks up as
+        // undefined and defaults to true so its "remove" diff is still recorded.
+        .filter((id) => this.getChildById(id)?.participatesInHistory ?? true)
         .map((id) => StayInstantChild.diff(this.historyChildren.get(id), this.getChildById(id)))
         .filter((o) => o) as StepProps[]
       this.pushToStack({
@@ -209,11 +210,10 @@ export function stayTools<Mode extends StayMode>(
       const child = this.getChildById(childId)
       if (!child) return
       this.removeChildById(child.id)
-      // Timeline children stay out of history on the REMOVAL path too. `child`
-      // here is still the live animated instance, so isStayAnimatedChild is
-      // reliable — after removal getChildById()/the degraded snapshot clone can no
-      // longer tell it was animated, so this is the only place it can be excluded.
-      if (!isStayAnimatedChild(child)) {
+      // Only history-participating children are tracked for undo/redo. `child` is
+      // still the live instance here, so the check is reliable even though after
+      // removal getChildById()/the degraded snapshot clone no longer could be.
+      if (child.participatesInHistory) {
         this.unLogedChildrenIds.add(child.id)
       }
       return new Promise<void>((resolve) => {
@@ -434,7 +434,8 @@ export function stayTools<Mode extends StayMode>(
 
       const childrenReady = Promise.all(
         children.map(async (c) => {
-          if (progress && isStayAnimatedChild(c)) {
+          if (progress) {
+            // no-op on static children (polymorphic), advances timeline children
             c.setCurrentTime({ time: progress })
           }
           for (let layerIndex = 0; layerIndex < layerNumber; layerIndex++) {

@@ -44,6 +44,11 @@ export class EventDispatcher<EventName extends string> {
   events: StayEventMap<EventName> = {} as StayEventMap<EventName>
   listeners = new Map<string, Required<ListenerProps<ListenerNamePayloadPair, EventName>>>()
   currentPressedKeys: { [key: string]: boolean } = {}
+  // Kept so destroy() can undo initEvents (the addEventListener handlers need the
+  // exact reference to removeEventListener; the on* handlers are nulled).
+  #boundLayer: HTMLCanvasElement | null = null
+  #dragstartHandler: ((e: DragEvent) => void) | null = null
+  #wheelHandler: ((e: WheelEvent) => void) | null = null
 
   constructor(
     private readonly root: Canvas,
@@ -181,6 +186,10 @@ export class EventDispatcher<EventName extends string> {
     const press = this.pressKey.bind(this)
     const release = this.releaseKey.bind(this)
 
+    this.#boundLayer = topLayer
+    this.#dragstartHandler = (e: DragEvent) => dragstart(fire, e)
+    this.#wheelHandler = (e: WheelEvent) => wheel(fire, e)
+
     topLayer.onkeyup = (e: KeyboardEvent) => keyup(fire, release, e)
     topLayer.onkeydown = (e: KeyboardEvent) => keydown(fire, press, e)
     topLayer.onmouseup = (e: MouseEvent) => mouseup(fire, release, e)
@@ -191,11 +200,26 @@ export class EventDispatcher<EventName extends string> {
     topLayer.ondblclick = (e: MouseEvent) => dblclick(fire, e)
     topLayer.oncontextmenu = (e: MouseEvent) => contextmenu(fire, e)
     topLayer.ondragover = (e) => dragover(fire, e)
-    topLayer.addEventListener("dragstart", (e: DragEvent) => dragstart(fire, e), false)
+    topLayer.addEventListener("dragstart", this.#dragstartHandler, false)
     topLayer.ondragend = (e: DragEvent) => dragend(fire, e)
     topLayer.ondrop = (e: DragEvent) => drop(fire, e)
-    topLayer.addEventListener("wheel", (e: WheelEvent) => wheel(fire, e), { passive: this.passive })
+    topLayer.addEventListener("wheel", this.#wheelHandler, { passive: this.passive })
     topLayer.onmouseenter = (e: MouseEvent) => mouseenter(fire, e)
     topLayer.onmouseleave = (e: MouseEvent) => mouseleave(fire, e)
+  }
+
+  // Undo initEvents: null the on* handlers and removeEventListener the two that
+  // were bound via addEventListener (needs the stored references).
+  destroy() {
+    const t = this.#boundLayer
+    if (!t) return
+    t.onkeyup = t.onkeydown = t.onmouseup = t.onmousedown = t.onmousemove = null
+    t.onmouseover = t.onclick = t.ondblclick = t.oncontextmenu = t.ondragover = null
+    t.ondragend = t.ondrop = t.onmouseenter = t.onmouseleave = null
+    if (this.#dragstartHandler) t.removeEventListener("dragstart", this.#dragstartHandler)
+    if (this.#wheelHandler) t.removeEventListener("wheel", this.#wheelHandler)
+    this.#boundLayer = null
+    this.#dragstartHandler = null
+    this.#wheelHandler = null
   }
 }

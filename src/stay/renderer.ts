@@ -13,6 +13,8 @@ interface DrawLayer {
 export class Renderer {
   #layers: DrawLayer[]
   #nextTick: (() => void)[] = []
+  #rafId: number | null = null
+  #stopped = false
 
   constructor(
     private readonly root: Canvas,
@@ -112,10 +114,21 @@ export class Renderer {
   }
 
   // The continuous render loop. Incremental: draw() only repaints dirty layers,
-  // so an idle frame paints nothing.
+  // so an idle frame paints nothing. Stops rescheduling once stop() is called.
   start() {
+    if (this.#stopped) return
     this.draw({ now: Date.now() })
-    window.requestAnimationFrame(() => this.start())
+    this.#rafId = window.requestAnimationFrame(() => this.start())
+  }
+
+  // Halt the loop and cancel any pending frame. After this, start() is a no-op
+  // (so a torn-down Stay can't keep painting — see Stay.destroy()).
+  stop() {
+    this.#stopped = true
+    if (this.#rafId !== null) {
+      window.cancelAnimationFrame(this.#rafId)
+      this.#rafId = null
+    }
   }
 
   #drainNextTick() {

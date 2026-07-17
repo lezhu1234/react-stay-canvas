@@ -5,24 +5,18 @@ import { ALLSTATE, DEFAULTSTATE, SUPPORT_OPRATOR } from "../userConstants"
 import {
   ActionCallbackProps,
   ActionEvent,
-  AnimatedTools,
   Area,
   ChildSortFunction,
   Dict,
   ExportChildrenProps,
   getContainPointChildrenProps,
   ImportChildrenProps,
-  InstantMode,
-  InstantTools,
   PointType,
   PredefinedMouseEventName,
   ProgressProps,
   RegionToTargetCanvasProps,
   SelectorFunc,
-  StayMode,
-  BasicTools,
   StayTools,
-  AnimatedMode,
   AppendChildProps,
   CreateChildProps,
   Cursor,
@@ -34,18 +28,8 @@ import { StayInstantChild } from "./child/stayInstantChild"
 import Stay from "./stay"
 import { StepProps } from "./types"
 
-export function isInstantMode(mode: StayMode): mode is InstantMode {
-  return mode === "instant"
-}
-
-// One factory, one unified tool surface — no more per-mode overloads. Every mode
-// gets all tools; `mode` is retained only for signature stability (it no longer
-// selects anything).
-export function stayTools<Mode extends StayMode>(
-  this: Stay<any, Mode>,
-  mode: Mode
-): StayTools<Mode> {
-  void mode
+// One factory, one unified tool surface. Every stage gets all tools.
+export function stayTools(this: Stay<any>): StayTools {
   const animatedTools = {
     progress: ({ timeMs: time, bound, beforeDrawCallback, afterDrawCallback }: ProgressProps) => {
       this.updateChildrenTime({ time, bound })

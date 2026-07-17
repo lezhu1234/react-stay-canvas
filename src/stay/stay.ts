@@ -19,7 +19,6 @@ import {
   PredefinedWheelEventName,
   SelectorFunc,
   StayDrawProps,
-  StayMode,
   StayTools,
   TriggerEvents,
 } from "../userTypes"
@@ -33,7 +32,7 @@ import { Renderer } from "./renderer"
 import { stayTools } from "./stayTools"
 import { SetShapeChildCurrentTime, StackItem } from "./types"
 
-class Stay<EventName extends string, Mode extends StayMode> {
+class Stay<EventName extends string> {
   readonly children = new ChildrenStore()
   composeStore: Record<string, any>
   renderer: Renderer
@@ -51,11 +50,10 @@ class Stay<EventName extends string, Mode extends StayMode> {
   y: number
   rootChild: StayInstantChild<Root>
   passive: boolean
-  mode: Mode
   rootId: string
-  tools: StayTools<Mode>
+  tools: StayTools
 
-  constructor(root: Canvas, passive: boolean, mode: Mode) {
+  constructor(root: Canvas, passive: boolean) {
     this.root = root
     this.passive = passive
     this.x = 0
@@ -83,7 +81,7 @@ class Stay<EventName extends string, Mode extends StayMode> {
 
     this.history = new History(() => this.cloneChildren())
 
-    this.tools = stayTools.call(this, mode)
+    this.tools = stayTools.call(this)
     this.renderer = new Renderer(this.root, () =>
       this.children.values().filter((child) => child.id !== this.rootId)
     )
@@ -99,15 +97,9 @@ class Stay<EventName extends string, Mode extends StayMode> {
 
     this.eventDispatcher.initEvents()
 
-    this.mode = mode
-    // Unified render lifecycle: the RAF loop runs in EVERY mode, not just
-    // instant. It is dirty-gated (idle frames paint nothing), so "animated" no
-    // longer has to stay loop-less — progress() stays the explicit time driver
-    // (seek / scrubbing / bound sub-range), it just no longer has to be the ONLY
-    // thing that repaints. This removes the last mode-gated runtime branch, a
-    // prerequisite for dropping the `mode` distinction entirely. (No auto-advance
-    // clock is introduced here — that would change animated semantics and is out
-    // of scope for this backward-compatible merge.)
+    // The RAF render loop runs for every stage; it is dirty-gated (idle frames
+    // paint nothing), and progress() drives timeline children as an explicit
+    // seek. There is no longer any per-mode branching.
     this.startRender()
   }
 

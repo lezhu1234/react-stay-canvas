@@ -138,11 +138,6 @@ export type SortChildrenMethodsValues = valueof<typeof SORT_CHILDREN_METHODS>
 export interface ActionCallbackProps<
   T = Dict,
   EventName extends string | string[] = string,
-  // @deprecated Vestigial since the instant/animated modes merged: `StayTools`
-  // now exposes every tool regardless of `Mode` (it no longer distributes over
-  // the union and hides mode-specific tools). Kept as a positional placeholder
-  // so existing 4-arg `ActionCallbackProps`/callback types don't shift `CS`.
-  Mode extends StayMode = InstantMode,
   // CS = this listener's composeStore shape (the per-listener scratchpad that
   // carries data across a gesture's phases). Defaults loose for backward
   // compatibility; declare it on ListenerProps to get `composeStore` typed.
@@ -154,7 +149,7 @@ export interface ActionCallbackProps<
   stateStore: storeType
   composeStore: CS
   canvas: Canvas
-  tools: StayTools<Mode>
+  tools: StayTools
   payload: T
 }
 
@@ -205,11 +200,10 @@ export type ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<
 export interface ListenerProps<
   T extends ListenerNamePayloadPair = ListenerNamePayloadPair,
   EventName extends string = string,
-  Mode extends StayMode = InstantMode,
   // CS = this listener's composeStore shape. Defaults loose (Record<string,any>)
   // so existing `ListenerProps` usages are unchanged; pass it to type the
   // `composeStore` param inside the callback, e.g.
-  // `ListenerProps<Pair, "dragstart" | "drag", InstantMode, { start: Coordinate }>`.
+  // `ListenerProps<Pair, "dragstart" | "drag", { start: Coordinate }>`.
   CS = Record<string, any>
 > {
   name: T["name"]
@@ -217,12 +211,11 @@ export interface ListenerProps<
   selector?: string
   event: EventName | EventName[]
   sortBy?: ChildSortFunction
-  callback: UserCallback<T["payload"], EventName | EventName[], Mode, CS>
+  callback: UserCallback<T["payload"], EventName | EventName[], CS>
 }
 
 export interface PredefinedEventListenerProps<
   EventName extends PredefinedEventName = PredefinedEventName,
-  Mode extends StayMode = InstantMode,
   CS = Record<string, any>
 > {
   name: string
@@ -230,7 +223,7 @@ export interface PredefinedEventListenerProps<
   selector?: string
   event: EventName | EventName[]
   sortBy?: ChildSortFunction
-  callback: UserCallback<Dict, EventName | EventName[], Mode, CS>
+  callback: UserCallback<Dict, EventName | EventName[], CS>
 }
 
 export type SelectorFunc = (child: StayInstantChild) => boolean
@@ -255,15 +248,11 @@ export interface ProgressProps {
 
 // The dual-mode merge: a single unified tool surface. Formerly this distributed
 // over StayMode (InstantTools for instant, AnimatedTools for animated) — and
-// because conditional types distribute over unions, `StayTools<StayMode>`
-// collapsed to just BasicTools, hiding BOTH tool sets (the root cause of the old
-// `as any` in the factory and the `@ts-ignore`s in StayStage). The three
-// interfaces have no name collisions, so a plain intersection exposes every tool
-// in every mode. `Mode` is now vestigial (kept until it is removed wholesale in
-// the next cut).
-export type StayTools<Mode extends StayMode = InstantMode> = BasicTools &
-  InstantTools &
-  AnimatedTools
+// The unified tool surface — every tool is available. (Historically this was a
+// conditional type keyed on an instant/animated `Mode`, which distributed over
+// the union and collapsed to just BasicTools; the modes were merged and the
+// three interfaces have no name collisions, so it is now a plain intersection.)
+export type StayTools = BasicTools & InstantTools & AnimatedTools
 export interface BasicTools {
   appendChild: <T extends InstantShape>(props: AppendChildProps<T>) => StayInstantChild<T>
   // createChild: <T extends InstantShape>(props: createChildProps<T>) => StayInstantChild<T>
@@ -474,20 +463,17 @@ export type PermutationsOfTuple<T extends unknown[], R extends unknown[] = []> =
 export type DisOrderArr<T> = PermutationsOfTuple<Union2Tuple<T>>
 export type UnionListenerProps<
   T extends ListenerNamePayloadPair[],
-  EventName extends string = string,
-  Mode extends StayMode = StayMode
+  EventName extends string = string
 > = {
-  [key in keyof T]: ListenerProps<T[key], EventName, Mode>
+  [key in keyof T]: ListenerProps<T[key], EventName>
 }
 
 export type ListenerArrayProps<
   T extends ListenerNamePayloadPairOrName[],
-  EventName extends string = string,
-  Mode extends StayMode = StayMode
+  EventName extends string = string
 > = UnionListenerProps<
   ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>,
-  EventName,
-  Mode
+  EventName
 >
 
 export type Tuple2Union<T extends unknown[]> = T extends [infer F, ...infer L]
@@ -575,14 +561,6 @@ export interface TextAttr extends AnimatedShapeProps {
   autoTransitionDiffText?: boolean
 }
 
-/**
- * @deprecated The instant/animated modes are merged — a single mode exposes the
- * full tool surface and runs one render loop. These types are kept only as
- * backward-compatible aliases; new code doesn't need `mode`.
- */
-export type StayMode = InstantMode | AnimatedMode
-export type InstantMode = "instant"
-export type AnimatedMode = "animated"
 
 export interface Font {
   size?: number

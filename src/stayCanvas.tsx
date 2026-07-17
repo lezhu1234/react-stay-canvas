@@ -13,10 +13,10 @@ import React, {
 import * as PredefinedEventList from "./predefinedEvents"
 import StayStage from "./stay/stayStage"
 import { ContextLayerSetFunction, StayCanvasProps } from "./types"
-import { PredefinedEventName, StayCanvasRefType, StayMode } from "./userTypes"
+import { PredefinedEventName, StayCanvasRefType } from "./userTypes"
 
 const StayCanvas = forwardRef(
-  <EventName extends string, Mode extends StayMode = StayMode>(
+  <EventName extends string>(
     {
       width = 500,
       height = 500,
@@ -26,10 +26,9 @@ const StayCanvas = forwardRef(
       layers = 2,
       className = "",
       passive = true,
-      mode,
       recreateOnResize = false,
       focusOnInit = true,
-    }: StayCanvasProps<Mode, EventName>,
+    }: StayCanvasProps<EventName>,
     ref: Ref<StayCanvasRefType>
   ) => {
     const initialized = useRef(false)
@@ -67,7 +66,7 @@ const StayCanvas = forwardRef(
       : never
 
     const canvasLayers = useRef<HTMLCanvasElement[]>([])
-    const stay = useRef<StayStage<Mode>>()
+    const stay = useRef<StayStage>()
 
     // eventList = useMemo(() => eventList || [], [eventList])
     // listenerList = useMemo(() => listenerList || [], [listenerList])
@@ -80,14 +79,12 @@ const StayCanvas = forwardRef(
     type ListenerNames = GetListenerPairName<ListenerPair>
 
     const init = () => {
-      //@ts-ignore i cannot understand
       stay.current = new StayStage(
         canvasLayers.current,
         contextLayerSetFunctionList,
         width,
         height,
-        passive,
-        mode ?? "instant"
+        passive
       )
       ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
         stay.current!.registerEvent(event as any)
@@ -97,7 +94,6 @@ const StayCanvas = forwardRef(
       })
 
       if (mounted && stay.current) {
-        //@ts-ignore i cannot understand
         mounted(stay.current.tools)
       }
 

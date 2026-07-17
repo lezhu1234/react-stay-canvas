@@ -1,7 +1,7 @@
-import StayStage from "../../src/stay/stayStage"
+import { createStay } from "../../src/stay/stay"
 import * as PredefinedEventList from "../../src/predefinedEvents"
 
-// Build a real StayStage backed by jsdom canvas elements (node-canvas provides
+// Build a real Stay backed by jsdom canvas elements (node-canvas provides
 // the 2D context). Requires `// @vitest-environment jsdom` in the test file.
 export function createStage(opts: {
   width?: number
@@ -27,7 +27,7 @@ export function createStage(opts: {
     () => (canvas: HTMLCanvasElement) => canvas.getContext("2d")
   )
 
-  const stage = new StayStage(canvasEls, contextSetters as any, width, height, false)
+  const stage = createStay(canvasEls, contextSetters as any, width, height, false)
   Object.values(PredefinedEventList).forEach((e) => stage.registerEvent(e as any))
   // Events bind to the top layer (last canvas).
   const top = canvasEls[canvasEls.length - 1]

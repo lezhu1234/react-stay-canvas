@@ -64,7 +64,7 @@ describe("trigger (programmatic custom event)", () => {
 
     // Mirrors what StayCanvasRefType.trigger builds under the hood.
     const ev = new Event("myEvent")
-    stage.triggerAction(
+    stage.tools.triggerAction(
       ev as any,
       { myEvent: { info: ev, event: ev } } as any,
       { value: 42 }

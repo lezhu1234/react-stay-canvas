@@ -8,7 +8,7 @@ import {
   StayInstantChildUpdateProps,
 } from "../../userTypes"
 import { parseLayer, uuid4 } from "../../utils"
-import { StepProps } from "../types"
+import { SetShapeChildCurrentTime, StepProps } from "../types"
 
 import { Canvas } from "../../canvas"
 
@@ -193,6 +193,19 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   layerDraw(layer: number) {
     this.updatedLayers.delete(layer)
   }
+
+  // Whether this child is tracked by undo/redo history. Static children are;
+  // timeline children are NOT (a history snapshot would freeze an interpolated
+  // frame). Overridden by StayAnimatedChild — kept as polymorphism so callers
+  // never branch on the child's concrete type.
+  get participatesInHistory(): boolean {
+    return true
+  }
+
+  // Advance this child to a point in time. A static child has no timeline, so
+  // this is a no-op; StayAnimatedChild overrides it with the real interpolation.
+  // Polymorphic so callers can tick every child uniformly.
+  setCurrentTime(_props: SetShapeChildCurrentTime): void {}
 
   copy(): StayInstantChild<T> {
     return new StayInstantChild({ ...this, shape: this.copyShapeMap() })

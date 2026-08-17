@@ -133,6 +133,34 @@ input:focus-visible {
   color: var(--accent);
 }
 
+.language-switcher {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+
+.language-switcher button {
+  min-width: 38px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.language-switcher button:hover,
+.language-switcher button.active {
+  color: var(--accent-strong);
+  background: var(--surface);
+}
+
 .sidebar {
   position: sticky;
   top: 64px;
@@ -464,6 +492,7 @@ input:focus-visible {
 }
 
 .canvas-viewport {
+  width: fit-content;
   max-width: 100%;
   overflow: auto;
   border: 1px solid var(--line);
@@ -932,6 +961,10 @@ input:focus-visible {
     display: none;
   }
 
+  .topbar nav {
+    gap: 10px;
+  }
+
   .content {
     padding-inline: 16px;
   }
@@ -1000,6 +1033,12 @@ input:focus-visible {
 
   .source-heading {
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 420px) {
+  .topbar nav a {
+    display: none;
   }
 }
 

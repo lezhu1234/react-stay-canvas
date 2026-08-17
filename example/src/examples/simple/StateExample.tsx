@@ -2,10 +2,12 @@ import { useMemo, useRef, useState } from "react"
 import { Circle, ListenerProps, Rectangle, StayCanvas, StayTools } from "react-stay-canvas"
 
 import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { useI18n } from "../../i18n"
 
 type Mode = "draw" | "select"
 
 export default function StateExample() {
+  const { text } = useI18n()
   const toolsRef = useRef<StayTools | null>(null)
   const [mode, setMode] = useState<Mode>("draw")
   const [entries, setEntries] = useState<string[]>([])
@@ -30,7 +32,7 @@ export default function StateExample() {
             strokeConfig: { color: colors.blue, lineWidth: 2 },
           }),
         })
-        push(`draw listener fired at ${Math.round(e.x)}, ${Math.round(e.y)}`)
+        push(text(`draw listener fired at ${Math.round(e.x)}, ${Math.round(e.y)}`, `绘制监听器触发于 ${Math.round(e.x)}, ${Math.round(e.y)}`))
       },
     },
     {
@@ -41,7 +43,7 @@ export default function StateExample() {
       callback: ({ e }) => {
         const shape = e.target.shape as Circle
         shape.update({ fillConfig: { color: colors.orangeSoft }, strokeConfig: { color: colors.orange, lineWidth: 4 } })
-        push(`select listener fired for ${e.target.id.slice(0, 8)}`)
+        push(text(`select listener fired for ${e.target.id.slice(0, 8)}`, `选择监听器命中 ${e.target.id.slice(0, 8)}`))
       },
     },
     {
@@ -57,7 +59,7 @@ export default function StateExample() {
         setStateCount(scoped)
       },
     },
-  ], [])
+  ], [text])
 
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
@@ -72,20 +74,20 @@ export default function StateExample() {
     toolsRef.current?.switchState(next)
     setMode(next)
     setStateCount(0)
-    push(`state changed to ${next}`)
+    push(text(`state changed to ${next}`, `状态已切换为 ${next === "draw" ? "绘制" : "选择"}`))
   }
 
   return (
     <DemoLayout>
-      <CanvasCard title="State-scoped listeners" description="Draw mode creates circles. Select mode highlights existing circles." wide>
+      <CanvasCard title={text("State-scoped listeners", "按状态生效的监听器")} description={text("Draw mode creates circles. Select mode highlights existing circles.", "绘制模式创建圆形，选择模式高亮已有圆形。")} wide>
         <StayCanvas className="demo-canvas" height={260} listenerList={listeners} mounted={mounted} width={440} />
       </CanvasCard>
       <Toolbar>
-        <Button active={mode === "draw"} onClick={() => switchMode("draw")}>Draw mode</Button>
-        <Button active={mode === "select"} onClick={() => switchMode("select")}>Select mode</Button>
+        <Button active={mode === "draw"} onClick={() => switchMode("draw")}>{text("Draw mode", "绘制模式")}</Button>
+        <Button active={mode === "select"} onClick={() => switchMode("select")}>{text("Select mode", "选择模式")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[["Current state", mode], ["Persistent store", persistentCount], ["State store", stateCount]]} />
+      <StatusGrid items={[[text("Current state", "当前状态"), mode === "draw" ? text("draw", "绘制") : text("select", "选择")], [text("Persistent store", "持久 Store"), persistentCount], [text("State store", "状态 Store"), stateCount]]} />
       <EventLog entries={entries} />
     </DemoLayout>
   )

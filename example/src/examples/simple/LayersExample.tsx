@@ -2,8 +2,10 @@ import { useRef, useState } from "react"
 import { Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
 import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { useI18n } from "../../i18n"
 
 export default function LayersExample() {
+  const { text } = useI18n()
   const frontRef = useRef<ReturnType<StayTools["appendChild"]> | null>(null)
   const middleRef = useRef<ReturnType<StayTools["appendChild"]> | null>(null)
   const [front, setFront] = useState("orange")
@@ -42,7 +44,7 @@ export default function LayersExample() {
       shape: new StayText({
         x: 220,
         y: 28,
-        text: "layer 2 overlay",
+        text: text("layer 2 overlay", "图层 2 覆盖层"),
         font: { size: 15, fontWeight: 650 },
         layer: 2,
         zIndex: 1,
@@ -63,14 +65,14 @@ export default function LayersExample() {
 
   return (
     <DemoLayout>
-      <CanvasCard title="Layer routing and zIndex" description="Canvas layers isolate paint passes; zIndex sorts Shapes inside a layer." wide>
+      <CanvasCard title={text("Layer routing and zIndex", "图层与 zIndex")} description={text("Canvas layers isolate paint passes; zIndex sorts Shapes inside a layer.", "图层决定整体前后关系，zIndex 调整同一图层内的绘制顺序。")} wide>
         <StayCanvas className="demo-canvas demo-canvas-grid" height={290} layers={3} mounted={mounted} width={440} />
       </CanvasCard>
       <Toolbar>
-        <Button onClick={swap}>Swap zIndex</Button>
+        <Button onClick={swap}>{text("Swap zIndex", "交换 zIndex")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[["Canvas layers", 3], ["Front shape", front], ["Overlay layer", 2]]} />
+      <StatusGrid items={[[text("Canvas layers", "Canvas 图层"), 3], [text("Front shape", "前景图形"), front === "orange" ? text("orange", "橙色") : text("blue", "蓝色")], [text("Overlay layer", "覆盖层"), 2]]} />
     </DemoLayout>
   )
 }

@@ -8,10 +8,11 @@ import {
 } from "react-stay-canvas"
 
 import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { useI18n } from "../../i18n"
 
 type Mode = "draw" | "select"
 
-function createAnnotationImage() {
+function createAnnotationImage(label: string) {
   const canvas = document.createElement("canvas")
   canvas.width = 720
   canvas.height = 420
@@ -28,15 +29,16 @@ function createAnnotationImage() {
   context.fillRect(392, 222, 250, 110)
   context.fillStyle = "rgba(255,255,255,.86)"
   context.font = "600 24px system-ui"
-  context.fillText("sample workspace", 102, 296)
+  context.fillText(label, 102, 296)
   return canvas.toDataURL("image/png")
 }
 
 export default function AnnotatorExample() {
+  const { text } = useI18n()
   const toolsRef = useRef<StayTools | null>(null)
   const selectedRef = useRef<string | null>(null)
   const [mode, setMode] = useState<Mode>("draw")
-  const [selected, setSelected] = useState("None")
+  const [selected, setSelected] = useState(text("None", "无"))
   const [count, setCount] = useState(0)
   const [entries, setEntries] = useState<string[]>([])
   const [snapshot, setSnapshot] = useState<string | null>(null)
@@ -64,7 +66,7 @@ export default function AnnotatorExample() {
               strokeConfig: { color: colors.orange, lineWidth: 3 },
             }),
           })
-          push("annotation started")
+          push(text("annotation started", "标注已开始"))
           return { start: e.point, child }
         },
         drag: () => {
@@ -80,7 +82,7 @@ export default function AnnotatorExample() {
         dragend: () => {
           tools.log()
           syncCount(tools)
-          push("annotation committed to history")
+          push(text("annotation committed to history", "标注已提交到历史记录"))
         },
       }),
     },
@@ -98,7 +100,7 @@ export default function AnnotatorExample() {
         shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
         selectedRef.current = e.target.id
         setSelected(e.target.id.slice(0, 8))
-        push(`selected ${e.target.id.slice(0, 8)}`)
+        push(text(`selected ${e.target.id.slice(0, 8)}`, `已选择 ${e.target.id.slice(0, 8)}`))
       },
     },
     {
@@ -126,11 +128,11 @@ export default function AnnotatorExample() {
           })
           tools.log()
           replacement.shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
-          push("selected annotation moved and logged")
+          push(text("selected annotation moved and logged", "所选标注已移动并记录"))
         },
       }),
     },
-  ], [])
+  ], [text])
 
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
@@ -146,16 +148,16 @@ export default function AnnotatorExample() {
         shape: new StayImage({ image, x: 0, y: 0, width: 720, height: 420, opacity: 1, layer: 0 }),
       })
       tools.log()
-      push("background ready")
+      push(text("background ready", "背景已就绪"))
     }
-    image.src = createAnnotationImage()
+    image.src = createAnnotationImage(text("sample workspace", "示例工作区"))
   }
 
   const switchMode = (next: Mode) => {
     toolsRef.current?.switchState(next)
     toolsRef.current?.changeCursor(next === "draw" ? "crosshair" : "default")
     setMode(next)
-    push(`mode: ${next}`)
+    push(text(`mode: ${next}`, `模式：${next === "draw" ? "绘制" : "选择"}`))
   }
 
   const removeSelected = () => {
@@ -165,9 +167,9 @@ export default function AnnotatorExample() {
     tools.removeChild(id)
     tools.log()
     selectedRef.current = null
-    setSelected("None")
+    setSelected(text("None", "无"))
     syncCount(tools)
-    push("selected annotation removed")
+    push(text("selected annotation removed", "所选标注已移除"))
   }
 
   const capture = async () => {
@@ -179,28 +181,28 @@ export default function AnnotatorExample() {
       children: tools.getChildrenWithoutRoot(),
     })
     setSnapshot(canvas.toDataURL("image/png"))
-    push("canvas captured")
+    push(text("canvas captured", "Canvas 已截取"))
   }
 
   return (
     <DemoLayout>
-      <CanvasCard title="Image annotation workspace" description="Draw boxes over a raster layer, then select, move, delete, transform, and export." wide>
+      <CanvasCard title={text("Image annotation workspace", "图像标注工作区")} description={text("Draw boxes over a raster layer, then select, move, delete, transform, and export.", "在底图上框选标注，再尝试选择、移动、删除、缩放和导出。")} wide>
         <StayCanvas className="demo-canvas" height={420} layers={2} listenerList={listeners} mounted={mounted} width={720} />
       </CanvasCard>
       <Toolbar>
-        <Button active={mode === "draw"} onClick={() => switchMode("draw")}>Draw</Button>
-        <Button active={mode === "select"} onClick={() => switchMode("select")}>Select</Button>
-        <Button disabled={!selectedRef.current} onClick={removeSelected}>Delete selected</Button>
-        <Button onClick={() => { toolsRef.current?.undo(); requestAnimationFrame(() => toolsRef.current && syncCount(toolsRef.current)); push("undo") }}>Undo</Button>
-        <Button onClick={() => { toolsRef.current?.redo(); requestAnimationFrame(() => toolsRef.current && syncCount(toolsRef.current)); push("redo") }}>Redo</Button>
-        <Button onClick={() => { void toolsRef.current?.zoom(-100, { x: 360, y: 210 }); push("zoom in") }}>Zoom in</Button>
-        <Button onClick={() => { void toolsRef.current?.reset(); push("transform reset") }}>Reset view</Button>
-        <Button onClick={capture}>Export image</Button>
+        <Button active={mode === "draw"} onClick={() => switchMode("draw")}>{text("Draw", "绘制")}</Button>
+        <Button active={mode === "select"} onClick={() => switchMode("select")}>{text("Select", "选择")}</Button>
+        <Button disabled={!selectedRef.current} onClick={removeSelected}>{text("Delete selected", "删除所选")}</Button>
+        <Button onClick={() => { toolsRef.current?.undo(); requestAnimationFrame(() => toolsRef.current && syncCount(toolsRef.current)); push(text("undo", "撤销")) }}>{text("Undo", "撤销")}</Button>
+        <Button onClick={() => { toolsRef.current?.redo(); requestAnimationFrame(() => toolsRef.current && syncCount(toolsRef.current)); push(text("redo", "重做")) }}>{text("Redo", "重做")}</Button>
+        <Button onClick={() => { void toolsRef.current?.zoom(-100, { x: 360, y: 210 }); push(text("zoom in", "放大")) }}>{text("Zoom in", "放大")}</Button>
+        <Button onClick={() => { void toolsRef.current?.reset(); push(text("transform reset", "变换已重置")) }}>{text("Reset view", "重置视图")}</Button>
+        <Button onClick={capture}>{text("Export image", "导出图像")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[["Mode", mode], ["Annotations", count], ["Selected", selected], ["Export", snapshot ? "Ready" : "Not captured"]]} />
+      <StatusGrid items={[[text("Mode", "模式"), mode === "draw" ? text("draw", "绘制") : text("select", "选择")], [text("Annotations", "标注"), count], [text("Selected", "已选择"), selected], [text("Export", "导出"), snapshot ? text("Ready", "已就绪") : text("Not captured", "未截取")]]} />
       <EventLog entries={entries} />
-      {snapshot && <div className="snapshot-preview"><img alt="Exported annotation canvas" src={snapshot} /></div>}
+      {snapshot && <div className="snapshot-preview"><img alt={text("Exported annotation canvas", "已导出的标注 Canvas")} src={snapshot} /></div>}
     </DemoLayout>
   )
 }

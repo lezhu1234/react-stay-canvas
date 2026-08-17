@@ -2,6 +2,7 @@ import { useRef, useState } from "react"
 import { Line, Rectangle, StayCanvas, StayShapeTransitionConfig, StayText, StayTools } from "react-stay-canvas"
 
 import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, TimelineControls, Toolbar } from "../../components/DemoKit"
+import { useI18n } from "../../i18n"
 
 const duration = 2200
 type AnimatedLineProps = ConstructorParameters<typeof Line>[0] & {
@@ -10,6 +11,7 @@ type AnimatedLineProps = ConstructorParameters<typeof Line>[0] & {
 const animatedLine = (props: AnimatedLineProps) => new Line(props)
 
 export default function MotionStudioExample() {
+  const { text } = useI18n()
   const toolsRef = useRef<StayTools | null>(null)
   const guideIds = useRef<string[]>([])
   const [range, setRange] = useState<"full" | "middle">("full")
@@ -35,9 +37,9 @@ export default function MotionStudioExample() {
     connector.appendKeyFrame("line", animatedLine({ x1: 56, y1: 300, x2: 660, y2: 300, layer: 2, strokeConfig: { color: colors.orange, lineWidth: 4, lineCap: "round" }, transition: { durationMs: 780 } }))
 
     const caption = tools.createChild({ className: "motion-caption" })
-    caption.appendKeyFrame("text", new StayText({ x: 116, y: 40, text: "Start", font: { size: 20, fontWeight: 700 }, layer: 2, fillConfig: { color: colors.blue }, transition: { durationMs: 500 } }))
-    caption.appendKeyFrame("text", new StayText({ x: 360, y: 40, text: "Compose", font: { size: 28, fontWeight: 700 }, layer: 2, fillConfig: { color: colors.green }, transition: { durationMs: 800, delayMs: 120 } }))
-    caption.appendKeyFrame("text", new StayText({ x: 594, y: 40, text: "Deliver", font: { size: 20, fontWeight: 700 }, layer: 2, fillConfig: { color: colors.orange }, transition: { durationMs: 780 } }))
+    caption.appendKeyFrame("text", new StayText({ x: 116, y: 40, text: text("Start", "开始"), font: { size: 20, fontWeight: 700 }, layer: 2, fillConfig: { color: colors.blue }, transition: { durationMs: 500 } }))
+    caption.appendKeyFrame("text", new StayText({ x: 360, y: 40, text: text("Compose", "编排"), font: { size: 28, fontWeight: 700 }, layer: 2, fillConfig: { color: colors.green }, transition: { durationMs: 800, delayMs: 120 } }))
+    caption.appendKeyFrame("text", new StayText({ x: 594, y: 40, text: text("Deliver", "交付"), font: { size: 20, fontWeight: 700 }, layer: 2, fillConfig: { color: colors.orange }, transition: { durationMs: 780 } }))
     tools.progress({ timeMs: 0 })
     tools.log()
   }
@@ -66,7 +68,7 @@ export default function MotionStudioExample() {
     guideIds.current.push(guide.id)
     tools.log()
     setGuides(tools.getChildrenBySelector(".guide").length)
-    push("static guide added and logged")
+    push(text("static guide added and logged", "已添加参考线并写入历史"))
   }
 
   const undoGuide = () => {
@@ -74,23 +76,23 @@ export default function MotionStudioExample() {
     toolsRef.current?.undo()
     guideIds.current.pop()
     requestAnimationFrame(() => setGuides(toolsRef.current?.getChildrenBySelector(".guide").length ?? 0))
-    push("undo changed static history only")
+    push(text("undo changed static history only", "已撤销一条参考线，动画不受影响"))
   }
 
   return (
     <DemoLayout>
-      <CanvasCard title="Motion composition studio" description="Three animated tracks share one explicit clock while static guides use normal history." wide>
+      <CanvasCard title={text("Motion composition studio", "动效编排工作室")} description={text("Three animated tracks share one explicit clock while static guides use normal history.", "三条动画轨道使用同一进度，静态参考线则可以单独撤销。")} wide>
         <StayCanvas className="demo-canvas" height={400} layers={3} mounted={mounted} width={720} />
       </CanvasCard>
-      <TimelineControls duration={duration} label={range === "full" ? "Full timeline" : "Middle sub-range"} onSeek={seek} />
+      <TimelineControls duration={duration} label={range === "full" ? text("Full timeline", "完整时间线") : text("Middle sub-range", "中间子区间")} onSeek={seek} />
       <Toolbar>
-        <Button active={range === "full"} onClick={() => setRange("full")}>Full range</Button>
-        <Button active={range === "middle"} onClick={() => setRange("middle")}>Bound range</Button>
-        <Button onClick={addGuide}>Add static guide</Button>
-        <Button disabled={guides === 0} onClick={undoGuide}>Undo static guide</Button>
+        <Button active={range === "full"} onClick={() => setRange("full")}>{text("Full range", "完整区间")}</Button>
+        <Button active={range === "middle"} onClick={() => setRange("middle")}>{text("Bound range", "限定区间")}</Button>
+        <Button onClick={addGuide}>{text("Add static guide", "添加静态参考线")}</Button>
+        <Button disabled={guides === 0} onClick={undoGuide}>{text("Undo static guide", "撤销静态参考线")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[["Animated tracks", 3], ["Playback range", range], ["Static guides", guides], ["History rule", "Animated tracks excluded"]]} />
+      <StatusGrid items={[[text("Animated tracks", "动画轨道"), 3], [text("Playback range", "播放区间"), range === "full" ? text("full", "完整") : text("middle", "中间")], [text("Static guides", "静态参考线"), guides], [text("History rule", "撤销范围"), text("Animated tracks excluded", "仅静态内容")]]} />
       <EventLog entries={entries} />
     </DemoLayout>
   )

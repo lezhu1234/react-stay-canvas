@@ -10,6 +10,7 @@ import {
 } from "react-stay-canvas"
 
 import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { useI18n } from "../../i18n"
 
 function makeSampleImage() {
   const canvas = document.createElement("canvas")
@@ -28,9 +29,10 @@ function makeSampleImage() {
 }
 
 export default function ShapesExample() {
+  const { text } = useI18n()
   const toolsRef = useRef<StayTools | null>(null)
   const rectangleRef = useRef<ReturnType<StayTools["appendChild"]> | null>(null)
-  const [variant, setVariant] = useState("Default geometry")
+  const [variant, setVariant] = useState(text("Default geometry", "默认状态"))
 
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
@@ -71,7 +73,7 @@ export default function ShapesExample() {
       shape: new StayText({
         x: 220,
         y: 154,
-        text: "Rectangle  Circle  Line  Text",
+        text: text("Rectangle  Circle  Line  Text", "矩形  圆形  线条  文本"),
         font: { size: 18, fontWeight: 650 },
         fillConfig: { color: colors.ink },
       }),
@@ -103,20 +105,20 @@ export default function ShapesExample() {
       width: rectangle.width === 112 ? 150 : 112,
       fillConfig: { color: rectangle.width === 112 ? colors.orangeSoft : colors.blueSoft },
     })
-    setVariant(rectangle.width === 150 ? "Updated geometry" : "Default geometry")
+    setVariant(rectangle.width === 150 ? text("Updated geometry", "已修改") : text("Default geometry", "默认状态"))
   }
 
   return (
     <DemoLayout>
-      <CanvasCard title="Built-in shape palette" description="Five drawing primitives share one incremental renderer." wide>
+      <CanvasCard title={text("Built-in shape palette", "内置图形与样式")} description={text("Five drawing primitives share one incremental renderer.", "同一个 Canvas 中绘制五种内容，并按需增量重绘。")} wide>
         <StayCanvas className="demo-canvas" height={330} layers={2} mounted={mounted} width={440} />
       </CanvasCard>
       <Toolbar>
-        <Button onClick={changeRectangle}>Toggle rectangle</Button>
-        <Button onClick={() => toolsRef.current?.refresh()}>Force refresh</Button>
+        <Button onClick={changeRectangle}>{text("Toggle rectangle", "切换矩形")}</Button>
+        <Button onClick={() => toolsRef.current?.refresh()}>{text("Force refresh", "强制刷新")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[["Variant", variant], ["Canvas", "440 × 330"], ["Layers", "2"]]} />
+      <StatusGrid items={[[text("Variant", "当前状态"), variant], ["Canvas", "440 × 330"], [text("Layers", "图层"), "2"]]} />
     </DemoLayout>
   )
 }

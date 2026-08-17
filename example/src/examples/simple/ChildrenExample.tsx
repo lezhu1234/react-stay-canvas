@@ -2,13 +2,15 @@ import { useRef, useState } from "react"
 import { Circle, Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
 import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { useI18n } from "../../i18n"
 
 export default function ChildrenExample() {
+  const { text } = useI18n()
   const toolsRef = useRef<StayTools | null>(null)
   const groupRef = useRef<ReturnType<StayTools["appendChild"]> | null>(null)
   const createdIds = useRef<string[]>([])
   const [count, setCount] = useState(0)
-  const [lastAction, setLastAction] = useState("Mounted")
+  const [lastAction, setLastAction] = useState(text("Mounted", "已挂载"))
 
   const updateCount = () => setCount(toolsRef.current?.getChildrenWithoutRoot().length ?? 0)
 
@@ -29,7 +31,7 @@ export default function ChildrenExample() {
         new StayText({
           x: 142,
           y: 91,
-          text: "one Child",
+          text: text("one Child", "一个 Child"),
           font: { size: 17, fontWeight: 650 },
           fillConfig: { color: colors.ink },
         }),
@@ -52,7 +54,7 @@ export default function ChildrenExample() {
       }),
     })
     createdIds.current.push(child.id)
-    setLastAction(`Appended ${child.id.slice(0, 8)}`)
+    setLastAction(text(`Appended ${child.id.slice(0, 8)}`, `已添加 ${child.id.slice(0, 8)}`))
     updateCount()
   }
 
@@ -60,29 +62,29 @@ export default function ChildrenExample() {
     const group = groupRef.current
     if (!group) return
     group.shapeMap.forEach((shape) => shape.move(18, 10))
-    setLastAction("Updated every Shape in the group")
+    setLastAction(text("Updated every Shape in the group", "已更新组内所有 Shape"))
   }
 
   const removeLast = () => {
     const id = createdIds.current.pop()
     if (!id || !toolsRef.current) return
     toolsRef.current.removeChild(id)
-    setLastAction(`Removed ${id.slice(0, 8)}`)
+    setLastAction(text(`Removed ${id.slice(0, 8)}`, `已移除 ${id.slice(0, 8)}`))
     updateCount()
   }
 
   return (
     <DemoLayout>
-      <CanvasCard title="Child lifecycle" description="The blue panel and its label belong to one multi-shape Child." wide>
+      <CanvasCard title={text("Child lifecycle", "Child 生命周期")} description={text("The blue panel and its label belong to one multi-shape Child.", "蓝色面板及其文字属于同一个多图形 Child。")} wide>
         <StayCanvas className="demo-canvas" height={250} mounted={mounted} width={440} />
       </CanvasCard>
       <Toolbar>
-        <Button onClick={addChild}>Append Child</Button>
-        <Button onClick={moveGroup}>Update group</Button>
-        <Button disabled={createdIds.current.length === 0} onClick={removeLast}>Remove last</Button>
+        <Button onClick={addChild}>{text("Append Child", "添加 Child")}</Button>
+        <Button onClick={moveGroup}>{text("Update group", "更新组")}</Button>
+        <Button disabled={createdIds.current.length === 0} onClick={removeLast}>{text("Remove last", "移除最后一项")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[["Children", count], ["Group shapes", groupRef.current?.shapeMap.size ?? 0], ["Last action", lastAction]]} />
+      <StatusGrid items={[["Children", count], [text("Group shapes", "组内图形"), groupRef.current?.shapeMap.size ?? 0], [text("Last action", "最近操作"), lastAction]]} />
     </DemoLayout>
   )
 }

@@ -28,13 +28,17 @@ The three install commands use the repository's lockfiles and must complete befo
 
 ## Manual execution
 
-1. Open every example from the gallery overview.
-2. Open the page's **Acceptance handbook** tab.
-3. Confirm the listed environment and prerequisites.
-4. Perform each operator action in order on **Live result**.
-5. Return to **Acceptance handbook** and check each expected result only after observing it.
-6. Retain the evidence requested on the page.
-7. Run cleanup before continuing to the next example.
+1. On the overview, switch to Chinese. Confirm the overview, navigation, example titles, controls, statuses, Canvas labels, and acceptance handbook use Chinese. Reload once and confirm Chinese remains selected.
+2. Switch to English and confirm the same surfaces use English. Reload once and confirm English remains selected.
+3. Open one 440px Canvas example, one 720px Canvas integration, and the two-Canvas transfer example on a wide viewport. Confirm every Canvas border ends at the rendered Canvas edge rather than filling the result panel with an empty strip.
+4. Narrow the viewport below the Canvas width. Confirm the result panel stays within the page and the Canvas area scrolls horizontally without shrinking or clipping its drawing surface. Restore the desktop viewport.
+5. Open every example from the gallery overview.
+6. Open the page's **Acceptance handbook** tab.
+7. Confirm the listed environment and prerequisites.
+8. Perform each operator action in order on **Live result**.
+9. Return to **Acceptance handbook** and check each expected result only after observing it.
+10. Retain the evidence requested on the page.
+11. Run cleanup before continuing to the next example.
 
 The example routes are the source of truth for scenario details. This keeps each runbook beside the exact component and source code being accepted.
 
@@ -49,6 +53,8 @@ Record the first failing action, the route, browser version, timestamp, screensh
 The gallery is accepted only when:
 
 - All automated preflight commands pass.
+- Both language modes pass the shell and persistence check.
+- Fixed-width Canvas borders fit their rendered content on wide screens and scroll safely on narrow screens.
 - All 13 example routes have every expected result checked.
 - Required evidence is retained for every route.
 - No unresolved failure remains.

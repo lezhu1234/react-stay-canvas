@@ -1,7 +1,8 @@
 import { Component, ErrorInfo, ReactNode } from "react"
+import { useI18n } from "../i18n"
 
-export class ErrorBoundary extends Component<
-  { children: ReactNode },
+class ExampleErrorBoundary extends Component<
+  { children: ReactNode; labels: { eyebrow: string; heading: string; reload: string } },
   { error: Error | null }
 > {
   state = { error: null as Error | null }
@@ -18,13 +19,26 @@ export class ErrorBoundary extends Component<
     if (this.state.error) {
       return (
         <section className="error-boundary" role="alert">
-          <p className="eyebrow">Runtime failure</p>
-          <h1>This example stopped unexpectedly.</h1>
+          <p className="eyebrow">{this.props.labels.eyebrow}</p>
+          <h1>{this.props.labels.heading}</h1>
           <pre>{this.state.error.message}</pre>
-          <button onClick={() => window.location.reload()}>Reload example</button>
+          <button onClick={() => window.location.reload()}>{this.props.labels.reload}</button>
         </section>
       )
     }
     return this.props.children
   }
+}
+
+export function ErrorBoundary({ children }: { children: ReactNode }) {
+  const { text } = useI18n()
+  return (
+    <ExampleErrorBoundary labels={{
+      eyebrow: text("Runtime failure", "运行出错"),
+      heading: text("This example stopped unexpectedly.", "这个示例没有正常运行。"),
+      reload: text("Reload example", "重新加载示例"),
+    }}>
+      {children}
+    </ExampleErrorBoundary>
+  )
 }

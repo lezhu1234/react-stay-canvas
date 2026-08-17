@@ -3,6 +3,7 @@ import { ReactNode, useEffect, useState } from "react"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import { ExamplePage } from "./components/ExamplePage"
 import { catalog, getExampleByPath } from "./examples/catalog"
+import { type Locale, useI18n } from "./i18n"
 
 const sourceModules = import.meta.glob("./examples/**/*.tsx", {
   query: "?raw",
@@ -47,6 +48,7 @@ function ExampleGrid({
   examples: typeof catalog
   featured?: boolean
 }) {
+  const { localized, text } = useI18n()
   return (
     <section className="catalog-section">
       <h2>{title}</h2>
@@ -54,9 +56,9 @@ function ExampleGrid({
         {examples.map((example) => (
           <RouteLink className="catalog-card" path={example.path} key={example.path}>
             <span className="catalog-card-index">{String(example.order).padStart(2, "0")}</span>
-            <h3>{example.title}</h3>
-            <p>{example.summary}</p>
-            <span className="catalog-card-link">Open example</span>
+            <h3>{localized(example.title)}</h3>
+            <p>{localized(example.summary)}</p>
+            <span className="catalog-card-link">{text("Open example", "打开示例")}</span>
           </RouteLink>
         ))}
       </div>
@@ -65,38 +67,53 @@ function ExampleGrid({
 }
 
 function CatalogHome() {
+  const { text } = useI18n()
   const simple = catalog.filter((example) => example.group === "Simple")
   const integrations = catalog.filter((example) => example.group === "Integrated")
 
   return (
     <div className="catalog-home">
       <section className="catalog-intro">
-        <p className="eyebrow">Executable reference</p>
-        <h1>Learn one behavior. Regress the whole system.</h1>
+        <p className="eyebrow">{text("Executable reference", "可运行示例")}</p>
+        <h1>{text("Learn one behavior. Regress the whole system.", "从基础绘制到完整流程，都有示例可以直接验证。")}</h1>
         <p>
-          Thirteen isolated examples cover the public surface of react-stay-canvas, from
-          individual shapes to complete editing workflows.
+          {text(
+            "Thirteen isolated examples cover the public surface of react-stay-canvas, from individual shapes to complete editing workflows.",
+            "13 个可独立运行的示例，覆盖 react-stay-canvas 从基础绘制到完整编辑流程的主要能力。",
+          )}
         </p>
-        <div className="catalog-metrics" aria-label="Example counts">
-          <span><strong>10</strong> focused examples</span>
-          <span><strong>3</strong> integration scenarios</span>
-          <span><strong>56</strong> unit tests</span>
+        <div className="catalog-metrics" aria-label={text("Example counts", "示例数量")}>
+          <span><strong>10</strong> {text("focused examples", "个基础示例")}</span>
+          <span><strong>3</strong> {text("integration scenarios", "个集成场景")}</span>
+          <span><strong>56</strong> {text("unit tests", "个单元测试")}</span>
         </div>
       </section>
 
-      <ExampleGrid title="Focused examples" examples={simple} />
-      <ExampleGrid title="Integration scenarios" examples={integrations} featured />
+      <ExampleGrid title={text("Focused examples", "基础示例")} examples={simple} />
+      <ExampleGrid title={text("Integration scenarios", "集成场景")} examples={integrations} featured />
     </div>
   )
 }
 
 export default function App() {
+  const { locale, localized, switchLocale, text } = useI18n()
   const path = useHashPath()
   const active = getExampleByPath(path)
 
   useEffect(() => {
-    document.title = active ? `${active.title} | react-stay-canvas` : "react-stay-canvas examples"
-  }, [active])
+    document.title = active ? `${localized(active.title)} | react-stay-canvas` : text("react-stay-canvas examples", "react-stay-canvas 示例")
+  }, [active, localized, text])
+
+  const localeButton = (target: Locale, label: string) => (
+    <button
+      aria-pressed={locale === target}
+      className={locale === target ? "active" : ""}
+      onClick={() => switchLocale(target)}
+      type="button"
+    >
+      {label}
+    </button>
+  )
 
   return (
     <div className="app-shell">
@@ -105,19 +122,23 @@ export default function App() {
           <span className="brand-mark" aria-hidden="true" />
           <span>react-stay-canvas</span>
         </RouteLink>
-        <nav aria-label="Project links">
+        <nav aria-label={text("Project links", "项目链接")}>
+          <div className="language-switcher" role="group" aria-label={text("Language", "语言")}>
+            {localeButton("zh", "中文")}
+            {localeButton("en", "EN")}
+          </div>
           <a href="https://github.com/lezhu1234/react-stay-canvas">GitHub</a>
           <a href="https://www.npmjs.com/package/react-stay-canvas">npm</a>
         </nav>
       </header>
 
-      <aside className="sidebar" aria-label="Examples">
+      <aside className="sidebar" aria-label={text("Examples", "示例")}>
         <RouteLink className={path === "/" ? "sidebar-home active" : "sidebar-home"} path="/">
-          Overview
+          {text("Overview", "总览")}
         </RouteLink>
         {(["Simple", "Integrated"] as const).map((group) => (
           <div className="sidebar-group" key={group}>
-            <h2>{group === "Simple" ? "Focused" : "Integrated"}</h2>
+            <h2>{group === "Simple" ? text("Focused", "基础") : text("Integrated", "集成")}</h2>
             {catalog
               .filter((example) => example.group === group)
               .map((example) => (
@@ -127,7 +148,7 @@ export default function App() {
                   path={example.path}
                 >
                   <span>{String(example.order).padStart(2, "0")}</span>
-                  {example.shortTitle}
+                  {localized(example.shortTitle)}
                 </RouteLink>
               ))}
           </div>
@@ -139,15 +160,15 @@ export default function App() {
           <ErrorBoundary key={active.path}>
             <ExamplePage
               definition={active}
-              source={sourceModules[active.sourcePath] ?? "Source unavailable."}
+              source={sourceModules[active.sourcePath] ?? text("Source unavailable.", "源码暂不可用。")}
             />
           </ErrorBoundary>
         ) : path === "/" ? (
           <CatalogHome />
         ) : (
           <section className="not-found">
-            <p>Example not found.</p>
-            <a href="#/">Return to overview</a>
+            <p>{text("Example not found.", "未找到示例。")}</p>
+            <a href="#/">{text("Return to overview", "返回总览")}</a>
           </section>
         )}
       </main>

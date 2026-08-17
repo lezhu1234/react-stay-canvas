@@ -9,6 +9,7 @@ import {
 } from "react-stay-canvas"
 
 import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { useI18n } from "../../i18n"
 
 type Mode = "select" | "connect"
 type Child = ReturnType<StayTools["appendChild"]>
@@ -19,6 +20,7 @@ type SavedGraph = {
 }
 
 export default function DiagramExample() {
+  const { text } = useI18n()
   const toolsRef = useRef<StayTools | null>(null)
   const nodesRef = useRef(new Map<string, Child>())
   const edgesRef = useRef<Edge[]>([])
@@ -27,7 +29,7 @@ export default function DiagramExample() {
   const [mode, setMode] = useState<Mode>("select")
   const [nodeCount, setNodeCount] = useState(0)
   const [edgeCount, setEdgeCount] = useState(0)
-  const [selected, setSelected] = useState("None")
+  const [selected, setSelected] = useState(text("None", "无"))
   const [entries, setEntries] = useState<string[]>([])
 
   const push = (message: string) => setEntries((current) => [message, ...current].slice(0, 8))
@@ -69,7 +71,7 @@ export default function DiagramExample() {
         new StayText({
           x: nodeX + 56,
           y: nodeY + 21,
-          text: `Node ${index + 1}`,
+          text: text(`Node ${index + 1}`, `节点 ${index + 1}`),
           font: { size: 15, fontWeight: 650 },
           layer: 2,
           zIndex: 3,
@@ -93,7 +95,7 @@ export default function DiagramExample() {
     const child = tools.appendChild({ className: "edge", shape: line })
     edgesRef.current.push({ childId: child.id, from, to, line })
     setEdgeCount(edgesRef.current.length)
-    push(`connected ${from} to ${to}`)
+    push(text(`connected ${from} to ${to}`, `已连接 ${from} 与 ${to}`))
   }
 
   const listeners = useMemo<ListenerProps[]>(() => [
@@ -112,7 +114,7 @@ export default function DiagramExample() {
           composeStore.child.move(e.x - composeStore.start.x, e.y - composeStore.start.y)
           updateEdges()
         },
-        dragend: () => push(`moved ${composeStore.child.id}`),
+        dragend: () => push(text(`moved ${composeStore.child.id}`, `已移动 ${composeStore.child.id}`)),
       }),
     },
     {
@@ -122,7 +124,7 @@ export default function DiagramExample() {
       event: "click",
       callback: ({ e }) => {
         setSelected(e.target.id)
-        push(`selected ${e.target.id}`)
+        push(text(`selected ${e.target.id}`, `已选择 ${e.target.id}`))
       },
     },
     {
@@ -135,15 +137,15 @@ export default function DiagramExample() {
         if (!from) {
           stateStore.set("from", e.target.id)
           setSelected(e.target.id)
-          push(`connection starts at ${e.target.id}`)
+          push(text(`connection starts at ${e.target.id}`, `连接起点为 ${e.target.id}`))
         } else {
           addEdge(from, e.target.id)
           stateStore.delete("from")
-          setSelected("None")
+          setSelected(text("None", "无"))
         }
       },
     },
-  ], [])
+  ], [text])
 
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
@@ -161,8 +163,8 @@ export default function DiagramExample() {
   const switchMode = (next: Mode) => {
     toolsRef.current?.switchState(next)
     setMode(next)
-    setSelected("None")
-    push(`mode: ${next}`)
+    setSelected(text("None", "无"))
+    push(text(`mode: ${next}`, `模式：${next === "select" ? "选择" : "连接"}`))
   }
 
   const save = () => {
@@ -172,7 +174,7 @@ export default function DiagramExample() {
       scene: tools.exportChildren({ children: tools.getChildrenWithoutRoot(), area: { x: 0, y: 0, width: 720, height: 420 } }),
       edges: edgesRef.current.map(({ childId, from, to }) => ({ childId, from, to })),
     }
-    push("scene saved in memory")
+    push(text("scene saved in memory", "场景已保存到内存"))
   }
 
   const restoreCopy = () => {
@@ -203,25 +205,25 @@ export default function DiagramExample() {
     })
     setNodeCount(nodesRef.current.size)
     setEdgeCount(edgesRef.current.length)
-    push("saved scene imported as a copy")
+    push(text("saved scene imported as a copy", "已将保存场景作为副本导入"))
   }
 
   return (
     <DemoLayout>
-      <CanvasCard title="Connected diagram" description="Drag nodes in Select mode. Choose two nodes in Connect mode to create an edge." wide>
+      <CanvasCard title={text("Connected diagram", "连线图编辑器")} description={text("Drag nodes in Select mode. Choose two nodes in Connect mode to create an edge.", "选择模式下可以拖动节点；连接模式下依次点击两个节点即可连线。")} wide>
         <StayCanvas className="demo-canvas demo-canvas-grid" height={420} layers={3} listenerList={listeners} mounted={mounted} width={720} />
       </CanvasCard>
       <Toolbar>
-        <Button active={mode === "select"} onClick={() => switchMode("select")}>Select</Button>
-        <Button active={mode === "connect"} onClick={() => switchMode("connect")}>Connect</Button>
-        <Button onClick={() => { const node = addNode(); if (node) { toolsRef.current?.log(); push(`added ${node.id}`) } }}>Add node</Button>
-        <Button onClick={() => { void toolsRef.current?.zoom(-100, { x: 360, y: 210 }); push("zoom in") }}>Zoom in</Button>
-        <Button onClick={() => { void toolsRef.current?.reset(); push("view reset") }}>Reset view</Button>
-        <Button onClick={save}>Save scene</Button>
-        <Button disabled={!savedGraphRef.current} onClick={restoreCopy}>Import copy</Button>
+        <Button active={mode === "select"} onClick={() => switchMode("select")}>{text("Select", "选择")}</Button>
+        <Button active={mode === "connect"} onClick={() => switchMode("connect")}>{text("Connect", "连接")}</Button>
+        <Button onClick={() => { const node = addNode(); if (node) { toolsRef.current?.log(); push(text(`added ${node.id}`, `已添加 ${node.id}`)) } }}>{text("Add node", "添加节点")}</Button>
+        <Button onClick={() => { void toolsRef.current?.zoom(-100, { x: 360, y: 210 }); push(text("zoom in", "放大")) }}>{text("Zoom in", "放大")}</Button>
+        <Button onClick={() => { void toolsRef.current?.reset(); push(text("view reset", "视图已重置")) }}>{text("Reset view", "重置视图")}</Button>
+        <Button onClick={save}>{text("Save scene", "保存场景")}</Button>
+        <Button disabled={!savedGraphRef.current} onClick={restoreCopy}>{text("Import copy", "导入副本")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[["Mode", mode], ["Nodes", nodeCount], ["Edges", edgeCount], ["Selected", selected]]} />
+      <StatusGrid items={[[text("Mode", "模式"), mode === "select" ? text("select", "选择") : text("connect", "连接")], [text("Nodes", "节点"), nodeCount], [text("Edges", "边"), edgeCount], [text("Selected", "已选择"), selected]]} />
       <EventLog entries={entries} />
     </DemoLayout>
   )

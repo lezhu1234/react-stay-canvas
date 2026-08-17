@@ -1,5 +1,7 @@
 import { ReactNode, useEffect, useRef, useState } from "react"
 
+import { useI18n } from "../i18n"
+
 export function DemoLayout({ children }: { children: ReactNode }) {
   return <div className="demo-layout">{children}</div>
 }
@@ -49,7 +51,8 @@ export function Button({
 }
 
 export function ResetButton() {
-  return <Button onClick={() => window.location.reload()}>Reset</Button>
+  const { text } = useI18n()
+  return <Button onClick={() => window.location.reload()}>{text("Reset", "重置")}</Button>
 }
 
 export function StatusGrid({ items }: { items: Array<[string, ReactNode]> }) {
@@ -66,9 +69,10 @@ export function StatusGrid({ items }: { items: Array<[string, ReactNode]> }) {
 }
 
 export function EventLog({ entries }: { entries: string[] }) {
+  const { text } = useI18n()
   return (
     <div className="event-log" aria-live="polite">
-      {entries.length === 0 ? <p>No events yet.</p> : entries.slice(0, 6).map((entry, index) => <p key={`${entry}-${index}`}>{entry}</p>)}
+      {entries.length === 0 ? <p>{text("No events yet.", "暂无事件。")}</p> : entries.slice(0, 6).map((entry, index) => <p key={`${entry}-${index}`}>{entry}</p>)}
     </div>
   )
 }
@@ -82,6 +86,7 @@ export function TimelineControls({
   onSeek: (time: number) => void
   label?: string
 }) {
+  const { text } = useI18n()
   const [playing, setPlaying] = useState(false)
   const rangeRef = useRef<HTMLInputElement>(null)
   const outputRef = useRef<HTMLOutputElement>(null)
@@ -123,7 +128,7 @@ export function TimelineControls({
   return (
     <div className="timeline-controls">
       <div className="timeline-heading">
-        <label htmlFor="timeline-range">{label}</label>
+        <label htmlFor="timeline-range">{label === "Timeline" ? text("Timeline", "时间线") : label}</label>
         <output ref={outputRef}>0 ms</output>
       </div>
       <input
@@ -137,9 +142,9 @@ export function TimelineControls({
         defaultValue={0}
       />
       <Toolbar>
-        <Button onClick={() => setPlaying((value) => !value)}>{playing ? "Pause" : "Play"}</Button>
-        <Button onClick={() => { setPlaying(false); seek(0) }}>Start</Button>
-        <Button onClick={() => { setPlaying(false); seek(duration) }}>End</Button>
+        <Button onClick={() => setPlaying((value) => !value)}>{playing ? text("Pause", "暂停") : text("Play", "播放")}</Button>
+        <Button onClick={() => { setPlaying(false); seek(0) }}>{text("Start", "起点")}</Button>
+        <Button onClick={() => { setPlaying(false); seek(duration) }}>{text("End", "终点")}</Button>
       </Toolbar>
     </div>
   )

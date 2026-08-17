@@ -9,8 +9,10 @@ import {
 } from "react-stay-canvas"
 
 import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { useI18n } from "../../i18n"
 
 export default function EventsExample() {
+  const { text } = useI18n()
   const canvasRef = useRef<StayCanvasRefType>(null)
   const [entries, setEntries] = useState<string[]>([])
   const [pings, setPings] = useState(0)
@@ -23,16 +25,16 @@ export default function EventsExample() {
       selector: ".target",
       callback: ({ e, composeStore }) => ({
         dragstart: () => {
-          push(`dragstart at ${Math.round(e.x)}, ${Math.round(e.y)}`)
+          push(text(`dragstart at ${Math.round(e.x)}, ${Math.round(e.y)}`, `dragstart，坐标 ${Math.round(e.x)}, ${Math.round(e.y)}`))
           const shape = e.target.shape as Rectangle
           return { target: e.target, offsetX: e.x - shape.x, offsetY: e.y - shape.y }
         },
         drag: () => {
           const shape = composeStore.target.shape as Rectangle
           shape.update({ x: e.x - composeStore.offsetX, y: e.y - composeStore.offsetY })
-          push(`drag at ${Math.round(e.x)}, ${Math.round(e.y)}`)
+          push(text(`drag at ${Math.round(e.x)}, ${Math.round(e.y)}`, `drag，坐标 ${Math.round(e.x)}, ${Math.round(e.y)}`))
         },
-        dragend: () => push("dragend"),
+        dragend: () => push(text("dragend", "dragend，拖动结束")),
       }),
     },
     {
@@ -41,7 +43,7 @@ export default function EventsExample() {
       selector: ".target|.stay-canvas",
       state: "all-state",
       callback: ({ e }) => {
-        push(e.name === "keydown" ? `keydown: ${e.key}` : e.name)
+        push(e.name === "keydown" ? text(`keydown: ${e.key}`, `keydown：${e.key}`) : e.name)
       },
     },
     {
@@ -50,10 +52,10 @@ export default function EventsExample() {
       state: "all-state",
       callback: ({ payload }) => {
         setPings((value) => value + 1)
-        push(`custom ping: ${payload.message}`)
+        push(text(`custom ping: ${payload.message}`, `自定义 ping：${payload.message}`))
       },
     },
-  ], [])
+  ], [text])
 
   const mounted = (tools: StayTools) => {
     tools.appendChild({
@@ -69,21 +71,21 @@ export default function EventsExample() {
     })
     tools.appendChild({
       className: "target-label",
-      shape: new StayText({ x: 220, y: 116, text: "drag me", font: { size: 20, fontWeight: 650 }, fillConfig: { color: colors.ink } }),
+      shape: new StayText({ x: 220, y: 116, text: text("drag me", "拖动我"), font: { size: 20, fontWeight: 650 }, fillConfig: { color: colors.ink } }),
     })
   }
 
   return (
     <DemoLayout>
-      <CanvasCard title="DOM events and custom actions" description="Focus the canvas, drag the blue target, scroll, or press a key." wide>
+      <CanvasCard title={text("DOM events and custom actions", "DOM 事件与自定义动作")} description={text("Focus the canvas, drag the blue target, scroll, or press a key.", "聚焦画布后可拖动蓝色目标、滚动或按键。")} wide>
         <StayCanvas ref={canvasRef} className="demo-canvas" height={260} listenerList={listeners} mounted={mounted} width={440} />
       </CanvasCard>
       <Toolbar>
-        <Button onClick={() => canvasRef.current?.trigger("ping", { message: "from React" })}>Trigger ping</Button>
-        <Button onClick={() => canvasRef.current?.focus()}>Focus canvas</Button>
+        <Button onClick={() => canvasRef.current?.trigger("ping", { message: text("from React", "来自 React") })}>{text("Trigger ping", "触发 ping")}</Button>
+        <Button onClick={() => canvasRef.current?.focus()}>{text("Focus canvas", "聚焦 Canvas")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[["Custom pings", pings], ["Latest event", entries[0] ?? "None"], ["Listener count", listeners.length]]} />
+      <StatusGrid items={[[text("Custom pings", "自定义 ping"), pings], [text("Latest event", "最近事件"), entries[0] ?? text("None", "无")], [text("Listener count", "监听器数量"), listeners.length]]} />
       <EventLog entries={entries} />
     </DemoLayout>
   )

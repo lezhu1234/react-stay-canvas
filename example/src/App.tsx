@@ -1,102 +1,156 @@
-import {
-  Circle,
-  Line,
-  Rectangle,
-  StayCanvas,
-  StayText,
-} from "react-stay-canvas"
+import { ReactNode, useEffect, useState } from "react"
 
-// The library takes colors as RGBA objects.
-const rgba = (r: number, g: number, b: number, a = 1) => ({ r, g, b, a })
-const blue = rgba(59, 130, 246, 1)
-const green = rgba(34, 197, 94, 1)
-const pink = rgba(244, 114, 182, 1)
-const slate = rgba(148, 163, 184, 1)
+import { ErrorBoundary } from "./components/ErrorBoundary"
+import { ExamplePage } from "./components/ExamplePage"
+import { catalog, getExampleByPath } from "./examples/catalog"
 
-// Example 1 — the built-in shapes drawn on mount.
-function ShapesExample() {
-  const mounted = (tools: any) => {
-    tools.appendChild({
-      className: "shape",
-      shape: new Rectangle({
-        x: 40,
-        y: 50,
-        width: 130,
-        height: 90,
-        strokeConfig: { color: blue, lineWidth: 2 },
-      }),
-    })
-    tools.appendChild({
-      className: "shape",
-      shape: new Rectangle({
-        x: 210,
-        y: 50,
-        width: 130,
-        height: 90,
-        fillConfig: { color: rgba(59, 130, 246, 0.25) },
-      }),
-    })
-    tools.appendChild({
-      className: "shape",
-      shape: new Circle({
-        x: 105,
-        y: 250,
-        radius: 55,
-        strokeConfig: { color: green, lineWidth: 2 },
-      }),
-    })
-    tools.appendChild({
-      className: "shape",
-      shape: new Line({
-        x1: 210,
-        y1: 200,
-        x2: 360,
-        y2: 300,
-        strokeConfig: { color: pink, lineWidth: 3 },
-      }),
-    })
-    tools.appendChild({
-      className: "shape",
-      shape: new StayText({
-        x: 200,
-        y: 350,
-        text: "Rectangle · Circle · Line · Text",
-        fillConfig: { color: slate },
-      }),
-    })
-  }
+const sourceModules = import.meta.glob("./examples/**/*.tsx", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>
+
+function useHashPath() {
+  const readPath = () => window.location.hash.slice(1) || "/"
+  const [path, setPath] = useState(readPath)
+
+  useEffect(() => {
+    const onHashChange = () => setPath(readPath())
+    window.addEventListener("hashchange", onHashChange)
+    return () => window.removeEventListener("hashchange", onHashChange)
+  }, [])
+
+  return path
+}
+
+function RouteLink({
+  path,
+  className,
+  children,
+}: {
+  path: string
+  className?: string
+  children: ReactNode
+}) {
+  // Stay currently owns a perpetual RAF loop. The query change forces a document
+  // navigation, isolating examples and fully discarding the previous stage.
+  const href = `${window.location.pathname}?example=${encodeURIComponent(path)}#${path}`
+  return <a className={className} href={href}>{children}</a>
+}
+
+function ExampleGrid({
+  title,
+  examples,
+  featured = false,
+}: {
+  title: string
+  examples: typeof catalog
+  featured?: boolean
+}) {
+  return (
+    <section className="catalog-section">
+      <h2>{title}</h2>
+      <div className={featured ? "catalog-grid catalog-grid-featured" : "catalog-grid"}>
+        {examples.map((example) => (
+          <RouteLink className="catalog-card" path={example.path} key={example.path}>
+            <span className="catalog-card-index">{String(example.order).padStart(2, "0")}</span>
+            <h3>{example.title}</h3>
+            <p>{example.summary}</p>
+            <span className="catalog-card-link">Open example</span>
+          </RouteLink>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function CatalogHome() {
+  const simple = catalog.filter((example) => example.group === "Simple")
+  const integrations = catalog.filter((example) => example.group === "Integrated")
 
   return (
-    <StayCanvas
-      width={400}
-      height={380}
-      layers={2}
-      mounted={mounted}
-      className="canvas"
-    />
+    <div className="catalog-home">
+      <section className="catalog-intro">
+        <p className="eyebrow">Executable reference</p>
+        <h1>Learn one behavior. Regress the whole system.</h1>
+        <p>
+          Thirteen isolated examples cover the public surface of react-stay-canvas, from
+          individual shapes to complete editing workflows.
+        </p>
+        <div className="catalog-metrics" aria-label="Example counts">
+          <span><strong>10</strong> focused examples</span>
+          <span><strong>3</strong> integration scenarios</span>
+          <span><strong>56</strong> unit tests</span>
+        </div>
+      </section>
+
+      <ExampleGrid title="Focused examples" examples={simple} />
+      <ExampleGrid title="Integration scenarios" examples={integrations} featured />
+    </div>
   )
 }
 
 export default function App() {
+  const path = useHashPath()
+  const active = getExampleByPath(path)
+
+  useEffect(() => {
+    document.title = active ? `${active.title} | react-stay-canvas` : "react-stay-canvas examples"
+  }, [active])
+
   return (
-    <main>
-      <header>
-        <h1>react-stay-canvas</h1>
-        <p>A small canvas library for React. Examples below.</p>
+    <div className="app-shell">
+      <header className="topbar">
+        <RouteLink className="brand" path="/">
+          <span className="brand-mark" aria-hidden="true" />
+          <span>react-stay-canvas</span>
+        </RouteLink>
+        <nav aria-label="Project links">
+          <a href="https://github.com/lezhu1234/react-stay-canvas">GitHub</a>
+          <a href="https://www.npmjs.com/package/react-stay-canvas">npm</a>
+        </nav>
       </header>
 
-      <section className="example">
-        <h2>Built-in shapes</h2>
-        <div className="stage">
-          <ShapesExample />
-        </div>
-      </section>
+      <aside className="sidebar" aria-label="Examples">
+        <RouteLink className={path === "/" ? "sidebar-home active" : "sidebar-home"} path="/">
+          Overview
+        </RouteLink>
+        {(["Simple", "Integrated"] as const).map((group) => (
+          <div className="sidebar-group" key={group}>
+            <h2>{group === "Simple" ? "Focused" : "Integrated"}</h2>
+            {catalog
+              .filter((example) => example.group === group)
+              .map((example) => (
+                <RouteLink
+                  className={path === example.path ? "active" : ""}
+                  key={example.path}
+                  path={example.path}
+                >
+                  <span>{String(example.order).padStart(2, "0")}</span>
+                  {example.shortTitle}
+                </RouteLink>
+              ))}
+          </div>
+        ))}
+      </aside>
 
-      <footer>
-        <a href="https://github.com/lezhu1234/react-stay-canvas">GitHub</a>
-        <span>·</span>
-        <a href="https://www.npmjs.com/package/react-stay-canvas">npm</a>
-      </footer>
-    </main>
+      <main className="content">
+        {active ? (
+          <ErrorBoundary key={active.path}>
+            <ExamplePage
+              definition={active}
+              source={sourceModules[active.sourcePath] ?? "Source unavailable."}
+            />
+          </ErrorBoundary>
+        ) : path === "/" ? (
+          <CatalogHome />
+        ) : (
+          <section className="not-found">
+            <p>Example not found.</p>
+            <a href="#/">Return to overview</a>
+          </section>
+        )}
+      </main>
+    </div>
   )
 }

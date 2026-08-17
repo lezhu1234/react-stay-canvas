@@ -8,6 +8,8 @@ export default function LayersExample() {
   const { text } = useI18n()
   const frontRef = useRef<ReturnType<StayTools["appendChild"]> | null>(null)
   const middleRef = useRef<ReturnType<StayTools["appendChild"]> | null>(null)
+  const orangeLabelRef = useRef<StayText | null>(null)
+  const blueLabelRef = useRef<StayText | null>(null)
   const [front, setFront] = useState("orange")
 
   const mounted = (tools: StayTools) => {
@@ -15,29 +17,53 @@ export default function LayersExample() {
       className: "background",
       shape: new Rectangle({ x: 20, y: 20, width: 400, height: 250, layer: 0, fillConfig: { color: colors.graySoft } }),
     })
+    blueLabelRef.current = new StayText({
+      x: 176,
+      y: 70,
+      text: text("blue · L1 · z1", "蓝色 · L1 · z1"),
+      font: { size: 12, fontWeight: 700 },
+      layer: 2,
+      zIndex: 2,
+      fillConfig: { color: colors.ink },
+    })
     middleRef.current = tools.appendChild({
       className: "stack",
-      shape: new Rectangle({
-        x: 92,
-        y: 62,
-        width: 190,
-        height: 150,
-        layer: 1,
-        zIndex: 1,
-        fillConfig: { color: colors.blue },
-      }),
+      shape: [
+        new Rectangle({
+          x: 92,
+          y: 62,
+          width: 190,
+          height: 150,
+          layer: 1,
+          zIndex: 1,
+          fillConfig: { color: colors.blue },
+        }),
+        blueLabelRef.current,
+      ],
+    })
+    orangeLabelRef.current = new StayText({
+      x: 270,
+      y: 196,
+      text: text("orange · L1 · z2", "橙色 · L1 · z2"),
+      font: { size: 12, fontWeight: 700 },
+      layer: 2,
+      zIndex: 2,
+      fillConfig: { color: colors.ink },
     })
     frontRef.current = tools.appendChild({
       className: "stack",
-      shape: new Rectangle({
-        x: 176,
-        y: 104,
-        width: 190,
-        height: 130,
-        layer: 1,
-        zIndex: 2,
-        fillConfig: { color: colors.orange },
-      }),
+      shape: [
+        new Rectangle({
+          x: 176,
+          y: 104,
+          width: 190,
+          height: 130,
+          layer: 1,
+          zIndex: 2,
+          fillConfig: { color: colors.orange },
+        }),
+        orangeLabelRef.current,
+      ],
     })
     tools.appendChild({
       className: "overlay",
@@ -60,7 +86,9 @@ export default function LayersExample() {
     const orangeZ = orange.zIndex
     orange.update({ zIndex: blue.zIndex })
     blue.update({ zIndex: orangeZ })
-    setFront((value) => value === "orange" ? "blue" : "orange")
+    blueLabelRef.current?.update({ text: text(`blue · L1 · z${blue.zIndex}`, `蓝色 · L1 · z${blue.zIndex}`) })
+    orangeLabelRef.current?.update({ text: text(`orange · L1 · z${orange.zIndex}`, `橙色 · L1 · z${orange.zIndex}`) })
+    setFront(blue.zIndex > orange.zIndex ? "blue" : "orange")
   }
 
   return (

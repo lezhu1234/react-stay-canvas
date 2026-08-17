@@ -1,4 +1,4 @@
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { Line, Rectangle, StayCanvas, StayShapeTransitionConfig, StayText, StayTools } from "react-stay-canvas"
 
 import { CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, TimelineControls, Toolbar } from "../../components/DemoKit"
@@ -13,6 +13,7 @@ const animatedLine = (props: AnimatedLineProps) => new Line(props)
 export default function TimelineExample() {
   const { text } = useI18n()
   const toolsRef = useRef<StayTools | null>(null)
+  const [currentTime, setCurrentTime] = useState(0)
 
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
@@ -38,6 +39,14 @@ export default function TimelineExample() {
     trace.appendKeyFrame("line", animatedLine({ x1: 28, y1: 210, x2: 260, y2: 210, strokeConfig: { color: colors.blue, lineWidth: 3 }, transition: { durationMs: 600, delayMs: 120 } }))
     trace.appendKeyFrame("line", animatedLine({ x1: 28, y1: 210, x2: 410, y2: 210, strokeConfig: { color: colors.orange, lineWidth: 3 }, transition: { durationMs: 480 } }))
 
+    tools.appendChild({
+      className: "timeline-milestones",
+      shape: [
+        new StayText({ x: 90, y: 218, text: "K1 · 400ms", font: { size: 10, fontWeight: 700 }, fillConfig: { color: colors.gray } }),
+        new StayText({ x: 260, y: 218, text: "K2 · 1120ms", font: { size: 10, fontWeight: 700 }, fillConfig: { color: colors.blue } }),
+        new StayText({ x: 390, y: 218, text: "K3 · 1600ms", font: { size: 10, fontWeight: 700 }, fillConfig: { color: colors.orange } }),
+      ],
+    })
     tools.appendChild({ className: "timeline-label", shape: new StayText({ x: 220, y: 244, text: text("explicit seek with tools.progress", "拖动时间线会调用 tools.progress"), font: { size: 14 }, fillConfig: { color: colors.ink } }) })
     tools.progress({ timeMs: 0 })
   }
@@ -47,9 +56,9 @@ export default function TimelineExample() {
       <CanvasCard title={text("Keyframe timeline", "关键帧时间线")} description={text("The library interpolates geometry, color, delay, and easing at an explicit time.", "拖动时间线，查看位置、颜色、延迟和缓动如何随时间变化。")} wide>
         <StayCanvas className="demo-canvas" height={280} layers={2} mounted={mounted} width={440} />
       </CanvasCard>
-      <TimelineControls duration={duration} onSeek={(time) => toolsRef.current?.progress({ timeMs: time })} />
+      <TimelineControls duration={duration} onSeek={(time) => { setCurrentTime(Math.round(time)); toolsRef.current?.progress({ timeMs: time }) }} />
       <Toolbar><ResetButton /></Toolbar>
-      <StatusGrid items={[[text("Duration", "时长"), `${duration} ms`], [text("Animated children", "动画 Child"), 2], [text("Clock", "进度来源"), "progress()"]]} />
+      <StatusGrid items={[[text("Current time", "当前时间"), `${currentTime} ms`], [text("Duration", "时长"), `${duration} ms`], [text("Animated children", "动画 Child"), 2], [text("Clock", "进度来源"), "progress()"]]} />
     </DemoLayout>
   )
 }

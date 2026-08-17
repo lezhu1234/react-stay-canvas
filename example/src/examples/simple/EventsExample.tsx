@@ -16,6 +16,7 @@ export default function EventsExample() {
   const canvasRef = useRef<StayCanvasRefType>(null)
   const [entries, setEntries] = useState<string[]>([])
   const [pings, setPings] = useState(0)
+  const [focusRequests, setFocusRequests] = useState(0)
   const push = (message: string) => setEntries((current) => [message, ...current].slice(0, 12))
 
   const listeners = useMemo<ListenerProps[]>(() => [
@@ -26,12 +27,11 @@ export default function EventsExample() {
       callback: ({ e, composeStore }) => ({
         dragstart: () => {
           push(text(`dragstart at ${Math.round(e.x)}, ${Math.round(e.y)}`, `dragstart，坐标 ${Math.round(e.x)}, ${Math.round(e.y)}`))
-          const shape = e.target.shape as Rectangle
-          return { target: e.target, offsetX: e.x - shape.x, offsetY: e.y - shape.y }
+          e.target.moveInit()
+          return { target: e.target, start: e.point }
         },
         drag: () => {
-          const shape = composeStore.target.shape as Rectangle
-          shape.update({ x: e.x - composeStore.offsetX, y: e.y - composeStore.offsetY })
+          composeStore.target.move(e.x - composeStore.start.x, e.y - composeStore.start.y)
           push(text(`drag at ${Math.round(e.x)}, ${Math.round(e.y)}`, `drag，坐标 ${Math.round(e.x)}, ${Math.round(e.y)}`))
         },
         dragend: () => push(text("dragend", "dragend，拖动结束")),
@@ -59,20 +59,26 @@ export default function EventsExample() {
 
   const mounted = (tools: StayTools) => {
     tools.appendChild({
+      id: "drag-target",
       className: "target",
-      shape: new Rectangle({
-        x: 118,
-        y: 72,
-        width: 204,
-        height: 118,
-        fillConfig: { color: colors.blueSoft },
-        strokeConfig: { color: colors.blue, lineWidth: 3 },
-      }),
+      shape: [
+        new Rectangle({
+          x: 118,
+          y: 72,
+          width: 204,
+          height: 118,
+          fillConfig: { color: colors.blueSoft },
+          strokeConfig: { color: colors.blue, lineWidth: 3 },
+        }),
+        new StayText({ x: 220, y: 116, text: text("drag me", "拖动我"), font: { size: 20, fontWeight: 650 }, fillConfig: { color: colors.ink } }),
+      ],
     })
-    tools.appendChild({
-      className: "target-label",
-      shape: new StayText({ x: 220, y: 116, text: text("drag me", "拖动我"), font: { size: 20, fontWeight: 650 }, fillConfig: { color: colors.ink } }),
-    })
+  }
+
+  const focusCanvas = () => {
+    canvasRef.current?.focus()
+    setFocusRequests((value) => value + 1)
+    push(text("Canvas focus requested from React", "已从 React 请求聚焦 Canvas"))
   }
 
   return (
@@ -82,10 +88,10 @@ export default function EventsExample() {
       </CanvasCard>
       <Toolbar>
         <Button onClick={() => canvasRef.current?.trigger("ping", { message: text("from React", "来自 React") })}>{text("Trigger ping", "触发 ping")}</Button>
-        <Button onClick={() => canvasRef.current?.focus()}>{text("Focus canvas", "聚焦 Canvas")}</Button>
+        <Button onClick={focusCanvas}>{text("Focus canvas", "聚焦 Canvas")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[[text("Custom pings", "自定义 ping"), pings], [text("Latest event", "最近事件"), entries[0] ?? text("None", "无")], [text("Listener count", "监听器数量"), listeners.length]]} />
+      <StatusGrid items={[[text("Custom pings", "自定义 ping"), pings], [text("Focus requests", "聚焦次数"), focusRequests], [text("Latest event", "最近事件"), entries[0] ?? text("None", "无")], [text("Listener count", "监听器数量"), listeners.length]]} />
       <EventLog entries={entries} />
     </DemoLayout>
   )

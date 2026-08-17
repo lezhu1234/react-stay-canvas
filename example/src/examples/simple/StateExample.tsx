@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react"
-import { Circle, ListenerProps, Rectangle, StayCanvas, StayTools } from "react-stay-canvas"
+import { Circle, ListenerProps, Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
 import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
@@ -9,12 +9,27 @@ type Mode = "draw" | "select"
 export default function StateExample() {
   const { text } = useI18n()
   const toolsRef = useRef<StayTools | null>(null)
+  const sequenceRef = useRef(0)
+  const selectedRef = useRef<string | null>(null)
+  const itemNamesRef = useRef(new Map<string, string>())
   const [mode, setMode] = useState<Mode>("draw")
+  const [selected, setSelected] = useState(text("None", "无"))
   const [entries, setEntries] = useState<string[]>([])
   const [persistentCount, setPersistentCount] = useState(0)
   const [stateCount, setStateCount] = useState(0)
 
   const push = (message: string) => setEntries((current) => [message, ...current].slice(0, 8))
+
+  const clearSelection = (tools: StayTools) => {
+    if (selectedRef.current) {
+      tools.getChildById<Circle>(selectedRef.current)?.shape.update({
+        fillConfig: { color: colors.blueSoft },
+        strokeConfig: { color: colors.blue, lineWidth: 2 },
+      })
+    }
+    selectedRef.current = null
+    setSelected(text("None", "无"))
+  }
 
   const listeners = useMemo<ListenerProps[]>(() => [
     {
@@ -22,28 +37,53 @@ export default function StateExample() {
       state: "draw",
       event: "click",
       callback: ({ e, tools }) => {
+        const index = ++sequenceRef.current
+        const name = text(`Item ${index}`, `圆形 ${index}`)
         tools.appendChild({
+          id: `item-${index}`,
           className: "item",
-          shape: new Circle({
-            x: e.x,
-            y: e.y,
-            radius: 18,
-            fillConfig: { color: colors.blueSoft },
-            strokeConfig: { color: colors.blue, lineWidth: 2 },
-          }),
+          shape: [
+            new Circle({
+              x: e.x,
+              y: e.y,
+              radius: 18,
+              fillConfig: { color: colors.blueSoft },
+              strokeConfig: { color: colors.blue, lineWidth: 2 },
+            }),
+            new StayText({
+              x: e.x,
+              y: e.y - 7,
+              text: String(index),
+              font: { size: 12, fontWeight: 700 },
+              fillConfig: { color: colors.ink },
+            }),
+          ],
         })
-        push(text(`draw listener fired at ${Math.round(e.x)}, ${Math.round(e.y)}`, `绘制监听器触发于 ${Math.round(e.x)}, ${Math.round(e.y)}`))
+        itemNamesRef.current.set(`item-${index}`, name)
+        push(text(`${name} drawn at ${Math.round(e.x)}, ${Math.round(e.y)}`, `${name} 已绘制于 ${Math.round(e.x)}, ${Math.round(e.y)}`))
       },
     },
     {
       name: "select-item",
       state: "select",
-      selector: ".item",
+      selector: ".stay-canvas",
       event: "click",
-      callback: ({ e }) => {
-        const shape = e.target.shape as Circle
-        shape.update({ fillConfig: { color: colors.orangeSoft }, strokeConfig: { color: colors.orange, lineWidth: 4 } })
-        push(text(`select listener fired for ${e.target.id.slice(0, 8)}`, `选择监听器命中 ${e.target.id.slice(0, 8)}`))
+      callback: ({ e, tools }) => {
+        const target = tools.getContainPointChildren<Circle>({
+          point: e.point,
+          selector: ".item",
+          withRoot: false,
+        })[0]
+        clearSelection(tools)
+        if (!target) {
+          push(text("selection cleared", "已取消选择"))
+          return
+        }
+        target.shape.update({ fillConfig: { color: colors.orangeSoft }, strokeConfig: { color: colors.orange, lineWidth: 4 } })
+        selectedRef.current = target.id
+        const name = itemNamesRef.current.get(target.id) ?? target.id
+        setSelected(name)
+        push(text(`${name} selected`, `已选择${name}`))
       },
     },
     {
@@ -71,6 +111,7 @@ export default function StateExample() {
   }
 
   const switchMode = (next: Mode) => {
+    if (toolsRef.current) clearSelection(toolsRef.current)
     toolsRef.current?.switchState(next)
     setMode(next)
     setStateCount(0)
@@ -87,7 +128,7 @@ export default function StateExample() {
         <Button active={mode === "select"} onClick={() => switchMode("select")}>{text("Select mode", "选择模式")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[[text("Current state", "当前状态"), mode === "draw" ? text("draw", "绘制") : text("select", "选择")], [text("Persistent store", "持久 Store"), persistentCount], [text("State store", "状态 Store"), stateCount]]} />
+      <StatusGrid items={[[text("Current state", "当前状态"), mode === "draw" ? text("draw", "绘制") : text("select", "选择")], [text("Selected", "已选择"), selected], [text("Persistent store", "持久 Store"), persistentCount], [text("State store", "状态 Store"), stateCount]]} />
       <EventLog entries={entries} />
     </DemoLayout>
   )

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react"
-import { ListenerProps, Rectangle, StayCanvas, StayTools } from "react-stay-canvas"
+import { ListenerProps, Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
 import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
@@ -13,7 +13,9 @@ const boxes = [
 export default function SelectorsExample() {
   const { text } = useI18n()
   const toolsRef = useRef<StayTools | null>(null)
-  const selectedIds = useRef<string[]>([])
+  const matchedIds = useRef<string[]>([])
+  const hitId = useRef<string | null>(null)
+  const visuals = useRef(new Map<string, { box: Rectangle; hitOutline: Rectangle }>())
   const [query, setQuery] = useState(".box")
   const [matches, setMatches] = useState<string[]>([])
   const [hit, setHit] = useState(text("Click a shape", "点击一个图形"))
@@ -21,14 +23,13 @@ export default function SelectorsExample() {
   const runQuery = (nextQuery = query) => {
     const tools = toolsRef.current
     if (!tools) return
-    selectedIds.current.forEach((id) => {
-      const shape = tools.getChildById<Rectangle>(id)?.shape
-      shape?.update({ strokeConfig: { lineWidth: 2, color: colors.ink } })
+    matchedIds.current.forEach((id) => {
+      visuals.current.get(id)?.box.update({ strokeConfig: { lineWidth: 2, color: colors.ink } })
     })
     const children = tools.getChildrenBySelector<Rectangle>(nextQuery)
-    children.forEach((child) => child.shape.update({ strokeConfig: { lineWidth: 6, color: colors.orange } }))
-    selectedIds.current = children.map((child) => child.id)
-    setMatches(selectedIds.current)
+    children.forEach((child) => visuals.current.get(child.id)?.box.update({ strokeConfig: { lineWidth: 6, color: colors.orange } }))
+    matchedIds.current = children.map((child) => child.id)
+    setMatches(matchedIds.current)
     setQuery(nextQuery)
   }
 
@@ -42,30 +43,66 @@ export default function SelectorsExample() {
         selector: ".box|.label",
         withRoot: false,
       })
-      setHit(children[0]?.id ?? text("No hit", "未命中"))
+      const nextHit = children[0]?.id ?? null
+      if (hitId.current) {
+        visuals.current.get(hitId.current)?.hitOutline.update({
+          strokeConfig: { color: { ...colors.blue, a: 0 }, lineWidth: 4 },
+        })
+      }
+      if (nextHit) {
+        visuals.current.get(nextHit)?.hitOutline.update({
+          strokeConfig: { color: colors.blue, lineWidth: 4 },
+        })
+      }
+      hitId.current = nextHit
+      setHit(nextHit ?? text("No hit", "未命中"))
     },
   }], [text])
 
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
-    boxes.forEach((box) => tools.appendChild({
-      id: box.id,
-      className: box.className,
-      shape: new Rectangle({
+    boxes.forEach((box) => {
+      const rectangle = new Rectangle({
         x: box.x,
         y: box.y,
         width: 106,
         height: 118,
+        zIndex: 1,
         fillConfig: { color: { ...box.color, a: 0.18 } },
         strokeConfig: { color: colors.ink, lineWidth: 2 },
-      }),
-    }))
+      })
+      const hitOutline = new Rectangle({
+        x: box.x,
+        y: box.y,
+        width: 106,
+        height: 118,
+        zIndex: 3,
+        strokeConfig: { color: { ...colors.blue, a: 0 }, lineWidth: 4 },
+      })
+      visuals.current.set(box.id, { box: rectangle, hitOutline })
+      tools.appendChild({
+        id: box.id,
+        className: box.className,
+        shape: [
+          rectangle,
+          new StayText({
+            x: box.x + 53,
+            y: box.y + 47,
+            text: `#${box.id} · .${box.className}`,
+            font: { size: 11, fontWeight: 650 },
+            zIndex: 2,
+            fillConfig: { color: colors.ink },
+          }),
+          hitOutline,
+        ],
+      })
+    })
     requestAnimationFrame(() => runQuery(".box"))
   }
 
   return (
     <DemoLayout>
-      <CanvasCard title={text("Selectors and hit testing", "选择器与命中测试")} description={text("Orange outlines are selector matches; click a shape for pointer hit testing.", "橙色描边表示选择器匹配项；点击图形可测试指针命中。")} wide>
+      <CanvasCard title={text("Selectors and hit testing", "选择器与命中测试")} description={text("Orange outlines show selector matches. Blue outlines show the latest pointer hit.", "橙色描边表示选择器匹配项，蓝色外框表示最近一次点击命中。")} wide>
         <StayCanvas className="demo-canvas" height={240} listenerList={listeners} mounted={mounted} width={440} />
       </CanvasCard>
       <div className="query-control">

@@ -9,6 +9,8 @@ export default function ChildrenExample() {
   const toolsRef = useRef<StayTools | null>(null)
   const groupRef = useRef<ReturnType<StayTools["appendChild"]> | null>(null)
   const createdIds = useRef<string[]>([])
+  const sequenceRef = useRef(0)
+  const childNamesRef = useRef(new Map<string, string>())
   const [count, setCount] = useState(0)
   const [lastAction, setLastAction] = useState(text("Mounted", "已挂载"))
 
@@ -44,17 +46,29 @@ export default function ChildrenExample() {
     const tools = toolsRef.current
     if (!tools) return
     const index = createdIds.current.length
+    const sequence = ++sequenceRef.current
+    const name = text(`Child ${sequence}`, `Child ${sequence}`)
     const child = tools.appendChild({
       className: "badge",
-      shape: new Circle({
-        x: 292 + (index % 3) * 42,
-        y: 74 + Math.floor(index / 3) * 50,
-        radius: 16,
-        fillConfig: { color: index % 2 ? colors.green : colors.orange },
-      }),
+      shape: [
+        new Circle({
+          x: 292 + (index % 3) * 42,
+          y: 74 + Math.floor(index / 3) * 50,
+          radius: 16,
+          fillConfig: { color: index % 2 ? colors.green : colors.orange },
+        }),
+        new StayText({
+          x: 292 + (index % 3) * 42,
+          y: 68 + Math.floor(index / 3) * 50,
+          text: String(sequence),
+          font: { size: 11, fontWeight: 700 },
+          fillConfig: { color: colors.paper },
+        }),
+      ],
     })
     createdIds.current.push(child.id)
-    setLastAction(text(`Appended ${child.id.slice(0, 8)}`, `已添加 ${child.id.slice(0, 8)}`))
+    childNamesRef.current.set(child.id, name)
+    setLastAction(text(`${name} appended`, `已添加 ${name}`))
     updateCount()
   }
 
@@ -69,7 +83,8 @@ export default function ChildrenExample() {
     const id = createdIds.current.pop()
     if (!id || !toolsRef.current) return
     toolsRef.current.removeChild(id)
-    setLastAction(text(`Removed ${id.slice(0, 8)}`, `已移除 ${id.slice(0, 8)}`))
+    const name = childNamesRef.current.get(id) ?? id
+    setLastAction(text(`${name} removed`, `已移除 ${name}`))
     updateCount()
   }
 

@@ -42,6 +42,19 @@ The three install commands use the repository's lockfiles and must complete befo
 
 The example routes are the source of truth for scenario details. This keeps each runbook beside the exact component and source code being accepted.
 
+## Cross-example visual consistency
+
+Apply these checks whenever the route exposes the relevant behavior:
+
+- A selected or pointer-hit object has an immediate Canvas-level visual change, not only a status or log update.
+- A visible label names the same Child, selector, node, annotation, or asset reported by the controls and status area.
+- Labels owned by a movable Child travel with that Child through drag, transform, history, import, and export operations.
+- Selector query matches use orange outlines; the latest pointer hit uses a blue outline without erasing the query result.
+- Single-selection examples restore the previous object before highlighting the next one, and clicking empty space clears selection.
+- Repeated imports, history restores, and copied nodes retain a visible stable identity so the operator can distinguish the affected object.
+
+Acceptance fails if a label remains behind its object, a status names an object that cannot be identified in the Canvas, or a selected object has no visible feedback.
+
 ## Failure criteria
 
 Acceptance fails when any page-specific expected result is not reproducible, an action runs more than once, stale Canvas pixels remain, state survives Reset unexpectedly, or DevTools reports an uncaught exception or React error.
@@ -55,6 +68,7 @@ The gallery is accepted only when:
 - All automated preflight commands pass.
 - Both language modes pass the shell and persistence check.
 - Fixed-width Canvas borders fit their rendered content on wide screens and scroll safely on narrow screens.
+- All applicable cross-example visual-consistency checks pass.
 - All 13 example routes have every expected result checked.
 - Required evidence is retained for every route.
 - No unresolved failure remains.

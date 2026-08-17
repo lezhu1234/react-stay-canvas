@@ -4,6 +4,7 @@ import {
   Rectangle,
   StayCanvas,
   StayImage,
+  StayText,
   StayTools,
 } from "react-stay-canvas"
 
@@ -37,6 +38,8 @@ export default function AnnotatorExample() {
   const { text } = useI18n()
   const toolsRef = useRef<StayTools | null>(null)
   const selectedRef = useRef<string | null>(null)
+  const sequenceRef = useRef(0)
+  const annotationNamesRef = useRef(new Map<string, string>())
   const [mode, setMode] = useState<Mode>("draw")
   const [selected, setSelected] = useState(text("None", "无"))
   const [count, setCount] = useState(0)
@@ -45,6 +48,17 @@ export default function AnnotatorExample() {
 
   const push = (message: string) => setEntries((current) => [message, ...current].slice(0, 8))
   const syncCount = (tools: StayTools) => setCount(tools.getChildrenBySelector(".annotation").length)
+  const annotationName = (id: string) => annotationNamesRef.current.get(id) ?? id
+
+  const clearSelection = (tools: StayTools) => {
+    if (selectedRef.current) {
+      tools.getChildById<Rectangle>(selectedRef.current)?.shape.update({
+        strokeConfig: { color: colors.orange, lineWidth: 3 },
+      })
+    }
+    selectedRef.current = null
+    setSelected(text("None", "无"))
+  }
 
   const listeners = useMemo<ListenerProps[]>(() => [
     {
@@ -54,53 +68,74 @@ export default function AnnotatorExample() {
       event: ["dragstart", "drag", "dragend"],
       callback: ({ e, composeStore, tools }) => ({
         dragstart: () => {
+          const index = ++sequenceRef.current
+          const name = text(`Annotation ${index}`, `标注 ${index}`)
+          const box = new Rectangle({
+            x: e.x,
+            y: e.y,
+            width: 0,
+            height: 0,
+            layer: 1,
+            fillConfig: { color: colors.orangeSoft },
+            strokeConfig: { color: colors.orange, lineWidth: 3 },
+          })
+          const label = new StayText({
+            x: e.x + 18,
+            y: e.y + 8,
+            text: `#${index}`,
+            font: { size: 12, fontWeight: 700 },
+            layer: 1,
+            zIndex: 2,
+            fillConfig: { color: colors.ink },
+          })
           const child = tools.appendChild({
             className: "annotation",
-            shape: new Rectangle({
-              x: e.x,
-              y: e.y,
-              width: 0,
-              height: 0,
-              layer: 1,
-              fillConfig: { color: colors.orangeSoft },
-              strokeConfig: { color: colors.orange, lineWidth: 3 },
-            }),
+            shape: [box, label],
           })
-          push(text("annotation started", "标注已开始"))
-          return { start: e.point, child }
+          annotationNamesRef.current.set(child.id, name)
+          push(text(`${name} started`, `${name}已开始`))
+          return { start: e.point, child, box, label }
         },
         drag: () => {
           const start = composeStore.start
-          const shape = composeStore.child.shape as Rectangle
-          shape.update({
-            x: Math.min(start.x, e.x),
-            y: Math.min(start.y, e.y),
+          const x = Math.min(start.x, e.x)
+          const y = Math.min(start.y, e.y)
+          composeStore.box.update({
+            x,
+            y,
             width: Math.abs(e.x - start.x),
             height: Math.abs(e.y - start.y),
           })
+          composeStore.label.update({ x: x + 18, y: y + 8 })
         },
         dragend: () => {
           tools.log()
           syncCount(tools)
-          push(text("annotation committed to history", "标注已提交到历史记录"))
+          push(text(`${annotationName(composeStore.child.id)} committed to history`, `${annotationName(composeStore.child.id)}已写入历史`))
         },
       }),
     },
     {
       name: "select-annotation",
       state: "select",
-      selector: ".annotation",
+      selector: ".stay-canvas",
       event: "click",
       callback: ({ e, tools }) => {
-        const previous = selectedRef.current
-          ? tools.getChildById<Rectangle>(selectedRef.current)
-          : undefined
-        previous?.shape.update({ strokeConfig: { color: colors.orange, lineWidth: 3 } })
-        const shape = e.target.shape as Rectangle
-        shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
-        selectedRef.current = e.target.id
-        setSelected(e.target.id.slice(0, 8))
-        push(text(`selected ${e.target.id.slice(0, 8)}`, `已选择 ${e.target.id.slice(0, 8)}`))
+        const target = tools.getContainPointChildren<Rectangle>({
+          point: e.point,
+          selector: ".annotation",
+          withRoot: false,
+        })[0]
+        clearSelection(tools)
+        if (!target) {
+          push(text("selection cleared", "已取消选择"))
+          return
+        }
+        target.shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
+        selectedRef.current = target.id
+        const name = annotationName(target.id)
+        setSelected(name)
+        push(text(`${name} selected`, `已选择${name}`))
       },
     },
     {
@@ -110,25 +145,29 @@ export default function AnnotatorExample() {
       event: ["dragstart", "drag", "dragend"],
       callback: ({ e, composeStore, tools }) => ({
         dragstart: () => {
+          clearSelection(tools)
           e.target.moveInit()
+          const shape = e.target.shape as Rectangle
+          shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
           selectedRef.current = e.target.id
-          setSelected(e.target.id.slice(0, 8))
+          setSelected(annotationName(e.target.id))
           return { start: e.point, child: e.target }
         },
         drag: () => composeStore.child.move(e.x - composeStore.start.x, e.y - composeStore.start.y),
         dragend: () => {
           const child = composeStore.child
-          const historyShape = (child.shape as Rectangle).copy() as Rectangle
+          const historyShapes = [...child.shapeMap.values()].map((shape) => shape.copy())
+          const historyShape = historyShapes.find((shape) => shape instanceof Rectangle) as Rectangle
           historyShape.update({ strokeConfig: { color: colors.orange, lineWidth: 3 } })
           tools.removeChild(child.id)
           const replacement = tools.appendChild({
             id: child.id,
             className: child.className,
-            shape: historyShape,
+            shape: historyShapes,
           })
           tools.log()
           replacement.shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
-          push(text("selected annotation moved and logged", "所选标注已移动并记录"))
+          push(text(`${annotationName(child.id)} moved and logged`, `${annotationName(child.id)}已移动并记录`))
         },
       }),
     },
@@ -154,6 +193,7 @@ export default function AnnotatorExample() {
   }
 
   const switchMode = (next: Mode) => {
+    if (toolsRef.current) clearSelection(toolsRef.current)
     toolsRef.current?.switchState(next)
     toolsRef.current?.changeCursor(next === "draw" ? "crosshair" : "default")
     setMode(next)
@@ -169,7 +209,7 @@ export default function AnnotatorExample() {
     selectedRef.current = null
     setSelected(text("None", "无"))
     syncCount(tools)
-    push(text("selected annotation removed", "所选标注已移除"))
+    push(text(`${annotationName(id)} removed`, `${annotationName(id)}已移除`))
   }
 
   const capture = async () => {
@@ -184,17 +224,26 @@ export default function AnnotatorExample() {
     push(text("canvas captured", "Canvas 已截取"))
   }
 
+  const navigateHistory = (direction: "undo" | "redo") => {
+    const tools = toolsRef.current
+    if (!tools) return
+    clearSelection(tools)
+    tools[direction]()
+    requestAnimationFrame(() => syncCount(tools))
+    push(direction === "undo" ? text("undo", "撤销") : text("redo", "重做"))
+  }
+
   return (
     <DemoLayout>
-      <CanvasCard title={text("Image annotation workspace", "图像标注工作区")} description={text("Draw boxes over a raster layer, then select, move, delete, transform, and export.", "在底图上框选标注，再尝试选择、移动、删除、缩放和导出。")} wide>
+      <CanvasCard title={text("Image annotation workspace", "图像标注工作区")} description={text("Each box has a stable number. Blue outlines show the current selection; click empty space to clear it.", "每个标注框都有稳定编号；蓝色描边表示当前选中，点击空白处可取消选择。")} wide>
         <StayCanvas className="demo-canvas" height={420} layers={2} listenerList={listeners} mounted={mounted} width={720} />
       </CanvasCard>
       <Toolbar>
         <Button active={mode === "draw"} onClick={() => switchMode("draw")}>{text("Draw", "绘制")}</Button>
         <Button active={mode === "select"} onClick={() => switchMode("select")}>{text("Select", "选择")}</Button>
         <Button disabled={!selectedRef.current} onClick={removeSelected}>{text("Delete selected", "删除所选")}</Button>
-        <Button onClick={() => { toolsRef.current?.undo(); requestAnimationFrame(() => toolsRef.current && syncCount(toolsRef.current)); push(text("undo", "撤销")) }}>{text("Undo", "撤销")}</Button>
-        <Button onClick={() => { toolsRef.current?.redo(); requestAnimationFrame(() => toolsRef.current && syncCount(toolsRef.current)); push(text("redo", "重做")) }}>{text("Redo", "重做")}</Button>
+        <Button onClick={() => navigateHistory("undo")}>{text("Undo", "撤销")}</Button>
+        <Button onClick={() => navigateHistory("redo")}>{text("Redo", "重做")}</Button>
         <Button onClick={() => { void toolsRef.current?.zoom(-100, { x: 360, y: 210 }); push(text("zoom in", "放大")) }}>{text("Zoom in", "放大")}</Button>
         <Button onClick={() => { void toolsRef.current?.reset(); push(text("transform reset", "变换已重置")) }}>{text("Reset view", "重置视图")}</Button>
         <Button onClick={capture}>{text("Export image", "导出图像")}</Button>

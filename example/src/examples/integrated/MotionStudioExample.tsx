@@ -15,6 +15,8 @@ export default function MotionStudioExample() {
   const toolsRef = useRef<StayTools | null>(null)
   const guideIds = useRef<string[]>([])
   const [range, setRange] = useState<"full" | "middle">("full")
+  const [uiTime, setUiTime] = useState(0)
+  const [effectiveTime, setEffectiveTime] = useState(0)
   const [guides, setGuides] = useState(0)
   const [entries, setEntries] = useState<string[]>([])
   const push = (message: string) => setEntries((current) => [message, ...current].slice(0, 8))
@@ -44,17 +46,28 @@ export default function MotionStudioExample() {
     tools.log()
   }
 
-  const seek = (uiTime: number) => {
+  const seek = (nextUiTime: number, nextRange = range) => {
     const tools = toolsRef.current
     if (!tools) return
-    if (range === "full") {
-      tools.progress({ timeMs: uiTime })
+    setUiTime(Math.round(nextUiTime))
+    if (nextRange === "full") {
+      setEffectiveTime(Math.round(nextUiTime))
+      tools.progress({ timeMs: nextUiTime })
       return
     }
     const beforeMs = 480
     const afterMs = 1740
-    const timeMs = beforeMs + (uiTime / duration) * (afterMs - beforeMs)
+    const timeMs = beforeMs + (nextUiTime / duration) * (afterMs - beforeMs)
+    setEffectiveTime(Math.round(timeMs))
     tools.progress({ timeMs, bound: { beforeMs, afterMs } })
+  }
+
+  const switchRange = (nextRange: "full" | "middle") => {
+    setRange(nextRange)
+    seek(uiTime, nextRange)
+    push(nextRange === "full"
+      ? text("full playback range selected", "已切换到完整区间")
+      : text("middle playback range selected", "已切换到限定区间"))
   }
 
   const addGuide = () => {
@@ -86,13 +99,20 @@ export default function MotionStudioExample() {
       </CanvasCard>
       <TimelineControls duration={duration} label={range === "full" ? text("Full timeline", "完整时间线") : text("Middle sub-range", "中间子区间")} onSeek={seek} />
       <Toolbar>
-        <Button active={range === "full"} onClick={() => setRange("full")}>{text("Full range", "完整区间")}</Button>
-        <Button active={range === "middle"} onClick={() => setRange("middle")}>{text("Bound range", "限定区间")}</Button>
+        <Button active={range === "full"} onClick={() => switchRange("full")}>{text("Full range", "完整区间")}</Button>
+        <Button active={range === "middle"} onClick={() => switchRange("middle")}>{text("Bound range", "限定区间")}</Button>
         <Button onClick={addGuide}>{text("Add static guide", "添加静态参考线")}</Button>
         <Button disabled={guides === 0} onClick={undoGuide}>{text("Undo static guide", "撤销静态参考线")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[[text("Animated tracks", "动画轨道"), 3], [text("Playback range", "播放区间"), range === "full" ? text("full", "完整") : text("middle", "中间")], [text("Static guides", "静态参考线"), guides], [text("History rule", "撤销范围"), text("Animated tracks excluded", "仅静态内容")]]} />
+      <StatusGrid items={[
+        [text("UI time", "滑块时间"), `${uiTime} ms`],
+        [text("Effective time", "实际时间"), `${effectiveTime} ms`],
+        [text("Playback range", "播放区间"), range === "full" ? text("full", "完整") : text("middle", "限定")],
+        [text("Animated tracks", "动画轨道"), 3],
+        [text("Static guides", "静态参考线"), guides],
+        [text("History rule", "撤销范围"), text("Animated tracks excluded", "仅静态内容")],
+      ]} />
       <EventLog entries={entries} />
     </DemoLayout>
   )

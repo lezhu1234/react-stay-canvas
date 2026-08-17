@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { Rectangle, StayCanvas, StayTools } from "react-stay-canvas"
+import { Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
 import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
@@ -23,20 +23,31 @@ export default function HistoryExample() {
     const tools = toolsRef.current
     if (!tools) return
     const index = sequence.current++
+    const name = text(`Item ${index + 1}`, `矩形 ${index + 1}`)
     const palette = [colors.blue, colors.green, colors.orange]
     const child = tools.appendChild({
+      id: `history-item-${index + 1}`,
       className: "history-item",
-      shape: new Rectangle({
-        x: 42 + (index % 4) * 90,
-        y: 52 + Math.floor(index / 4) * 84,
-        width: 66,
-        height: 54,
-        fillConfig: { color: { ...palette[index % palette.length], a: 0.22 } },
-        strokeConfig: { color: palette[index % palette.length], lineWidth: 2 },
-      }),
+      shape: [
+        new Rectangle({
+          x: 42 + (index % 4) * 90,
+          y: 52 + Math.floor(index / 4) * 84,
+          width: 66,
+          height: 54,
+          fillConfig: { color: { ...palette[index % palette.length], a: 0.22 } },
+          strokeConfig: { color: palette[index % palette.length], lineWidth: 2 },
+        }),
+        new StayText({
+          x: 75 + (index % 4) * 90,
+          y: 71 + Math.floor(index / 4) * 84,
+          text: String(index + 1),
+          font: { size: 13, fontWeight: 700 },
+          fillConfig: { color: colors.ink },
+        }),
+      ],
     })
     tools.log()
-    sync(text(`append + log: ${child.id.slice(0, 8)}`, `添加并记录：${child.id.slice(0, 8)}`))
+    sync(text(`${name} appended and logged`, `已添加并记录 ${name}`))
   }
 
   const remove = () => {
@@ -46,7 +57,8 @@ export default function HistoryExample() {
     if (!tools || !child) return
     tools.removeChild(child.id)
     tools.log()
-    sync(text(`remove + log: ${child.id.slice(0, 8)}`, `移除并记录：${child.id.slice(0, 8)}`))
+    const sequenceNumber = child.id.replace("history-item-", "")
+    sync(text(`Item ${sequenceNumber} removed and logged`, `已移除并记录矩形 ${sequenceNumber}`))
   }
 
   const undo = () => {

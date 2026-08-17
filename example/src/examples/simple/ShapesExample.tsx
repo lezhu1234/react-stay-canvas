@@ -32,48 +32,66 @@ export default function ShapesExample() {
   const { text } = useI18n()
   const toolsRef = useRef<StayTools | null>(null)
   const rectangleRef = useRef<ReturnType<StayTools["appendChild"]> | null>(null)
+  const rectangleLabelRef = useRef<StayText | null>(null)
   const [variant, setVariant] = useState(text("Default geometry", "默认状态"))
+  const [refreshCount, setRefreshCount] = useState(0)
 
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
+    rectangleLabelRef.current = new StayText({
+      x: 84,
+      y: 118,
+      text: "Rectangle",
+      font: { size: 12, fontWeight: 700 },
+      fillConfig: { color: colors.ink },
+    })
     rectangleRef.current = tools.appendChild({
       id: "shape-rectangle",
       className: "shape",
-      shape: new Rectangle({
-        x: 28,
-        y: 32,
-        width: 112,
-        height: 76,
-        fillConfig: { color: colors.blueSoft },
-        strokeConfig: { color: colors.blue, lineWidth: 3 },
-      }),
+      shape: [
+        new Rectangle({
+          x: 28,
+          y: 32,
+          width: 112,
+          height: 76,
+          fillConfig: { color: colors.blueSoft },
+          strokeConfig: { color: colors.blue, lineWidth: 3 },
+        }),
+        rectangleLabelRef.current,
+      ],
     })
     tools.appendChild({
       className: "shape",
-      shape: new Circle({
-        x: 220,
-        y: 70,
-        radius: 42,
-        fillConfig: { color: colors.greenSoft },
-        strokeConfig: { color: colors.green, lineWidth: 3 },
-      }),
+      shape: [
+        new Circle({
+          x: 220,
+          y: 70,
+          radius: 42,
+          fillConfig: { color: colors.greenSoft },
+          strokeConfig: { color: colors.green, lineWidth: 3 },
+        }),
+        new StayText({ x: 220, y: 118, text: "Circle", font: { size: 12, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
+      ],
     })
     tools.appendChild({
       className: "shape",
-      shape: new Line({
-        x1: 292,
-        y1: 32,
-        x2: 402,
-        y2: 108,
-        strokeConfig: { color: colors.orange, lineWidth: 4, dash: [10, 7], lineCap: "round" },
-      }),
+      shape: [
+        new Line({
+          x1: 292,
+          y1: 32,
+          x2: 402,
+          y2: 108,
+          strokeConfig: { color: colors.orange, lineWidth: 4, dash: [10, 7], lineCap: "round" },
+        }),
+        new StayText({ x: 347, y: 118, text: "Line", font: { size: 12, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
+      ],
     })
     tools.appendChild({
       className: "label",
       shape: new StayText({
         x: 220,
         y: 154,
-        text: text("Rectangle  Circle  Line  Text", "矩形  圆形  线条  文本"),
+        text: "StayText",
         font: { size: 18, fontWeight: 650 },
         fillConfig: { color: colors.ink },
       }),
@@ -105,7 +123,13 @@ export default function ShapesExample() {
       width: rectangle.width === 112 ? 150 : 112,
       fillConfig: { color: rectangle.width === 112 ? colors.orangeSoft : colors.blueSoft },
     })
+    rectangleLabelRef.current?.update({ x: rectangle.width === 150 ? 129 : 84 })
     setVariant(rectangle.width === 150 ? text("Updated geometry", "已修改") : text("Default geometry", "默认状态"))
+  }
+
+  const forceRefresh = () => {
+    toolsRef.current?.refresh()
+    setRefreshCount((value) => value + 1)
   }
 
   return (
@@ -115,10 +139,10 @@ export default function ShapesExample() {
       </CanvasCard>
       <Toolbar>
         <Button onClick={changeRectangle}>{text("Toggle rectangle", "切换矩形")}</Button>
-        <Button onClick={() => toolsRef.current?.refresh()}>{text("Force refresh", "强制刷新")}</Button>
+        <Button onClick={forceRefresh}>{text("Force refresh", "强制刷新")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[[text("Variant", "当前状态"), variant], ["Canvas", "440 × 330"], [text("Layers", "图层"), "2"]]} />
+      <StatusGrid items={[[text("Variant", "当前状态"), variant], [text("Refreshes", "刷新次数"), refreshCount], ["Canvas", "440 × 330"], [text("Layers", "图层"), "2"]]} />
     </DemoLayout>
   )
 }

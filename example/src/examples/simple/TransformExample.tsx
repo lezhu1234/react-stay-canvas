@@ -1,8 +1,34 @@
 import { useMemo, useRef, useState } from "react"
-import { Circle, ListenerProps, Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
+import { Circle, EventProps, ListenerProps, MOUSE_EVENTS, Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
 import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
+
+const isSpacePressed = (pressedKeys: Set<string>) => pressedKeys.has(" ") || pressedKeys.has("Spacebar")
+
+const spaceMoveEndEvent: EventProps<string> = {
+  name: "moveend",
+  trigger: MOUSE_EVENTS.MOUSE_UP,
+  conditionCallback: () => true,
+  successCallback: ({ deleteEvent }) => {
+    deleteEvent("move")
+    deleteEvent("moveend")
+  },
+}
+
+const spaceMoveEvent: EventProps<string> = {
+  name: "move",
+  trigger: MOUSE_EVENTS.MOUSE_MOVE,
+  conditionCallback: ({ e }) => isSpacePressed(e.pressedKeys) && e.pressedKeys.has("mouse0"),
+  successCallback: () => spaceMoveEndEvent,
+}
+
+const spaceStartMoveEvent: EventProps<string> = {
+  name: "startmove",
+  trigger: MOUSE_EVENTS.MOUSE_DOWN,
+  conditionCallback: ({ e }) => isSpacePressed(e.pressedKeys) && e.pressedKeys.has("mouse0"),
+  successCallback: () => [spaceMoveEvent, spaceMoveEndEvent],
+}
 
 export default function TransformExample() {
   const { text } = useI18n()
@@ -11,6 +37,14 @@ export default function TransformExample() {
   const originLabelRef = useRef<StayText | null>(null)
   const [action, setAction] = useState(text("Original view", "初始视图"))
   const [zoomOrigin, setZoomOrigin] = useState("220, 145")
+  const [sessionState, setSessionState] = useState(text("Idle", "空闲"))
+  const [sessionOwner, setSessionOwner] = useState(text("None", "无"))
+  const [pointerPosition, setPointerPosition] = useState(text("Inside", "Canvas 内"))
+  const [primaryButton, setPrimaryButton] = useState(text("Released", "已松开"))
+  const [endCount, setEndCount] = useState(0)
+  const [terminalReason, setTerminalReason] = useState(text("None", "无"))
+
+  const isInsideCanvas = (x: number, y: number) => x >= 0 && x <= 440 && y >= 0 && y <= 290
 
   const markZoomOrigin = (x: number, y: number) => {
     originMarkerRef.current?.update({ x, y })
@@ -20,29 +54,57 @@ export default function TransformExample() {
 
   const listeners = useMemo<ListenerProps[]>(() => [
     {
+      name: "prevent-space-scroll",
+      event: ["keydown", "keyup"],
+      callback: ({ e, originEvent }) => {
+        if (e.key === " " || e.key === "Spacebar") originEvent.preventDefault()
+      },
+    },
+    {
       name: "wheel-zoom",
       event: ["zoomin", "zoomout"],
       callback: ({ e, tools, originEvent }) => {
         originEvent.preventDefault()
         markZoomOrigin(e.x, e.y)
         void tools.zoom(e.deltaY, e.point)
-        setAction(text(`${e.name} around ${Math.round(e.x)}, ${Math.round(e.y)}`, `${e.name}，中心 ${Math.round(e.x)}, ${Math.round(e.y)}`))
+        setAction(e.name === "zoomin"
+          ? text(`Zoomed in around ${Math.round(e.x)}, ${Math.round(e.y)}`, `已放大，中心 ${Math.round(e.x)}, ${Math.round(e.y)}`)
+          : text(`Zoomed out around ${Math.round(e.x)}, ${Math.round(e.y)}`, `已缩小，中心 ${Math.round(e.x)}, ${Math.round(e.y)}`))
       },
     },
     {
-      name: "control-pan",
+      name: "space-pan",
       event: ["startmove", "move", "moveend"],
       callback: ({ e, composeStore, tools }) => ({
         startmove: () => {
           tools.moveStart()
-          setAction(text("Control-drag started", "Control 拖动开始"))
+          setAction(text("Space-drag started", "空格拖动开始"))
+          setSessionState(text("Active", "进行中"))
+          setSessionOwner(text("Canvas root", "Canvas 根节点"))
+          setPointerPosition(text("Inside", "Canvas 内"))
+          setPrimaryButton(text("Pressed", "按下中"))
+          setTerminalReason(text("None", "无"))
           return { start: e.point }
         },
         move: () => {
           void tools.move(e.x - composeStore.start.x, e.y - composeStore.start.y)
-          setAction(text("Control-drag panning", "Control 拖动平移中"))
+          setAction(text("Space-drag panning", "空格拖动平移中"))
+          setPointerPosition(isInsideCanvas(e.x, e.y) ? text("Inside", "Canvas 内") : text("Outside", "Canvas 外"))
         },
-        moveend: () => setAction(text("Control-drag ended", "Control 拖动结束")),
+        moveend: () => {
+          const outside = !isInsideCanvas(e.x, e.y)
+          const cancelled = e.cancelled ?? false
+          setAction(cancelled ? text("Space-drag cancelled", "空格拖动已取消") : text("Space-drag ended", "空格拖动结束"))
+          setSessionState(cancelled ? text("Cancelled", "已取消") : text("Ended", "已结束"))
+          setPointerPosition(outside ? text("Outside", "Canvas 外") : text("Inside", "Canvas 内"))
+          setPrimaryButton(text("Released", "已松开"))
+          setEndCount((count) => count + 1)
+          setTerminalReason(cancelled
+            ? text(e.cancelReason ?? "pointer cancelled", `取消：${e.cancelReason ?? "pointercancel"}`)
+            : outside
+              ? text("pointerup outside", "在 Canvas 外 pointerup")
+              : text("pointerup inside", "在 Canvas 内 pointerup"))
+        },
       }),
     },
   ], [text])
@@ -64,7 +126,7 @@ export default function TransformExample() {
         })
       }
     }
-    tools.appendChild({ className: "label", shape: new StayText({ x: 220, y: 250, text: text("wheel to zoom  |  control-drag to pan", "滚轮缩放  |  Control 拖动平移"), font: { size: 14 }, fillConfig: { color: colors.ink } }) })
+    tools.appendChild({ className: "label", shape: new StayText({ x: 220, y: 250, text: text("wheel to zoom  |  hold Space and drag to pan", "滚轮缩放  |  按住空格键拖动平移"), font: { size: 14 }, fillConfig: { color: colors.ink } }) })
     originMarkerRef.current = new Circle({
       x: 220,
       y: 145,
@@ -100,9 +162,16 @@ export default function TransformExample() {
 
   return (
     <DemoLayout>
-      <CanvasCard title={text("Viewport transforms", "平移与缩放")} description={text("Buttons and native pointer events drive the same move and zoom tools.", "按钮和鼠标手势调用的是同一套平移、缩放能力。")} wide>
-        <StayCanvas className="demo-canvas demo-canvas-grid" height={290} listenerList={listeners} mounted={mounted} passive={false} width={440} />
-      </CanvasCard>
+      <div className="pointer-session-demo">
+        <CanvasCard title={text("Viewport transforms", "平移与缩放")} description={text("Hold Space and drag from the Canvas into the striped release zone, then release outside.", "按住空格键从 Canvas 内拖到右侧条纹区域，并在 Canvas 外松开鼠标。") }>
+          <StayCanvas className="demo-canvas demo-canvas-grid" eventList={[spaceStartMoveEvent]} height={290} listenerList={listeners} mounted={mounted} passive={false} width={440} />
+        </CanvasCard>
+        <aside className="outside-release-zone">
+          <span>{text("Outside Canvas", "Canvas 外部")}</span>
+          <strong>{text("Release primary button here", "在这里松开鼠标主键")}</strong>
+          <p>{text("Then move back without pressing it again.", "然后不要再次按键，直接移回 Canvas。")}</p>
+        </aside>
+      </div>
       <Toolbar>
         <Button onClick={() => pan(-24, 0)}>{text("Pan left", "向左平移")}</Button>
         <Button onClick={() => pan(24, 0)}>{text("Pan right", "向右平移")}</Button>
@@ -111,7 +180,7 @@ export default function TransformExample() {
         <Button onClick={() => { void toolsRef.current?.reset(); markZoomOrigin(220, 145); setAction(text("Reset transform", "已恢复初始视图")) }}>{text("Tool reset", "恢复初始视图")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[[text("Last transform", "最近变换"), action], [text("Zoom origin", "缩放原点"), zoomOrigin], [text("Pointer gesture", "指针手势"), text("Control + drag", "Control + 拖动")]]} />
+      <StatusGrid items={[[text("Last transform", "最近变换"), action], [text("Session", "会话状态"), sessionState], [text("Owner", "手势所有者"), sessionOwner], [text("Pointer", "指针位置"), pointerPosition], [text("Primary button", "鼠标主键"), primaryButton], [text("End count", "结束次数"), endCount], [text("Terminal reason", "结束原因"), terminalReason], [text("Zoom origin", "缩放原点"), zoomOrigin]]} />
     </DemoLayout>
   )
 }

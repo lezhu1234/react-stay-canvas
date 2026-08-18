@@ -37,6 +37,7 @@ class Stay<EventName extends string> {
   composeStore: Record<string, any>
   renderer: Renderer
   eventDispatcher: EventDispatcher<EventName>
+  gestureTargets: Map<string, StayInstantChild | null>
   history: History
   height: number
   root: Canvas
@@ -76,6 +77,7 @@ class Stay<EventName extends string> {
     this.store = new Map<string, any>()
     this.stateStore = new Map<string, any>()
     this.composeStore = {}
+    this.gestureTargets = new Map()
     this.state = DEFAULTSTATE
     this.stateSet = new Set([DEFAULTSTATE])
 
@@ -92,7 +94,8 @@ class Stay<EventName extends string> {
       this.stateStore,
       () => this.state,
       (originEvent, triggerEvents, payload) =>
-        this.tools.triggerAction(originEvent, triggerEvents, payload)
+        this.tools.triggerAction(originEvent, triggerEvents, payload),
+      () => this.gestureTargets.clear()
     )
 
     this.eventDispatcher.initEvents()
@@ -148,6 +151,12 @@ class Stay<EventName extends string> {
 
   clearEvents() {
     this.eventDispatcher.clearEvents()
+  }
+
+  destroy() {
+    this.eventDispatcher.destroy()
+    this.renderer.stop()
+    this.gestureTargets.clear()
   }
 
   cloneChildren(): Map<string, StayInstantChild> {

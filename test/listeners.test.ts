@@ -29,7 +29,9 @@ describe("listeners & event chain", () => {
     })
 
     top.dispatchEvent(md(30, 30))
+    top.dispatchEvent(mu(30, 30))
     top.dispatchEvent(md(60, 60))
+    top.dispatchEvent(mu(60, 60))
 
     expect(count).toBe(2)
     expect(stage.tools.getChildrenBySelector(".dot")).toHaveLength(2)

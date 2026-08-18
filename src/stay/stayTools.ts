@@ -28,6 +28,13 @@ import { StayInstantChild } from "./child/stayInstantChild"
 import Stay from "./stay"
 import { StepProps } from "./types"
 
+const GESTURE_START_EVENTS = new Set(["dragstart", "startmove"])
+const GESTURE_CONTINUATION_EVENTS = new Set(["drag", "dragend", "move", "moveend"])
+const GESTURE_EVENT_FAMILIES = [
+  { start: "dragstart", events: new Set(["dragstart", "drag", "dragend"]) },
+  { start: "startmove", events: new Set(["startmove", "move", "moveend"]) },
+]
+
 // One factory, one unified tool surface. Every stage gets all tools.
 export function stayTools(this: Stay<any>): StayTools {
   const animatedTools = {
@@ -461,17 +468,52 @@ export function stayTools(this: Stay<any>): StayTools {
           event = [event]
         }
 
-        event.forEach((actionEventName: string) => {
-          const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
+        const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
+        if (!avaliableSet.includes(this.state)) return
 
-          if (!avaliableSet.includes(this.state) || !(actionEventName in triggerEvents)) {
+        // Target ownership belongs to the gesture, not to whether this listener
+        // happens to subscribe to its start callback. Capture at the start point
+        // for listeners that consume any phase of that gesture family.
+        GESTURE_EVENT_FAMILIES.forEach(({ start, events }) => {
+          if (!(start in triggerEvents) || !event.some((eventName: string) => events.has(eventName))) return
+          const startEvent = triggerEvents[start].info as ActionEvent<PredefinedMouseEventName>
+          const children = this.tools.getContainPointChildren({
+            point: startEvent.point,
+            selector,
+            sortBy,
+          })
+          this.gestureTargets.set(name, (children[0] as StayInstantChild | undefined) ?? null)
+        })
+
+        event.forEach((actionEventName: string) => {
+          if (!(actionEventName in triggerEvents)) {
             return false
           }
 
           const { info: actionEvent, event: preEvent } = triggerEvents[actionEventName]
 
           const _actionEvent = actionEvent as ActionEvent<PredefinedMouseEventName>
-          if (preEvent.withTargetConditionCallback) {
+          const isGestureContinuation = GESTURE_CONTINUATION_EVENTS.has(actionEventName)
+          const hasGestureOwner = isGestureContinuation && this.gestureTargets.has(name)
+          const gestureTarget = hasGestureOwner ? this.gestureTargets.get(name) : undefined
+
+          if (hasGestureOwner && !gestureTarget) {
+            return false
+          } else if (gestureTarget) {
+            if (
+              preEvent.withTargetConditionCallback &&
+              !preEvent.withTargetConditionCallback({
+                e: _actionEvent as any,
+                store: this.store,
+                stateStore: this.stateStore,
+                target: gestureTarget,
+                originEvent,
+              })
+            ) {
+              return false
+            }
+            _actionEvent.target = gestureTarget
+          } else if (preEvent.withTargetConditionCallback) {
             const children = this.tools.getChildrenBySelector(selector)
             let flag = false
             for (let index = 0; index < children.length; index++) {
@@ -497,7 +539,7 @@ export function stayTools(this: Stay<any>): StayTools {
             }
           }
 
-          if (isMouseEvent) {
+          if (isMouseEvent && !gestureTarget) {
             if (actionEventName === "mouseleave") {
               _actionEvent.target = this.rootChild
             } else {
@@ -512,6 +554,10 @@ export function stayTools(this: Stay<any>): StayTools {
               }
               _actionEvent.target = children[0] as StayInstantChild
             }
+          }
+
+          if (GESTURE_START_EVENTS.has(actionEventName) && _actionEvent.target) {
+            this.gestureTargets.set(name, _actionEvent.target)
           }
 
           if (callback) {

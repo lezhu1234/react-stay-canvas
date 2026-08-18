@@ -726,6 +726,8 @@ event 属性接受一个字符串, 你可以在 StayCanvas 的 eventList 中传�
 - redo: ctrl + shift + z
 - undo: ctrl + z
 
+连续指针手势使用 Pointer Capture：在 Canvas 内开始后，即使指针移出 Canvas，后续移动与释放仍属于同一次手势。`drag`/`move` 及其结束事件保持开始时的逻辑目标；取消、失焦或页面隐藏会以 `cancelled: true` 结束手势。
+
 #### Listener callback 函数
 
 callback 函数是用来控制用户在 canvas 上交互的核心函数，该函数的定义如下
@@ -756,9 +758,13 @@ export interface ActionEvent {
   y: number // 鼠标相对于 canvas 的 y 坐标
   point: Point // 鼠标相对于 canvas 的坐标
   target: StayChild // 触发事件的元素
-  pressedKeys: Set<string> // 当前按下的键盘键和鼠标键, 鼠标左键为 mouse0 ，鼠标右键为 mouse1, 鼠标滚轮为 mouse2
+  pressedKeys: Set<string> // 当前按下的键盘键和鼠标键：左键为 mouse0，中键为 mouse1，右键为 mouse2
   key: string | null // 触发事件的键盘键，当我们触发 mouseup 事件时, pressedKeys 中不会有该键，而 key 中有该键
   isMouseEvent: boolean // 是否为鼠标事件
+  pointerId?: number // Pointer Events 的指针 id
+  pointerType?: string // mouse、pen 或 touch
+  cancelled?: boolean // 连续手势是否因取消、失焦等原因结束
+  cancelReason?: "pointercancel" | "lostpointercapture" | "blur" | "visibilitychange"
   deltaX: number // 鼠标滚轮滑动时的 x 轴偏移
   deltaY: number // 鼠标滚轮滑动时的 y 轴偏移
   deltaZ: number // 鼠标滚轮滑动时的 z 轴偏移

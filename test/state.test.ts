@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest"
-import { createStage, md } from "./helpers/stage"
+import { createStage, md, mu } from "./helpers/stage"
 
 // Dimension 5 (State management): listeners are gated by the current state.
 
@@ -19,11 +19,13 @@ describe("state machine", () => {
 
     // default state -> should NOT fire
     top.dispatchEvent(md(30, 30))
+    top.dispatchEvent(mu(30, 30))
     expect(fired).toBe(0)
 
     // switch into "draw" -> should fire
     stage.tools.switchState("draw")
     top.dispatchEvent(md(30, 30))
+    top.dispatchEvent(mu(30, 30))
     expect(fired).toBe(1)
   })
 
@@ -41,9 +43,12 @@ describe("state machine", () => {
     })
 
     top.dispatchEvent(md(10, 10)) // k undefined, then set to "v"
+    top.dispatchEvent(mu(10, 10))
     top.dispatchEvent(md(10, 10)) // k still "v" (same state)
+    top.dispatchEvent(mu(10, 10))
     stage.tools.switchState("other") // clears stateStore
     top.dispatchEvent(md(10, 10)) // k undefined again
+    top.dispatchEvent(mu(10, 10))
 
     expect(seen).toEqual([undefined, "v", undefined])
   })

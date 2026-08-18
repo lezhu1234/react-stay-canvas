@@ -11,8 +11,10 @@ interface DrawLayer {
 // nextTick queue. Extracted from Stay so "rendering" is one focused concern.
 // Reads the children to paint via an injected provider (the non-root children).
 export class Renderer {
+  #frameId: number | undefined
   #layers: DrawLayer[]
   #nextTick: (() => void)[] = []
+  #running = false
 
   constructor(
     private readonly root: Canvas,
@@ -114,8 +116,25 @@ export class Renderer {
   // The continuous render loop. Incremental: draw() only repaints dirty layers,
   // so an idle frame paints nothing.
   start() {
-    this.draw({ now: Date.now() })
-    window.requestAnimationFrame(() => this.start())
+    if (this.#running) return
+    this.#running = true
+
+    const frame = () => {
+      if (!this.#running) return
+      this.draw({ now: Date.now() })
+      this.#frameId = window.requestAnimationFrame(frame)
+    }
+
+    frame()
+  }
+
+  stop() {
+    this.#running = false
+    if (this.#frameId !== undefined) {
+      window.cancelAnimationFrame(this.#frameId)
+      this.#frameId = undefined
+    }
+    this.#nextTick = []
   }
 
   #drainNextTick() {

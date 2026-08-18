@@ -34,6 +34,12 @@ export type StayCanvasRefType = {
   focus: () => void
 }
 
+export type PointerSessionCancelReason =
+  | "pointercancel"
+  | "lostpointercapture"
+  | "blur"
+  | "visibilitychange"
+
 export interface MouseActionEvent<EventName extends PredefinedMouseEventName> {
   state: string
   pressedKeys: Set<string>
@@ -43,6 +49,10 @@ export interface MouseActionEvent<EventName extends PredefinedMouseEventName> {
   point: Coordinate
   target: StayInstantChild
   isMouseEvent: true
+  pointerId?: number
+  pointerType?: string
+  cancelled?: boolean
+  cancelReason?: PointerSessionCancelReason
 }
 
 export interface KeyActionEvent<EventName extends PredefinedKeyEventName> {
@@ -79,6 +89,10 @@ export interface AnyActionEvent {
   deltaY: number
   deltaZ: number
   target: StayInstantChild
+  pointerId?: number
+  pointerType?: string
+  cancelled?: boolean
+  cancelReason?: PointerSessionCancelReason
 }
 
 export type ActionEvent<EventName extends string | string[]> =

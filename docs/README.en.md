@@ -734,6 +734,8 @@ In react-stay-canvas, the following types of events are predefined:
 - redo: ctrl + shift + z
 - undo: ctrl + z
 
+Continuous pointer gestures use Pointer Capture. After a gesture starts inside the Canvas, movement and release remain part of that gesture even outside the Canvas. `drag`/`move` and their terminal events retain the logical target selected at the start; cancellation, focus loss, or page hiding ends the gesture with `cancelled: true`.
+
 #### Listener Callback Function
 
 The callback function is the core function that controls user interactions on the canvas. The definition of this function is as follows:
@@ -764,9 +766,13 @@ export interface ActionEvent {
   y: number // The y-coordinate of the mouse relative to the canvas
   point: Point // The coordinates of the mouse relative to the canvas
   target: StayChild // The element that triggered the event
-  pressedKeys: Set<string> // The keys and mouse buttons currently pressed. The left mouse button is mouse0, the right mouse button is mouse1, and the mouse wheel is mouse2
+  pressedKeys: Set<string> // The keys and mouse buttons currently pressed: left is mouse0, middle is mouse1, and right is mouse2
   key: string | null // The keyboard key that triggered the event. When we trigger the mouseup event, the pressedKeys will not have this key, but key will have this key
   isMouseEvent: boolean // Whether it is a mouse event
+  pointerId?: number // The Pointer Events pointer id
+  pointerType?: string // mouse, pen, or touch
+  cancelled?: boolean // Whether a continuous gesture ended through cancellation or focus loss
+  cancelReason?: "pointercancel" | "lostpointercapture" | "blur" | "visibilitychange"
   deltaX: number // The x-axis offset when the mouse wheel is scrolled
   deltaY: number // The y-axis offset when the mouse wheel is scrolled
   deltaZ: number // The z-axis offset when the mouse wheel is scrolled

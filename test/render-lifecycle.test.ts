@@ -12,4 +12,29 @@ describe("render lifecycle", () => {
     createStage({ raf: () => (n++, 0) })
     expect(n).toBe(1)
   })
+
+  it("cancels the scheduled frame and does not reschedule after destroy", () => {
+    let calls = 0
+    let queuedFrame: FrameRequestCallback | undefined
+    let cancelledFrame: number | undefined
+    const originalCancelAnimationFrame = window.cancelAnimationFrame
+    window.cancelAnimationFrame = (frameId: number) => {
+      cancelledFrame = frameId
+    }
+
+    const { stage } = createStage({
+      raf: (callback) => {
+        calls++
+        queuedFrame = callback
+        return 42
+      },
+    })
+
+    stage.destroy()
+    queuedFrame?.(0)
+
+    expect(cancelledFrame).toBe(42)
+    expect(calls).toBe(1)
+    window.cancelAnimationFrame = originalCancelAnimationFrame
+  })
 })

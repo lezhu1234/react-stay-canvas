@@ -29,7 +29,7 @@ interface AreaProps {
   height: number
 }
 export interface FireEvent {
-  (e: KeyboardEvent | MouseEvent | WheelEvent, trigger: string): void
+  (e: KeyboardEvent | MouseEvent | PointerEvent | WheelEvent, trigger: string): void
 }
 
 export interface UserCallbackTools {

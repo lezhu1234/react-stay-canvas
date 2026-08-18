@@ -76,6 +76,7 @@ export const MouseLeaveEvent: EventProps<PredefinedMouseEventName> = {
 const DragEndEvent: EventProps<PredefinedMouseEventName> = {
   name: "dragend",
   trigger: MOUSE_EVENTS.MOUSE_UP,
+  conditionCallback: ({ e, store }) => Boolean(e.cancelled || store.get("dragging")),
   successCallback: ({ store, deleteEvent }) => {
     deleteEvent("drag")
     deleteEvent("dragend")
@@ -108,17 +109,19 @@ export const DragStartEvent: EventProps<PredefinedMouseEventName> = {
   },
   successCallback: ({ e, store }) => {
     store.set("dragStartPosition", e.point)
-    return DragEvent
+    store.set("dragging", false)
+    return [DragEvent, DragEndEvent]
   },
 }
 
 const MoveEndEvent: EventProps<PredefinedMouseEventName> = {
   name: "moveend",
   trigger: MOUSE_EVENTS.MOUSE_UP,
-  conditionCallback: () => true,
-  successCallback: ({ deleteEvent }) => {
+  conditionCallback: ({ e, store }) => Boolean(e.cancelled || store.get("moving")),
+  successCallback: ({ store, deleteEvent }) => {
     deleteEvent("move")
     deleteEvent("moveend")
+    store.set("moving", false)
   },
 }
 
@@ -128,7 +131,8 @@ const MoveEvent: EventProps<PredefinedMouseEventName> = {
   conditionCallback: ({ e, store }) => {
     return e.pressedKeys.has("Control") && e.pressedKeys.has("mouse0")
   },
-  successCallback: () => {
+  successCallback: ({ store }) => {
+    store.set("moving", true)
     return MoveEndEvent
   },
 }
@@ -139,8 +143,9 @@ export const StartMoveEvent: EventProps<PredefinedMouseEventName> = {
   conditionCallback: ({ e }) => {
     return e.pressedKeys.has("mouse0") && e.pressedKeys.has("Control")
   },
-  successCallback: () => {
-    return MoveEvent
+  successCallback: ({ store }) => {
+    store.set("moving", false)
+    return [MoveEvent, MoveEndEvent]
   },
 }
 

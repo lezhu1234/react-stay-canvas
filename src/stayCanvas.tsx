@@ -79,6 +79,7 @@ const StayCanvas = forwardRef(
     type ListenerNames = GetListenerPairName<ListenerPair>
 
     const init = () => {
+      stay.current?.destroy()
       stay.current = createStay(
         canvasLayers.current,
         contextLayerSetFunctionList,
@@ -133,6 +134,15 @@ const StayCanvas = forwardRef(
         initialized.current = true
       }
     }, [width, height])
+
+    useEffect(
+      () => () => {
+        stay.current?.destroy()
+        stay.current = undefined
+        initialized.current = false
+      },
+      []
+    )
 
     return (
       <>

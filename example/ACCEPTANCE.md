@@ -52,6 +52,7 @@ Apply these checks whenever the route exposes the relevant behavior:
 - Selector query matches use orange outlines; the latest pointer hit uses a blue outline without erasing the query result.
 - Single-selection examples restore the previous object before highlighting the next one, and clicking empty space clears selection.
 - Repeated imports, history restores, and copied nodes retain a visible stable identity so the operator can distinguish the affected object.
+- A continuous pointer gesture that starts inside a Canvas ends exactly once after release outside; returning without pressing again must not resume movement.
 
 Acceptance fails if a label remains behind its object, a status names an object that cannot be identified in the Canvas, or a selected object has no visible feedback.
 

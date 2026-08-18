@@ -49,6 +49,7 @@ type FireEventOptions = {
 }
 
 const MOUSE_BUTTON_MASKS = [1, 4, 2, 8, 16]
+const POINTER_SESSION_EVENT_NAMES = new Set(["drag", "dragend", "move", "moveend"])
 
 // Owns event registration, the listener registry, pressed-key tracking, the DOM
 // wiring, and fireEvent (build ActionEvent → run each event's condition/success
@@ -212,7 +213,7 @@ export class EventDispatcher<EventName extends string> {
           linkEvent.forEach((le) => {
             const belongsToPointerSession = Boolean(this.activePointer) &&
               (trigger === MOUSE_EVENTS.MOUSE_DOWN || trigger === MOUSE_EVENTS.MOUSE_MOVE) &&
-              (le.trigger === MOUSE_EVENTS.MOUSE_MOVE || le.trigger === MOUSE_EVENTS.MOUSE_UP)
+              POINTER_SESSION_EVENT_NAMES.has(le.name)
             this.registerEvent(le, belongsToPointerSession)
           })
         }
@@ -257,6 +258,12 @@ export class EventDispatcher<EventName extends string> {
     })
   }
 
+  private clearPointerButtons() {
+    Object.keys(this.currentPressedKeys).forEach((key) => {
+      if (key.startsWith("mouse")) delete this.currentPressedKeys[key]
+    })
+  }
+
   private movePointerSession(e: PointerEvent) {
     if (!e.isPrimary) return
     if (this.activePointer) {
@@ -294,27 +301,35 @@ export class EventDispatcher<EventName extends string> {
     this.handledPointerEnds.add(e)
     this.activePointer = undefined
     this.releaseKey(`mouse${session.button}`)
+    if (cancelled) this.clearPointerButtons()
 
-    if (notify) {
-      this.fireEvent(e, MOUSE_EVENTS.MOUSE_UP, {
-        cancelled,
-        cancelReason,
-        onlyLinkedEvents: cancelled,
-        pointerId: session.pointerId,
-        pointerType: session.pointerType,
-      })
-    }
-
-    if (this.topLayer?.hasPointerCapture?.(session.pointerId)) {
-      try {
-        this.topLayer.releasePointerCapture(session.pointerId)
-      } catch {
-        // Capture may already have been released implicitly.
+    try {
+      if (notify) {
+        this.fireEvent(e, MOUSE_EVENTS.MOUSE_UP, {
+          cancelled,
+          cancelReason,
+          onlyLinkedEvents: cancelled,
+          pointerId: session.pointerId,
+          pointerType: session.pointerType,
+        })
       }
-    }
+    } finally {
+      // Click pairing belongs to this pointer session even when cancellation
+      // intentionally suppresses the public mouseup event.
+      this.store.delete("lastMouseDownPosition")
+      this.store.delete("laseMouseDownTime")
 
-    this.clearPointerSessionEvents()
-    this.onPointerSessionEnd()
+      if (this.topLayer?.hasPointerCapture?.(session.pointerId)) {
+        try {
+          this.topLayer.releasePointerCapture(session.pointerId)
+        } catch {
+          // Capture may already have been released implicitly.
+        }
+      }
+
+      this.clearPointerSessionEvents()
+      this.onPointerSessionEnd()
+    }
   }
 
   private cancelPointerSession(reason: PointerSessionCancelReason, event?: PointerEvent) {

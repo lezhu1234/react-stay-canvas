@@ -85,7 +85,7 @@ function CatalogHome() {
         <div className="catalog-metrics" aria-label={text("Example counts", "示例数量")}>
           <span><strong>10</strong> {text("focused examples", "个基础示例")}</span>
           <span><strong>3</strong> {text("integration scenarios", "个集成场景")}</span>
-          <span><strong>73</strong> {text("unit tests", "个单元测试")}</span>
+          <span><strong>79</strong> {text("unit tests", "个单元测试")}</span>
         </div>
       </section>
 

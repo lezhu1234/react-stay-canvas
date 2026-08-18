@@ -37,7 +37,7 @@
 
 ## 指针在 Canvas 外释放后，输入状态可能无法结束
 
-状态：已修复，待合并（`codex/pointer-session-lifecycle`）  
+状态：已修复，待合并（`codex/pointer-session-lifecycle`）
 关联记录：[GitHub Issue #27](https://github.com/lezhu1234/react-stay-canvas/issues/27)
 
 ### 复现步骤

@@ -469,21 +469,39 @@ export function stayTools(this: Stay<any>): StayTools {
         }
 
         const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
-        if (!avaliableSet.includes(this.state)) return
+        const isListenerAvailable = avaliableSet.includes(this.state)
 
         // Target ownership belongs to the gesture, not to whether this listener
-        // happens to subscribe to its start callback. Capture at the start point
-        // for listeners that consume any phase of that gesture family.
+        // happens to subscribe to its start callback. Inactive listeners record
+        // an explicit no-owner without running selectors or target predicates,
+        // so later activation cannot acquire a target mid-gesture.
         GESTURE_EVENT_FAMILIES.forEach(({ start, events }) => {
           if (!(start in triggerEvents) || !event.some((eventName: string) => events.has(eventName))) return
-          const startEvent = triggerEvents[start].info as ActionEvent<PredefinedMouseEventName>
+          if (!isListenerAvailable) {
+            this.gestureTargets.set(name, null)
+            return
+          }
+          const startTrigger = triggerEvents[start]
+          const startEvent = startTrigger.info as ActionEvent<PredefinedMouseEventName>
           const children = this.tools.getContainPointChildren({
             point: startEvent.point,
             selector,
             sortBy,
           })
-          this.gestureTargets.set(name, (children[0] as StayInstantChild | undefined) ?? null)
+          const startTarget = children.find((child) =>
+            !startTrigger.event.withTargetConditionCallback ||
+            startTrigger.event.withTargetConditionCallback({
+              e: startEvent as any,
+              store: this.store,
+              stateStore: this.stateStore,
+              target: child,
+              originEvent,
+            })
+          )
+          this.gestureTargets.set(name, (startTarget as StayInstantChild | undefined) ?? null)
         })
+
+        if (!isListenerAvailable) return
 
         event.forEach((actionEventName: string) => {
           if (!(actionEventName in triggerEvents)) {
@@ -493,14 +511,17 @@ export function stayTools(this: Stay<any>): StayTools {
           const { info: actionEvent, event: preEvent } = triggerEvents[actionEventName]
 
           const _actionEvent = actionEvent as ActionEvent<PredefinedMouseEventName>
+          const isGestureStart = GESTURE_START_EVENTS.has(actionEventName)
           const isGestureContinuation = GESTURE_CONTINUATION_EVENTS.has(actionEventName)
-          const hasGestureOwner = isGestureContinuation && this.gestureTargets.has(name)
+          const hasGestureOwner =
+            (isGestureStart || isGestureContinuation) && this.gestureTargets.has(name)
           const gestureTarget = hasGestureOwner ? this.gestureTargets.get(name) : undefined
 
           if (hasGestureOwner && !gestureTarget) {
             return false
           } else if (gestureTarget) {
             if (
+              isGestureContinuation &&
               preEvent.withTargetConditionCallback &&
               !preEvent.withTargetConditionCallback({
                 e: _actionEvent as any,

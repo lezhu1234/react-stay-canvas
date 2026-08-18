@@ -195,6 +195,55 @@ describe("pointer session lifecycle", () => {
     expect(targets).toEqual([])
   })
 
+  it("records no-owner before state filtering when a listener activates mid-gesture", async () => {
+    const { stage, top } = createStage()
+    stage.tools.appendChild({
+      id: "state-start-node",
+      className: "node",
+      shape: new Rectangle({ x: 10, y: 10, width: 40, height: 40 }),
+    })
+    stage.tools.appendChild({
+      id: "state-late-node",
+      className: "node",
+      shape: new Rectangle({ x: 100, y: 10, width: 40, height: 40 }),
+    })
+    let drags = 0
+    let targetConditionCalls = 0
+
+    stage.registerEvent({
+      name: "dragstart",
+      trigger: MOUSE_EVENTS.MOUSE_DOWN,
+      withTargetConditionCallback: () => {
+        targetConditionCalls++
+        return true
+      },
+      successCallback: () => [
+        {
+          name: "drag",
+          trigger: MOUSE_EVENTS.MOUSE_MOVE,
+          conditionCallback: ({ e }) => e.pressedKeys.has("mouse0"),
+        },
+        { name: "dragend", trigger: MOUSE_EVENTS.MOUSE_UP },
+      ],
+    })
+    stage.addEventListener({
+      name: "state-late-drag",
+      state: "active",
+      selector: ".node",
+      event: "drag",
+      callback: () => ({ drag: () => { drags++ } }),
+    })
+
+    top.dispatchEvent(md(20, 20))
+    stage.tools.switchState("active")
+    top.dispatchEvent(mm(110, 20))
+    top.dispatchEvent(mu(110, 20))
+    await tick()
+
+    expect(targetConditionCalls).toBe(0)
+    expect(drags).toBe(0)
+  })
+
   it("still evaluates a continuation target condition against the retained owner", async () => {
     const { stage, top } = createStage()
     stage.tools.appendChild({
@@ -378,6 +427,152 @@ describe("pointer session lifecycle", () => {
     await tick()
 
     expect(laterMoves).toBe(1)
+  })
+
+  it("keeps non-gesture pointer chains outside session cleanup", async () => {
+    const { stage, top } = createStage()
+    let laterMoves = 0
+    let laterUps = 0
+
+    stage.registerEvent({
+      name: "arm-non-gesture-chain",
+      trigger: MOUSE_EVENTS.MOUSE_DOWN,
+      successCallback: () => [
+        { name: "later-hover", trigger: MOUSE_EVENTS.MOUSE_MOVE },
+        { name: "later-up", trigger: MOUSE_EVENTS.MOUSE_UP },
+      ],
+    })
+    stage.addEventListener({
+      name: "observe-non-gesture-chain",
+      event: ["later-hover", "later-up"],
+      callback: () => ({
+        "later-hover": () => { laterMoves++ },
+        "later-up": () => { laterUps++ },
+      }),
+    })
+
+    top.dispatchEvent(md(20, 20))
+    top.dispatchEvent(pc(20, 20))
+    await tick()
+    expect(laterUps).toBe(0)
+
+    top.dispatchEvent(mm(30, 30))
+    top.dispatchEvent(mu(30, 30))
+    await tick()
+
+    expect(laterMoves).toBe(1)
+    expect(laterUps).toBe(1)
+  })
+
+  it("clears click pairing when a pointer session is cancelled", async () => {
+    const { stage, top } = createStage()
+    let clicks = 0
+
+    stage.addEventListener({
+      name: "no-click-after-cancel",
+      event: "click",
+      callback: () => { clicks++ },
+    })
+
+    top.dispatchEvent(md(20, 20))
+    top.dispatchEvent(pc(20, 20))
+    top.dispatchEvent(mu(20, 20))
+    await tick()
+
+    expect(clicks).toBe(0)
+    expect(stage.store.has("lastMouseDownPosition")).toBe(false)
+    expect(stage.store.has("laseMouseDownTime")).toBe(false)
+  })
+
+  it("clears every pressed mouse button when a chord is cancelled", async () => {
+    const { stage, top } = createStage()
+
+    top.dispatchEvent(md(20, 20))
+    top.dispatchEvent(new PointerEvent("pointermove", {
+      clientX: 30,
+      clientY: 30,
+      button: 2,
+      buttons: 3,
+      bubbles: true,
+      pointerId: 1,
+      pointerType: "mouse",
+      isPrimary: true,
+    }))
+    expect(stage.eventDispatcher.currentPressedKeys.mouse0).toBe(true)
+    expect(stage.eventDispatcher.currentPressedKeys.mouse2).toBe(true)
+
+    top.dispatchEvent(pc(30, 30))
+    await tick()
+
+    expect(stage.eventDispatcher.currentPressedKeys.mouse0).toBeUndefined()
+    expect(stage.eventDispatcher.currentPressedKeys.mouse2).toBeUndefined()
+  })
+
+  it("records no gesture owner when the start target condition rejects the hit", async () => {
+    const { stage, top } = createStage()
+    stage.tools.appendChild({
+      id: "rejected-start-node",
+      className: "node",
+      shape: new Rectangle({ x: 10, y: 10, width: 80, height: 80 }),
+    })
+    let starts = 0
+    let drags = 0
+
+    stage.registerEvent({
+      name: "dragstart",
+      trigger: MOUSE_EVENTS.MOUSE_DOWN,
+      withTargetConditionCallback: () => false,
+      successCallback: () => [
+        {
+          name: "drag",
+          trigger: MOUSE_EVENTS.MOUSE_MOVE,
+          conditionCallback: ({ e }) => e.pressedKeys.has("mouse0"),
+        },
+        { name: "dragend", trigger: MOUSE_EVENTS.MOUSE_UP },
+      ],
+    })
+    stage.addEventListener({
+      name: "reject-start-target",
+      selector: ".node",
+      event: ["dragstart", "drag"],
+      callback: () => ({
+        dragstart: () => { starts++ },
+        drag: () => { drags++ },
+      }),
+    })
+
+    top.dispatchEvent(md(20, 20))
+    top.dispatchEvent(mm(50, 50))
+    top.dispatchEvent(mu(50, 50))
+    await tick()
+
+    expect(starts).toBe(0)
+    expect(drags).toBe(0)
+  })
+
+  it("cleans the pointer session even when a terminal listener throws", () => {
+    const { stage, top, capturedPointers } = createStage()
+
+    stage.addEventListener({
+      name: "throwing-pan-end",
+      event: ["startmove", "move", "moveend"],
+      callback: () => ({
+        startmove: () => undefined,
+        move: () => undefined,
+        moveend: () => { throw new Error("terminal failed") },
+      }),
+    })
+
+    holdControl(top)
+    top.dispatchEvent(md(20, 20))
+    top.dispatchEvent(mm(60, 60))
+
+    expect(() => (stage.eventDispatcher as any).finishPointerSession(mu(60, 60), false))
+      .toThrow("terminal failed")
+    expect(capturedPointers.has(1)).toBe(false)
+    expect((stage.eventDispatcher as any).activePointer).toBeUndefined()
+    expect((stage.eventDispatcher as any).pointerSessionEventNames.size).toBe(0)
+    expect(stage.gestureTargets.size).toBe(0)
   })
 
   it("ends a mouse session when its initiating button is released during a chord", async () => {

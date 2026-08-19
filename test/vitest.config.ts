@@ -9,6 +9,10 @@ export default defineConfig({
     alias: {
       // Import the library exactly as a consumer does; resolves to source.
       "react-stay-canvas": path.resolve(rootDir, "../src/index.ts"),
+      // Component lifecycle tests must use the same React instance as the
+      // renderer installed in this test package.
+      react: path.resolve(rootDir, "node_modules/react"),
+      "react-dom": path.resolve(rootDir, "node_modules/react-dom"),
     },
   },
   test: {

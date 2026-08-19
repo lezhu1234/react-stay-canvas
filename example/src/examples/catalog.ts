@@ -64,9 +64,9 @@ export const catalog: ExampleDefinition[] = [
     title: l("Events and listeners", "事件与监听器"),
     shortTitle: l("Events", "事件"),
     summary: l("Exercise predefined pointer and key events, drag composeStore, focus, and programmatic custom actions.", "演示鼠标、键盘和拖拽事件，以及通过 React 主动触发自定义事件。"),
-    features: ["listenerList", "drag chain", "composeStore", "ref.trigger", "payload"],
-    instructions: [l("Drag the blue rectangle, then capture the drag entries before continuing.", "拖动蓝色矩形，先确认拖拽日志，再进行下一步。"), l("Focus the Canvas and press a key.", "点击“聚焦 Canvas”，然后按任意键。"), l("Scroll over the Canvas.", "把鼠标移到 Canvas 上并滚动。"), l("Trigger the custom ping from React.", "点击按钮，从 React 触发一次自定义 ping。")],
-    checklist: [l("The log contains dragstart, drag, and dragend in emission order, displayed newest first.", "日志依次出现 dragstart、drag 和 dragend，并按最新事件在前显示。"), l("The rectangle and its drag label move together without jumping.", "矩形和“拖动我”文字一起移动，并且不会跳位。"), l("Dragging directly on the label moves the same Child.", "直接拖动文字时，移动的是同一个 Child。"), l("Focus requests increment immediately, then keyboard and wheel events reach listeners.", "点击聚焦后次数立即增加，随后按键和滚轮操作都能进入监听器。"), l("The custom payload is visible in the log.", "自定义事件携带的内容能在日志中看到。")],
+    features: ["listenerList", "drag chain", "composeStore", "ref.trigger", "ref.reCreate", "payload"],
+    instructions: [l("Drag the blue rectangle, then capture the drag entries before continuing.", "拖动蓝色矩形，先确认拖拽日志，再进行下一步。"), l("Focus the Canvas and press a key.", "点击“聚焦 Canvas”，然后按任意键。"), l("Scroll over the Canvas.", "把鼠标移到 Canvas 上并滚动。"), l("Trigger the custom ping from React.", "点击按钮，从 React 触发一次自定义 ping。"), l("Note the Canvas instance count, click Recreate Canvas, then focus it and press one key.", "记下 Canvas 实例数，点击“重新创建 Canvas”，聚焦后只按一次按键。")],
+    checklist: [l("The log contains dragstart, drag, and dragend in emission order, displayed newest first.", "日志依次出现 dragstart、drag 和 dragend，并按最新事件在前显示。"), l("The rectangle and its drag label move together without jumping.", "矩形和“拖动我”文字一起移动，并且不会跳位。"), l("Dragging directly on the label moves the same Child.", "直接拖动文字时，移动的是同一个 Child。"), l("Focus requests increment immediately, then keyboard and wheel events reach listeners.", "点击聚焦后次数立即增加，随后按键和滚轮操作都能进入监听器。"), l("The custom payload is visible in the log.", "自定义事件携带的内容能在日志中看到。"), l("Recreate increments the Canvas instance count by one, restores the rectangle, and the single key press produces exactly one keydown log entry.", "重新创建后 Canvas 实例数只增加 1，矩形回到初始位置，并且单次按键只产生一条 keydown 日志。")],
     component: EventsExample,
   },
   {

@@ -17,6 +17,7 @@ export default function EventsExample() {
   const [entries, setEntries] = useState<string[]>([])
   const [pings, setPings] = useState(0)
   const [focusRequests, setFocusRequests] = useState(0)
+  const [canvasInstances, setCanvasInstances] = useState(0)
   const push = (message: string) => setEntries((current) => [message, ...current].slice(0, 12))
 
   const listeners = useMemo<ListenerProps[]>(() => [
@@ -73,12 +74,18 @@ export default function EventsExample() {
         new StayText({ x: 220, y: 116, text: text("drag me", "拖动我"), font: { size: 20, fontWeight: 650 }, fillConfig: { color: colors.ink } }),
       ],
     })
+    setCanvasInstances((value) => value + 1)
   }
 
   const focusCanvas = () => {
     canvasRef.current?.focus()
     setFocusRequests((value) => value + 1)
     push(text("Canvas focus requested from React", "已从 React 请求聚焦 Canvas"))
+  }
+
+  const recreateCanvas = () => {
+    canvasRef.current?.reCreate()
+    push(text("Canvas recreated", "Canvas 已重新创建"))
   }
 
   return (
@@ -89,9 +96,10 @@ export default function EventsExample() {
       <Toolbar>
         <Button onClick={() => canvasRef.current?.trigger("ping", { message: text("from React", "来自 React") })}>{text("Trigger ping", "触发 ping")}</Button>
         <Button onClick={focusCanvas}>{text("Focus canvas", "聚焦 Canvas")}</Button>
+        <Button onClick={recreateCanvas}>{text("Recreate Canvas", "重新创建 Canvas")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[[text("Custom pings", "自定义 ping"), pings], [text("Focus requests", "聚焦次数"), focusRequests], [text("Latest event", "最近事件"), entries[0] ?? text("None", "无")], [text("Listener count", "监听器数量"), listeners.length]]} />
+      <StatusGrid items={[[text("Custom pings", "自定义 ping"), pings], [text("Focus requests", "聚焦次数"), focusRequests], [text("Canvas instances", "Canvas 实例数"), canvasInstances], [text("Latest event", "最近事件"), entries[0] ?? text("None", "无")], [text("Listener count", "监听器数量"), listeners.length]]} />
       <EventLog entries={entries} />
     </DemoLayout>
   )

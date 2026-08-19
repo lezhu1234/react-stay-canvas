@@ -563,10 +563,13 @@ describe("ActionRouter contracts", () => {
       },
     })
 
-    stage.eventDispatcher.releaseKey("mouse0")
-    expect(() => stage.eventDispatcher.fireEvent(mu(80, 10), "mouseup")).toThrow(
-      "mouseup definition failed"
-    )
+    expect(() =>
+      stage.eventRuntime.handleInput({
+        originEvent: mu(80, 10),
+        trigger: "mouseup",
+        pressedKeys: new Set(),
+      })
+    ).toThrow("mouseup definition failed")
 
     stage.registerEvent({ name: "drag", trigger: "mousemove" })
     top.dispatchEvent(mm(80, 10))

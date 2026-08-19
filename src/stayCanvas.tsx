@@ -78,29 +78,44 @@ const StayCanvas = forwardRef(
       : never
     type ListenerNames = GetListenerPairName<ListenerPair>
 
+    const destroyCurrentStay = () => {
+      stay.current?.destroy()
+      stay.current = undefined
+    }
+
     const init = () => {
-      stay.current = createStay(
+      destroyCurrentStay()
+      const nextStay = createStay(
         canvasLayers.current,
         contextLayerSetFunctionList,
         width,
         height,
         passive
       )
-      ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
-        stay.current!.registerEvent(event as any)
-      })
-      listenerList.forEach((listener) => {
-        stay.current!.addEventListener(listener as any)
-      })
+      stay.current = nextStay
 
-      if (mounted && stay.current) {
-        mounted(stay.current.tools)
-      }
+      try {
+        ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
+          nextStay.registerEvent(event as any)
+        })
+        listenerList.forEach((listener) => {
+          nextStay.addEventListener(listener as any)
+        })
 
-      if (focusOnInit) {
-        canvasLayers.current[canvasLayers.current.length - 1].focus()
+        if (mounted) {
+          mounted(nextStay.tools)
+        }
+
+        if (focusOnInit) {
+          canvasLayers.current[canvasLayers.current.length - 1].focus()
+        }
+      } catch (error) {
+        if (stay.current === nextStay) destroyCurrentStay()
+        throw error
       }
     }
+    const initRef = useRef(init)
+    initRef.current = init
 
     useImperativeHandle(
       ref,
@@ -117,7 +132,7 @@ const StayCanvas = forwardRef(
             }
           },
           reCreate() {
-            init()
+            initRef.current()
           },
           focus() {
             canvasLayers.current[canvasLayers.current.length - 1].focus()
@@ -133,6 +148,14 @@ const StayCanvas = forwardRef(
         initialized.current = true
       }
     }, [width, height])
+
+    useEffect(
+      () => () => {
+        destroyCurrentStay()
+        initialized.current = false
+      },
+      []
+    )
 
     return (
       <>

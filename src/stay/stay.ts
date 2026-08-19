@@ -112,12 +112,17 @@ class Stay<EventName extends string> {
       this.eventRuntime
     )
 
-    this.eventDispatcher.initEvents()
+    try {
+      this.eventDispatcher.initEvents()
 
-    // The RAF render loop runs for every stage; it is dirty-gated (idle frames
-    // paint nothing), and progress() drives timeline children as an explicit
-    // seek. There is no longer any per-mode branching.
-    this.startRender()
+      // The RAF render loop runs for every stage; it is dirty-gated (idle frames
+      // paint nothing), and progress() drives timeline children as an explicit
+      // seek. There is no longer any per-mode branching.
+      this.startRender()
+    } catch (error) {
+      this.destroy()
+      throw error
+    }
   }
 
   addEventListener(props: ListenerProps<ListenerNamePayloadPair, EventName>) {
@@ -161,6 +166,13 @@ class Stay<EventName extends string> {
 
   clearEvents() {
     this.eventRuntime.clearEvents()
+  }
+
+  destroy() {
+    this.eventDispatcher.destroy()
+    this.renderer.stop()
+    this.eventRuntime.clearEvents()
+    this.actionRouter.clearListeners()
   }
 
   cloneChildren(): Map<string, StayInstantChild> {

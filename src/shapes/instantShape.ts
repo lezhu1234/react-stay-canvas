@@ -16,8 +16,10 @@ import {
   CanvasFillProps,
   CanvasGlobalProps,
 } from "../userTypes"
-import { applyEasing, hasIntersection, isRGB, isRGBA } from "../utils"
-import W3Color, { RGB, RGBA, rgbaToString } from "../w3color"
+import { isRGB, isRGBA } from "../utils/color"
+import { applyEasing } from "../utils/easing"
+import { hasIntersection } from "../utils/geometry"
+import W3Color, { RGB, RGBA, rgbaToString } from "../vendor/w3color"
 
 export const ZeroColor: RGBA = { a: 0, r: 0, g: 0, b: 0 }
 export const BlackColor: RGBA = { a: 1, r: 0, g: 0, b: 0 }

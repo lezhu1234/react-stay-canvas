@@ -8,7 +8,7 @@ import {
   PredefinedMouseEventName,
   PredefinedWheelEventName,
 } from "./userTypes"
-import { distance } from "./utils"
+import { distance } from "./utils/geometry"
 
 export const mouseDownEvent: EventProps<PredefinedMouseEventName> = {
   name: "mousedown",

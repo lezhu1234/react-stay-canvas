@@ -16,14 +16,11 @@ import {
 import {
   borderSame,
   fillSame,
-  getDefaultFont,
-  getRGBAStr,
-  getSize,
-  isRGB,
-  isRGBA,
   strokeSame,
-} from "../utils"
-import { RGBA, rgbaToString } from "../w3color"
+} from "../utils/equality"
+import { getRGBAStr, isRGB, isRGBA } from "../utils/color"
+import { getDefaultFont, getSize } from "../utils/typography"
+import { RGBA, rgbaToString } from "../vendor/w3color"
 import { AnimatedShape } from "./animatedShape"
 import { BlackColor, InstantShape, ZeroColor } from "./instantShape"
 import { Rectangle } from "./rectangle"

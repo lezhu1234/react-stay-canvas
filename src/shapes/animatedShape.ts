@@ -1,6 +1,7 @@
 import { AnimatedShapeProps, Border, EasingFunction, StayShapeTransitionConfig } from "../userTypes"
-import { applyEasing, fillSame, isBasicType, strokeSame } from "../utils"
-import { RGBA } from "../w3color"
+import { applyEasing } from "../utils/easing"
+import { fillSame, isBasicType, strokeSame } from "../utils/equality"
+import { RGBA } from "../vendor/w3color"
 import { InstantShape, ZeroColor } from "./instantShape"
 
 // export const DefaultTransitionConfig: Required<AnimatedShapeTransitionConfig> = {

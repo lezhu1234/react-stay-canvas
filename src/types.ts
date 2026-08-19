@@ -1,4 +1,4 @@
-import { InstantShape } from "./shapes"
+import { InstantShape } from "./shapes/instantShape"
 import { Rectangle } from "./shapes/rectangle"
 import { StayInstantChild } from "./stay/children/stayInstantChild"
 import { valueof } from "./stay/types"

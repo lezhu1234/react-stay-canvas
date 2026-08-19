@@ -1,0 +1,73 @@
+import { describe, expect, it } from "vitest"
+import * as StayCanvas from "react-stay-canvas"
+
+const publicUtilityNames = [
+  "applyEasing",
+  "assert",
+  "basicArraySame",
+  "borderSame",
+  "colorSame",
+  "distance",
+  "easeInBack",
+  "easeInBounce",
+  "easeInCirc",
+  "easeInCubic",
+  "easeInElastic",
+  "easeInExpo",
+  "easeInOutBack",
+  "easeInOutBounce",
+  "easeInOutCirc",
+  "easeInOutCubic",
+  "easeInOutElastic",
+  "easeInOutExpo",
+  "easeInOutQuad",
+  "easeInOutQuart",
+  "easeInOutQuint",
+  "easeInOutSine",
+  "easeInQuad",
+  "easeInQuart",
+  "easeInQuint",
+  "easeInSine",
+  "easeOutBack",
+  "easeOutBounce",
+  "easeOutCirc",
+  "easeOutCubic",
+  "easeOutElastic",
+  "easeOutExpo",
+  "easeOutQuad",
+  "easeOutQuart",
+  "easeOutQuint",
+  "easeOutSine",
+  "easingFunctions",
+  "ensureInRangeZeroOne",
+  "ensureNotNegative",
+  "ensurePositive",
+  "fillSame",
+  "getCornersByCenterLine",
+  "getDefaultFont",
+  "getFontStr",
+  "getRGBAStr",
+  "getSize",
+  "hasIntersection",
+  "infixExpressionParser",
+  "isBasicType",
+  "isRGB",
+  "isRGBA",
+  "isRelativeNumericString",
+  "isStayAnimatedChild",
+  "linear",
+  "numberAlmostEqual",
+  "parseLayer",
+  "stringToRgba",
+  "strokeSame",
+  "uuid4",
+  "validateNumericString",
+] as const
+
+describe("public utility exports", () => {
+  it("keeps every package-root utility name available", () => {
+    publicUtilityNames.forEach((name) => {
+      expect(StayCanvas[name], name).toBeDefined()
+    })
+  })
+})

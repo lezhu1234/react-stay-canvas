@@ -15,7 +15,7 @@ export const mouseDownEvent: EventProps<PredefinedMouseEventName> = {
   trigger: MOUSE_EVENTS.MOUSE_DOWN,
   conditionCallback: () => true,
   successCallback: ({ e, store }) => {
-    store.set("lastMouseDownPosition", e.point)
+    if (e.point) store.set("lastMouseDownPosition", e.point)
     store.set("laseMouseDownTime", Date.now())
   },
 }
@@ -25,7 +25,9 @@ export const UndoEvent: EventProps<PredefinedKeyEventName> = {
   trigger: KEYBOARRD_EVENTS.KEY_UP,
   conditionCallback: ({ e }) => {
     return (
-      e.pressedKeys.has("Control") && !e.pressedKeys.has("Shift") && e.key.toLowerCase() === "z"
+      e.pressedKeys.has("Control") &&
+      !e.pressedKeys.has("Shift") &&
+      e.key?.toLowerCase() === "z"
     )
   },
 }
@@ -34,7 +36,11 @@ export const RedoEvent: EventProps<PredefinedKeyEventName> = {
   name: "redo",
   trigger: KEYBOARRD_EVENTS.KEY_UP,
   conditionCallback: ({ e }) => {
-    return e.pressedKeys.has("Control") && e.pressedKeys.has("Shift") && e.key.toLowerCase() === "z"
+    return (
+      e.pressedKeys.has("Control") &&
+      e.pressedKeys.has("Shift") &&
+      e.key?.toLowerCase() === "z"
+    )
   },
 }
 
@@ -45,6 +51,7 @@ export const ClickEvent: EventProps<PredefinedMouseEventName> = {
     if (!store.get("lastMouseDownPosition")) {
       return false
     }
+    if (e.x === undefined || e.y === undefined) return false
     const { x, y } = store.get("lastMouseDownPosition")
     const now = Date.now()
     const timeDiff = now - store.get("laseMouseDownTime")
@@ -88,6 +95,7 @@ const DragEvent: EventProps<PredefinedMouseEventName> = {
   trigger: MOUSE_EVENTS.MOUSE_MOVE,
   conditionCallback: ({ e, store }) => {
     const dragStartPosition: Coordinate = store.get("dragStartPosition")
+    if (!e.point) return false
     return (
       e.pressedKeys.has("mouse0") &&
       (distance(dragStartPosition, e.point) >= 10 || store.get("dragging")) &&
@@ -107,7 +115,7 @@ export const DragStartEvent: EventProps<PredefinedMouseEventName> = {
     return e.pressedKeys.has("mouse0") && !e.pressedKeys.has("Control")
   },
   successCallback: ({ e, store }) => {
-    store.set("dragStartPosition", e.point)
+    if (e.point) store.set("dragStartPosition", e.point)
     return DragEvent
   },
 }
@@ -157,13 +165,13 @@ export const MouseUpEvent: EventProps<PredefinedMouseEventName> = {
 export const ZoomInEvent: EventProps<PredefinedWheelEventName> = {
   name: "zoomin",
   trigger: MOUSE_EVENTS.WHEEL,
-  conditionCallback: ({ e }) => e.deltaY < 0,
+  conditionCallback: ({ e }) => e.deltaY !== undefined && e.deltaY < 0,
 }
 
 export const ZoomOutEvent: EventProps<PredefinedWheelEventName> = {
   name: "zoomout",
   trigger: MOUSE_EVENTS.WHEEL,
-  conditionCallback: ({ e }) => e.deltaY > 0,
+  conditionCallback: ({ e }) => e.deltaY !== undefined && e.deltaY > 0,
 }
 
 export const KeyUpEvent: EventProps<PredefinedKeyEventName> = {

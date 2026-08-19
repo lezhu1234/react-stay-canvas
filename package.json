@@ -5,7 +5,10 @@
   "scripts": {
     "build": "rollup -c",
     "pub": "rollup -c && pnpm version patch && pnpm publish",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm test --prefix test",
+    "typecheck:example": "npm run typecheck --prefix example",
+    "build:example": "npm run build --prefix example",
+    "verify": "pnpm build && pnpm test && pnpm build:example"
   },
   "repository": {
     "type": "git",

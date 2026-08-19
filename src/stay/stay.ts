@@ -75,7 +75,7 @@ class Stay<EventName extends string> {
 
     this.history = new History(() => this.cloneChildren())
 
-    this.actionRouter = new ActionRouter({
+    this.actionRouter = new ActionRouter<EventName>({
       canvas: this.root,
       store: this.store,
       stateStore: this.stateStore,

@@ -1,9 +1,13 @@
 import type { ChildSortFunction, SelectorFunc } from "../../../types/children"
-import type { ActionEvent, EventProps, TriggerEvents } from "../../../types/events"
+import type { EventProps } from "../../../types/events"
 import { MOUSE_EVENTS } from "../../../userConstants"
 import { createActionEventEnvelope } from "./actionEventEnvelope"
 import { StayInstantChild } from "../../children/stayInstantChild"
-import type { EventDefinitionLookup } from "../contracts"
+import type {
+  EvaluatedActions,
+  EventDefinitionLookup,
+  NormalizedActionEvent,
+} from "../contracts"
 
 type Store = Map<string, any>
 export type GestureFamily = "drag" | "move"
@@ -89,7 +93,7 @@ export class ActionTargetResolver {
     eventName: string,
     available: boolean,
     originEvent: Event,
-    triggerEvents: TriggerEvents<T>,
+    triggerEvents: EvaluatedActions<T>,
     eventDefinitions: EventDefinitionLookup
   ): GestureFamily | undefined {
     if (!(originEvent instanceof MouseEvent)) return undefined
@@ -111,7 +115,7 @@ export class ActionTargetResolver {
     capturedFamilies: ReadonlySet<GestureFamily>,
     available: boolean,
     originEvent: Event,
-    triggerEvents: TriggerEvents<T>,
+    triggerEvents: EvaluatedActions<T>,
     eventDefinitions: EventDefinitionLookup
   ) {
     if (!(originEvent instanceof MouseEvent)) return
@@ -132,8 +136,8 @@ export class ActionTargetResolver {
 
   resolve<T extends string>(
     registration: TargetRegistration,
-    eventName: string,
-    sourceEvent: ActionEvent<T>,
+    eventName: T,
+    sourceEvent: NormalizedActionEvent<T>,
     eventDefinition: EventProps<T>,
     originEvent: Event
   ): TargetDecision {
@@ -192,13 +196,13 @@ export class ActionTargetResolver {
 
   releaseCompletedGestures<T extends string>(
     originEvent: Event,
-    triggerEvents: TriggerEvents<T>
+    triggerEvents: EvaluatedActions<T>
   ) {
     if (!(originEvent instanceof MouseEvent)) return
 
     const completedFamilies = GESTURES
       .filter(({ end, triggers }) => {
-        const terminal = triggerEvents[end]
+        const terminal = triggerEvents[end as T]
         return terminal && terminal.event.trigger === triggers[end]
       })
       .map(({ family }) => family)
@@ -213,8 +217,8 @@ export class ActionTargetResolver {
   private resolveGestureTarget<T extends string>(
     listenerId: symbol,
     gesture: GestureDefinition,
-    eventName: string,
-    sourceEvent: ActionEvent<T>,
+    eventName: T,
+    sourceEvent: NormalizedActionEvent<T>,
     eventDefinition: EventProps<T>,
     originEvent: Event
   ): TargetDecision {
@@ -239,12 +243,12 @@ export class ActionTargetResolver {
 
   private findPointerTarget<T extends string>(
     registration: TargetRegistration,
-    eventName: string,
-    sourceEvent: ActionEvent<T>,
+    eventName: T,
+    sourceEvent: NormalizedActionEvent<T>,
     eventDefinition: EventProps<T>,
     originEvent: Event
   ): StayInstantChild | undefined {
-    const point = (sourceEvent as any).point
+    const point = sourceEvent.point
     if (!point) return undefined
 
     return this.context
@@ -256,8 +260,8 @@ export class ActionTargetResolver {
 
   private targetIfAccepted<T extends string>(
     target: StayInstantChild,
-    eventName: string,
-    sourceEvent: ActionEvent<T>,
+    eventName: T,
+    sourceEvent: NormalizedActionEvent<T>,
     eventDefinition: EventProps<T>,
     originEvent: Event
   ): TargetDecision {
@@ -268,8 +272,8 @@ export class ActionTargetResolver {
 
   private acceptsTarget<T extends string>(
     target: StayInstantChild,
-    eventName: string,
-    sourceEvent: ActionEvent<T>,
+    eventName: T,
+    sourceEvent: NormalizedActionEvent<T>,
     eventDefinition: EventProps<T>,
     originEvent: Event
   ) {
@@ -277,7 +281,7 @@ export class ActionTargetResolver {
     if (!predicate) return true
 
     return predicate({
-      e: createActionEventEnvelope(sourceEvent, eventName) as any,
+      e: createActionEventEnvelope(sourceEvent, eventName),
       store: this.context.store,
       stateStore: this.context.stateStore,
       target,
@@ -301,19 +305,17 @@ export class ActionTargetResolver {
   private shouldCaptureStart<T extends string>(
     registration: TargetRegistration,
     gesture: GestureDefinition,
-    triggerEvents: TriggerEvents<T>,
+    triggerEvents: EvaluatedActions<T>,
     eventDefinitions: EventDefinitionLookup
   ) {
-    const start = triggerEvents[gesture.start]
-    return (
-      Boolean(start) &&
-      gesture.triggers[gesture.start] === start.event.trigger &&
-      registration.eventNames.some((name) => {
-        if (!gesture.all.has(name)) return false
-        const definition = eventDefinitions.get(name)
-        return !definition || definition.trigger === gesture.triggers[name]
-      })
-    )
+    const start = triggerEvents[gesture.start as T]
+    if (!start || gesture.triggers[gesture.start] !== start.event.trigger) return false
+
+    return registration.eventNames.some((name) => {
+      if (!gesture.all.has(name)) return false
+      const definition = eventDefinitions.get(name)
+      return !definition || definition.trigger === gesture.triggers[name]
+    })
   }
 
   private captureGestureStart<T extends string>(
@@ -321,17 +323,17 @@ export class ActionTargetResolver {
     gesture: GestureDefinition,
     available: boolean,
     originEvent: Event,
-    triggerEvents: TriggerEvents<T>
+    triggerEvents: EvaluatedActions<T>
   ) {
     if (!available) {
       this.setGestureOwner(registration.id, gesture.family, { kind: "none" })
       return
     }
 
-    const start = triggerEvents[gesture.start]!
+    const start = triggerEvents[gesture.start as T]!
     const target = this.findPointerTarget(
       registration,
-      gesture.start,
+      gesture.start as T,
       start.info,
       start.event,
       originEvent

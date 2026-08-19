@@ -3,9 +3,9 @@ import { DEFAULTSTATE, ROOTNAME } from "../../../userConstants"
 import type { ChildSortFunction } from "../../../types/children"
 import type { Dict } from "../../../types/common"
 import type {
+  ActionEvent,
   ListenerNamePayloadPair,
   ListenerProps,
-  TriggerEvents,
 } from "../../../types/events"
 import type { StayTools } from "../../../types/tools"
 import { createActionEventEnvelope } from "./actionEventEnvelope"
@@ -15,7 +15,11 @@ import {
   TargetDecision,
   TargetResolverContext,
 } from "./actionTargetResolver"
-import type { EventDefinitionLookup } from "../contracts"
+import type {
+  EvaluatedActions,
+  EventDefinitionLookup,
+  NormalizedActionEvent,
+} from "../contracts"
 
 type Store = Map<string, any>
 
@@ -103,9 +107,9 @@ export class ActionRouter<EventName extends string> {
     this.targetResolver.clearGestureOwners()
   }
 
-  dispatch<T extends string>(
+  dispatch(
     originEvent: Event,
-    triggerEvents: TriggerEvents<T>,
+    triggerEvents: EvaluatedActions<EventName>,
     payload: Dict,
     eventDefinitions: EventDefinitionLookup = EMPTY_EVENT_DEFINITIONS
   ): void {
@@ -124,10 +128,33 @@ export class ActionRouter<EventName extends string> {
     }
   }
 
-  private dispatchListener<T extends string>(
+  dispatchManual(
+    originEvent: Event,
+    actions: ReadonlyMap<EventName, NormalizedActionEvent<EventName>>,
+    payload: Dict
+  ): void {
+    this.listeners.forEach((runtime) => {
+      const { registration } = runtime
+      registration.eventNames.forEach((eventName) => {
+        const actionEvent = actions.get(eventName)
+        if (!actionEvent || !this.context.isStateAvailable(registration.state)) return
+
+        this.invoke(
+          runtime,
+          eventName,
+          actionEvent,
+          { kind: "targetless" },
+          originEvent,
+          payload
+        )
+      })
+    })
+  }
+
+  private dispatchListener(
     runtime: ListenerRuntime<EventName>,
     originEvent: Event,
-    triggerEvents: TriggerEvents<T>,
+    triggerEvents: EvaluatedActions<EventName>,
     payload: Dict,
     eventDefinitions: EventDefinitionLookup
   ) {
@@ -174,22 +201,22 @@ export class ActionRouter<EventName extends string> {
     )
   }
 
-  private invoke<T extends string>(
+  private invoke(
     runtime: ListenerRuntime<EventName>,
     eventName: EventName,
-    sourceEvent: TriggerEvents<T>[string]["info"],
+    sourceEvent: NormalizedActionEvent<EventName>,
     target: Exclude<TargetDecision, { kind: "skip" }>,
     originEvent: Event,
     payload: Dict
   ) {
-    const routedEvent = createActionEventEnvelope(sourceEvent, String(eventName))
+    const routedEvent = createActionEventEnvelope(sourceEvent, eventName)
     if (target.kind === "target") {
-      ;(routedEvent as any).target = target.target
+      routedEvent.target = target.target
     }
 
     const result = runtime.registration.callback({
       originEvent,
-      e: routedEvent as any,
+      e: routedEvent,
       store: this.context.store,
       stateStore: this.context.stateStore,
       composeStore: runtime.composeStore,

@@ -103,13 +103,20 @@ npm install react-stay-canvas
 ## 入门示例
 
 ```typescript
-import { ListenerProps, Point, Rectangle, StayCanvas } from "react-stay-canvas"
+import { ActionEvent, Coordinate, ListenerProps, Point, Rectangle, StayCanvas } from "react-stay-canvas"
+
+function hasPointerPosition(
+  e: ActionEvent
+): e is ActionEvent & { x: number; y: number; point: Coordinate } {
+  return e.x !== undefined && e.y !== undefined && e.point !== undefined
+}
 
 export function Demo() {
   const DragListener: ListenerProps = {
     name: "dragListener",
     event: ["dragstart", "drag", "dragend"],
     callback: ({ e, composeStore, tools: { appendChild, updateChild, log } }) => {
+      if (!hasPointerPosition(e)) return
       return {
         dragstart: () => ({
           dragStartPosition: e.point,
@@ -596,9 +603,11 @@ export const HoverListener: ListenerProps = {
   name: "hoverListener",
   event: "mousemove",
   callback: ({ e, tools: { getChildrenBySelector } }) => {
+    const point = e.point
+    if (!point) return
     const labels = getChildrenBySelector(".label")
     labels.forEach((label) => {
-      let rectState = label.shape.contains(e.point) ? "hover" : "default"
+      let rectState = label.shape.contains(point) ? "hover" : "default"
       label.shape.switchState(rectState)
     })
   },
@@ -752,24 +761,32 @@ export interface ActionCallbackProps {
 export interface ActionEvent {
   state: string // 事件触发时的状态
   name: string // 事件名称
-  x: number // 鼠标相对于 canvas 的 x 坐标
-  y: number // 鼠标相对于 canvas 的 y 坐标
-  point: Point // 鼠标相对于 canvas 的坐标
-  target: StayChild // 触发事件的元素
   pressedKeys: Set<string> // 当前按下的键盘键和鼠标键, 鼠标左键为 mouse0 ，鼠标右键为 mouse1, 鼠标滚轮为 mouse2
-  key: string | null // 触发事件的键盘键，当我们触发 mouseup 事件时, pressedKeys 中不会有该键，而 key 中有该键
   isMouseEvent: boolean // 是否为鼠标事件
-  deltaX: number // 鼠标滚轮滑动时的 x 轴偏移
-  deltaY: number // 鼠标滚轮滑动时的 y 轴偏移
-  deltaZ: number // 鼠标滚轮滑动时的 z 轴偏移
+  x?: number // 鼠标事件才有的 Canvas 相对坐标
+  y?: number
+  point?: Coordinate
+  target?: StayChild // 命中 Child 的路由才有 target
+  key?: string // 键盘事件或显式手动 action 才有 key
+  deltaX?: number // 滚轮事件或显式手动 action 才有滚轮偏移
+  deltaY?: number
+  deltaZ?: number
 }
 
 // 路由保证：
+// - originEvent 始终是原生 Event，e 始终是普通 ActionEvent，二者不会混用。
 // - 每次 listener 调用都会获得独立的 ActionEvent 外壳。
 // - 一个 listener 对 point、pressedKeys 或 target 的修改不会影响其他 listener。
 // - withTargetConditionCallback 通过的 Child 就是最终传给 callback 的 e.target。
 // - drag/move 的继续与结束阶段始终使用开始阶段捕获的 target。
 // - 开始时没有 target 的手势不会在中途重新获取。
+
+// 手动 action 可以使用预定义事件名但不携带 DOM 输入数据，读取可选字段前应先缩小类型。
+function hasPointerPosition(
+  e: ActionEvent
+): e is ActionEvent & { x: number; y: number; point: Coordinate } {
+  return e.x !== undefined && e.y !== undefined && e.point !== undefined
+}
 
 //example 1
 // 在该例中, callback 函数没有返回任何值, 该 listener 实现了鼠标移动时，根据鼠标是否在矩形内切换矩形的状态
@@ -777,6 +794,7 @@ export const HoverListener: ListenerProps = {
   name: "hoverListener",
   event: "mousemove",
   callback: ({ e, tools: { getChildrenBySelector } }) => {
+    if (!hasPointerPosition(e)) return
     const labels = getChildrenBySelector(".label")
     labels.forEach((label) => {
       let rectState = label.shape.contains(e.point) ? "hover" : "default"
@@ -796,6 +814,7 @@ const DragListener: ListenerProps = {
   name: "dragListener",
   event: ["dragstart", "drag", "dragend"],
   callback: ({ e, composeStore, tools: { appendChild, updateChild, log } }) => {
+    if (!hasPointerPosition(e)) return
     return {
       dragstart: () => ({
         dragStartPosition: new Point(e.x, e.y),
@@ -855,7 +874,11 @@ export interface StayTools {
   log: () => void
   redo: () => void
   undo: () => void
-  triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
+  triggerAction: <EventName extends string>(
+    originEvent: Event,
+    triggerEvents: ManualTriggerEvents<EventName>,
+    payload: Dict
+  ) => void
   deleteListener: (name: string) => void
 }
 ```
@@ -1081,6 +1104,7 @@ export const MoveListener: ListenerProps = {
   event: ["startmove", "move"],
   state: ALLSTATE,
   callback: ({ e, composeStore, tools: { moveStart, move } }) => {
+    if (!hasPointerPosition(e)) return
     const eventMap = {
       startmove: () => {
         moveStart()
@@ -1113,6 +1137,7 @@ export const ZoomListener: ListenerProps = {
   event: ["zoomin", "zoomout"],
   state: ALLSTATE,
   callback: ({ e, tools: { zoom } }) => {
+    if (!hasPointerPosition(e) || e.deltaY === undefined) return
     zoom(e.deltaY, new Point(e.x, e.y))
   },
 }
@@ -1149,6 +1174,7 @@ export function Demo() {
 -    callback: ({ e, composeStore, tools: { appendChild, updateChild } }) => {
 +    event: ["dragstart", "drag", "dragend"],
 +    callback: ({ e, composeStore, tools: { appendChild, updateChild, log } }) => {
+      if (!hasPointerPosition(e)) return
       return {
         dragstart: () => ({
           dragStartPosition: e.point,
@@ -1234,10 +1260,35 @@ export function Demo() {
 
 ##### triggerAction
 
-triggerAction 函数用来手动触发事件，其效果与调用 trigger 一致，但是需要手动构造 Event 对象， 同时需要传入 triggerEvents 对象
+`triggerAction` 用于手动触发 action。原生事件只通过第一个参数传给 callback 的
+`originEvent`；`triggerEvents.info` 必须是普通 action 数据，不能传入原生 Event。
+`state` 默认使用 Canvas 当前状态，`pressedKeys` 默认为空集合，`isMouseEvent` 默认为
+`false`。map 的 key 是最终的 action 名称。
 
 ```typescript
-type triggerEventsProps = { [key: string]: ActionEvent },
+type ManualActionEvent = {
+  state?: string
+  pressedKeys?: ReadonlySet<string>
+  isMouseEvent?: boolean
+  x?: number
+  y?: number
+  point?: Coordinate
+  key?: string
+  deltaX?: number
+  deltaY?: number
+  deltaZ?: number
+}
+
+type ManualTriggerEvents<EventName extends string> = Partial<
+  Record<EventName, { info: ManualActionEvent }>
+>
+
+const originEvent = new Event("save")
+tools.triggerAction(
+  originEvent,
+  { save: { info: { pressedKeys: new Set(["Meta"]) } } },
+  { documentId: "doc-1" }
+)
 ```
 
 ##### deleteListener
@@ -1344,6 +1395,7 @@ const DragEvent: EventProps = {
   name: "drag", // 事件名称
   trigger: MOUSE_EVENTS.MOUSE_MOVE, // 触发条件，鼠标移动
   conditionCallback: ({ e, store }) => {
+    if (!e.point) return false
     const dragStartPosition: Point = store.get("dragStartPosition")
     return (
       e.pressedKeys.has("mouse0") && // 检查鼠标左键是否按下
@@ -1364,6 +1416,7 @@ export const DragStartEvent: EventProps = {
     return e.pressedKeys.has("mouse0") // 鼠标左键按下
   },
   successCallback: ({ e, store }) => {
+    if (!e.point) return
     store.set("dragStartPosition", e.point) // 存储开始拖拽时的鼠标位置
     return DragEvent // 返回进行中的拖拽事件，以便其可以被注册
   },

@@ -113,6 +113,74 @@ describe("EventRuntime contracts", () => {
     expect(observedState).toBe("next")
   })
 
+  it("keeps the registered action name after success mutates its seed", () => {
+    const { stage, top } = createStage()
+    let observedName = ""
+    let predicateName = ""
+
+    stage.tools.appendChild({
+      className: "stable-name-node",
+      shape: new Rectangle({ x: 0, y: 0, width: 30, height: 30 }),
+    })
+
+    stage.registerEvent({
+      name: "stable-name",
+      trigger: "mousedown",
+      withTargetConditionCallback: ({ e }) => {
+        predicateName = e.name
+        return true
+      },
+      successCallback: ({ e }) => {
+        e.name = "mutated-name"
+      },
+    })
+    stage.addEventListener({
+      name: "stable-name-listener",
+      event: "stable-name",
+      selector: ".stable-name-node",
+      callback: ({ e }) => {
+        observedName = e.name
+      },
+    })
+
+    top.dispatchEvent(md(10, 10))
+
+    expect(predicateName).toBe("stable-name")
+    expect(observedName).toBe("stable-name")
+  })
+
+  it("lets routing own the listener target", () => {
+    const { stage } = createStage()
+    const injectedTarget = stage.tools.appendChild({
+      className: "injected-target",
+      shape: new Rectangle({ x: 0, y: 0, width: 30, height: 30 }),
+    })
+    let observedTarget: unknown = "not-called"
+
+    stage.registerEvent({
+      name: "targetless-key-action",
+      trigger: "keydown",
+      successCallback: ({ e }) => {
+        e.target = injectedTarget
+      },
+    })
+    stage.addEventListener({
+      name: "targetless-key-listener",
+      event: "targetless-key-action",
+      callback: ({ e }) => {
+        observedTarget = e.target
+      },
+    })
+
+    stage.eventRuntime.handleInput({
+      originEvent: new KeyboardEvent("keydown", { key: "k" }),
+      trigger: "keydown",
+      pressedKeys: new Set(["k"]),
+    })
+
+    expect(observedTarget).toBeUndefined()
+  })
+
   it("keeps an immediate deletion when success throws synchronously", () => {
     const { stage } = createStage()
     let victimCalls = 0

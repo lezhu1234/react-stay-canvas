@@ -3,6 +3,7 @@ import { ListenerProps, Rectangle, StayCanvas, StayText, StayTools } from "react
 
 import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
+import { hasPointerPosition } from "../actionEventGuards"
 
 const boxes = [
   { id: "box-a", className: "box", x: 42, y: 58, color: colors.blue },
@@ -38,6 +39,7 @@ export default function SelectorsExample() {
     event: "click",
     selector: ".stay-canvas",
     callback: ({ e, tools }) => {
+      if (!hasPointerPosition(e)) return
       const children = tools.getContainPointChildren({
         point: e.point,
         selector: ".box|.label",

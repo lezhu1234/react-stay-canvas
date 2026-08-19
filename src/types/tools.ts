@@ -15,6 +15,7 @@ import type {
 } from "./children"
 import type { Dict } from "./common"
 import type { Area, PointType } from "./geometry"
+import type { ManualTriggerEvents } from "./manualActions"
 
 export interface StayDrawProps {
   now?: number
@@ -60,7 +61,11 @@ export interface BasicTools {
   importChildren: (props: ExportChildrenProps, targetArea?: Area) => void
   regionToTargetCanvas: (props: RegionToTargetCanvasProps) => Promise<HTMLCanvasElement>
   refresh: () => void
-  triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
+  triggerAction: <EventName extends string>(
+    originEvent: Event,
+    triggerEvents: ManualTriggerEvents<EventName>,
+    payload: Dict
+  ) => void
   deleteListener: (name: string) => void
 }
 

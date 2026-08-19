@@ -10,6 +10,7 @@ import {
 
 import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
+import { hasPointerPosition, hasPointerTarget } from "../actionEventGuards"
 
 type Mode = "select" | "connect"
 type Child = ReturnType<StayTools["appendChild"]>
@@ -152,18 +153,21 @@ export default function DiagramExample() {
       selector: ".node",
       sortBy: frontmostNodeFirst,
       event: ["dragstart", "drag", "dragend"],
-      callback: ({ e, composeStore }) => ({
-        dragstart: () => {
-          e.target.moveInit()
-          setNodeFeedback(e.target.id, "selected")
-          return { start: e.point, child: e.target }
-        },
-        drag: () => {
-          composeStore.child.move(e.x - composeStore.start.x, e.y - composeStore.start.y)
-          updateEdges()
-        },
-        dragend: () => push(text(`moved ${nodeLabel(composeStore.child.id)}`, `已移动 ${nodeLabel(composeStore.child.id)}`)),
-      }),
+      callback: ({ e, composeStore }) => {
+        if (!hasPointerTarget(e)) return
+        return {
+          dragstart: () => {
+            e.target.moveInit()
+            setNodeFeedback(e.target.id, "selected")
+            return { start: e.point, child: e.target }
+          },
+          drag: () => {
+            composeStore.child.move(e.x - composeStore.start.x, e.y - composeStore.start.y)
+            updateEdges()
+          },
+          dragend: () => push(text(`moved ${nodeLabel(composeStore.child.id)}`, `已移动 ${nodeLabel(composeStore.child.id)}`)),
+        }
+      },
     },
     {
       name: "select-node",
@@ -171,6 +175,7 @@ export default function DiagramExample() {
       selector: ".stay-canvas",
       event: "click",
       callback: ({ e, tools }) => {
+        if (!hasPointerPosition(e)) return
         const target = tools.getContainPointChildren({ point: e.point, selector: ".node", sortBy: frontmostNodeFirst, withRoot: false })[0]
         if (!target) {
           clearSelection()
@@ -187,6 +192,7 @@ export default function DiagramExample() {
       selector: ".stay-canvas",
       event: "click",
       callback: ({ e, stateStore, tools }) => {
+        if (!hasPointerPosition(e)) return
         const target = tools.getContainPointChildren({ point: e.point, selector: ".node", sortBy: frontmostNodeFirst, withRoot: false })[0]
         const from = stateStore.get("from") as string | undefined
         if (!target) {

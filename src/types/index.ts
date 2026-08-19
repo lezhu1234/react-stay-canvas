@@ -13,5 +13,6 @@ export type {
 export * from "./component"
 export * from "./events"
 export * from "./geometry"
+export * from "./manualActions"
 export * from "./shapes"
 export * from "./tools"

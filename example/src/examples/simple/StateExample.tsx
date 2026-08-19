@@ -3,6 +3,7 @@ import { Circle, ListenerProps, Rectangle, StayCanvas, StayText, StayTools } fro
 
 import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
+import { hasPointerPosition } from "../actionEventGuards"
 
 type Mode = "draw" | "select"
 
@@ -37,6 +38,7 @@ export default function StateExample() {
       state: "draw",
       event: "click",
       callback: ({ e, tools }) => {
+        if (!hasPointerPosition(e)) return
         const index = ++sequenceRef.current
         const name = text(`Item ${index}`, `圆形 ${index}`)
         tools.appendChild({
@@ -69,6 +71,7 @@ export default function StateExample() {
       selector: ".stay-canvas",
       event: "click",
       callback: ({ e, tools }) => {
+        if (!hasPointerPosition(e)) return
         const target = tools.getContainPointChildren<Circle>({
           point: e.point,
           selector: ".item",

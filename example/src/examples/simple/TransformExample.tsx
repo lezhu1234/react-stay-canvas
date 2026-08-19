@@ -3,6 +3,7 @@ import { Circle, ListenerProps, Rectangle, StayCanvas, StayText, StayTools } fro
 
 import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
+import { hasPointerPosition } from "../actionEventGuards"
 
 export default function TransformExample() {
   const { text } = useI18n()
@@ -23,6 +24,7 @@ export default function TransformExample() {
       name: "wheel-zoom",
       event: ["zoomin", "zoomout"],
       callback: ({ e, tools, originEvent }) => {
+        if (!hasPointerPosition(e) || e.deltaY === undefined) return
         originEvent.preventDefault()
         markZoomOrigin(e.x, e.y)
         void tools.zoom(e.deltaY, e.point)
@@ -32,18 +34,21 @@ export default function TransformExample() {
     {
       name: "control-pan",
       event: ["startmove", "move", "moveend"],
-      callback: ({ e, composeStore, tools }) => ({
-        startmove: () => {
-          tools.moveStart()
-          setAction(text("Control-drag started", "Control 拖动开始"))
-          return { start: e.point }
-        },
-        move: () => {
-          void tools.move(e.x - composeStore.start.x, e.y - composeStore.start.y)
-          setAction(text("Control-drag panning", "Control 拖动平移中"))
-        },
-        moveend: () => setAction(text("Control-drag ended", "Control 拖动结束")),
-      }),
+      callback: ({ e, composeStore, tools }) => {
+        if (!hasPointerPosition(e)) return
+        return {
+          startmove: () => {
+            tools.moveStart()
+            setAction(text("Control-drag started", "Control 拖动开始"))
+            return { start: e.point }
+          },
+          move: () => {
+            void tools.move(e.x - composeStore.start.x, e.y - composeStore.start.y)
+            setAction(text("Control-drag panning", "Control 拖动平移中"))
+          },
+          moveend: () => setAction(text("Control-drag ended", "Control 拖动结束")),
+        }
+      },
     },
   ], [text])
 

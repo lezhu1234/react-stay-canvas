@@ -17,6 +17,7 @@ src/types/
 ├── component.ts
 ├── events.ts
 ├── geometry.ts
+├── manualActions.ts
 ├── shapes.ts
 ├── tools.ts
 └── index.ts
@@ -57,3 +58,9 @@ into its module graph.
   Infrastructure and vendor modules must not import the utility barrel.
 
 The package-root utility names remain stable even when their internal owner changes.
+
+## Documentation boundary
+
+`README.md` is a concise bilingual landing page. `docs/README.zh.md` and
+`docs/README.en.md` are the canonical API documents for their respective languages; API text and
+examples are not duplicated in the root landing page.

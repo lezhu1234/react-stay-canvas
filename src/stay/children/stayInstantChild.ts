@@ -1,12 +1,9 @@
 import { InstantShape } from "../../shapes/instantShape"
-import {
-  Area,
-  Coordinate,
-  PointType,
-  Rect,
+import type {
   StayInstantChildProps,
   StayInstantChildUpdateProps,
-} from "../../userTypes"
+} from "../../types/children"
+import type { Area, Coordinate, PointType, Rect } from "../../types/geometry"
 import { uuid4 } from "../../utils/identifiers"
 import { parseLayer } from "../../utils/stage"
 import { SetShapeChildCurrentTime, StepProps } from "../types"

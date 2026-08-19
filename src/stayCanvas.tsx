@@ -12,8 +12,9 @@ import React, {
 
 import * as PredefinedEventList from "./predefinedEvents"
 import Stay, { createStay } from "./stay/stay"
-import { ContextLayerSetFunction, StayCanvasProps } from "./types"
-import { PredefinedEventName, StayCanvasRefType } from "./userTypes"
+import type { ContextLayerSetFunction } from "./types/canvas"
+import type { StayCanvasProps, StayCanvasRefType } from "./types/component"
+import type { PredefinedEventName } from "./types/events"
 
 const StayCanvas = forwardRef(
   <EventName extends string>(

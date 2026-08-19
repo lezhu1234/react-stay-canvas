@@ -1,5 +1,7 @@
 import { InstantShape } from "../shapes/instantShape"
-import { ExtraTransform, ProgressBound, ShapeDrawProps } from "../userTypes"
+import type { ProgressBound } from "../types/animation"
+import type { ExtraTransform } from "../types/geometry"
+import type { ShapeDrawProps } from "../types/shapes"
 
 export interface StackItem {
   state: string
@@ -22,8 +24,6 @@ export interface StepRecorderProps {
   relatedChildren: StepChildProps[]
   steps: StepProps[]
 }
-
-export type valueof<T> = T extends Record<string, infer V> ? V : never
 
 export interface DrawChildProps {
   props: ShapeDrawProps

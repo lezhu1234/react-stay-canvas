@@ -1,21 +1,19 @@
 import { StayInstantChild } from "../stay/children/stayInstantChild"
 import { shapeUpdateEventEmitter } from "./shapeUpdateEventEmitter"
-import { valueof } from "../stay/types"
-import { DrawCanvasContext } from "../types"
+import type { valueof } from "../types/common"
+import type { EasingFunction } from "../types/animation"
+import type { DrawCanvasContext } from "../types/canvas"
+import type { Dict } from "../types/common"
+import type { Coordinate, PointType, Rect } from "../types/geometry"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import {
-  Dict,
-  EasingFunction,
+import type {
   ShapeDrawProps,
   ShapeProps,
-  PointType,
   Font,
-  Rect,
-  Coordinate,
   CanvasStrokeProps,
   CanvasFillProps,
   CanvasGlobalProps,
-} from "../userTypes"
+} from "../types/shapes"
 import { isRGB, isRGBA } from "../utils/color"
 import { applyEasing } from "../utils/easing"
 import { hasIntersection } from "../utils/geometry"

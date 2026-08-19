@@ -1,11 +1,11 @@
 import { AnimatedShape } from "../../shapes/animatedShape"
-import {
+import type {
   FrameBoundInfo,
   ProgressBound,
   ShapeBound,
-  StayAnimatedChildProps,
   StayShapeTransitionConfig,
-} from "../../userTypes"
+} from "../../types/animation"
+import type { StayAnimatedChildProps } from "../../types/children"
 import { uuid4 } from "../../utils/identifiers"
 import { parseLayer } from "../../utils/stage"
 import { StayInstantChild } from "./stayInstantChild"

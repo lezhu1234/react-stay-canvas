@@ -1,4 +1,4 @@
-import type { Size } from "../userTypes"
+import type { Size } from "../types/geometry"
 
 class CanvasResourceCache {
   private readonly fontSizes = new Map<string, Size>()

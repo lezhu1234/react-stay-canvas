@@ -1,11 +1,6 @@
-import { EventProps } from "../../../types"
+import type { ChildSortFunction, SelectorFunc } from "../../../types/children"
+import type { ActionEvent, EventProps, TriggerEvents } from "../../../types/events"
 import { MOUSE_EVENTS } from "../../../userConstants"
-import {
-  ActionEvent,
-  ChildSortFunction,
-  SelectorFunc,
-  TriggerEvents,
-} from "../../../userTypes"
 import { createActionEventEnvelope } from "./actionEventEnvelope"
 import { StayInstantChild } from "../../children/stayInstantChild"
 import type { EventDefinitionLookup } from "../contracts"

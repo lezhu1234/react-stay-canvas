@@ -1,4 +1,4 @@
-import type { NumericString, Positive } from "../types"
+import type { NumericString, Positive } from "../types/common"
 
 export function validateNumericString(value: string | number): NumericString {
   if (/^[+-]?\d+$/.test(value.toString())) {

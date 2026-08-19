@@ -2,8 +2,9 @@ import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { getCornersByCenterLine } from "../utils/geometry"
 import { Line } from "./line"
 import { Point } from "./point"
-import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
-import { DrawCanvasContext } from "../types"
+import type { DrawCanvasContext } from "../types/canvas"
+import type { Coordinate, Rect } from "../types/geometry"
+import type { ShapeDrawProps, ShapeProps } from "../types/shapes"
 import { InstantShape } from "./instantShape"
 
 export interface PathAttr extends ShapeProps {

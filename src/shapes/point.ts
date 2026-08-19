@@ -1,5 +1,6 @@
 import { Line } from "./line"
-import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
+import type { Coordinate, Rect } from "../types/geometry"
+import type { ShapeDrawProps, ShapeProps } from "../types/shapes"
 import { InstantShape } from "./instantShape"
 export interface PointProps extends ShapeProps {
   x: number

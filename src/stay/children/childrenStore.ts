@@ -1,4 +1,4 @@
-import { SelectorFunc } from "../../userTypes"
+import type { SelectorFunc } from "../../types/children"
 import { infixExpressionParser } from "../../utils/selectors"
 import { StayInstantChild } from "./stayInstantChild"
 

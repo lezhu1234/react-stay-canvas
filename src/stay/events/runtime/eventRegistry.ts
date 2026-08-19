@@ -1,4 +1,4 @@
-import { EventProps, StayEventProps } from "../../../types"
+import type { EventProps, StayEventProps } from "../../../types/events"
 
 export class EventRegistry<EventName extends string> {
   private readonly definitions = new Map<EventName, StayEventProps<EventName>>()

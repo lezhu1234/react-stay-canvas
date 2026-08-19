@@ -2,23 +2,21 @@ import { AnimatedShape } from "../shapes/animatedShape"
 import { InstantShape } from "../shapes/instantShape"
 import { Rectangle } from "../shapes/rectangle"
 import { ALLSTATE, SUPPORT_OPRATOR } from "../userConstants"
-import {
-  Area,
+import type { ProgressProps } from "../types/animation"
+import type {
+  AppendChildProps,
   ChildSortFunction,
-  Dict,
+  CreateChildProps,
   ExportChildrenProps,
   getContainPointChildrenProps,
   ImportChildrenProps,
-  PointType,
-  ProgressProps,
   RegionToTargetCanvasProps,
   SelectorFunc,
-  StayTools,
-  AppendChildProps,
-  CreateChildProps,
-  Cursor,
-  TriggerEvents,
-} from "../userTypes"
+} from "../types/children"
+import type { Dict } from "../types/common"
+import type { TriggerEvents } from "../types/events"
+import type { Area, PointType } from "../types/geometry"
+import type { Cursor, StayTools } from "../types/tools"
 import { assert } from "../utils/assertions"
 import { numberAlmostEqual } from "../utils/geometry"
 import { infixExpressionParser } from "../utils/selectors"

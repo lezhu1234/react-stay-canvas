@@ -1,18 +1,17 @@
-import { DrawCanvasContext } from "../types"
+import type { EasingFunction } from "../types/animation"
+import type { DrawCanvasContext } from "../types/canvas"
+import type { Coordinate, Rect } from "../types/geometry"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import {
+import type {
   Border,
   CanvasFillProps,
   CanvasStrokeProps,
-  Coordinate,
   DiagonalDirection,
-  EasingFunction,
   Font,
   FourrDirection,
-  Rect,
   ShapeDrawProps,
   TextAttr,
-} from "../userTypes"
+} from "../types/shapes"
 import {
   borderSame,
   fillSame,

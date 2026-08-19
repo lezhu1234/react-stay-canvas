@@ -1,14 +1,13 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
 import { Point } from "./point"
 
-import {
+import type {
   CanvasFillProps,
   CanvasStrokeProps,
-  Coordinate,
-  Rect,
   ShapeDrawProps,
   ShapeProps,
-} from "../userTypes"
+} from "../types/shapes"
+import type { Coordinate, Rect } from "../types/geometry"
 import { BlackColor, InstantShape, ZeroColor } from "./instantShape"
 import { rgbaToString } from "../vendor/w3color"
 

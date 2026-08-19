@@ -1,4 +1,4 @@
-import type { EasingFunction, EasingFunctionMap } from "../userTypes"
+import type { EasingFunction, EasingFunctionMap } from "../types/animation"
 
 export function easeInSine(x: number): number {
   return 1 - Math.cos((x * Math.PI) / 2)

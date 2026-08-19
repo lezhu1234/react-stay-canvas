@@ -3,7 +3,10 @@ import { Root } from "../shapes/root"
 import { InstantShape } from "../shapes/instantShape"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
-import { ContextLayerSetFunction, EventProps } from "../types"
+import type { ContextLayerSetFunction } from "../types/canvas"
+import type { SelectorFunc } from "../types/children"
+import type { EventProps, ListenerNamePayloadPair, ListenerProps } from "../types/events"
+import type { DrawReturn, StayDrawProps, StayTools } from "../types/tools"
 import {
   DEFAULTSTATE,
   FRAME_EVENT_NAME,
@@ -11,14 +14,6 @@ import {
   ROOTNAME,
   SUPPORT_OPRATOR,
 } from "../userConstants"
-import {
-  DrawReturn,
-  ListenerNamePayloadPair,
-  ListenerProps,
-  SelectorFunc,
-  StayDrawProps,
-  StayTools,
-} from "../userTypes"
 import { uuid4 } from "../utils/identifiers"
 
 import { ChildrenStore } from "./children/childrenStore"

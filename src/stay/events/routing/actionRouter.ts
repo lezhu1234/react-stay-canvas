@@ -1,13 +1,13 @@
 import Canvas from "../../../canvas"
 import { DEFAULTSTATE, ROOTNAME } from "../../../userConstants"
-import {
-  ChildSortFunction,
-  Dict,
+import type { ChildSortFunction } from "../../../types/children"
+import type { Dict } from "../../../types/common"
+import type {
   ListenerNamePayloadPair,
   ListenerProps,
-  StayTools,
   TriggerEvents,
-} from "../../../userTypes"
+} from "../../../types/events"
+import type { StayTools } from "../../../types/tools"
 import { createActionEventEnvelope } from "./actionEventEnvelope"
 import {
   ActionTargetResolver,

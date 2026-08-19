@@ -1,5 +1,5 @@
 import type { Line } from "../shapes/line"
-import type { Coordinate, Rect } from "../userTypes"
+import type { Coordinate, Rect } from "../types/geometry"
 
 export function distance(point1: Coordinate, point2: Coordinate): number {
   const dx = point1.x - point2.x

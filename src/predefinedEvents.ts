@@ -1,13 +1,13 @@
 import { Point } from "./shapes/point"
-import { EventProps } from "./types"
+import type { EventProps } from "./types/events"
 import { FRAME_EVENT_NAME, KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
-import {
-  Coordinate,
+import type {
   PredefinedEventName,
   PredefinedKeyEventName,
   PredefinedMouseEventName,
   PredefinedWheelEventName,
-} from "./userTypes"
+} from "./types/events"
+import type { Coordinate } from "./types/geometry"
 import { distance } from "./utils/geometry"
 
 export const mouseDownEvent: EventProps<PredefinedMouseEventName> = {

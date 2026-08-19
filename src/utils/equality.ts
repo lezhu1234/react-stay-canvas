@@ -1,4 +1,4 @@
-import type { Border, CanvasFillProps, CanvasStrokeProps } from "../userTypes"
+import type { Border, CanvasFillProps, CanvasStrokeProps } from "../types/shapes"
 import { colorSame } from "./color"
 
 export function borderSame(first?: Border[], second?: Border[]) {

@@ -1,5 +1,6 @@
 import { canvasResourceCache } from "../runtime/canvasResourceCache"
-import type { Font, Size } from "../userTypes"
+import type { Size } from "../types/geometry"
+import type { Font } from "../types/shapes"
 
 export function getFontStr(font: Font) {
   const { size, fontFamily, fontWeight, italic } = font

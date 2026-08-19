@@ -1,5 +1,5 @@
-import { ContextLayerSetFunction, DrawCanvasContext } from "./types"
-import { Rect } from "./userTypes"
+import type { ContextLayerSetFunction, DrawCanvasContext } from "./types/canvas"
+import type { Rect } from "./types/geometry"
 
 function dprScale(
   canvas: HTMLCanvasElement,

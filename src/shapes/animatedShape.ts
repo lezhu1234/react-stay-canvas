@@ -1,4 +1,5 @@
-import { AnimatedShapeProps, Border, EasingFunction, StayShapeTransitionConfig } from "../userTypes"
+import type { EasingFunction, StayShapeTransitionConfig } from "../types/animation"
+import type { AnimatedShapeProps, Border } from "../types/shapes"
 import { applyEasing } from "../utils/easing"
 import { fillSame, isBasicType, strokeSame } from "../utils/equality"
 import { RGBA } from "../vendor/w3color"

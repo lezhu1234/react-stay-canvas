@@ -1,11 +1,12 @@
 import Canvas from "../../../canvas"
-import { EventProps, StayEventProps } from "../../../types"
-import { MOUSE_EVENTS } from "../../../userConstants"
-import {
+import type {
   ActionEvent,
+  EventProps,
   PredefinedWheelEventName,
+  StayEventProps,
   TriggerEvents,
-} from "../../../userTypes"
+} from "../../../types/events"
+import { MOUSE_EVENTS } from "../../../userConstants"
 import type {
   ActionRoutePort,
   EventDefinitionLookup,

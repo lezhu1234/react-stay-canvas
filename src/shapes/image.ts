@@ -1,8 +1,9 @@
 import { Rectangle } from "./rectangle"
 
-import { AnimatedShapeProps, EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
+import type { EasingFunction } from "../types/animation"
+import type { DrawCanvasContext } from "../types/canvas"
+import type { AnimatedShapeProps, ShapeDrawProps, ShapeProps } from "../types/shapes"
 import { isRGBA } from "../utils/color"
-import { DrawCanvasContext } from "../types"
 import { RGBA } from "../vendor/w3color"
 
 export interface ImageProps extends AnimatedShapeProps {

@@ -1,4 +1,4 @@
-import type { TriggerEvents } from "../../userTypes"
+import type { TriggerEvents } from "../../types/events"
 
 export type EventInput = {
   originEvent: Event

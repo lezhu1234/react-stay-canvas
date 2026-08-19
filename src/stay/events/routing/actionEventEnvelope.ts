@@ -1,4 +1,4 @@
-import { ActionEvent } from "../../../userTypes"
+import type { ActionEvent } from "../../../types/events"
 
 function wrapNativeEvent(source: Event, eventName: string): Event & { name: string } {
   const overrides = new Map<PropertyKey, any>([["name", eventName]])

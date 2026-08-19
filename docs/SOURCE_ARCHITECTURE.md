@@ -6,6 +6,27 @@
 Internal modules import the concrete file that owns a symbol; they do not use package-level
 barrels to reach another internal module.
 
+## Type modules
+
+```text
+src/types/
+├── animation.ts
+├── canvas.ts
+├── children.ts
+├── common.ts
+├── component.ts
+├── events.ts
+├── geometry.ts
+├── shapes.ts
+├── tools.ts
+└── index.ts
+```
+
+Each public type has one domain owner. `types/index.ts` is a package-boundary facade: it preserves
+the package-root type exports, while production modules import types from the owning leaf file.
+Internal paths under `src/types/` are implementation details and are not supported consumer entry
+points.
+
 ## Utility modules
 
 ```text

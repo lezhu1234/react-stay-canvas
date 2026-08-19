@@ -19,7 +19,9 @@ import {
   Cursor,
   TriggerEvents,
 } from "../userTypes"
-import { assert, infixExpressionParser, numberAlmostEqual } from "../utils"
+import { assert } from "../utils/assertions"
+import { numberAlmostEqual } from "../utils/geometry"
+import { infixExpressionParser } from "../utils/selectors"
 import { StayAnimatedChild } from "./children/stayAnimatedChild"
 import { StayInstantChild } from "./children/stayInstantChild"
 import Stay from "./stay"

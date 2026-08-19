@@ -1,5 +1,5 @@
 import { SelectorFunc } from "../../userTypes"
-import { infixExpressionParser } from "../../utils"
+import { infixExpressionParser } from "../../utils/selectors"
 import { StayInstantChild } from "./stayInstantChild"
 
 // Owns the child map and all lookup / selector queries. Extracted from Stay so

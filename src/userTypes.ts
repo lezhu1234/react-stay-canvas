@@ -14,7 +14,7 @@ import {
   UserCallback,
 } from "./types"
 import { DRAW_ACTIONS, SHAPE_DRAW_TYPES, SORT_CHILDREN_METHODS } from "./userConstants"
-import { RGB, RGBA } from "./w3color"
+import { RGB, RGBA } from "./vendor/w3color"
 
 type SortChildrenMethodsKeys = keyof typeof SORT_CHILDREN_METHODS
 export type StayChildren = Record<string, StayInstantChild>

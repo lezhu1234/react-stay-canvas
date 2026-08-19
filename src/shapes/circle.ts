@@ -10,7 +10,7 @@ import {
   ShapeProps,
 } from "../userTypes"
 import { BlackColor, InstantShape, ZeroColor } from "./instantShape"
-import { rgbaToString } from "../w3color"
+import { rgbaToString } from "../vendor/w3color"
 
 export interface CircleAttr extends ShapeProps {
   x: number

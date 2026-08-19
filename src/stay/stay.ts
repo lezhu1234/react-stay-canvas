@@ -1,5 +1,5 @@
 import Canvas from "../canvas"
-import { Root } from "../shapes"
+import { Root } from "../shapes/root"
 import { InstantShape } from "../shapes/instantShape"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
@@ -19,7 +19,7 @@ import {
   StayDrawProps,
   StayTools,
 } from "../userTypes"
-import { uuid4 } from "../utils"
+import { uuid4 } from "../utils/identifiers"
 
 import { ChildrenStore } from "./children/childrenStore"
 import { StayInstantChild } from "./children/stayInstantChild"

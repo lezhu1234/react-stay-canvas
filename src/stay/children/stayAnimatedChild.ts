@@ -6,7 +6,8 @@ import {
   StayAnimatedChildProps,
   StayShapeTransitionConfig,
 } from "../../userTypes"
-import { parseLayer, uuid4 } from "../../utils"
+import { uuid4 } from "../../utils/identifiers"
+import { parseLayer } from "../../utils/stage"
 import { StayInstantChild } from "./stayInstantChild"
 import { Canvas } from "../../canvas"
 import { SetShapeChildCurrentTime } from "../types"

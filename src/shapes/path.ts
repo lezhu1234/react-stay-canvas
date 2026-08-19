@@ -1,5 +1,5 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { getCornersByCenterLine } from "../utils"
+import { getCornersByCenterLine } from "../utils/geometry"
 import { Line } from "./line"
 import { Point } from "./point"
 import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"

@@ -7,7 +7,8 @@ import {
   StayInstantChildProps,
   StayInstantChildUpdateProps,
 } from "../../userTypes"
-import { parseLayer, uuid4 } from "../../utils"
+import { uuid4 } from "../../utils/identifiers"
+import { parseLayer } from "../../utils/stage"
 import { SetShapeChildCurrentTime, StepProps } from "../types"
 
 import { Canvas } from "../../canvas"

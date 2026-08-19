@@ -7,8 +7,8 @@ import {
   ShapeDrawProps,
   ShapeProps,
 } from "../userTypes"
-import { isRGBA } from "../utils"
-import { RGBA } from "../w3color"
+import { isRGBA } from "../utils/color"
+import { RGBA } from "../vendor/w3color"
 import { AnimatedShape } from "./animatedShape"
 import { InstantShape, ZeroColor } from "./instantShape"
 import { Line } from "./line"

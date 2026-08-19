@@ -127,7 +127,7 @@ const StayCanvas = forwardRef(
             if (stay.current) {
               stay.current.tools.triggerAction(
                 customEvent,
-                { [name as string]: { info: customEvent, event: customEvent } },
+                { [name as string]: { info: {} } },
                 payload || {}
               )
             }

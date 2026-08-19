@@ -5,6 +5,7 @@ import type { FRAME_EVENT_NAME, KEYBOARRD_EVENTS, MOUSE_EVENTS } from "../userCo
 import type { ChildSortFunction } from "./children"
 import type { Dict, storeType, valueof } from "./common"
 import type { Coordinate } from "./geometry"
+import type { ManualTriggerEvents } from "./manualActions"
 import type { StayTools } from "./tools"
 
 export type PredefinedWheelEventName = "wheel" | "zoomout" | "zoomin"
@@ -31,62 +32,49 @@ export type PredefinedKeyEventName = "keydown" | "keyup" | "undo" | "redo"
 
 export type PredefinedEventName = PredefinedMouseEventName | PredefinedKeyEventName
 
-export interface MouseActionEvent<EventName extends PredefinedMouseEventName> {
+export interface ActionEvent<EventName extends string = string> {
   state: string
   pressedKeys: Set<string>
   name: EventName
+  isMouseEvent: boolean
+  // Action names do not imply an input source: a manual action may use a
+  // predefined name without carrying pointer, keyboard, wheel, or target data.
+  target?: StayInstantChild
+  x?: number
+  y?: number
+  point?: Coordinate
+  key?: string
+  deltaX?: number
+  deltaY?: number
+  deltaZ?: number
+}
+
+export interface MouseActionEvent<EventName extends PredefinedMouseEventName>
+  extends ActionEvent<EventName> {
   x: number
   y: number
   point: Coordinate
-  target: StayInstantChild
   isMouseEvent: true
 }
 
-export interface KeyActionEvent<EventName extends PredefinedKeyEventName> {
-  state: string
+export interface KeyActionEvent<EventName extends PredefinedKeyEventName>
+  extends ActionEvent<EventName> {
   key: string
-  pressedKeys: Set<string>
-  name: EventName
   isMouseEvent: false
 }
 
 export interface WheelActionEvent<EventName extends PredefinedWheelEventName>
   extends MouseActionEvent<EventName> {
-  name: EventName
   deltaX: number
   deltaY: number
   deltaZ: number
 }
 
-// Fallback for multi-event and custom listeners. It intentionally exposes all
-// fields that a callback may read instead of collapsing an unknown event to never.
-export interface AnyActionEvent {
-  state: string
-  name: string
-  pressedKeys: Set<string>
-  isMouseEvent: boolean
-  x: number
-  y: number
-  point: Coordinate
-  key: string
-  deltaX: number
-  deltaY: number
-  deltaZ: number
-  target: StayInstantChild
-}
-
-export type ActionEvent<EventName extends string | string[]> =
-  EventName extends PredefinedWheelEventName
-    ? WheelActionEvent<EventName>
-    : EventName extends PredefinedKeyEventName
-    ? KeyActionEvent<EventName>
-    : EventName extends PredefinedMouseEventName
-    ? MouseActionEvent<EventName>
-    : AnyActionEvent
+export interface AnyActionEvent extends ActionEvent<string> {}
 
 export interface ActionCallbackProps<
   T = Dict,
-  EventName extends string | string[] = string,
+  EventName extends string = string,
   CS = Record<string, any>
 > {
   originEvent: Event
@@ -102,13 +90,13 @@ export interface ActionCallbackProps<
 export type CallbackFuncMap<
   T extends ActionCallbackProps<U, EventName>,
   U,
-  EventName extends string | string[],
+  EventName extends string,
   CS = Record<string, any>
 > = {
   [key in T["e"]["name"]]?: () => Partial<CS> | void | undefined
 }
 
-export type UserCallback<T, EventName extends string | string[], CS = Record<string, any>> = (
+export type UserCallback<T, EventName extends string, CS = Record<string, any>> = (
   p: ActionCallbackProps<T, EventName, CS>
 ) =>
   | CallbackFuncMap<ActionCallbackProps<T, EventName>, T, EventName, CS>
@@ -147,7 +135,7 @@ export interface ListenerProps<
   selector?: string
   event: EventName | EventName[]
   sortBy?: ChildSortFunction
-  callback: UserCallback<T["payload"], EventName | EventName[], CS>
+  callback: UserCallback<T["payload"], EventName, CS>
 }
 
 export interface PredefinedEventListenerProps<
@@ -159,7 +147,7 @@ export interface PredefinedEventListenerProps<
   selector?: string
   event: EventName | EventName[]
   sortBy?: ChildSortFunction
-  callback: UserCallback<Dict, EventName | EventName[], CS>
+  callback: UserCallback<Dict, EventName, CS>
 }
 
 export interface FireEvent {
@@ -228,12 +216,8 @@ export type EventProps<EventName extends string> = StayEventRequiredProps<EventN
     }) => boolean
   }
 
-export type TriggerEvents<EventName extends string> = {
-  [key: string]: {
-    info: ActionEvent<EventName>
-    event: EventProps<EventName>
-  }
-}
+/** @deprecated Use ManualTriggerEvents for StayTools.triggerAction. */
+export type TriggerEvents<EventName extends string> = ManualTriggerEvents<EventName>
 
 export type Contra<T> = T extends any ? (arg: T) => void : never
 

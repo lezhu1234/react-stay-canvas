@@ -10,6 +10,7 @@ import {
 
 import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
+import { hasPointerTarget } from "../actionEventGuards"
 
 export default function EventsExample() {
   const { text } = useI18n()
@@ -25,18 +26,21 @@ export default function EventsExample() {
       name: "drag-card",
       event: ["dragstart", "drag", "dragend"],
       selector: ".target",
-      callback: ({ e, composeStore }) => ({
-        dragstart: () => {
-          push(text(`dragstart at ${Math.round(e.x)}, ${Math.round(e.y)}`, `dragstart，坐标 ${Math.round(e.x)}, ${Math.round(e.y)}`))
-          e.target.moveInit()
-          return { target: e.target, start: e.point }
-        },
-        drag: () => {
-          composeStore.target.move(e.x - composeStore.start.x, e.y - composeStore.start.y)
-          push(text(`drag at ${Math.round(e.x)}, ${Math.round(e.y)}`, `drag，坐标 ${Math.round(e.x)}, ${Math.round(e.y)}`))
-        },
-        dragend: () => push(text("dragend", "dragend，拖动结束")),
-      }),
+      callback: ({ e, composeStore }) => {
+        if (!hasPointerTarget(e)) return
+        return {
+          dragstart: () => {
+            push(text(`dragstart at ${Math.round(e.x)}, ${Math.round(e.y)}`, `dragstart，坐标 ${Math.round(e.x)}, ${Math.round(e.y)}`))
+            e.target.moveInit()
+            return { target: e.target, start: e.point }
+          },
+          drag: () => {
+            composeStore.target.move(e.x - composeStore.start.x, e.y - composeStore.start.y)
+            push(text(`drag at ${Math.round(e.x)}, ${Math.round(e.y)}`, `drag，坐标 ${Math.round(e.x)}, ${Math.round(e.y)}`))
+          },
+          dragend: () => push(text("dragend", "dragend，拖动结束")),
+        }
+      },
     },
     {
       name: "event-probe",

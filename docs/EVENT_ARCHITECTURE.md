@@ -20,6 +20,7 @@ src/stay/events/
 ├── input/
 │   ├── domInputAdapter.ts
 │   ├── eventDispatcher.ts
+│   ├── manualActionAdapter.ts
 │   └── pressedInputState.ts
 ├── runtime/
 │   ├── eventRegistry.ts
@@ -41,14 +42,18 @@ src/stay/events/
 - `ActionRouter` 独占 listener registry、listener state gate、selector/target 解析、gesture owner、`composeStore` 和用户 callback 派发。
 - `EventRuntime` 独占 `EventProps` 匹配、`conditionCallback`、`successCallback` 和动态事件生命周期。
 - `DomInputAdapter` 只负责无 Pointer 的 DOM listener 绑定、解绑和输入标准化，不接触 Child、selector 或事件 DSL。
-- `StayTools.triggerAction` 和 `deleteListener` 作为兼容门面保留，内部委托 `ActionRouter`。
-- listener callback 每次获得属于本次调用的 routed event envelope；一个 listener 对 event envelope 的修改不能污染另一个 listener。
+- `StayTools.triggerAction` 和 `deleteListener` 作为公共门面保留，内部委托 `ActionRouter`；手动触发的 `info` 只接受普通 action 数据。
+- `originEvent` 专门保存原生 Event；listener 的 `e` 始终是标准化后的普通 `ActionEvent`，两者不共享身份或可变字段。
+- `NormalizedActionEvent` 是 runtime 与 router 之间的内部数据契约，不包含 target；只有 Router 能在 routed `ActionEvent` 上附加 target。
+- evaluated action map 的 key 是权威 action 名称；definition callback 不能通过修改 seed 的 `name` 改变 target predicate 或 listener 看到的路由身份。
+- listener callback 每次获得属于本次调用的 routed action envelope；一个 listener 对 action envelope 的修改不能污染另一个 listener。
 - target predicate 检查的 Child 必须就是 callback 最终收到的 target。
 - gesture continuation/end 使用 gesture start 捕获的 owner；start 没有 owner 时，后续不得重新命中。
 - listener state 仍在处理该 listener 时读取；本轮不改变同一次 dispatch 中同步 `switchState` 的现有时序。
 - 同名 listener 替换视为新的 registration：旧的 `composeStore`、gesture owner 和注册顺序都不继承。
 - 只有物理 `MouseEvent`、phase 名称与标准 trigger 同时匹配时才进入 gesture owner 流程；手动触发或自定义的同名事件仍按普通 action 派发，且不得捕获或释放真实手势的 owner。
-- 现有 `EventProps`、`ListenerProps`、`ActionEvent`、`StayCanvasRef.trigger` 和 StayTools 公共签名保持不变。
+- `StayCanvasRef.trigger(name, payload)` 保持不变；直接调用 `StayTools.triggerAction` 时，不再支持把原生 Event 放入 `triggerEvents.info`。
+- 旧的公开 `TriggerEvents` 类型仅作为 `ManualTriggerEvents` 的 deprecated alias 保留，不再暴露内部 evaluated action 结构。
 
 这些决定仅在出现与现有公共文档、真实调用或回归测试矛盾的新证据时重新讨论。
 
@@ -62,7 +67,10 @@ src/stay/events/
 
 - `EventRegistry` 是事件定义的唯一存储；注册、替换、删除和清空都经由该对象完成。
 - 每次原始输入先快照事件名称，随后按名称实时读取定义：新增名称下一轮生效，删除立即生效，同名替换保持原位置并可在本轮生效。
-- 每个匹配定义独立创建 `ActionEvent`，并在执行该定义时实时读取 state；一个定义修改 event seed 不污染后续定义。
+- 每个匹配定义独立创建 `NormalizedActionEvent`，并在执行该定义时实时读取 state；一个定义修改 event seed 不污染后续定义。
+- DOM 和手动输入在进入 listener 路由前都转换为 `NormalizedActionEvent`；Router 不读取原生 Event 上的自定义字段。
+- Router 根据权威 action key 和 target decision 创建全新的 routed `ActionEvent`；definition seed 上附加的 `name` 或 `target` 不能越过该边界。
+- 手动 action 在 dispatch 开始时统一快照 state、pressedKeys 和 point；原生 Event 仅作为独立的 `originEvent` 传递。
 - `conditionCallback`、`successCallback` 和 listener callback 的同步异常继续向调用方抛出；已经完成的动态增删不回滚。
 - 物理 `mouseup` 的 gesture owner 清理位于 runtime 的 terminal `finally` 中，事件定义抛错不能跳过清理。
 

@@ -18,13 +18,11 @@ Run from the repository root:
 pnpm install --frozen-lockfile
 npm ci --prefix test
 npm ci --prefix example
-pnpm build
-npm test --prefix test
-npm run build --prefix example
+pnpm verify
 npm run preview --prefix example -- --host 127.0.0.1
 ```
 
-The three install commands use the repository's lockfiles and must complete before the build and test commands. The build and test commands must succeed before manual acceptance begins. Open the address printed by the preview command.
+The three install commands use the repository's lockfiles and must complete before verification. `pnpm verify` builds the library, runs the test suite, type-checks the example source, and builds the example gallery; every step must succeed before manual acceptance begins. Open the address printed by the preview command.
 
 ## Manual execution
 

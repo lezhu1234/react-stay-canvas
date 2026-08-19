@@ -1,27 +1,26 @@
 import Canvas from "../../../canvas"
 import type {
-  ActionEvent,
   EventProps,
-  PredefinedWheelEventName,
   StayEventProps,
-  TriggerEvents,
 } from "../../../types/events"
 import { MOUSE_EVENTS } from "../../../userConstants"
 import type {
   ActionRoutePort,
+  EvaluatedActions,
   EventDefinitionLookup,
   EventInput,
+  NormalizedActionEvent,
 } from "../contracts"
 import { EventRegistry } from "./eventRegistry"
 
 type Store = Map<string, any>
 
-type EventRuntimeContext = {
+type EventRuntimeContext<EventName extends string> = {
   canvas: Canvas
   store: Store
   stateStore: Store
   getState: () => string
-  actionRouter: ActionRoutePort
+  actionRouter: ActionRoutePort<EventName>
 }
 
 export class EventRuntime<EventName extends string> {
@@ -30,7 +29,7 @@ export class EventRuntime<EventName extends string> {
     get: (name) => this.registry.get(name),
   }
 
-  constructor(private readonly context: EventRuntimeContext) {}
+  constructor(private readonly context: EventRuntimeContext<EventName>) {}
 
   registerEvent(definition: EventProps<EventName>) {
     this.registry.register(definition)
@@ -61,8 +60,8 @@ export class EventRuntime<EventName extends string> {
     }
   }
 
-  private evaluate(input: EventInput): TriggerEvents<EventName> {
-    const triggerEvents: TriggerEvents<EventName> = {}
+  private evaluate(input: EventInput): EvaluatedActions<EventName> {
+    const triggerEvents: EvaluatedActions<EventName> = {}
     const namesAtStart = this.registry.names()
 
     namesAtStart.forEach((eventName) => {
@@ -72,8 +71,8 @@ export class EventRuntime<EventName extends string> {
       const actionEvent = this.createActionEvent(eventName, event, input)
       if (!this.conditionPasses(event, actionEvent)) return
 
-      triggerEvents[eventName] = { info: actionEvent, event }
       this.runSuccess(event, actionEvent)
+      triggerEvents[eventName] = { info: actionEvent, event }
     })
 
     return triggerEvents
@@ -83,30 +82,29 @@ export class EventRuntime<EventName extends string> {
     eventName: EventName,
     event: StayEventProps<EventName>,
     input: EventInput
-  ): ActionEvent<EventName> {
-    const actionEvent = {
+  ): NormalizedActionEvent<EventName> {
+    const actionEvent: NormalizedActionEvent<EventName> = {
       state: this.context.getState(),
       name: eventName,
       pressedKeys: new Set(input.pressedKeys),
       isMouseEvent: input.originEvent instanceof MouseEvent,
-    } as ActionEvent<EventName>
+    }
 
-    if (!actionEvent.isMouseEvent) {
-      actionEvent.key = (input.originEvent as KeyboardEvent).key
+    if (input.originEvent instanceof KeyboardEvent) {
+      actionEvent.key = input.originEvent.key
       return actionEvent
     }
 
-    const mouseEvent = input.originEvent as MouseEvent
-    actionEvent.x = mouseEvent.clientX - this.context.canvas.x
-    actionEvent.y = mouseEvent.clientY - this.context.canvas.y
+    if (!(input.originEvent instanceof MouseEvent)) return actionEvent
+
+    actionEvent.x = input.originEvent.clientX - this.context.canvas.x
+    actionEvent.y = input.originEvent.clientY - this.context.canvas.y
     actionEvent.point = { x: actionEvent.x, y: actionEvent.y }
 
-    if (event.trigger === MOUSE_EVENTS.WHEEL) {
-      const wheelEvent = input.originEvent as WheelEvent
-      const wheelAction = actionEvent as ActionEvent<PredefinedWheelEventName>
-      wheelAction.deltaX = wheelEvent.deltaX
-      wheelAction.deltaY = wheelEvent.deltaY
-      wheelAction.deltaZ = wheelEvent.deltaZ
+    if (event.trigger === MOUSE_EVENTS.WHEEL && input.originEvent instanceof WheelEvent) {
+      actionEvent.deltaX = input.originEvent.deltaX
+      actionEvent.deltaY = input.originEvent.deltaY
+      actionEvent.deltaZ = input.originEvent.deltaZ
     }
 
     return actionEvent
@@ -114,7 +112,7 @@ export class EventRuntime<EventName extends string> {
 
   private conditionPasses(
     event: StayEventProps<EventName>,
-    actionEvent: ActionEvent<EventName>
+    actionEvent: NormalizedActionEvent<EventName>
   ) {
     return event.conditionCallback({
       e: actionEvent,
@@ -125,7 +123,7 @@ export class EventRuntime<EventName extends string> {
 
   private runSuccess(
     event: StayEventProps<EventName>,
-    actionEvent: ActionEvent<EventName>
+    actionEvent: NormalizedActionEvent<EventName>
   ) {
     const linked = event.successCallback({
       e: actionEvent,

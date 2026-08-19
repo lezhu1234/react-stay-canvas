@@ -14,7 +14,7 @@ import type {
   SelectorFunc,
 } from "../types/children"
 import type { Dict } from "../types/common"
-import type { TriggerEvents } from "../types/events"
+import type { ManualTriggerEvents } from "../types/manualActions"
 import type { Area, PointType } from "../types/geometry"
 import type { Cursor, StayTools } from "../types/tools"
 import { assert } from "../utils/assertions"
@@ -22,6 +22,7 @@ import { numberAlmostEqual } from "../utils/geometry"
 import { infixExpressionParser } from "../utils/selectors"
 import { StayAnimatedChild } from "./children/stayAnimatedChild"
 import { StayInstantChild } from "./children/stayInstantChild"
+import { normalizeManualActions } from "./events/input/manualActionAdapter"
 import Stay from "./stay"
 import { StepProps } from "./types"
 
@@ -445,9 +446,14 @@ export function stayTools(this: Stay<any>): StayTools {
     },
     triggerAction: <T extends string>(
       originEvent: Event,
-      triggerEvents: TriggerEvents<T>,
+      triggerEvents: ManualTriggerEvents<T>,
       payload: Dict
-    ): void => this.actionRouter.dispatch(originEvent, triggerEvents, payload),
+    ): void =>
+      this.actionRouter.dispatchManual(
+        originEvent,
+        normalizeManualActions(triggerEvents, this.state),
+        payload
+      ),
     deleteListener: (name: string) => this.actionRouter.deleteListener(name),
   }
 

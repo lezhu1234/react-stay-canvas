@@ -354,28 +354,34 @@ describe("ActionRouter contracts", () => {
 
     stage.tools.triggerAction(
       originEvent,
-      { "custom-action": { info: originEvent, event: originEvent } },
+      { "custom-action": { info: {} } },
       payload
     )
 
     expect(received.originEvent).toBe(originEvent)
     expect(received.payload).toBe(payload)
+    expect(received.e).not.toBe(originEvent)
+    expect(received.e.name).toBe("custom-action")
+    expect(received.e.state).toBe("default-state")
+    expect(received.e.isMouseEvent).toBe(false)
+    expect([...received.e.pressedKeys]).toEqual([])
     expect(received.e.target == null).toBe(true)
 
     stage.tools.triggerAction(
       originEvent,
-      { "custom-action": { info: originEvent, event: originEvent } },
+      { "custom-action": { info: {} } },
       payload
     )
     expect(seenCompose).toEqual([{}, { count: 1 }])
   })
 
-  it("isolates mutable fields added to a manually triggered native event", () => {
+  it("isolates mutable fields from explicit manual action data", () => {
     const { stage } = createStage()
-    const manualEvent = Object.assign(new Event("manual-action"), {
+    const originEvent = new Event("manual-action")
+    const actionInfo = {
       point: { x: 4, y: 8 },
       pressedKeys: new Set(["Shift"]),
-    })
+    }
     let observed: any
 
     stage.addEventListener({
@@ -397,18 +403,18 @@ describe("ActionRouter contracts", () => {
     })
 
     stage.tools.triggerAction(
-      manualEvent,
-      { "manual-action": { info: manualEvent, event: manualEvent } },
+      originEvent,
+      { "manual-action": { info: actionInfo } },
       {}
     )
 
     expect(observed.point).toEqual({ x: 4, y: 8 })
     expect([...observed.pressedKeys]).toEqual(["Shift"])
-    expect(manualEvent.point).toEqual({ x: 4, y: 8 })
-    expect([...manualEvent.pressedKeys]).toEqual(["Shift"])
+    expect(actionInfo.point).toEqual({ x: 4, y: 8 })
+    expect([...actionInfo.pressedKeys]).toEqual(["Shift"])
   })
 
-  it("preserves native event subtype fields in an isolated manual envelope", () => {
+  it("keeps the native event separate from explicit manual action data", () => {
     const { stage } = createStage()
     const keyboardEvent = new KeyboardEvent("keydown", {
       key: "k",
@@ -419,21 +425,60 @@ describe("ActionRouter contracts", () => {
     stage.addEventListener({
       name: "manual-keyboard",
       event: "manual-keyboard",
-      callback: ({ e }: any) => {
-        received = e
+      callback: (props: any) => {
+        received = props
       },
     })
 
     stage.tools.triggerAction(
       keyboardEvent,
-      { "manual-keyboard": { info: keyboardEvent, event: keyboardEvent } },
+      {
+        "manual-keyboard": {
+          info: { key: "action-key", pressedKeys: new Set(["Meta"]) },
+        },
+      },
       {}
     )
 
-    expect(received).toBeInstanceOf(KeyboardEvent)
-    expect(received.key).toBe("k")
-    expect(received.ctrlKey).toBe(true)
-    expect(received.name).toBe("manual-keyboard")
+    expect(received.originEvent).toBe(keyboardEvent)
+    expect(received.e).not.toBeInstanceOf(KeyboardEvent)
+    expect(received.e.key).toBe("action-key")
+    expect(received.e.ctrlKey).toBeUndefined()
+    expect([...received.e.pressedKeys]).toEqual(["Meta"])
+    expect(received.e.name).toBe("manual-keyboard")
+  })
+
+  it("rejects a native Event used as manual action info", () => {
+    const { stage } = createStage()
+    const originEvent = new Event("manual-action")
+
+    expect(() =>
+      stage.tools.triggerAction(
+        originEvent,
+        { "manual-action": { info: originEvent } } as any,
+        {}
+      )
+    ).toThrow("Manual action info must be plain action data")
+  })
+
+  it("rejects a native Event from another realm as manual action info", () => {
+    const { stage } = createStage()
+    const iframe = document.createElement("iframe")
+    document.body.append(iframe)
+
+    try {
+      const foreignEvent = new iframe.contentWindow!.Event("manual-action")
+      expect(foreignEvent).not.toBeInstanceOf(Event)
+      expect(() =>
+        stage.tools.triggerAction(
+          foreignEvent,
+          { "manual-action": { info: foreignEvent } } as any,
+          {}
+        )
+      ).toThrow("Manual action info must be plain action data")
+    } finally {
+      iframe.remove()
+    }
   })
 
   it("keeps manually triggered gesture names targetless", () => {
@@ -451,7 +496,7 @@ describe("ActionRouter contracts", () => {
 
     names.forEach((name) => {
       const event = new Event(name)
-      stage.tools.triggerAction(event, { [name]: { info: event, event } }, {})
+      stage.tools.triggerAction(event, { [name]: { info: {} } }, {})
     })
 
     expect(received).toEqual(names)
@@ -498,7 +543,7 @@ describe("ActionRouter contracts", () => {
     const manualEnd = new Event("dragend")
     stage.tools.triggerAction(
       manualEnd,
-      { dragend: { info: manualEnd, event: manualEnd } },
+      { dragend: { info: {} } },
       {}
     )
     top.dispatchEvent(mm(80, 10))

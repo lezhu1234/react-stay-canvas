@@ -105,13 +105,20 @@ npm install react-stay-canvas
 ## Getting Started Example
 
 ```typescript
-import { ListenerProps, Point, Rectangle, StayCanvas } from "react-stay-canvas"
+import { ActionEvent, Coordinate, ListenerProps, Point, Rectangle, StayCanvas } from "react-stay-canvas"
+
+function hasPointerPosition(
+  e: ActionEvent
+): e is ActionEvent & { x: number; y: number; point: Coordinate } {
+  return e.x !== undefined && e.y !== undefined && e.point !== undefined
+}
 
 export function Demo() {
   const DragListener: ListenerProps = {
     name: "dragListener",
     event: ["dragstart", "drag", "dragend"],
     callback: ({ e, composeStore, tools: { appendChild, updateChild, log } }) => {
+      if (!hasPointerPosition(e)) return
       return {
         dragstart: () => ({
           dragStartPosition: e.point,
@@ -604,9 +611,11 @@ export const HoverListener: ListenerProps = {
   name: "hoverListener",
   event: "mousemove",
   callback: ({ e, tools: { getChildrenBySelector } }) => {
+    const point = e.point
+    if (!point) return
     const labels = getChildrenBySelector(".label")
     labels.forEach((label) => {
-      let rectState = label.shape.contains(e.point) ? "hover" : "default"
+      let rectState = label.shape.contains(point) ? "hover" : "default"
       label.shape.switchState(rectState)
     })
   },
@@ -760,24 +769,33 @@ export interface ActionCallbackProps {
 export interface ActionEvent {
   state: string // The state when the event is triggered
   name: string // The name of the event
-  x: number // The x-coordinate of the mouse relative to the canvas
-  y: number // The y-coordinate of the mouse relative to the canvas
-  point: Point // The coordinates of the mouse relative to the canvas
-  target: StayChild // The element that triggered the event
   pressedKeys: Set<string> // The keys and mouse buttons currently pressed. The left mouse button is mouse0, the right mouse button is mouse1, and the mouse wheel is mouse2
-  key: string | null // The keyboard key that triggered the event. When we trigger the mouseup event, the pressedKeys will not have this key, but key will have this key
   isMouseEvent: boolean // Whether it is a mouse event
-  deltaX: number // The x-axis offset when the mouse wheel is scrolled
-  deltaY: number // The y-axis offset when the mouse wheel is scrolled
-  deltaZ: number // The z-axis offset when the mouse wheel is scrolled
+  x?: number // Canvas-relative coordinates, present for mouse actions
+  y?: number
+  point?: Coordinate
+  target?: StayChild // Present only when routing resolves a Child
+  key?: string // Present for keyboard actions or explicit manual action data
+  deltaX?: number // Present for wheel actions or explicit manual action data
+  deltaY?: number
+  deltaZ?: number
 }
 
 // Routing guarantees:
+// - originEvent is always the native Event; e is always a plain ActionEvent.
 // - Each listener invocation receives its own ActionEvent envelope.
 // - Changes to point, pressedKeys, or target in one listener do not affect another.
 // - A target accepted by withTargetConditionCallback is the same Child delivered as e.target.
 // - drag/move continuation and end retain the target captured at start.
 // - A gesture that starts without a target cannot acquire one later.
+
+// A manual action may use a predefined name without carrying DOM input data.
+// Narrow optional fields before reading them.
+function hasPointerPosition(
+  e: ActionEvent
+): e is ActionEvent & { x: number; y: number; point: Coordinate } {
+  return e.x !== undefined && e.y !== undefined && e.point !== undefined
+}
 
 // example 1
 // In this example, the callback function does not return any value. This listener switches the state of the rectangle based on whether the mouse is inside the rectangle when the mouse moves
@@ -785,6 +803,7 @@ export const HoverListener: ListenerProps = {
   name: "hoverListener",
   event: "mousemove",
   callback: ({ e, tools: { getChildrenBySelector } }) => {
+    if (!hasPointerPosition(e)) return
     const labels = getChildrenBySelector(".label")
     labels.forEach((label) => {
       let rectState = label.shape.contains(e.point) ? "hover" : "default"
@@ -804,6 +823,7 @@ const DragListener: ListenerProps = {
   name: "dragListener",
   event: ["dragstart", "drag", "dragend"],
   callback: ({ e, composeStore, tools: { appendChild, updateChild, log } }) => {
+    if (!hasPointerPosition(e)) return
     return {
       dragstart: () => ({
         dragStartPosition: new Point(e.x, e.y),
@@ -863,7 +883,11 @@ export interface StayTools {
   log: () => void
   redo: () => void
   undo: () => void
-  triggerAction: (originEvent: Event, triggerEvents: Record<string, any>, payload: Dict) => void
+  triggerAction: <EventName extends string>(
+    originEvent: Event,
+    triggerEvents: ManualTriggerEvents<EventName>,
+    payload: Dict
+  ) => void
   deleteListener: (name: string) => void
 }
 ```
@@ -1089,6 +1113,7 @@ export const MoveListener: ListenerProps = {
   event: ["startmove", "move"],
   state: ALLSTATE,
   callback: ({ e, composeStore, tools: { moveStart, move } }) => {
+    if (!hasPointerPosition(e)) return
     const eventMap = {
       startmove: () => {
         moveStart()
@@ -1121,6 +1146,7 @@ export const ZoomListener: ListenerProps = {
   event: ["zoomin", "zoomout"],
   state: ALLSTATE,
   callback: ({ e, tools: { zoom } }) => {
+    if (!hasPointerPosition(e) || e.deltaY === undefined) return
     zoom(e.deltaY, new Point(e.x, e.y))
   },
 }
@@ -1157,6 +1183,7 @@ export function Demo() {
 -    callback: ({ e, composeStore, tools: { appendChild, updateChild } }) => {
 +    event: ["dragstart", "drag", "dragend"],
 +    callback: ({ e, composeStore, tools: { appendChild, updateChild, log } }) => {
+      if (!hasPointerPosition(e)) return
       return {
         dragstart: () => ({
           dragStartPosition: e.point,
@@ -1242,10 +1269,35 @@ export function Demo() {
 
 ##### triggerAction
 
-The triggerAction function is used to manually trigger an event. Its effect is the same as calling trigger, but you need to manually construct the Event object and pass in the triggerEvents object at the same time.
+`triggerAction` manually dispatches an action. The first argument is exposed only as the
+callback's native `originEvent`; `triggerEvents.info` must contain plain action data and must not
+be a native Event. `state` defaults to the current Canvas state, `pressedKeys` defaults to an empty
+set, and `isMouseEvent` defaults to `false`. Each map key is the final action name.
 
 ```typescript
-type triggerEventsProps = { [key: string]: ActionEvent },
+type ManualActionEvent = {
+  state?: string
+  pressedKeys?: ReadonlySet<string>
+  isMouseEvent?: boolean
+  x?: number
+  y?: number
+  point?: Coordinate
+  key?: string
+  deltaX?: number
+  deltaY?: number
+  deltaZ?: number
+}
+
+type ManualTriggerEvents<EventName extends string> = Partial<
+  Record<EventName, { info: ManualActionEvent }>
+>
+
+const originEvent = new Event("save")
+tools.triggerAction(
+  originEvent,
+  { save: { info: { pressedKeys: new Set(["Meta"]) } } },
+  { documentId: "doc-1" }
+)
 ```
 
 ##### deleteListener
@@ -1352,6 +1404,7 @@ const DragEvent: EventProps = {
   name: "drag", // Event name
   trigger: MOUSE_EVENTS.MOUSE_MOVE, // Trigger condition, mouse movement
   conditionCallback: ({ e, store }) => {
+    if (!e.point) return false
     const dragStartPosition: Point = store.get("dragStartPosition")
     return (
       e.pressedKeys.has("mouse0") && // Check if the left mouse button is pressed
@@ -1372,6 +1425,7 @@ export const DragStartEvent: EventProps = {
     return e.pressedKeys.has("mouse0") // Left mouse button pressed
   },
   successCallback: ({ e, store }) => {
+    if (!e.point) return
     store.set("dragStartPosition", e.point) // Store the mouse position at the start of dragging
     return DragEvent // Return the ongoing drag event so that it can be registered
   },

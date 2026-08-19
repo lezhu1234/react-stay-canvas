@@ -108,7 +108,10 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   }
 
   containsPointer(point: Coordinate): boolean {
-    return this.shapeMap.values().some((shape) => shape.contains(point))
+    for (const shape of this.shapeMap.values()) {
+      if (shape.contains(point)) return true
+    }
+    return false
   }
 
   getUpdatedLayers(): Set<number> {
@@ -116,16 +119,19 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   }
 
   inArea(area: Area) {
-    return this.shapeMap.values().some((shape) => {
+    for (const shape of this.shapeMap.values()) {
       const center = shape.getCenterPoint()
 
-      return (
+      if (
         center.x >= area.x &&
         center.x <= area.x + area.width &&
         center.y >= area.y &&
         center.y <= area.y + area.height
-      )
-    })
+      ) {
+        return true
+      }
+    }
+    return false
   }
 
   getLayers(): Set<number> {

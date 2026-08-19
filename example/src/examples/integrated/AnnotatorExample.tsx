@@ -10,6 +10,7 @@ import {
 
 import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
+import { hasPointerPosition, hasPointerTarget } from "../actionEventGuards"
 
 type Mode = "draw" | "select"
 
@@ -66,54 +67,57 @@ export default function AnnotatorExample() {
       state: "draw",
       selector: ".stay-canvas",
       event: ["dragstart", "drag", "dragend"],
-      callback: ({ e, composeStore, tools }) => ({
-        dragstart: () => {
-          const index = ++sequenceRef.current
-          const name = text(`Annotation ${index}`, `标注 ${index}`)
-          const box = new Rectangle({
-            x: e.x,
-            y: e.y,
-            width: 0,
-            height: 0,
-            layer: 1,
-            fillConfig: { color: colors.orangeSoft },
-            strokeConfig: { color: colors.orange, lineWidth: 3 },
-          })
-          const label = new StayText({
-            x: e.x + 18,
-            y: e.y + 8,
-            text: `#${index}`,
-            font: { size: 12, fontWeight: 700 },
-            layer: 1,
-            zIndex: 2,
-            fillConfig: { color: colors.ink },
-          })
-          const child = tools.appendChild({
-            className: "annotation",
-            shape: [box, label],
-          })
-          annotationNamesRef.current.set(child.id, name)
-          push(text(`${name} started`, `${name}已开始`))
-          return { start: e.point, child, box, label }
-        },
-        drag: () => {
-          const start = composeStore.start
-          const x = Math.min(start.x, e.x)
-          const y = Math.min(start.y, e.y)
-          composeStore.box.update({
-            x,
-            y,
-            width: Math.abs(e.x - start.x),
-            height: Math.abs(e.y - start.y),
-          })
-          composeStore.label.update({ x: x + 18, y: y + 8 })
-        },
-        dragend: () => {
-          tools.log()
-          syncCount(tools)
-          push(text(`${annotationName(composeStore.child.id)} committed to history`, `${annotationName(composeStore.child.id)}已写入历史`))
-        },
-      }),
+      callback: ({ e, composeStore, tools }) => {
+        if (!hasPointerPosition(e)) return
+        return {
+          dragstart: () => {
+            const index = ++sequenceRef.current
+            const name = text(`Annotation ${index}`, `标注 ${index}`)
+            const box = new Rectangle({
+              x: e.x,
+              y: e.y,
+              width: 0,
+              height: 0,
+              layer: 1,
+              fillConfig: { color: colors.orangeSoft },
+              strokeConfig: { color: colors.orange, lineWidth: 3 },
+            })
+            const label = new StayText({
+              x: e.x + 18,
+              y: e.y + 8,
+              text: `#${index}`,
+              font: { size: 12, fontWeight: 700 },
+              layer: 1,
+              zIndex: 2,
+              fillConfig: { color: colors.ink },
+            })
+            const child = tools.appendChild({
+              className: "annotation",
+              shape: [box, label],
+            })
+            annotationNamesRef.current.set(child.id, name)
+            push(text(`${name} started`, `${name}已开始`))
+            return { start: e.point, child, box, label }
+          },
+          drag: () => {
+            const start = composeStore.start
+            const x = Math.min(start.x, e.x)
+            const y = Math.min(start.y, e.y)
+            composeStore.box.update({
+              x,
+              y,
+              width: Math.abs(e.x - start.x),
+              height: Math.abs(e.y - start.y),
+            })
+            composeStore.label.update({ x: x + 18, y: y + 8 })
+          },
+          dragend: () => {
+            tools.log()
+            syncCount(tools)
+            push(text(`${annotationName(composeStore.child.id)} committed to history`, `${annotationName(composeStore.child.id)}已写入历史`))
+          },
+        }
+      },
     },
     {
       name: "select-annotation",
@@ -121,6 +125,7 @@ export default function AnnotatorExample() {
       selector: ".stay-canvas",
       event: "click",
       callback: ({ e, tools }) => {
+        if (!hasPointerPosition(e)) return
         const target = tools.getContainPointChildren<Rectangle>({
           point: e.point,
           selector: ".annotation",
@@ -143,33 +148,36 @@ export default function AnnotatorExample() {
       state: "select",
       selector: ".annotation",
       event: ["dragstart", "drag", "dragend"],
-      callback: ({ e, composeStore, tools }) => ({
-        dragstart: () => {
-          clearSelection(tools)
-          e.target.moveInit()
-          const shape = e.target.shape as Rectangle
-          shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
-          selectedRef.current = e.target.id
-          setSelected(annotationName(e.target.id))
-          return { start: e.point, child: e.target }
-        },
-        drag: () => composeStore.child.move(e.x - composeStore.start.x, e.y - composeStore.start.y),
-        dragend: () => {
-          const child = composeStore.child
-          const historyShapes = [...child.shapeMap.values()].map((shape) => shape.copy())
-          const historyShape = historyShapes.find((shape) => shape instanceof Rectangle) as Rectangle
-          historyShape.update({ strokeConfig: { color: colors.orange, lineWidth: 3 } })
-          tools.removeChild(child.id)
-          const replacement = tools.appendChild({
-            id: child.id,
-            className: child.className,
-            shape: historyShapes,
-          })
-          tools.log()
-          replacement.shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
-          push(text(`${annotationName(child.id)} moved and logged`, `${annotationName(child.id)}已移动并记录`))
-        },
-      }),
+      callback: ({ e, composeStore, tools }) => {
+        if (!hasPointerTarget(e)) return
+        return {
+          dragstart: () => {
+            clearSelection(tools)
+            e.target.moveInit()
+            const shape = e.target.shape as Rectangle
+            shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
+            selectedRef.current = e.target.id
+            setSelected(annotationName(e.target.id))
+            return { start: e.point, child: e.target }
+          },
+          drag: () => composeStore.child.move(e.x - composeStore.start.x, e.y - composeStore.start.y),
+          dragend: () => {
+            const child = composeStore.child
+            const historyShapes = [...child.shapeMap.values()].map((shape) => shape.copy())
+            const historyShape = historyShapes.find((shape) => shape instanceof Rectangle) as Rectangle
+            historyShape.update({ strokeConfig: { color: colors.orange, lineWidth: 3 } })
+            tools.removeChild(child.id)
+            const replacement = tools.appendChild({
+              id: child.id,
+              className: child.className,
+              shape: historyShapes,
+            })
+            tools.log()
+            replacement.shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
+            push(text(`${annotationName(child.id)} moved and logged`, `${annotationName(child.id)}已移动并记录`))
+          },
+        }
+      },
     },
   ], [text])
 

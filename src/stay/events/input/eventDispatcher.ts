@@ -1,16 +1,16 @@
-import Canvas from "../canvas"
+import Canvas from "../../../canvas"
+import type { EventInputPort } from "../contracts"
 import { DomInputAdapter } from "./domInputAdapter"
-import { EventRuntime } from "./eventRuntime"
 import { PressedInputState } from "./pressedInputState"
 
-export class EventDispatcher<EventName extends string> {
+export class EventDispatcher {
   private readonly inputAdapter: DomInputAdapter
   private readonly pressedState = new PressedInputState()
 
   constructor(
     root: Canvas,
     passive: boolean,
-    runtime: EventRuntime<EventName>
+    runtime: EventInputPort
   ) {
     const topLayer = root.layers[root.layers.length - 1]
     this.inputAdapter = new DomInputAdapter(

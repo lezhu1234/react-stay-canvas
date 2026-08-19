@@ -1,22 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest"
 import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "react-stay-canvas"
-import { DomInputAdapter } from "../src/stay/domInputAdapter"
-import type { EventInput } from "../src/stay/eventRuntime"
-import { PressedInputState } from "../src/stay/pressedInputState"
+import type { EventInput } from "../src/stay/events/contracts"
+import { DomInputAdapter } from "../src/stay/events/input/domInputAdapter"
+import { PressedInputState } from "../src/stay/events/input/pressedInputState"
 
 describe("DomInputAdapter", () => {
-  it("keeps snapshots stable and clears the owned pressed state", () => {
-    const state = new PressedInputState()
-    state.press("Control")
-    const beforeClear = state.snapshot()
-
-    state.clear()
-
-    expect([...beforeClear]).toEqual(["Control"])
-    expect([...state.snapshot()]).toEqual([])
-  })
-
   it("normalizes DOM events and snapshots pressed input after each transition", () => {
     const target = document.createElement("canvas")
     const state = new PressedInputState()

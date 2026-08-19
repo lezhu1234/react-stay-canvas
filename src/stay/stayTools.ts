@@ -20,8 +20,8 @@ import {
   TriggerEvents,
 } from "../userTypes"
 import { assert, infixExpressionParser, numberAlmostEqual } from "../utils"
-import { StayAnimatedChild } from "./child/stayAnimatedChild"
-import { StayInstantChild } from "./child/stayInstantChild"
+import { StayAnimatedChild } from "./children/stayAnimatedChild"
+import { StayInstantChild } from "./children/stayInstantChild"
 import Stay from "./stay"
 import { StepProps } from "./types"
 

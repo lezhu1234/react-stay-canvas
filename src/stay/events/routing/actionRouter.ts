@@ -1,5 +1,5 @@
-import Canvas from "../canvas"
-import { DEFAULTSTATE, ROOTNAME } from "../userConstants"
+import Canvas from "../../../canvas"
+import { DEFAULTSTATE, ROOTNAME } from "../../../userConstants"
 import {
   ChildSortFunction,
   Dict,
@@ -7,7 +7,7 @@ import {
   ListenerProps,
   StayTools,
   TriggerEvents,
-} from "../userTypes"
+} from "../../../userTypes"
 import { createActionEventEnvelope } from "./actionEventEnvelope"
 import {
   ActionTargetResolver,
@@ -15,7 +15,7 @@ import {
   TargetDecision,
   TargetResolverContext,
 } from "./actionTargetResolver"
-import type { EventDefinitionLookup } from "./actionTargetResolver"
+import type { EventDefinitionLookup } from "../contracts"
 
 type Store = Map<string, any>
 

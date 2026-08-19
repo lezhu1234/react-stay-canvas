@@ -21,12 +21,12 @@ import {
 } from "../userTypes"
 import { uuid4 } from "../utils"
 
-import { ChildrenStore } from "./childrenStore"
-import { ActionRouter } from "./actionRouter"
-import { EventDispatcher } from "./eventDispatcher"
-import { EventRuntime } from "./eventRuntime"
+import { ChildrenStore } from "./children/childrenStore"
+import { StayInstantChild } from "./children/stayInstantChild"
+import { EventDispatcher } from "./events/input/eventDispatcher"
+import { ActionRouter } from "./events/routing/actionRouter"
+import { EventRuntime } from "./events/runtime/eventRuntime"
 import { History } from "./history"
-import { StayInstantChild } from "./child/stayInstantChild"
 import { Renderer } from "./renderer"
 import { stayTools } from "./stayTools"
 import { SetShapeChildCurrentTime, StackItem } from "./types"
@@ -36,7 +36,7 @@ class Stay<EventName extends string> {
   actionRouter: ActionRouter<EventName>
   eventRuntime: EventRuntime<EventName>
   renderer: Renderer
-  eventDispatcher: EventDispatcher<EventName>
+  eventDispatcher: EventDispatcher
   history: History
   height: number
   root: Canvas

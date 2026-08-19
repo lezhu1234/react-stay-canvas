@@ -1,7 +1,7 @@
 import { Canvas } from "../canvas"
 import { InstantShape } from "../shapes/instantShape"
 import { DrawReturn, StayDrawProps } from "../userTypes"
-import { StayInstantChild } from "./child/stayInstantChild"
+import { StayInstantChild } from "./children/stayInstantChild"
 
 interface DrawLayer {
   forceUpdate: boolean

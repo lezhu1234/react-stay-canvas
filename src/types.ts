@@ -1,6 +1,6 @@
 import { InstantShape } from "./shapes"
 import { Rectangle } from "./shapes/rectangle"
-import { StayInstantChild } from "./stay/child/stayInstantChild"
+import { StayInstantChild } from "./stay/children/stayInstantChild"
 import { valueof } from "./stay/types"
 import { FRAME_EVENT_NAME, KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
 import {

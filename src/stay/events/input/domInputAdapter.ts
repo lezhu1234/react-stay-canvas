@@ -1,8 +1,7 @@
-import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "../userConstants"
-import type { EventInput } from "./eventRuntime"
+import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "../../../userConstants"
+import type { EventInputSink } from "../contracts"
 import { PressedInputState } from "./pressedInputState"
 
-type InputSink = (input: EventInput) => void
 type PressedStateUpdate = (event: Event, state: PressedInputState) => void
 
 type DomEventBinding = {
@@ -85,7 +84,7 @@ export class DomInputAdapter {
     private readonly target: HTMLCanvasElement,
     passive: boolean,
     private readonly pressedState: PressedInputState,
-    private readonly inputSink: InputSink
+    private readonly inputSink: EventInputSink
   ) {
     this.bindings = createBindings(passive)
   }

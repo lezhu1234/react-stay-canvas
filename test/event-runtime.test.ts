@@ -134,11 +134,16 @@ describe("EventRuntime contracts", () => {
       },
     })
 
-    expect(() => stage.eventDispatcher.fireEvent(md(10, 10), "mousedown")).toThrow(
-      "event success failed"
-    )
+    const fire = () =>
+      stage.eventRuntime.handleInput({
+        originEvent: md(10, 10),
+        trigger: "mousedown",
+        pressedKeys: new Set(["mouse0"]),
+      })
+
+    expect(fire).toThrow("event success failed")
     stage.eventRuntime.deleteEvent("delete-then-throw")
-    stage.eventDispatcher.fireEvent(md(10, 10), "mousedown")
+    fire()
 
     expect(victimCalls).toBe(0)
   })

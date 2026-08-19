@@ -33,8 +33,7 @@ function RouteLink({
   className?: string
   children: ReactNode
 }) {
-  // Stay currently owns a perpetual RAF loop. The query change forces a document
-  // navigation, isolating examples and fully discarding the previous stage.
+  // A document navigation gives every handbook scenario a clean route state.
   const href = `${window.location.pathname}?example=${encodeURIComponent(path)}#${path}`
   return <a className={className} href={href}>{children}</a>
 }
@@ -85,7 +84,7 @@ function CatalogHome() {
         <div className="catalog-metrics" aria-label={text("Example counts", "示例数量")}>
           <span><strong>10</strong> {text("focused examples", "个基础示例")}</span>
           <span><strong>3</strong> {text("integration scenarios", "个集成场景")}</span>
-          <span><strong>56</strong> {text("unit tests", "个单元测试")}</span>
+          <span><strong>90</strong> {text("unit tests", "个单元测试")}</span>
         </div>
       </section>
 

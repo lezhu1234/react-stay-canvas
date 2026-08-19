@@ -65,6 +65,14 @@ U2 运行时不变量：
 - Evidence: keyboard、mouse、wheel、drag/drop、多 Canvas、reCreate/destroy；受影响的真实验收手册场景。
 - Dependency: U2 merged or explicitly selected as a stacked base.
 
+U3 输入与生命周期不变量：
+
+- `DomInputAdapter` 只将顶层 Canvas 的 DOM 事件标准化为 runtime input，并对所有绑定提供对称解绑。
+- `PressedInputState` 是键盘按键和鼠标按钮状态的唯一所有者；每次派发获得独立快照，销毁时统一清空。
+- `EventDispatcher` 仅协调 input adapter、pressed state 与 `EventRuntime`，不保存事件定义或 listener 状态。
+- `Stay.destroy()` 是 DOM 监听、render loop、事件定义、gesture owner 和 listener 状态的统一终止出口。
+- React unmount、显式 `reCreate()` 和 resize recreate 都必须先销毁旧 Stay，不能遗留 DOM listener 或 animation frame。
+
 ## Merge gates
 
 - 每个单元独立完成 deterministic checks 和 PR-boundary CR。

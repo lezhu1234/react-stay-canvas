@@ -1,6 +1,6 @@
 import { globalStore } from "./globalStore"
 import { Line, Point } from "./shapes"
-import { StayAnimatedChild } from "./stay/child/stayAnimatedChild"
+import { StayAnimatedChild } from "./stay/children/stayAnimatedChild"
 import { NumericString, Positive } from "./types"
 import { SUPPORT_OPRATOR } from "./userConstants"
 import {

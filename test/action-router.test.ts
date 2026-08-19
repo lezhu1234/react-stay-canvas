@@ -538,44 +538,6 @@ describe("ActionRouter contracts", () => {
     expect(sortCalls).toBe(0)
   })
 
-  it("clears gesture owners when a mouseup event definition throws", () => {
-    const { stage, top } = createStage()
-    stage.tools.appendChild({
-      className: "throw-end-node",
-      shape: rectangle(0, 0, 40, 40),
-    })
-    let drags = 0
-
-    stage.addEventListener({
-      name: "throw-end-listener",
-      event: "drag",
-      selector: ".throw-end-node",
-      callback: () => {
-        drags++
-      },
-    })
-    top.dispatchEvent(md(10, 10))
-    stage.registerEvent({
-      name: "throw-on-up",
-      trigger: "mouseup",
-      successCallback: () => {
-        throw new Error("mouseup definition failed")
-      },
-    })
-
-    expect(() =>
-      stage.eventRuntime.handleInput({
-        originEvent: mu(80, 10),
-        trigger: "mouseup",
-        pressedKeys: new Set(),
-      })
-    ).toThrow("mouseup definition failed")
-
-    stage.registerEvent({ name: "drag", trigger: "mousemove" })
-    top.dispatchEvent(mm(80, 10))
-    expect(drags).toBe(0)
-  })
-
   it("merges composeStore synchronously and keeps it isolated by listener", () => {
     const { stage, top } = createStage()
     const seenA: Record<string, unknown>[] = []

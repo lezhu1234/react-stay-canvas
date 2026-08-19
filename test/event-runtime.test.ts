@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest"
 import { Rectangle } from "react-stay-canvas"
-import { createStage, md, mm } from "./helpers/stage"
+import { createStage, md, mm, mu } from "./helpers/stage"
 
 describe("EventRuntime contracts", () => {
   it("defers a newly linked event until a later raw input", () => {
@@ -185,5 +185,43 @@ describe("EventRuntime contracts", () => {
 
     expect(customCalls).toBe(1)
     expect(dragCalls).toBe(0)
+  })
+
+  it("clears gesture owners when a mouseup event definition throws", () => {
+    const { stage, top } = createStage()
+    stage.tools.appendChild({
+      className: "throw-end-node",
+      shape: new Rectangle({ x: 0, y: 0, width: 40, height: 40 }),
+    })
+    let drags = 0
+
+    stage.addEventListener({
+      name: "throw-end-listener",
+      event: "drag",
+      selector: ".throw-end-node",
+      callback: () => {
+        drags++
+      },
+    })
+    top.dispatchEvent(md(10, 10))
+    stage.registerEvent({
+      name: "throw-on-up",
+      trigger: "mouseup",
+      successCallback: () => {
+        throw new Error("mouseup definition failed")
+      },
+    })
+
+    expect(() =>
+      stage.eventRuntime.handleInput({
+        originEvent: mu(80, 10),
+        trigger: "mouseup",
+        pressedKeys: new Set(),
+      })
+    ).toThrow("mouseup definition failed")
+
+    stage.registerEvent({ name: "drag", trigger: "mousemove" })
+    top.dispatchEvent(mm(80, 10))
+    expect(drags).toBe(0)
   })
 })

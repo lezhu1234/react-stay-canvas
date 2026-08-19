@@ -12,6 +12,30 @@ DOM
   -> User Listener
 ```
 
+## Module layout
+
+```text
+src/stay/events/
+├── contracts.ts
+├── input/
+│   ├── domInputAdapter.ts
+│   ├── eventDispatcher.ts
+│   └── pressedInputState.ts
+├── runtime/
+│   ├── eventRegistry.ts
+│   └── eventRuntime.ts
+└── routing/
+    ├── actionEventEnvelope.ts
+    ├── actionRouter.ts
+    └── actionTargetResolver.ts
+```
+
+- `input` 将 DOM 输入标准化为 `EventInput`，维护按键快照，并负责绑定生命周期。
+- `runtime` 匹配和执行事件定义，管理动态事件注册表。
+- `routing` 解析 listener、state、selector、target 和 gesture owner，最后调用用户 callback。
+- `contracts.ts` 只声明相邻层之间使用的窄接口，不保存状态，也不实现业务逻辑。
+- `Stay` 是组合根，负责创建并连接上述对象；各层不反向依赖 `Stay`。
+
 ## Accepted decisions
 
 - `ActionRouter` 独占 listener registry、listener state gate、selector/target 解析、gesture owner、`composeStore` 和用户 callback 派发。
@@ -34,23 +58,7 @@ DOM
 - 不引入 FSM 框架、事件总线、Observable、DI 容器或通用 gesture plugin 系统。
 - 不顺带重写 renderer、history、shape、selector 语法或公开手势 DSL。
 
-## Delivery map
-
-### U1 — ActionRouter
-
-- Outcome: listener 派发不再位于 `stayTools.ts`，listener/target/gesture/compose 状态有单一所有者。
-- Scope: `ActionRouter`、Stay/EventDispatcher 委托、路由契约测试和相关文档。
-- Evidence: 单元测试、类型检查、库与 example 构建；Events、Selectors、State、Annotator、Diagram 手册场景。
-- Intended PR: base `codex/example-regression-gallery`。
-
-### U2 — EventRuntime and EventRegistry
-
-- Outcome: 事件定义与动态生命周期原子管理，事件执行流程为 match -> seed -> condition -> success -> route。
-- Scope: runtime/registry、EventDispatcher 委托、动态链 characterization tests。
-- Evidence: 动态事件增删覆盖、手动 trigger、同步异常和现有完整测试。
-- Dependency: U1 merged or explicitly selected as a stacked base.
-
-U2 运行时不变量：
+## Runtime invariants
 
 - `EventRegistry` 是事件定义的唯一存储；注册、替换、删除和清空都经由该对象完成。
 - 每次原始输入先快照事件名称，随后按名称实时读取定义：新增名称下一轮生效，删除立即生效，同名替换保持原位置并可在本轮生效。
@@ -58,23 +66,10 @@ U2 运行时不变量：
 - `conditionCallback`、`successCallback` 和 listener callback 的同步异常继续向调用方抛出；已经完成的动态增删不回滚。
 - 物理 `mouseup` 的 gesture owner 清理位于 runtime 的 terminal `finally` 中，事件定义抛错不能跳过清理。
 
-### U3 — DomInputAdapter and PressedInputState
-
-- Outcome: DOM wiring 与业务事件执行分离，EventDispatcher 成为薄协调层。
-- Scope: 无 Pointer DOM adapter、pressed input state、mount/destroy/reCreate 生命周期测试。
-- Evidence: keyboard、mouse、wheel、drag/drop、多 Canvas、reCreate/destroy；受影响的真实验收手册场景。
-- Dependency: U2 merged or explicitly selected as a stacked base.
-
-U3 输入与生命周期不变量：
+## Input and lifecycle invariants
 
 - `DomInputAdapter` 只将顶层 Canvas 的 DOM 事件标准化为 runtime input，并对所有绑定提供对称解绑。
 - `PressedInputState` 是键盘按键和鼠标按钮状态的唯一所有者；每次派发获得独立快照，销毁时统一清空。
 - `EventDispatcher` 仅协调 input adapter、pressed state 与 `EventRuntime`，不保存事件定义或 listener 状态。
 - `Stay.destroy()` 是 DOM 监听、render loop、事件定义、gesture owner 和 listener 状态的统一终止出口。
 - React unmount、显式 `reCreate()` 和 resize recreate 都必须先销毁旧 Stay，不能遗留 DOM listener 或 animation frame。
-
-## Merge gates
-
-- 每个单元独立完成 deterministic checks 和 PR-boundary CR。
-- 架构整洁、职责清晰、单向依赖和可读控制流是硬性验收条件；测试通过不能替代这些条件。
-- 默认等待人工合并后再推进下一个依赖单元。

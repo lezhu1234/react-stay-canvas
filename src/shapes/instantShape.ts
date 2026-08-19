@@ -1,5 +1,5 @@
-import { shapeUpdateEventEmitter } from "../ShapeUpdateEventEmitter"
-import { StayInstantChild } from "../stay/child/stayInstantChild"
+import { StayInstantChild } from "../stay/children/stayInstantChild"
+import { shapeUpdateEventEmitter } from "./shapeUpdateEventEmitter"
 import { valueof } from "../stay/types"
 import { DrawCanvasContext } from "../types"
 import { SHAPE_DRAW_TYPES } from "../userConstants"

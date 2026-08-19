@@ -1,31 +1,19 @@
-import Canvas from "../canvas"
-import { EventProps, StayEventProps } from "../types"
-import { MOUSE_EVENTS } from "../userConstants"
+import Canvas from "../../../canvas"
+import { EventProps, StayEventProps } from "../../../types"
+import { MOUSE_EVENTS } from "../../../userConstants"
 import {
   ActionEvent,
   PredefinedWheelEventName,
   TriggerEvents,
-} from "../userTypes"
-import type { EventDefinitionLookup } from "./actionTargetResolver"
+} from "../../../userTypes"
+import type {
+  ActionRoutePort,
+  EventDefinitionLookup,
+  EventInput,
+} from "../contracts"
 import { EventRegistry } from "./eventRegistry"
 
 type Store = Map<string, any>
-
-type ActionRoutePort = {
-  dispatch<T extends string>(
-    originEvent: Event,
-    triggerEvents: TriggerEvents<T>,
-    payload: Record<string, any>,
-    eventDefinitions: EventDefinitionLookup
-  ): void
-  endGesture(): void
-}
-
-export type EventInput = {
-  originEvent: Event
-  trigger: string
-  pressedKeys: ReadonlySet<string>
-}
 
 type EventRuntimeContext = {
   canvas: Canvas

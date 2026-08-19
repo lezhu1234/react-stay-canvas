@@ -1,13 +1,14 @@
-import { EventProps } from "../types"
-import { MOUSE_EVENTS } from "../userConstants"
+import { EventProps } from "../../../types"
+import { MOUSE_EVENTS } from "../../../userConstants"
 import {
   ActionEvent,
   ChildSortFunction,
   SelectorFunc,
   TriggerEvents,
-} from "../userTypes"
+} from "../../../userTypes"
 import { createActionEventEnvelope } from "./actionEventEnvelope"
-import { StayInstantChild } from "./child/stayInstantChild"
+import { StayInstantChild } from "../../children/stayInstantChild"
+import type { EventDefinitionLookup } from "../contracts"
 
 type Store = Map<string, any>
 export type GestureFamily = "drag" | "move"
@@ -30,10 +31,6 @@ export type TargetRegistration = {
   eventNames: readonly string[]
   selector: string
   sortBy: ChildSortFunction
-}
-
-export type EventDefinitionLookup = {
-  get(name: string): { trigger?: string } | undefined
 }
 
 export type TargetDecision =

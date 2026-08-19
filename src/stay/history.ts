@@ -1,4 +1,4 @@
-import { StayInstantChild } from "./child/stayInstantChild"
+import { StayInstantChild } from "./children/stayInstantChild"
 import { StackItem } from "./types"
 
 // Owns the undo/redo history *state*: the step stack + cursor (stackIndex), the

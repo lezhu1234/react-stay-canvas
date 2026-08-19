@@ -2,8 +2,8 @@ import Canvas from "./canvas"
 import { AnimatedShape } from "./shapes/animatedShape"
 import { InstantShape } from "./shapes/instantShape"
 import { Point } from "./shapes/point"
-import { StayAnimatedChild } from "./stay/child/stayAnimatedChild"
-import { StayInstantChild } from "./stay/child/stayInstantChild"
+import { StayAnimatedChild } from "./stay/children/stayAnimatedChild"
+import { StayInstantChild } from "./stay/children/stayInstantChild"
 import { valueof } from "./stay/types"
 import {
   DrawCanvasContext,

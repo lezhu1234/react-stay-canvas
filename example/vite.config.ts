@@ -13,6 +13,9 @@ export default defineConfig({
   base,
   plugins: [react()],
   resolve: {
+    // Library source lives one directory above this app. Always use the example
+    // app's React instance so local root dependencies cannot create two runtimes.
+    dedupe: ["react", "react-dom"],
     alias: {
       // Import the library straight from source so examples track the repo.
       "react-stay-canvas": path.resolve(rootDir, "../src/index.ts"),

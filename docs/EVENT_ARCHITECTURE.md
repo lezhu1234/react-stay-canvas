@@ -50,6 +50,14 @@ DOM
 - Evidence: 动态事件增删覆盖、手动 trigger、同步异常和现有完整测试。
 - Dependency: U1 merged or explicitly selected as a stacked base.
 
+U2 运行时不变量：
+
+- `EventRegistry` 是事件定义的唯一存储；注册、替换、删除和清空都经由该对象完成。
+- 每次原始输入先快照事件名称，随后按名称实时读取定义：新增名称下一轮生效，删除立即生效，同名替换保持原位置并可在本轮生效。
+- 每个匹配定义独立创建 `ActionEvent`，并在执行该定义时实时读取 state；一个定义修改 event seed 不污染后续定义。
+- `conditionCallback`、`successCallback` 和 listener callback 的同步异常继续向调用方抛出；已经完成的动态增删不回滚。
+- 物理 `mouseup` 的 gesture owner 清理位于 runtime 的 terminal `finally` 中，事件定义抛错不能跳过清理。
+
 ### U3 — DomInputAdapter and PressedInputState
 
 - Outcome: DOM wiring 与业务事件执行分离，EventDispatcher 成为薄协调层。

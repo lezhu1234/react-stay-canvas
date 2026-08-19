@@ -11,11 +11,11 @@ import {
 import { createActionEventEnvelope } from "./actionEventEnvelope"
 import {
   ActionTargetResolver,
-  EventDefinitionLookup,
   GestureFamily,
   TargetDecision,
   TargetResolverContext,
 } from "./actionTargetResolver"
+import type { EventDefinitionLookup } from "./actionTargetResolver"
 
 type Store = Map<string, any>
 
@@ -41,6 +41,10 @@ type ActionRouterContext = {
   getTools: () => StayTools
   isStateAvailable: (selector: string) => boolean
   targetResolver: TargetResolverContext
+}
+
+const EMPTY_EVENT_DEFINITIONS: EventDefinitionLookup = {
+  get: () => undefined,
 }
 
 const defaultSort: ChildSortFunction = (child) => {
@@ -103,7 +107,7 @@ export class ActionRouter<EventName extends string> {
     originEvent: Event,
     triggerEvents: TriggerEvents<T>,
     payload: Dict,
-    eventDefinitions: EventDefinitionLookup = {}
+    eventDefinitions: EventDefinitionLookup = EMPTY_EVENT_DEFINITIONS
   ): void {
     try {
       this.listeners.forEach((runtime) => {

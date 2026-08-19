@@ -32,9 +32,9 @@ export type TargetRegistration = {
   sortBy: ChildSortFunction
 }
 
-export type EventDefinitionLookup = Readonly<
-  Partial<Record<string, { trigger?: string } | undefined>>
->
+export type EventDefinitionLookup = {
+  get(name: string): { trigger?: string } | undefined
+}
 
 export type TargetDecision =
   | { kind: "target"; target: StayInstantChild }
@@ -318,7 +318,7 @@ export class ActionTargetResolver {
       gesture.triggers[gesture.start] === start.event.trigger &&
       registration.eventNames.some((name) => {
         if (!gesture.all.has(name)) return false
-        const definition = eventDefinitions[name]
+        const definition = eventDefinitions.get(name)
         return !definition || definition.trigger === gesture.triggers[name]
       })
     )

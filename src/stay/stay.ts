@@ -24,6 +24,7 @@ import { uuid4 } from "../utils"
 import { ChildrenStore } from "./childrenStore"
 import { ActionRouter } from "./actionRouter"
 import { EventDispatcher } from "./eventDispatcher"
+import { EventRuntime } from "./eventRuntime"
 import { History } from "./history"
 import { StayInstantChild } from "./child/stayInstantChild"
 import { Renderer } from "./renderer"
@@ -33,6 +34,7 @@ import { SetShapeChildCurrentTime, StackItem } from "./types"
 class Stay<EventName extends string> {
   readonly children = new ChildrenStore()
   actionRouter: ActionRouter<EventName>
+  eventRuntime: EventRuntime<EventName>
   renderer: Renderer
   eventDispatcher: EventDispatcher<EventName>
   history: History
@@ -97,13 +99,17 @@ class Stay<EventName extends string> {
     this.renderer = new Renderer(this.root, () =>
       this.children.values().filter((child) => child.id !== this.rootId)
     )
+    this.eventRuntime = new EventRuntime({
+      canvas: this.root,
+      store: this.store,
+      stateStore: this.stateStore,
+      getState: () => this.state,
+      actionRouter: this.actionRouter,
+    })
     this.eventDispatcher = new EventDispatcher(
       this.root,
       this.passive,
-      this.store,
-      this.stateStore,
-      () => this.state,
-      this.actionRouter
+      this.eventRuntime
     )
 
     this.eventDispatcher.initEvents()
@@ -154,8 +160,7 @@ class Stay<EventName extends string> {
   }
 
   clearEvents() {
-    this.eventDispatcher.clearEvents()
-    this.actionRouter.endGesture()
+    this.eventRuntime.clearEvents()
   }
 
   cloneChildren(): Map<string, StayInstantChild> {
@@ -220,7 +225,7 @@ class Stay<EventName extends string> {
   }
 
   registerEvent(props: EventProps<EventName>) {
-    this.eventDispatcher.registerEvent(props)
+    this.eventRuntime.registerEvent(props)
   }
 
   removeChildById(id: string) {

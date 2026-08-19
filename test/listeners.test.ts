@@ -3,9 +3,8 @@ import { describe, it, expect } from "vitest"
 import { Rectangle } from "react-stay-canvas"
 import { createStage, md, mm, mu } from "./helpers/stage"
 
-// triggerAction awaits the listener callback, deferring composeStore merges to a
-// microtask. Real DOM events land on separate event-loop turns; back-to-back
-// synchronous dispatch does not, so flush between dispatches.
+// Some shape updates settle on the render loop, so gesture phases await a tick
+// even though ActionRouter merges composeStore synchronously.
 const tick = () => new Promise((r) => setTimeout(r, 0))
 
 // Dimensions 3 & 4 (custom events / listeners): the predefined drag chain

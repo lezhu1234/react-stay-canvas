@@ -764,6 +764,13 @@ export interface ActionEvent {
   deltaZ: number // 鼠标滚轮滑动时的 z 轴偏移
 }
 
+// 路由保证：
+// - 每次 listener 调用都会获得独立的 ActionEvent 外壳。
+// - 一个 listener 对 point、pressedKeys 或 target 的修改不会影响其他 listener。
+// - withTargetConditionCallback 通过的 Child 就是最终传给 callback 的 e.target。
+// - drag/move 的继续与结束阶段始终使用开始阶段捕获的 target。
+// - 开始时没有 target 的手势不会在中途重新获取。
+
 //example 1
 // 在该例中, callback 函数没有返回任何值, 该 listener 实现了鼠标移动时，根据鼠标是否在矩形内切换矩形的状态
 export const HoverListener: ListenerProps = {

@@ -3,7 +3,7 @@ import { Root } from "../shapes"
 import { InstantShape } from "../shapes/instantShape"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
-import { ContextLayerSetFunction, EventProps, StayEventMap, StayEventProps } from "../types"
+import { ContextLayerSetFunction, EventProps } from "../types"
 import {
   DEFAULTSTATE,
   FRAME_EVENT_NAME,
@@ -12,19 +12,17 @@ import {
   SUPPORT_OPRATOR,
 } from "../userConstants"
 import {
-  ActionEvent,
   DrawReturn,
   ListenerNamePayloadPair,
   ListenerProps,
-  PredefinedWheelEventName,
   SelectorFunc,
   StayDrawProps,
   StayTools,
-  TriggerEvents,
 } from "../userTypes"
 import { uuid4 } from "../utils"
 
 import { ChildrenStore } from "./childrenStore"
+import { ActionRouter } from "./actionRouter"
 import { EventDispatcher } from "./eventDispatcher"
 import { History } from "./history"
 import { StayInstantChild } from "./child/stayInstantChild"
@@ -34,7 +32,7 @@ import { SetShapeChildCurrentTime, StackItem } from "./types"
 
 class Stay<EventName extends string> {
   readonly children = new ChildrenStore()
-  composeStore: Record<string, any>
+  actionRouter: ActionRouter<EventName>
   renderer: Renderer
   eventDispatcher: EventDispatcher<EventName>
   history: History
@@ -75,12 +73,26 @@ class Stay<EventName extends string> {
     this.children.add(this.rootChild)
     this.store = new Map<string, any>()
     this.stateStore = new Map<string, any>()
-    this.composeStore = {}
     this.state = DEFAULTSTATE
     this.stateSet = new Set([DEFAULTSTATE])
 
     this.history = new History(() => this.cloneChildren())
 
+    this.actionRouter = new ActionRouter({
+      canvas: this.root,
+      store: this.store,
+      stateStore: this.stateStore,
+      getTools: () => this.tools,
+      isStateAvailable: (selector) =>
+        this.tools.getAvailiableStates(selector).includes(this.state),
+      targetResolver: {
+        rootChild: this.rootChild,
+        store: this.store,
+        stateStore: this.stateStore,
+        select: (selector, sortBy) => this.tools.getChildrenBySelector(selector, sortBy),
+        hitTest: (props) => this.tools.getContainPointChildren(props),
+      },
+    })
     this.tools = stayTools.call(this)
     this.renderer = new Renderer(this.root, () =>
       this.children.values().filter((child) => child.id !== this.rootId)
@@ -91,8 +103,7 @@ class Stay<EventName extends string> {
       this.store,
       this.stateStore,
       () => this.state,
-      (originEvent, triggerEvents, payload) =>
-        this.tools.triggerAction(originEvent, triggerEvents, payload)
+      this.actionRouter
     )
 
     this.eventDispatcher.initEvents()
@@ -104,7 +115,7 @@ class Stay<EventName extends string> {
   }
 
   addEventListener(props: ListenerProps<ListenerNamePayloadPair, EventName>) {
-    this.eventDispatcher.addEventListener(props)
+    this.actionRouter.addListener(props)
   }
   checkName(name: string, preserveNames: string[]) {
     if (name.length === 0) {
@@ -118,10 +129,6 @@ class Stay<EventName extends string> {
         `name connot contain ${allOprators} and cannot be one of: ${preserveNames}, your name: ${name}`
       )
     }
-  }
-
-  get listeners() {
-    return this.eventDispatcher.listeners
   }
 
   // History state lives in `this.history`; these keep the old flat field API
@@ -143,11 +150,12 @@ class Stay<EventName extends string> {
   }
 
   clearEventListeners() {
-    this.eventDispatcher.clearEventListeners()
+    this.actionRouter.clearListeners()
   }
 
   clearEvents() {
     this.eventDispatcher.clearEvents()
+    this.actionRouter.endGesture()
   }
 
   cloneChildren(): Map<string, StayInstantChild> {

@@ -1,10 +1,8 @@
 import { AnimatedShape } from "../shapes/animatedShape"
 import { InstantShape } from "../shapes/instantShape"
 import { Rectangle } from "../shapes/rectangle"
-import { ALLSTATE, DEFAULTSTATE, SUPPORT_OPRATOR } from "../userConstants"
+import { ALLSTATE, SUPPORT_OPRATOR } from "../userConstants"
 import {
-  ActionCallbackProps,
-  ActionEvent,
   Area,
   ChildSortFunction,
   Dict,
@@ -12,7 +10,6 @@ import {
   getContainPointChildrenProps,
   ImportChildrenProps,
   PointType,
-  PredefinedMouseEventName,
   ProgressProps,
   RegionToTargetCanvasProps,
   SelectorFunc,
@@ -450,120 +447,8 @@ export function stayTools(this: Stay<any>): StayTools {
       originEvent: Event,
       triggerEvents: TriggerEvents<T>,
       payload: Dict
-    ): void => {
-      const isMouseEvent = originEvent instanceof MouseEvent
-      this.listeners.forEach(({ name, event, state, selector, sortBy, callback }) => {
-        if (!(name in this.composeStore)) {
-          this.composeStore[name] = {}
-        }
-
-        if (!Array.isArray(event)) {
-          event = [event]
-        }
-
-        event.forEach((actionEventName: string) => {
-          const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
-
-          if (!avaliableSet.includes(this.state) || !(actionEventName in triggerEvents)) {
-            return false
-          }
-
-          const { info: actionEvent, event: preEvent } = triggerEvents[actionEventName]
-
-          const _actionEvent = actionEvent as ActionEvent<PredefinedMouseEventName>
-          if (preEvent.withTargetConditionCallback) {
-            const children = this.tools.getChildrenBySelector(selector)
-            let flag = false
-            for (let index = 0; index < children.length; index++) {
-              const child = children[index]
-
-              if (
-                preEvent.withTargetConditionCallback({
-                  e: _actionEvent as any,
-                  store: this.store,
-                  stateStore: this.stateStore,
-                  target: child,
-                  originEvent,
-                })
-              ) {
-                _actionEvent.target = child
-                flag = true
-                break
-              }
-            }
-
-            if (!flag) {
-              return false
-            }
-          }
-
-          if (isMouseEvent) {
-            if (actionEventName === "mouseleave") {
-              _actionEvent.target = this.rootChild
-            } else {
-              const children = this.tools.getContainPointChildren({
-                point: _actionEvent.point,
-                selector: selector,
-                sortBy: sortBy,
-              })
-
-              if (children.length === 0) {
-                return false
-              }
-              _actionEvent.target = children[0] as StayInstantChild
-            }
-          }
-
-          if (callback) {
-            // Merge the callback's returned partial into THIS listener's
-            // composeStore (keyed by listener name). Shared by the sync and the
-            // defensive async path below. TODO(2b): type eventFuncMap.
-            const mergeComposeStore = (eventFuncMap: any) => {
-              if (eventFuncMap !== undefined && actionEvent.name in eventFuncMap) {
-                const particalComposeStore = eventFuncMap[actionEvent.name]()
-                this.composeStore[name] = {
-                  ...this.composeStore[name],
-                  ...particalComposeStore,
-                }
-              }
-            }
-
-            const result = callback({
-              originEvent,
-              //@ts-ignore cannot understand
-              e: actionEvent,
-              store: this.store,
-              stateStore: this.stateStore,
-              composeStore: this.composeStore[name],
-              tools: this.getTools() as any,
-              canvas: this.root,
-              payload,
-            })
-
-            // The callback type is synchronous (CallbackFuncMap | void), so the
-            // common path merges in the SAME tick — no microtask defer, no
-            // `await tick()` needed, and a synchronous throw keeps its real
-            // stack. A plain-JS caller could still hand back a Promise; handle
-            // that defensively rather than dropping it on the floor (the old
-            // `forEach(async …)` swallowed both the result and any rejection).
-            if (result instanceof Promise) {
-              result
-                .then((eventFuncMap) => mergeComposeStore(eventFuncMap))
-                .catch((err) =>
-                  console.error(`[stay] listener "${name}" async callback threw:`, err)
-                )
-            } else {
-              mergeComposeStore(result)
-            }
-          }
-        })
-      })
-    },
-    deleteListener: (name: string) => {
-      if (this.listeners.has(name)) {
-        this.listeners.delete(name)
-      }
-    },
+    ): void => this.actionRouter.dispatch(originEvent, triggerEvents, payload),
+    deleteListener: (name: string) => this.actionRouter.deleteListener(name),
   }
 
   // Unified surface: every mode gets all tools (see StayTools). The three groups

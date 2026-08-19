@@ -772,6 +772,13 @@ export interface ActionEvent {
   deltaZ: number // The z-axis offset when the mouse wheel is scrolled
 }
 
+// Routing guarantees:
+// - Each listener invocation receives its own ActionEvent envelope.
+// - Changes to point, pressedKeys, or target in one listener do not affect another.
+// - A target accepted by withTargetConditionCallback is the same Child delivered as e.target.
+// - drag/move continuation and end retain the target captured at start.
+// - A gesture that starts without a target cannot acquire one later.
+
 // example 1
 // In this example, the callback function does not return any value. This listener switches the state of the rectangle based on whether the mouse is inside the rectangle when the mouse moves
 export const HoverListener: ListenerProps = {

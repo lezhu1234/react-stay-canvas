@@ -18,31 +18,31 @@ import {
   wheel,
 } from "../rawEvents"
 import { EventProps, StayEventMap, StayEventProps } from "../types"
-import { DEFAULTSTATE, MOUSE_EVENTS, ROOTNAME } from "../userConstants"
+import { MOUSE_EVENTS } from "../userConstants"
 import {
   ActionEvent,
-  ListenerNamePayloadPair,
-  ListenerProps,
   PredefinedWheelEventName,
   TriggerEvents,
 } from "../userTypes"
 
 type Store = Map<string, any>
-type TriggerActionFn<EventName extends string> = (
-  originEvent: Event,
-  triggerEvents: TriggerEvents<EventName>,
-  payload: Record<string, any>
-) => void
+type ActionRoutePort<EventName extends string> = {
+  dispatch<T extends string>(
+    originEvent: Event,
+    triggerEvents: TriggerEvents<T>,
+    payload: Record<string, any>,
+    eventDefinitions?: Readonly<
+      Partial<Record<string, { trigger?: string } | undefined>>
+    >
+  ): void
+  endGesture(): void
+}
 
-// Owns event registration, the listener registry, pressed-key tracking, the DOM
-// wiring, and fireEvent (build ActionEvent → run each event's condition/success
-// callbacks → hand off to tools.triggerAction). Extracted from Stay so "event
-// dispatch" is one concern. Reads Stay's live state/store via injected
-// accessors; the final dispatch — walking listeners and calling their callbacks
-// — stays in tools.triggerAction, which is injected here.
+// U1 leaves event-definition execution and DOM wiring here. Listener routing is
+// delegated through the narrow ActionRoutePort; U2 and U3 will extract the two
+// remaining concerns without coupling them back to Child selection.
 export class EventDispatcher<EventName extends string> {
   events: StayEventMap<EventName> = {} as StayEventMap<EventName>
-  listeners = new Map<string, Required<ListenerProps<ListenerNamePayloadPair, EventName>>>()
   currentPressedKeys: { [key: string]: boolean } = {}
 
   constructor(
@@ -51,23 +51,8 @@ export class EventDispatcher<EventName extends string> {
     private readonly store: Store,
     private readonly stateStore: Store,
     private readonly getState: () => string,
-    private readonly triggerAction: TriggerActionFn<EventName>
+    private readonly actionRouter: ActionRoutePort<EventName>
   ) {}
-
-  addEventListener({
-    name,
-    event,
-    callback,
-    state = DEFAULTSTATE,
-    selector = `.${ROOTNAME}`,
-    sortBy = (child) => {
-      const { width, height } = child.getBound()
-      return width * height
-    },
-  }: ListenerProps<ListenerNamePayloadPair, EventName>) {
-    const eventList = Array.isArray(event) ? event : [event]
-    this.listeners.set(name, { name, state, selector, event: eventList, sortBy, callback })
-  }
 
   registerEvent({
     name,
@@ -93,10 +78,6 @@ export class EventDispatcher<EventName extends string> {
     this.events = {} as StayEventMap<EventName>
   }
 
-  clearEventListeners() {
-    this.listeners.clear()
-  }
-
   pressKey(key: string) {
     this.currentPressedKeys[key] = true
   }
@@ -106,6 +87,20 @@ export class EventDispatcher<EventName extends string> {
   }
 
   fireEvent(e: KeyboardEvent | MouseEvent | WheelEvent | DragEvent | Event, trigger: string) {
+    try {
+      const triggerEvents = this.collectTriggerEvents(e, trigger)
+      this.actionRouter.dispatch(e, triggerEvents, {}, this.events)
+    } finally {
+      if (trigger === MOUSE_EVENTS.MOUSE_UP) {
+        this.actionRouter.endGesture()
+      }
+    }
+  }
+
+  private collectTriggerEvents(
+    e: KeyboardEvent | MouseEvent | WheelEvent | DragEvent | Event,
+    trigger: string
+  ) {
     const isMouseEvent = e instanceof MouseEvent
     const triggerEvents: TriggerEvents<EventName> = {}
     Object.keys(this.events).forEach((_eventName) => {
@@ -170,8 +165,7 @@ export class EventDispatcher<EventName extends string> {
         }
       }
     })
-
-    this.triggerAction(e, triggerEvents, {})
+    return triggerEvents
   }
 
   // Bind the DOM events on the top layer to fireEvent / pressKey / releaseKey.

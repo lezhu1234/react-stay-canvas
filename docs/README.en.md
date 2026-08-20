@@ -779,15 +779,23 @@ export interface ActionEvent {
   deltaX?: number // Present for wheel actions or explicit manual action data
   deltaY?: number
   deltaZ?: number
+  pointerId?: number // Present for actions emitted by an active Pointer Session
+  pointerType?: string // Usually mouse, pen, or touch
+  cancelled?: boolean // True when a gesture terminal is caused by cancellation
+  cancelReason?: "pointercancel" | "lostpointercapture" | "blur" | "visibilitychange"
 }
 
 // Routing guarantees:
-// - originEvent is always the native Event; e is always a plain ActionEvent.
+// - originEvent is always the native Event; pointer-capable browsers provide PointerEvent
+//   for the primary down/move/up chain, while e is always a plain ActionEvent.
 // - Each listener invocation receives its own ActionEvent envelope.
 // - Changes to point, pressedKeys, or target in one listener do not affect another.
 // - A target accepted by withTargetConditionCallback is the same Child delivered as e.target.
 // - drag/move continuation and end retain the target captured at start.
 // - A gesture that starts without a target cannot acquire one later.
+// - A gesture started inside the Canvas keeps receiving move/end outside it and ends once.
+// - A pointerdown/mousedown synchronously dispatched before a terminal callback returns is ignored.
+//   Use triggerAction for application actions; start the next native test session after the callback returns.
 
 // A manual action may use a predefined name without carrying DOM input data.
 // Narrow optional fields before reading them.

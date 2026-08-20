@@ -193,6 +193,71 @@ describe("ActionRouter contracts", () => {
     expect(targets).toEqual([start.id, start.id])
   })
 
+  it("routes a one-shot gesture start after its definition deletes itself", () => {
+    const { stage, top } = createStage()
+    const start = stage.tools.appendChild({
+      className: "one-shot-start-node",
+      shape: rectangle(0, 0, 40, 40),
+    })
+    const targets: string[] = []
+
+    stage.registerEvent({
+      name: "dragstart",
+      trigger: "mousedown",
+      successCallback: ({ deleteEvent }) => {
+        deleteEvent("dragstart")
+      },
+    })
+    stage.addEventListener({
+      name: "one-shot-start-listener",
+      event: "dragstart",
+      selector: ".one-shot-start-node",
+      callback: ({ e }: any) => targets.push(e.target.id),
+    })
+
+    top.dispatchEvent(md(10, 10))
+
+    expect(targets).toEqual([start.id])
+  })
+
+  it("retains the start target for a terminal registered by a later phase", () => {
+    const { stage, top } = createStage()
+    const start = stage.tools.appendChild({
+      className: "staged-terminal-node",
+      shape: rectangle(0, 0, 40, 40),
+    })
+    stage.tools.appendChild({
+      className: "staged-terminal-node",
+      shape: rectangle(80, 0, 40, 40),
+    })
+    const targets: string[] = []
+
+    stage.registerEvent({
+      name: "dragstart",
+      trigger: "mousedown",
+      successCallback: () => ({
+        name: "drag",
+        trigger: "mousemove",
+        successCallback: () => ({
+          name: "dragend",
+          trigger: "mouseup",
+        }),
+      }),
+    })
+    stage.addEventListener({
+      name: "staged-terminal-listener",
+      event: "dragend",
+      selector: ".staged-terminal-node",
+      callback: ({ e }: any) => targets.push(e.target.id),
+    })
+
+    top.dispatchEvent(md(10, 10))
+    top.dispatchEvent(mm(90, 10))
+    top.dispatchEvent(mu(90, 10))
+
+    expect(targets).toEqual([start.id])
+  })
+
   it("keeps no-owner when an inactive listener becomes active during dragstart", () => {
     const { stage, top } = createStage()
     stage.tools.appendChild({

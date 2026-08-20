@@ -1,9 +1,38 @@
-import type { ActionEvent, EventProps } from "../../types/events"
+import type {
+  ActionEvent,
+  EventProps,
+  PointerSessionCancelReason,
+} from "../../types/events"
+import type {
+  EventDefinitionRole,
+  EventDefinitionScope,
+} from "./gesturePhases"
+
+export type PointerSample = {
+  clientX: number
+  clientY: number
+}
+
+export type PointerSessionRef = {
+  id: number
+  pointerId?: number
+  pointerType: string
+  initiatingButton: number
+}
+
+export type PointerSessionTransition = {
+  phase: "start" | "continue" | "end" | "cancel"
+  outcome?: "released" | "implicit-release" | "cancelled"
+  cancelReason?: PointerSessionCancelReason
+}
 
 export type EventInput = {
   originEvent: Event
-  trigger: string
   pressedKeys: ReadonlySet<string>
+  pointerSample?: PointerSample
+  rawAction?: { trigger: string }
+  pointerSession?: PointerSessionRef
+  sessionTransition?: PointerSessionTransition
 }
 
 export type EventInputSink = (input: EventInput) => void
@@ -13,7 +42,11 @@ export type EventInputPort = {
 }
 
 export type EventDefinitionLookup = {
-  get(name: string): { trigger?: string } | undefined
+  get(name: string): {
+    trigger: string
+    role: EventDefinitionRole
+    scope: EventDefinitionScope
+  } | undefined
 }
 
 // Input adapters and event definitions produce normalized action data. A Child
@@ -27,6 +60,9 @@ export type EvaluatedActions<EventName extends string> = Partial<
   Record<EventName, {
     info: NormalizedActionEvent<EventName>
     event: EventProps<EventName>
+    role: EventDefinitionRole
+    scope: EventDefinitionScope
+    sessionId?: number
   }>
 >
 
@@ -37,5 +73,6 @@ export type ActionRoutePort<EventName extends string> = {
     payload: Record<string, any>,
     eventDefinitions: EventDefinitionLookup
   ): void
-  endGesture(): void
+  endPointerSession(sessionId: number): void
+  clearGestureOwners(): void
 }

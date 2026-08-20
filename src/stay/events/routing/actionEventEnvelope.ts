@@ -19,5 +19,9 @@ export function createActionEventEnvelope<EventName extends string>(
   if (source.deltaX !== undefined) envelope.deltaX = source.deltaX
   if (source.deltaY !== undefined) envelope.deltaY = source.deltaY
   if (source.deltaZ !== undefined) envelope.deltaZ = source.deltaZ
+  if (source.pointerId !== undefined) envelope.pointerId = source.pointerId
+  if (source.pointerType !== undefined) envelope.pointerType = source.pointerType
+  if (source.cancelled !== undefined) envelope.cancelled = source.cancelled
+  if (source.cancelReason !== undefined) envelope.cancelReason = source.cancelReason
   return envelope
 }

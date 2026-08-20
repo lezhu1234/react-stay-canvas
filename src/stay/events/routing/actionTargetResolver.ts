@@ -1,28 +1,28 @@
 import type { ChildSortFunction, SelectorFunc } from "../../../types/children"
 import type { EventProps } from "../../../types/events"
-import { MOUSE_EVENTS } from "../../../userConstants"
-import { createActionEventEnvelope } from "./actionEventEnvelope"
 import { StayInstantChild } from "../../children/stayInstantChild"
 import type {
   EvaluatedActions,
   EventDefinitionLookup,
   NormalizedActionEvent,
 } from "../contracts"
+import {
+  GESTURES,
+  type EventDefinitionRole,
+  type GestureDefinition,
+  type GestureFamily,
+} from "../gesturePhases"
+import { createActionEventEnvelope } from "./actionEventEnvelope"
 
 type Store = Map<string, any>
-export type GestureFamily = "drag" | "move"
 
-type GestureOwner =
+type GestureTarget =
   | { kind: "child"; child: StayInstantChild }
   | { kind: "none" }
 
-type GestureDefinition = {
-  family: GestureFamily
-  start: string
-  end: string
-  continuation: ReadonlySet<string>
-  all: ReadonlySet<string>
-  triggers: Readonly<Record<string, string>>
+type GestureOwner = {
+  sessionId: number
+  target: GestureTarget
 }
 
 export type TargetRegistration = {
@@ -52,39 +52,11 @@ export type TargetResolverContext = {
   }) => StayInstantChild[]
 }
 
-const GESTURES: readonly GestureDefinition[] = [
-  {
-    family: "drag",
-    start: "dragstart",
-    end: "dragend",
-    continuation: new Set(["drag", "dragend"]),
-    all: new Set(["dragstart", "drag", "dragend"]),
-    triggers: {
-      dragstart: MOUSE_EVENTS.MOUSE_DOWN,
-      drag: MOUSE_EVENTS.MOUSE_MOVE,
-      dragend: MOUSE_EVENTS.MOUSE_UP,
-    },
-  },
-  {
-    family: "move",
-    start: "startmove",
-    end: "moveend",
-    continuation: new Set(["move", "moveend"]),
-    all: new Set(["startmove", "move", "moveend"]),
-    triggers: {
-      startmove: MOUSE_EVENTS.MOUSE_DOWN,
-      move: MOUSE_EVENTS.MOUSE_MOVE,
-      moveend: MOUSE_EVENTS.MOUSE_UP,
-    },
-  },
-]
-
-function gestureForEvent(eventName: string): GestureDefinition | undefined {
-  return GESTURES.find(({ all }) => all.has(eventName))
-}
-
 export class ActionTargetResolver {
-  private readonly gestureOwners = new Map<symbol, Map<GestureFamily, GestureOwner>>()
+  private readonly gestureOwners = new Map<
+    symbol,
+    Map<GestureFamily, GestureOwner>
+  >()
 
   constructor(private readonly context: TargetResolverContext) {}
 
@@ -96,17 +68,30 @@ export class ActionTargetResolver {
     triggerEvents: EvaluatedActions<T>,
     eventDefinitions: EventDefinitionLookup
   ): GestureFamily | undefined {
-    if (!(originEvent instanceof MouseEvent)) return undefined
-
-    const gesture = GESTURES.find(({ start }) => start === eventName)
+    const triggered = triggerEvents[eventName as T]
+    const role = triggered?.role
     if (
-      !gesture ||
-      !this.shouldCaptureStart(registration, gesture, triggerEvents, eventDefinitions)
+      !triggered ||
+      role?.kind !== "gesture" ||
+      role.phase !== "start" ||
+      triggered.sessionId === undefined
     ) {
       return undefined
     }
 
-    this.captureGestureStart(registration, gesture, available, originEvent, triggerEvents)
+    const gesture = GESTURES.find(({ family }) => family === role.family)
+    if (!gesture || !this.listenerParticipates(registration, gesture, eventDefinitions)) {
+      return undefined
+    }
+
+    this.captureGestureStart(
+      registration,
+      gesture,
+      triggered.sessionId,
+      available,
+      originEvent,
+      triggerEvents
+    )
     return gesture.family
   }
 
@@ -118,19 +103,25 @@ export class ActionTargetResolver {
     triggerEvents: EvaluatedActions<T>,
     eventDefinitions: EventDefinitionLookup
   ) {
-    if (!(originEvent instanceof MouseEvent)) return
-
     GESTURES.forEach((gesture) => {
-      if (capturedFamilies.has(gesture.family)) return
+      const triggered = triggerEvents[gesture.start as T]
       if (
-        !this.shouldCaptureStart(
-          registration,
-          gesture,
-          triggerEvents,
-          eventDefinitions
-        )
+        !triggered ||
+        triggered.role.kind !== "gesture" ||
+        triggered.role.phase !== "start" ||
+        triggered.sessionId === undefined ||
+        capturedFamilies.has(gesture.family) ||
+        !this.listenerParticipates(registration, gesture, eventDefinitions)
       ) return
-      this.captureGestureStart(registration, gesture, available, originEvent, triggerEvents)
+
+      this.captureGestureStart(
+        registration,
+        gesture,
+        triggered.sessionId,
+        available,
+        originEvent,
+        triggerEvents
+      )
     })
   }
 
@@ -139,15 +130,16 @@ export class ActionTargetResolver {
     eventName: T,
     sourceEvent: NormalizedActionEvent<T>,
     eventDefinition: EventProps<T>,
+    role: EventDefinitionRole,
+    sessionId: number | undefined,
     originEvent: Event
   ): TargetDecision {
-    const gesture = gestureForEvent(eventName)
-    const isGesturePhase = originEvent instanceof MouseEvent &&
-      gesture?.triggers[eventName] === eventDefinition.trigger
-    if (gesture && isGesturePhase) {
+    if (role.kind === "gesture" && sessionId !== undefined) {
       return this.resolveGestureTarget(
         registration.id,
-        gesture,
+        role.family,
+        role.phase,
+        sessionId,
         eventName,
         sourceEvent,
         eventDefinition,
@@ -190,45 +182,42 @@ export class ActionTargetResolver {
     this.gestureOwners.delete(listenerId)
   }
 
-  clearGestureOwners() {
-    this.gestureOwners.clear()
-  }
-
-  releaseCompletedGestures<T extends string>(
-    originEvent: Event,
-    triggerEvents: EvaluatedActions<T>
-  ) {
-    if (!(originEvent instanceof MouseEvent)) return
-
-    const completedFamilies = GESTURES
-      .filter(({ end, triggers }) => {
-        const terminal = triggerEvents[end as T]
-        return terminal && terminal.event.trigger === triggers[end]
-      })
-      .map(({ family }) => family)
-    if (completedFamilies.length === 0) return
-
+  endPointerSession(sessionId: number) {
     this.gestureOwners.forEach((owners, listenerId) => {
-      completedFamilies.forEach((family) => owners.delete(family))
+      owners.forEach((owner, family) => {
+        if (owner.sessionId === sessionId) owners.delete(family)
+      })
       if (owners.size === 0) this.gestureOwners.delete(listenerId)
     })
   }
 
+  clearGestureOwners() {
+    this.gestureOwners.clear()
+  }
+
   private resolveGestureTarget<T extends string>(
     listenerId: symbol,
-    gesture: GestureDefinition,
+    family: GestureFamily,
+    phase: "start" | "continue" | "terminal",
+    sessionId: number,
     eventName: T,
     sourceEvent: NormalizedActionEvent<T>,
     eventDefinition: EventProps<T>,
     originEvent: Event
   ): TargetDecision {
-    const owner = this.gestureOwners.get(listenerId)?.get(gesture.family)
-    if (!owner || owner.kind === "none") return { kind: "skip" }
+    const owner = this.gestureOwners.get(listenerId)?.get(family)
+    if (
+      !owner ||
+      owner.sessionId !== sessionId ||
+      owner.target.kind === "none"
+    ) {
+      return { kind: "skip" }
+    }
 
     if (
-      gesture.continuation.has(eventName) &&
+      phase !== "start" &&
       !this.acceptsTarget(
-        owner.child,
+        owner.target.child,
         eventName,
         sourceEvent,
         eventDefinition,
@@ -238,7 +227,7 @@ export class ActionTargetResolver {
       return { kind: "skip" }
     }
 
-    return { kind: "target", target: owner.child }
+    return { kind: "target", target: owner.target.child }
   }
 
   private findPointerTarget<T extends string>(
@@ -290,47 +279,53 @@ export class ActionTargetResolver {
   }
 
   private setGestureOwner(
+    sessionId: number,
     listenerId: symbol,
     family: GestureFamily,
-    owner: GestureOwner
+    target: GestureTarget
   ) {
     let owners = this.gestureOwners.get(listenerId)
     if (!owners) {
       owners = new Map()
       this.gestureOwners.set(listenerId, owners)
     }
-    owners.set(family, owner)
+    owners.set(family, { sessionId, target })
   }
 
-  private shouldCaptureStart<T extends string>(
+  private listenerParticipates(
     registration: TargetRegistration,
     gesture: GestureDefinition,
-    triggerEvents: EvaluatedActions<T>,
     eventDefinitions: EventDefinitionLookup
   ) {
-    const start = triggerEvents[gesture.start as T]
-    if (!start || gesture.triggers[gesture.start] !== start.event.trigger) return false
-
     return registration.eventNames.some((name) => {
       if (!gesture.all.has(name)) return false
       const definition = eventDefinitions.get(name)
-      return !definition || definition.trigger === gesture.triggers[name]
+      if (!definition) return true
+      return definition.role.kind === "gesture" &&
+        definition.role.family === gesture.family
     })
   }
 
   private captureGestureStart<T extends string>(
     registration: TargetRegistration,
     gesture: GestureDefinition,
+    sessionId: number,
     available: boolean,
     originEvent: Event,
     triggerEvents: EvaluatedActions<T>
   ) {
     if (!available) {
-      this.setGestureOwner(registration.id, gesture.family, { kind: "none" })
+      this.setGestureOwner(
+        sessionId,
+        registration.id,
+        gesture.family,
+        { kind: "none" }
+      )
       return
     }
 
-    const start = triggerEvents[gesture.start as T]!
+    const start = triggerEvents[gesture.start as T]
+    if (!start) return
     const target = this.findPointerTarget(
       registration,
       gesture.start as T,
@@ -339,6 +334,7 @@ export class ActionTargetResolver {
       originEvent
     )
     this.setGestureOwner(
+      sessionId,
       registration.id,
       gesture.family,
       target ? { kind: "child", child: target } : { kind: "none" }

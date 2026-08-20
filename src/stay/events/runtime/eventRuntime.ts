@@ -1,9 +1,5 @@
 import Canvas from "../../../canvas"
-import type {
-  EventProps,
-  StayEventProps,
-} from "../../../types/events"
-import { MOUSE_EVENTS } from "../../../userConstants"
+import type { EventProps, StayEventProps } from "../../../types/events"
 import type {
   ActionRoutePort,
   EvaluatedActions,
@@ -11,7 +7,16 @@ import type {
   EventInput,
   NormalizedActionEvent,
 } from "../contracts"
-import { EventRegistry } from "./eventRegistry"
+import {
+  beginClickPairing,
+  clearClickPairing,
+  getClickPairing,
+} from "../clickPairing"
+import {
+  describeEventDefinition,
+  type EventDefinitionScope,
+} from "../gesturePhases"
+import { EventRegistry, type RegisteredEvent } from "./eventRegistry"
 
 type Store = Map<string, any>
 
@@ -25,9 +30,6 @@ type EventRuntimeContext<EventName extends string> = {
 
 export class EventRuntime<EventName extends string> {
   private readonly registry = new EventRegistry<EventName>()
-  private readonly definitions: EventDefinitionLookup = {
-    get: (name) => this.registry.get(name),
-  }
 
   constructor(private readonly context: EventRuntimeContext<EventName>) {}
 
@@ -41,21 +43,27 @@ export class EventRuntime<EventName extends string> {
 
   clearEvents() {
     this.registry.clear()
-    this.context.actionRouter.endGesture()
+    clearClickPairing(this.context.store)
+    this.context.actionRouter.clearGestureOwners()
   }
 
   handleInput(input: EventInput) {
+    this.beginClickCandidate(input)
+    const terminalSessionId = this.terminalSessionId(input)
+
     try {
       const triggerEvents = this.evaluate(input)
       this.context.actionRouter.dispatch(
         input.originEvent,
         triggerEvents,
         {},
-        this.definitions
+        this.definitionLookup(input.pointerSession?.id)
       )
     } finally {
-      if (input.trigger === MOUSE_EVENTS.MOUSE_UP) {
-        this.context.actionRouter.endGesture()
+      if (terminalSessionId !== undefined) {
+        this.registry.clearPointerSession(terminalSessionId)
+        clearClickPairing(this.context.store, terminalSessionId)
+        this.context.actionRouter.endPointerSession(terminalSessionId)
       }
     }
   }
@@ -65,17 +73,75 @@ export class EventRuntime<EventName extends string> {
     const namesAtStart = this.registry.names()
 
     namesAtStart.forEach((eventName) => {
-      const event = this.registry.get(eventName)
-      if (!event || event.trigger !== input.trigger) return
+      const registered = this.registry.getRegistered(
+        eventName,
+        input.pointerSession?.id
+      )
+      if (!registered || !this.shouldEvaluate(registered, input)) return
 
-      const actionEvent = this.createActionEvent(eventName, event, input)
-      if (!this.conditionPasses(event, actionEvent)) return
+      const actionEvent = this.createActionEvent(
+        eventName,
+        registered.definition,
+        input
+      )
+      if (!this.conditionPasses(registered.definition, actionEvent)) return
 
-      this.runSuccess(event, actionEvent)
-      triggerEvents[eventName] = { info: actionEvent, event }
+      this.runSuccess(registered, actionEvent, input)
+      triggerEvents[eventName] = {
+        info: actionEvent,
+        event: registered.definition,
+        role: registered.role,
+        scope: registered.scope,
+        sessionId: input.pointerSession?.id,
+      }
     })
 
     return triggerEvents
+  }
+
+  private shouldEvaluate(
+    registered: RegisteredEvent<EventName>,
+    input: EventInput
+  ) {
+    const { definition, role, scope } = registered
+    const rawTrigger = input.rawAction?.trigger
+    const transition = input.sessionTransition
+    const sessionId = input.pointerSession?.id
+
+    if (role.kind === "ordinary") return rawTrigger === definition.trigger
+
+    if (role.kind === "click-terminal") {
+      if (
+        rawTrigger !== definition.trigger ||
+        transition?.phase !== "end" ||
+        transition.outcome !== "released"
+      ) {
+        return false
+      }
+      const pairing = getClickPairing(this.context.store)
+      return sessionId !== undefined &&
+        pairing?.sessionId === sessionId &&
+        pairing.initiatingButton === input.pointerSession?.initiatingButton
+    }
+
+    if (role.phase === "start") {
+      return rawTrigger === definition.trigger && transition?.phase === "start"
+    }
+
+    if (!transition || sessionId === undefined || !this.scopeAccepts(scope, sessionId)) {
+      return false
+    }
+
+    if (role.phase === "continue") {
+      return rawTrigger === definition.trigger && transition.phase === "continue"
+    }
+
+    if (transition.phase !== "end" && transition.phase !== "cancel") return false
+    return scope.kind === "pointer-session" || transition.phase === "end"
+  }
+
+  private scopeAccepts(scope: EventDefinitionScope, sessionId: number) {
+    return scope.kind === "persistent" || scope.sessionId === sessionId
   }
 
   private createActionEvent(
@@ -87,27 +153,44 @@ export class EventRuntime<EventName extends string> {
       state: this.context.getState(),
       name: eventName,
       pressedKeys: new Set(input.pressedKeys),
-      isMouseEvent: input.originEvent instanceof MouseEvent,
+      isMouseEvent: Boolean(input.pointerSample) || input.originEvent instanceof MouseEvent,
     }
 
     if (input.originEvent instanceof KeyboardEvent) {
       actionEvent.key = input.originEvent.key
-      return actionEvent
     }
 
-    if (!(input.originEvent instanceof MouseEvent)) return actionEvent
+    const sample = input.pointerSample ?? this.sampleFromMouseEvent(input.originEvent)
+    if (sample) {
+      actionEvent.x = sample.clientX - this.context.canvas.x
+      actionEvent.y = sample.clientY - this.context.canvas.y
+      actionEvent.point = { x: actionEvent.x, y: actionEvent.y }
+    }
 
-    actionEvent.x = input.originEvent.clientX - this.context.canvas.x
-    actionEvent.y = input.originEvent.clientY - this.context.canvas.y
-    actionEvent.point = { x: actionEvent.x, y: actionEvent.y }
+    const session = input.pointerSession
+    if (session) {
+      actionEvent.pointerId = session.pointerId
+      actionEvent.pointerType = session.pointerType
+    }
+    if (input.sessionTransition?.phase === "cancel") {
+      actionEvent.cancelled = true
+      actionEvent.cancelReason = input.sessionTransition.cancelReason
+    } else if (input.sessionTransition) {
+      actionEvent.cancelled = false
+    }
 
-    if (event.trigger === MOUSE_EVENTS.WHEEL && input.originEvent instanceof WheelEvent) {
+    if (event.trigger === "wheel" && input.originEvent instanceof WheelEvent) {
       actionEvent.deltaX = input.originEvent.deltaX
       actionEvent.deltaY = input.originEvent.deltaY
       actionEvent.deltaZ = input.originEvent.deltaZ
     }
 
     return actionEvent
+  }
+
+  private sampleFromMouseEvent(originEvent: Event) {
+    if (!(originEvent instanceof MouseEvent)) return undefined
+    return { clientX: originEvent.clientX, clientY: originEvent.clientY }
   }
 
   private conditionPasses(
@@ -122,17 +205,86 @@ export class EventRuntime<EventName extends string> {
   }
 
   private runSuccess(
-    event: StayEventProps<EventName>,
-    actionEvent: NormalizedActionEvent<EventName>
+    registered: RegisteredEvent<EventName>,
+    actionEvent: NormalizedActionEvent<EventName>,
+    input: EventInput
   ) {
-    const linked = event.successCallback({
+    const linked = registered.definition.successCallback({
       e: actionEvent,
       store: this.context.store,
       stateStore: this.context.stateStore,
-      deleteEvent: (name) => this.deleteEvent(name),
+      deleteEvent: (name) => this.registry.deleteResolved(
+        name,
+        input.pointerSession?.id
+      ),
     })
     if (!linked) return
 
-    this.registry.registerAll(Array.isArray(linked) ? linked : [linked])
+    const definitions = Array.isArray(linked) ? linked : [linked]
+    definitions.forEach((definition) => {
+      this.registry.register(
+        definition,
+        this.linkedScope(registered, definition, input)
+      )
+    })
+  }
+
+  private linkedScope(
+    parent: RegisteredEvent<EventName>,
+    child: EventProps<EventName>,
+    input: EventInput
+  ): EventDefinitionScope {
+    const childRole = describeEventDefinition(child.name, child.trigger)
+    const parentRole = parent.role
+    const sessionId = input.pointerSession?.id
+
+    if (
+      sessionId !== undefined &&
+      parentRole.kind === "gesture" &&
+      childRole.kind === "gesture" &&
+      parentRole.family === childRole.family &&
+      childRole.phase !== "start"
+    ) {
+      return { kind: "pointer-session", sessionId }
+    }
+
+    return { kind: "persistent" }
+  }
+
+  private beginClickCandidate(input: EventInput) {
+    const transition = input.sessionTransition
+    const sample = input.pointerSample
+    const session = input.pointerSession
+    if (transition?.phase !== "start" || !sample || !session) return
+
+    beginClickPairing(this.context.store, {
+      sessionId: session.id,
+      initiatingButton: session.initiatingButton,
+      point: {
+        x: sample.clientX - this.context.canvas.x,
+        y: sample.clientY - this.context.canvas.y,
+      },
+      startedAt: Date.now(),
+    })
+  }
+
+  private terminalSessionId(input: EventInput) {
+    const phase = input.sessionTransition?.phase
+    if (phase !== "end" && phase !== "cancel") return undefined
+    return input.pointerSession?.id
+  }
+
+  private definitionLookup(pointerSessionId?: number): EventDefinitionLookup {
+    return {
+      get: (name) => {
+        const registered = this.registry.getRegistered(name, pointerSessionId)
+        if (!registered) return undefined
+        return {
+          trigger: registered.definition.trigger,
+          role: registered.role,
+          scope: registered.scope,
+        }
+      },
+    }
   }
 }

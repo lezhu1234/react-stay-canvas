@@ -22,7 +22,7 @@ describe("DomInputAdapter", () => {
     target.dispatchEvent(new MouseEvent("mouseup", { button: 2 }))
     target.dispatchEvent(new KeyboardEvent("keyup", { key: "Control" }))
 
-    expect(inputs.map(({ trigger }) => trigger)).toEqual([
+    expect(inputs.map(({ rawAction }) => rawAction?.trigger)).toEqual([
       KEYBOARRD_EVENTS.KEY_DOWN,
       MOUSE_EVENTS.MOUSE_DOWN,
       MOUSE_EVENTS.MOUSE_UP,
@@ -41,7 +41,7 @@ describe("DomInputAdapter", () => {
       target,
       false,
       new PressedInputState(),
-      ({ trigger }) => triggers.push(trigger)
+      ({ rawAction }) => triggers.push(rawAction!.trigger)
     )
     const inputs: Array<[string, string]> = [
       ["mousemove", MOUSE_EVENTS.MOUSE_MOVE],

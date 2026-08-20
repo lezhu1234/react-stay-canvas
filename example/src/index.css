@@ -658,6 +658,56 @@ input:focus-visible {
   gap: 16px;
 }
 
+.pointer-session-demo {
+  display: grid;
+  grid-template-columns: minmax(0, 440px) minmax(190px, 1fr);
+  gap: 16px;
+  align-items: end;
+}
+
+.outside-release-zone {
+  display: flex;
+  min-height: 290px;
+  padding: 24px;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  flex-direction: column;
+  justify-content: center;
+  color: var(--ink);
+  background-color: var(--accent-soft);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 14px,
+    rgba(54, 105, 221, 0.08) 14px,
+    rgba(54, 105, 221, 0.08) 28px
+  );
+}
+
+.outside-release-zone span {
+  margin-bottom: 8px;
+  color: var(--accent-strong);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.outside-release-zone strong {
+  max-width: 18ch;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.outside-release-zone p {
+  max-width: 28ch;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .snapshot-preview {
   padding: 12px;
   overflow: auto;
@@ -980,8 +1030,13 @@ input:focus-visible {
   .catalog-grid,
   .catalog-grid-featured,
   .dual-canvas,
+  .pointer-session-demo,
   .acceptance-panel {
     grid-template-columns: 1fr;
+  }
+
+  .outside-release-zone {
+    min-height: 180px;
   }
 
   .catalog-grid-featured .catalog-card:last-child {

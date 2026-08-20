@@ -32,6 +32,12 @@ export type PredefinedKeyEventName = "keydown" | "keyup" | "undo" | "redo"
 
 export type PredefinedEventName = PredefinedMouseEventName | PredefinedKeyEventName
 
+export type PointerSessionCancelReason =
+  | "pointercancel"
+  | "lostpointercapture"
+  | "blur"
+  | "visibilitychange"
+
 export interface ActionEvent<EventName extends string = string> {
   state: string
   pressedKeys: Set<string>
@@ -47,6 +53,10 @@ export interface ActionEvent<EventName extends string = string> {
   deltaX?: number
   deltaY?: number
   deltaZ?: number
+  pointerId?: number
+  pointerType?: string
+  cancelled?: boolean
+  cancelReason?: PointerSessionCancelReason
 }
 
 export interface MouseActionEvent<EventName extends PredefinedMouseEventName>

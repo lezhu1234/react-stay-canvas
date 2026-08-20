@@ -84,6 +84,45 @@ describe("EventRuntime contracts", () => {
     expect(replacementCalls).toBe(1)
   })
 
+  it("lets a later persistent definition replace a session-scoped definition", () => {
+    const { stage, top } = createStage()
+    let stalePointerCalls = 0
+    let replacementKeyCalls = 0
+
+    stage.registerEvent({
+      name: "dragstart",
+      trigger: "mousedown",
+      successCallback: () => ({
+        name: "drag",
+        trigger: "mousemove",
+        successCallback: () => {
+          stalePointerCalls++
+        },
+      }),
+    })
+    stage.registerEvent({
+      name: "replace-session-drag",
+      trigger: "mousedown",
+      successCallback: () => ({
+        name: "drag",
+        trigger: "keydown",
+        successCallback: () => {
+          replacementKeyCalls++
+        },
+      }),
+    })
+
+    top.dispatchEvent(md(10, 10))
+    top.dispatchEvent(mm(20, 10))
+    top.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "d",
+      bubbles: true,
+    }))
+
+    expect(stalePointerCalls).toBe(0)
+    expect(replacementKeyCalls).toBe(1)
+  })
+
   it("seeds every definition independently and reads state live", () => {
     const { stage, top } = createStage()
     let observedPointX = 0
@@ -174,8 +213,8 @@ describe("EventRuntime contracts", () => {
 
     stage.eventRuntime.handleInput({
       originEvent: new KeyboardEvent("keydown", { key: "k" }),
-      trigger: "keydown",
       pressedKeys: new Set(["k"]),
+      rawAction: { trigger: "keydown" },
     })
 
     expect(observedTarget).toBeUndefined()
@@ -205,8 +244,8 @@ describe("EventRuntime contracts", () => {
     const fire = () =>
       stage.eventRuntime.handleInput({
         originEvent: md(10, 10),
-        trigger: "mousedown",
         pressedKeys: new Set(["mouse0"]),
+        rawAction: { trigger: "mousedown" },
       })
 
     expect(fire).toThrow("event success failed")
@@ -255,7 +294,7 @@ describe("EventRuntime contracts", () => {
     expect(dragCalls).toBe(0)
   })
 
-  it("clears gesture owners when a mouseup event definition throws", () => {
+  it("clears only the terminal session owner when a mouseup definition throws", () => {
     const { stage, top } = createStage()
     stage.tools.appendChild({
       className: "throw-end-node",
@@ -283,8 +322,18 @@ describe("EventRuntime contracts", () => {
     expect(() =>
       stage.eventRuntime.handleInput({
         originEvent: mu(80, 10),
-        trigger: "mouseup",
         pressedKeys: new Set(),
+        pointerSample: { clientX: 80, clientY: 10 },
+        pointerSession: {
+          id: 1,
+          pointerType: "mouse",
+          initiatingButton: 0,
+        },
+        rawAction: { trigger: "mouseup" },
+        sessionTransition: {
+          phase: "end",
+          outcome: "released",
+        },
       })
     ).toThrow("mouseup definition failed")
 
@@ -292,4 +341,5 @@ describe("EventRuntime contracts", () => {
     top.dispatchEvent(mm(80, 10))
     expect(drags).toBe(0)
   })
+
 })

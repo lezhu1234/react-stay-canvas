@@ -771,15 +771,23 @@ export interface ActionEvent {
   deltaX?: number // 滚轮事件或显式手动 action 才有滚轮偏移
   deltaY?: number
   deltaZ?: number
+  pointerId?: number // Pointer Session 产生的 action 才有
+  pointerType?: string // 通常为 mouse、pen 或 touch
+  cancelled?: boolean // 手势因取消而结束时为 true
+  cancelReason?: "pointercancel" | "lostpointercapture" | "blur" | "visibilitychange"
 }
 
 // 路由保证：
-// - originEvent 始终是原生 Event，e 始终是普通 ActionEvent，二者不会混用。
+// - originEvent 始终是原生 Event；支持 Pointer Events 的浏览器会在主按下/移动/松开链路
+//   提供 PointerEvent，e 始终是普通 ActionEvent，二者不会混用。
 // - 每次 listener 调用都会获得独立的 ActionEvent 外壳。
 // - 一个 listener 对 point、pressedKeys 或 target 的修改不会影响其他 listener。
 // - withTargetConditionCallback 通过的 Child 就是最终传给 callback 的 e.target。
+// - 在 Canvas 内开始的手势会在 Canvas 外继续收到 move/end，并且只结束一次。
 // - drag/move 的继续与结束阶段始终使用开始阶段捕获的 target。
 // - 开始时没有 target 的手势不会在中途重新获取。
+// - terminal callback 尚未返回时，同步 dispatchEvent 的 pointerdown/mousedown 会被忽略；
+//   应用级联动请使用 triggerAction，测试中的下一条原生会话应在 callback 返回后再开始。
 
 // 手动 action 可以使用预定义事件名但不携带 DOM 输入数据，读取可选字段前应先缩小类型。
 function hasPointerPosition(

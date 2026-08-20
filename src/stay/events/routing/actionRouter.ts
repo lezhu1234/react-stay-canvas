@@ -11,10 +11,10 @@ import type { StayTools } from "../../../types/tools"
 import { createActionEventEnvelope } from "./actionEventEnvelope"
 import {
   ActionTargetResolver,
-  GestureFamily,
   TargetDecision,
   TargetResolverContext,
 } from "./actionTargetResolver"
+import type { GestureFamily } from "../gesturePhases"
 import type {
   EvaluatedActions,
   EventDefinitionLookup,
@@ -103,7 +103,11 @@ export class ActionRouter<EventName extends string> {
     this.targetResolver.clearGestureOwners()
   }
 
-  endGesture() {
+  endPointerSession(sessionId: number) {
+    this.targetResolver.endPointerSession(sessionId)
+  }
+
+  clearGestureOwners() {
     this.targetResolver.clearGestureOwners()
   }
 
@@ -113,19 +117,15 @@ export class ActionRouter<EventName extends string> {
     payload: Dict,
     eventDefinitions: EventDefinitionLookup = EMPTY_EVENT_DEFINITIONS
   ): void {
-    try {
-      this.listeners.forEach((runtime) => {
-        this.dispatchListener(
-          runtime,
-          originEvent,
-          triggerEvents,
-          payload,
-          eventDefinitions
-        )
-      })
-    } finally {
-      this.targetResolver.releaseCompletedGestures(originEvent, triggerEvents)
-    }
+    this.listeners.forEach((runtime) => {
+      this.dispatchListener(
+        runtime,
+        originEvent,
+        triggerEvents,
+        payload,
+        eventDefinitions
+      )
+    })
   }
 
   dispatchManual(
@@ -182,6 +182,8 @@ export class ActionRouter<EventName extends string> {
         eventName,
         triggered.info,
         triggered.event,
+        triggered.role,
+        triggered.sessionId,
         originEvent
       )
       if (target.kind === "skip") return

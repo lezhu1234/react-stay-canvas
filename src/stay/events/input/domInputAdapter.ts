@@ -1,59 +1,25 @@
 import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "../../../userConstants"
 import type { EventInputSink } from "../contracts"
+import { PointerSession } from "./pointerSession"
 import { PressedInputState } from "./pressedInputState"
 
-type PressedStateUpdate = (event: Event, state: PressedInputState) => void
-
 type DomEventBinding = {
+  target: EventTarget
+  type: string
+  listener: EventListener
+  options?: boolean | AddEventListenerOptions
+}
+
+type StatelessBinding = {
   type: string
   trigger: string
-  updatePressedState?: PressedStateUpdate
   afterDispatch?: (event: Event) => void
   options?: AddEventListenerOptions
 }
 
-const pressKeyboardKey: PressedStateUpdate = (event, state) => {
-  state.press((event as KeyboardEvent).key)
-}
+const allowDrop = (event: Event) => event.preventDefault()
 
-const releaseKeyboardKey: PressedStateUpdate = (event, state) => {
-  state.release((event as KeyboardEvent).key)
-}
-
-const pressMouseButton: PressedStateUpdate = (event, state) => {
-  state.press(`mouse${(event as MouseEvent).button}`)
-}
-
-const releaseMouseButton: PressedStateUpdate = (event, state) => {
-  state.release(`mouse${(event as MouseEvent).button}`)
-}
-
-const allowDrop = (event: Event) => {
-  event.preventDefault()
-}
-
-const createBindings = (passive: boolean): DomEventBinding[] => [
-  {
-    type: "keyup",
-    trigger: KEYBOARRD_EVENTS.KEY_UP,
-    updatePressedState: releaseKeyboardKey,
-  },
-  {
-    type: "keydown",
-    trigger: KEYBOARRD_EVENTS.KEY_DOWN,
-    updatePressedState: pressKeyboardKey,
-  },
-  {
-    type: "mouseup",
-    trigger: MOUSE_EVENTS.MOUSE_UP,
-    updatePressedState: releaseMouseButton,
-  },
-  {
-    type: "mousedown",
-    trigger: MOUSE_EVENTS.MOUSE_DOWN,
-    updatePressedState: pressMouseButton,
-  },
-  { type: "mousemove", trigger: MOUSE_EVENTS.MOUSE_MOVE },
+const createStatelessBindings = (passive: boolean): StatelessBinding[] => [
   { type: "mouseover", trigger: MOUSE_EVENTS.MOUSE_OVER },
   { type: "click", trigger: MOUSE_EVENTS.CLICK },
   { type: "dblclick", trigger: MOUSE_EVENTS.DB_CLICK },
@@ -77,23 +43,25 @@ const createBindings = (passive: boolean): DomEventBinding[] => [
 
 export class DomInputAdapter {
   private bound = false
-  private readonly bindings: DomEventBinding[]
   private readonly cleanupCallbacks: Array<() => void> = []
+  private readonly pointerSession: PointerSession
 
   constructor(
     private readonly target: HTMLCanvasElement,
-    passive: boolean,
+    private readonly passive: boolean,
     private readonly pressedState: PressedInputState,
     private readonly inputSink: EventInputSink
   ) {
-    this.bindings = createBindings(passive)
+    this.pointerSession = new PointerSession(target, pressedState, inputSink)
   }
 
   bind() {
     if (this.bound) return
 
     try {
-      this.bindings.forEach((binding) => this.bindEvent(binding))
+      this.bindKeyboard()
+      this.bindPointerLifecycle()
+      this.bindStatelessInputs()
       this.bound = true
     } catch (error) {
       this.destroy()
@@ -102,24 +70,165 @@ export class DomInputAdapter {
   }
 
   destroy() {
+    this.pointerSession.destroy()
     this.cleanupCallbacks.splice(0).forEach((cleanup) => cleanup())
     this.bound = false
   }
 
-  private bindEvent(binding: DomEventBinding) {
-    const listener: EventListener = (originEvent) => {
-      binding.updatePressedState?.(originEvent, this.pressedState)
-      this.inputSink({
-        originEvent,
-        trigger: binding.trigger,
-        pressedKeys: this.pressedState.snapshot(),
-      })
-      binding.afterDispatch?.(originEvent)
+  private bindKeyboard() {
+    const keydown = (event: KeyboardEvent) => {
+      this.pressedState.press(event.key)
+      this.emit(event, KEYBOARRD_EVENTS.KEY_DOWN)
+    }
+    const keyup = (event: KeyboardEvent) => {
+      this.pressedState.release(event.key)
+      this.emit(event, KEYBOARRD_EVENTS.KEY_UP)
     }
 
-    this.target.addEventListener(binding.type, listener, binding.options)
+    this.addBinding(this.target, "keydown", keydown)
+    this.addBinding(this.target, "keyup", keyup)
+    this.addBinding(window, "keyup", (event: KeyboardEvent) => {
+      if (this.pressedState.has(event.key)) this.pressedState.release(event.key)
+    })
+  }
+
+  private bindPointerLifecycle() {
+    if (typeof window.PointerEvent === "function") {
+      this.bindPointerEvents()
+    } else {
+      this.bindMouseFallback()
+    }
+
+    this.addBinding(window, "blur", (event: Event) => {
+      this.pressedState.clear()
+      this.pointerSession.cancel(event, "blur")
+    })
+    this.addBinding(document, "visibilitychange", (event: Event) => {
+      if (document.visibilityState !== "hidden") return
+      this.pressedState.clear()
+      this.pointerSession.cancel(event, "visibilitychange")
+    })
+  }
+
+  private bindPointerEvents() {
+    this.addBinding(this.target, "pointerdown", (event: PointerEvent) => {
+      this.pointerSession.pointerDown(event)
+    })
+    this.addBinding(this.target, "pointermove", (event: PointerEvent) => {
+      this.pointerSession.pointerMove(event)
+    })
+    this.addBinding(this.target, "pointerup", (event: PointerEvent) => {
+      this.pointerSession.pointerUp(event)
+    })
+    this.addBinding(this.target, "pointercancel", (event: PointerEvent) => {
+      this.pointerSession.pointerCancel(event, "pointercancel")
+    })
+    this.addBinding(this.target, "lostpointercapture", (event: PointerEvent) => {
+      this.pointerSession.pointerCancel(event, "lostpointercapture")
+    })
+    this.addBinding(
+      window,
+      "pointerup",
+      (event: PointerEvent) => {
+        if (this.isDeliveredToCanvas(event)) return
+        this.pointerSession.outsidePointerUp(event)
+      },
+      true
+    )
+    this.addBinding(
+      window,
+      "pointercancel",
+      (event: PointerEvent) => {
+        if (this.isDeliveredToCanvas(event)) return
+        this.pointerSession.pointerCancel(event, "pointercancel")
+      },
+      true
+    )
+
+    // Mouse button chords do not emit pointerdown/pointerup for every button.
+    // Compatibility MouseEvents keep per-button state exact when available;
+    // PointerEvent.buttons remains authoritative on every pointermove.
+    this.addBinding(this.target, "mousedown", (event: MouseEvent) => {
+      this.pointerSession.compatibilityMouseDown(event)
+    })
+    this.addBinding(this.target, "mouseup", (event: MouseEvent) => {
+      this.pointerSession.compatibilityMouseUp(event)
+    })
+    this.addBinding(
+      window,
+      "mouseup",
+      (event: MouseEvent) => {
+        if (this.isDeliveredToCanvas(event)) return
+        this.pointerSession.outsideCompatibilityMouseUp(event)
+      },
+      true
+    )
+  }
+
+  private bindMouseFallback() {
+    this.addBinding(this.target, "mousedown", (event: MouseEvent) => {
+      this.pointerSession.mouseDown(event)
+    })
+    this.addBinding(this.target, "mousemove", (event: MouseEvent) => {
+      this.pointerSession.mouseMove(event)
+    })
+    this.addBinding(this.target, "mouseup", (event: MouseEvent) => {
+      this.pointerSession.mouseUp(event)
+    })
+    this.addBinding(
+      window,
+      "mouseup",
+      (event: MouseEvent) => {
+        if (this.isDeliveredToCanvas(event)) return
+        this.pointerSession.outsideMouseUp(event)
+      },
+      true
+    )
+  }
+
+  private bindStatelessInputs() {
+    createStatelessBindings(this.passive).forEach((binding) => {
+      this.addBinding(
+        this.target,
+        binding.type,
+        (event: Event) => {
+          this.emit(event, binding.trigger)
+          binding.afterDispatch?.(event)
+        },
+        binding.options
+      )
+    })
+  }
+
+  private emit(originEvent: Event, trigger: string) {
+    this.inputSink({
+      originEvent,
+      pressedKeys: this.pressedState.snapshot(),
+      pointerSample: originEvent instanceof MouseEvent
+        ? { clientX: originEvent.clientX, clientY: originEvent.clientY }
+        : undefined,
+      rawAction: { trigger },
+    })
+  }
+
+  private isDeliveredToCanvas(event: Event) {
+    const path = event.composedPath?.()
+    if (path?.length) return path.includes(this.target)
+    const target = event.target
+    return target === this.target || (target instanceof Node && this.target.contains(target))
+  }
+
+  private addBinding<T extends Event>(
+    target: EventTarget,
+    type: string,
+    listener: (event: T) => void,
+    options?: boolean | AddEventListenerOptions
+  ) {
+    const eventListener = listener as EventListener
+    const binding: DomEventBinding = { target, type, listener: eventListener, options }
+    binding.target.addEventListener(binding.type, binding.listener, binding.options)
     this.cleanupCallbacks.push(() => {
-      this.target.removeEventListener(binding.type, listener, binding.options)
+      binding.target.removeEventListener(binding.type, binding.listener, binding.options)
     })
   }
 }

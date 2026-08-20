@@ -1,4 +1,8 @@
-# Warning
+# Legacy document
+
+> This monolithic document is being replaced and contains stale APIs and examples. Start with the new [English documentation](./en/README.md). Package exports and repository examples define the current public surface and behavior.
+
+## Original warning
 
 After several iterations, the API of react-stay-canvas has undergone significant changes, becoming more powerful. However, the Readme has become outdated and is currently being updated.
 
@@ -13,8 +17,6 @@ stay-canvas for react
  </a> | <a href="./README.zh.md">
    <strong>中文简体</strong>
  </a></div>
-
-## Translated by [ChatGPT4](https://chatgpt.com/)
 
 ## Table of Contents
 

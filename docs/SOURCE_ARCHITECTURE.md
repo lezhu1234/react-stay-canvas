@@ -61,6 +61,14 @@ The package-root utility names remain stable even when their internal owner chan
 
 ## Documentation boundary
 
-`README.md` is a concise bilingual landing page. `docs/README.zh.md` and
-`docs/README.en.md` are the canonical API documents for their respective languages; API text and
-examples are not duplicated in the root landing page.
+`README.md` is a concise bilingual landing page. Topic-based documentation lives under `docs/zh/`
+and `docs/en/`; both language trees cover the same public contracts but use natural prose rather
+than line-by-line translation. API text and examples are not duplicated in the root landing page.
+
+During the documentation migration, `docs/README.zh.md` and `docs/README.en.md` remain available as
+explicitly marked legacy references. New pages must use package exports and repository examples as
+their factual sources instead of copying declarations from those legacy files.
+
+Runnable behavior belongs in the example gallery. Manual regression procedures and evidence belong
+in `example/ACCEPTANCE.md` and its route handbooks. Maintainer architecture documents explain
+internal ownership and must not become a second user-facing API reference.

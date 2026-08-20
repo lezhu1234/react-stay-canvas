@@ -4,11 +4,11 @@
 
 A layered Canvas rendering and interaction library for React, with shapes, children, selectors, state, history, animation, and composable events.
 
-[中文文档](./docs/README.zh.md) · [English documentation](./docs/README.en.md) · [示例 / Examples](https://lezhu1234.github.io/react-stay-canvas/) · [验收手册 / Acceptance handbook](./example/ACCEPTANCE.md)
+[中文文档](./docs/zh/README.md) · [English documentation](./docs/en/README.md) · [示例 / Examples](https://lezhu1234.github.io/react-stay-canvas/) · [验收手册 / Acceptance handbook](./example/ACCEPTANCE.md)
 
-> 本页只作为项目入口。中文和英文 API 文档分别是对应语言的规范来源，不再在根 README 维护第三份 API 副本。
+> 本页只作为项目入口。使用指南和 API 参考按主题维护在中英文文档中，不在根 README 维护第三份副本。
 >
-> This page is only the project entry point. The Chinese and English API documents are the canonical sources for their respective languages.
+> This page is only the project entry point. Guides and API reference are maintained by topic in the Chinese and English documentation instead of being copied here.
 
 ## 安装 / Installation
 
@@ -42,9 +42,9 @@ export function Demo() {
 }
 ```
 
-完整的事件、selector、变换、历史记录、场景传输和集成示例请查看示例站点。API、类型和行为契约请查看对应语言文档。
+完整的事件、selector、变换、历史记录、场景传输和集成示例请查看示例站点。建议先阅读对应语言的快速开始和核心概念，再按主题查阅后续文档。
 
-See the example gallery for events, selectors, transforms, history, scene transfer, and integrated workflows. See the language-specific documentation for the API, types, and behavior contracts.
+See the example gallery for events, selectors, transforms, history, scene transfer, and integrated workflows. Start with Getting started and Core concepts in the language-specific documentation, then use the topic guides as reference.
 
 ## 本地验证 / Local verification
 

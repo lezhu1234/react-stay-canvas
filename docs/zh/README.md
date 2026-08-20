@@ -7,7 +7,8 @@
 ## 从哪里开始
 
 - [快速开始](./getting-started.md)：安装库，渲染第一个场景，并理解尺寸和容器布局。
-- [核心概念](./core-concepts.md)：认识 Canvas、图层、Child、Shape、StayTools、selector、state 和事件系统之间的关系。
+- [核心概念](./core-concepts.md)：认识 Canvas、图层、Child、Shape 和 StayTools 之间的关系。
+- [交互与事件](./interaction-and-events.md)：理解 Listener、selector、state、ActionEvent、手动动作和 Pointer Session。
 - [在线示例](https://lezhu1234.github.io/react-stay-canvas/)：10 个单项示例和 3 个集成示例，可直接操作并按页面验收手册回归。
 
 如果你第一次使用这个库，建议先完成“快速开始”，再阅读“核心概念”。不要从 API 列表开始；理解场景对象和事件模型后，具体接口会更容易使用。
@@ -18,7 +19,7 @@
 | --- | --- | --- |
 | 快速开始 | 已重写 | 安装、首个场景、布局、修改和删除对象 |
 | 核心概念 | 已重写 | 渲染模型、对象所有权、图层和交互入口 |
-| 交互与事件 | 迁移中 | Listener、Event、selector、state、Pointer Session |
+| 交互与事件 | 已重写 | Listener、Event、selector、state、Pointer Session |
 | Shape 与动画 | 迁移中 | 内置 Shape、样式、关键帧和自定义 Shape |
 | 场景与工具 | 迁移中 | 查询、变换、历史、导入导出和截图 |
 | API 参考 | 迁移中 | `StayCanvas`、Child、Shape、Event、Listener、`StayTools` |

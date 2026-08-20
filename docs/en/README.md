@@ -7,7 +7,8 @@
 ## Start here
 
 - [Getting started](./getting-started.md): install the package, render a scene, and understand sizing and layout.
-- [Core concepts](./core-concepts.md): learn how Canvas layers, Children, Shapes, StayTools, selectors, state, and events fit together.
+- [Core concepts](./core-concepts.md): learn how Canvas layers, Children, Shapes, and StayTools fit together.
+- [Interaction and events](./interaction-and-events.md): understand Listeners, selectors, state, ActionEvent, manual actions, and Pointer Sessions.
 - [Example gallery](https://lezhu1234.github.io/react-stay-canvas/): run 10 focused examples and 3 integrated workflows, each with its own acceptance handbook.
 
 If this is your first time using the library, work through Getting started before reading Core concepts. The API reference is much easier to use once the scene and event models are familiar.
@@ -18,7 +19,7 @@ If this is your first time using the library, work through Getting started befor
 | --- | --- | --- |
 | Getting started | Rewritten | Installation, first scene, layout, updates, and removal |
 | Core concepts | Rewritten | Rendering model, ownership, layers, and interaction entry points |
-| Interaction and events | In migration | Listeners, Events, selectors, state, and Pointer Sessions |
+| Interaction and events | Rewritten | Listeners, Events, selectors, state, and Pointer Sessions |
 | Shapes and animation | In migration | Built-in Shapes, styling, keyframes, and custom Shapes |
 | Scenes and tools | In migration | Queries, transforms, history, transfer, and capture |
 | API reference | In migration | `StayCanvas`, Children, Shapes, Events, Listeners, and `StayTools` |

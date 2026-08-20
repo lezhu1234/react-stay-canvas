@@ -136,4 +136,4 @@ When a Canvas is recreated, let `mounted` repopulate the scene and replace saved
 
 - Read [Core concepts](./core-concepts.md) to understand why Children, Shapes, and layers are separate.
 - Open the [example gallery](https://lezhu1234.github.io/react-stay-canvas/) and start with the Shapes, Children, and Layers examples.
-- Events, dragging, selectors, and Pointer Sessions will be covered in the Interaction and events guide.
+- Continue with [Interaction and events](./interaction-and-events.md) for Listeners, dragging, selectors, and Pointer Sessions.

@@ -136,4 +136,4 @@ Shape 的 `move`、`update`、`zoom` 等方法会通知所属 Child 和渲染器
 
 - 阅读[核心概念](./core-concepts.md)，理解 Child、Shape 和图层为什么分开。
 - 打开[在线示例](https://lezhu1234.github.io/react-stay-canvas/)，从 Shapes、Children 和 Layers 三个简单示例开始。
-- 事件、拖动、selector 和 Pointer Session 会在后续“交互与事件”文档中展开。
+- 阅读[交互与事件](./interaction-and-events.md)，继续学习 Listener、拖动、selector 和 Pointer Session。

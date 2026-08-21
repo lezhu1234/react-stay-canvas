@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { Rectangle } from "react-stay-canvas"
 import { createStage } from "./helpers/stage"
 
@@ -47,6 +47,46 @@ describe("export / import children", () => {
     expect(shape.x).toBeCloseTo(10)
     expect(shape.y).toBeCloseTo(10)
     expect(shape.width).toBeCloseTo(20)
+  })
+
+  it("does not mutate an exported payload reused across target areas", () => {
+    const src = createStage().stage
+    src.tools.appendChild({ className: "r", shape: rect(10, 10, 20, 20) })
+    const exported = src.tools.exportChildren({
+      children: src.tools.getChildrenWithoutRoot(),
+      area: { x: 0, y: 0, width: 100, height: 100 },
+    })
+    const exportedShape = [...exported.children[0].shapeMap.values()][0]
+
+    const firstTarget = createStage().stage
+    firstTarget.tools.importChildren(exported, { x: 20, y: 30, width: 100, height: 100 })
+
+    const secondTarget = createStage().stage
+    secondTarget.tools.importChildren(exported, { x: 40, y: 50, width: 100, height: 100 })
+
+    expect(exportedShape.x).toBe(10)
+    expect(exportedShape.y).toBe(10)
+    expect(firstTarget.tools.getChildrenWithoutRoot()[0].shape.x).toBe(30)
+    expect(firstTarget.tools.getChildrenWithoutRoot()[0].shape.y).toBe(40)
+    expect(secondTarget.tools.getChildrenWithoutRoot()[0].shape.x).toBe(50)
+    expect(secondTarget.tools.getChildrenWithoutRoot()[0].shape.y).toBe(60)
+  })
+})
+
+describe("regionToTargetCanvas", () => {
+  it("seeks children when progress is zero", async () => {
+    const { stage } = createStage()
+    const child = stage.tools.appendChild({ className: "r", shape: rect(0, 0) })
+    const setCurrentTime = vi.spyOn(child, "setCurrentTime")
+
+    await stage.tools.regionToTargetCanvas({
+      area: { x: 0, y: 0, width: 100, height: 100 },
+      children: [child],
+      progress: 0,
+    })
+
+    expect(setCurrentTime).toHaveBeenCalledOnce()
+    expect(setCurrentTime).toHaveBeenCalledWith({ time: 0 })
   })
 })
 

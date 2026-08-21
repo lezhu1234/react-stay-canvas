@@ -164,7 +164,7 @@ targetTools.importChildren(scene, {
 
 这是几何传输路径，不是完整保留状态的序列化格式。内置 copy 当前会遗漏部分 Shape 公共状态，可能共享嵌套样式值，并把动画 Child 降级为静态快照。详见[当前限制](./known-limitations.md#场景操作)。
 
-当前 `importChildren()` 会先在传入的 `scene.children` 副本上执行 move/zoom，再把结果复制进目标 Canvas。因此同一个 exported payload 不应反复导入到不同区域；每次导入前重新 `exportChildren()`，或者对 payload 中的 Child 再调用 `copy()`。
+`importChildren()` 会先复制 `scene.children`，再对内部副本执行 move/zoom，因此可以把同一个 exported payload 重复导入不同 Canvas 或目标区域，输入数据不会被修改。
 
 如果 `exportChildren()` 省略 `area`，会使用源 Canvas 的 root 边界。如果 `importChildren()` 省略目标区域，会使用目标 Canvas 的 root 边界。
 
@@ -180,7 +180,7 @@ const snapshotCanvas = await tools.regionToTargetCanvas({
 const png = snapshotCanvas.toDataURL("image/png")
 ```
 
-`regionToTargetCanvas()` 返回一个未挂载到 DOM 的 `HTMLCanvasElement`。它按 Shape 的 layer 和 `zIndex` 顺序强制绘制传入的 Children。若传入非零 `progress`，动画 Child 会先推进到该毫秒时间；静态 Child 保持不变。当前 `progress: 0` 会被 truthy 判断跳过，需要先调用 `tools.progress({ timeMs: 0 })`，再在不传 `progress` 的情况下截取当前帧。
+`regionToTargetCanvas()` 返回一个未挂载到 DOM 的 `HTMLCanvasElement`。它按 Shape 的 layer 和 `zIndex` 顺序强制绘制传入的 Children。传入 `progress` 时，动画 Child 会先推进到对应毫秒时间，包括 `progress: 0`；静态 Child 保持不变。
 
 当前实现不会自动把 `area` 平移或缩放到 `targetSize`，因此它更接近“按当前场景坐标绘制到另一个 Canvas”。需要真正裁剪或缩放时，应先导出/导入到目标坐标系，或在业务层明确处理变换。
 

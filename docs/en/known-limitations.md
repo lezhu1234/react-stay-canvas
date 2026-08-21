@@ -26,8 +26,6 @@ The following user-visible behavior is not reliable in the current implementatio
 
 - `reset()` is not a reliable inverse after a scene move because it reuses the previous movement snapshot. Do not present it as a restore-to-initial-state operation.
 - Built-in `Shape.copy()` does not preserve every common field and may share nested mutable style values. `StayAnimatedChild.copy()` also loses its timeline and becomes a static snapshot. Consequently, history and scene transfer are not fully state-preserving for every Shape or animated scene.
-- `importChildren()` mutates the copied Children inside its input payload before appending another copy. Export again before importing the same scene into a different target area.
-- `regionToTargetCanvas({ progress: 0 })` skips timeline seeking because the current implementation uses a truthy check. Seek with `tools.progress({ timeMs: 0 })` first, then capture without the `progress` option.
 
 ## Events and targeting
 

@@ -94,19 +94,19 @@ Shape 通过 `update({ layer })` 换层时也存在脏层缺口：`applyUpdate()
 
 ## 区域输出无法通过 `progress: 0` 回到动画起点
 
-状态：待处理
+状态：已修复，待随代码变更合入
 
 `regionToTargetCanvas()` 只在 `progress` 为 truthy 时推进动画，因此显式传入 `0` 会跳过时间线定位，并按 Child 当前的动画状态绘制。这和公开参数“按毫秒指定输出时间”的语义不一致。
 
-当前若要输出起始帧，应先调用 `tools.progress({ timeMs: 0 })`，再省略 `progress` 调用区域输出。后续实现应以 `progress !== undefined` 判断是否定位时间，并覆盖 `0`、正数、静态 Child 与混合图层。
+区域输出现在以 `progress !== undefined` 判断是否定位时间，显式传入 `0` 会调用 Child 的统一时间定位入口。自动化测试覆盖 `progress: 0`；正数、静态 Child 与混合图层继续沿用同一多态路径。
 
 ## `importChildren()` 会修改传入的导出副本
 
-状态：待处理
+状态：已修复，待随代码变更合入
 
 `exportChildren()` 不会修改源场景，它会先复制 Child；但 `importChildren()` 会直接对 payload 中这些副本执行 move/zoom，再复制到目标 Canvas。同一个 exported payload 连续导入到不同区域时，后一次会基于前一次已变换的坐标继续变换。
 
-当前文档要求每次导入重新导出或先复制 payload Child。后续修复应让 import 在内部只操作临时副本，使输入值保持不变，并增加“一份导出数据导入多个 Canvas/区域”的回归测试。
+`importChildren()` 现在为每次导入创建临时 Child 副本，只对临时副本执行 move/zoom，输入 payload 保持不变。自动化测试覆盖同一份导出数据连续导入不同 Canvas 和目标区域。
 
 ## 部分遗留 Shape 属性被类型接受但未绘制
 

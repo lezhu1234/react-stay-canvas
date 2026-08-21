@@ -164,7 +164,7 @@ Source and target areas must have the same aspect ratio or the method throws `ar
 
 This is a geometry-transfer path, not a fully state-preserving serialization format. Built-in copies currently omit some common Shape state, may share nested style values, and reduce animated Children to static snapshots. See [Current limitations](./known-limitations.md#scene-operations).
 
-The current `importChildren()` first moves and zooms the copied Children inside the supplied payload, then copies that result into the target Canvas. Do not reuse one exported payload for imports into different areas. Export again before each import, or call `copy()` on each payload Child first.
+`importChildren()` copies `scene.children` before moving and zooming its internal copies. The same exported payload can therefore be imported repeatedly into different Canvases or target areas without mutating the input data.
 
 When `exportChildren()` omits `area`, it uses the source root bounds. When `importChildren()` omits its target area, it uses the target root bounds.
 
@@ -180,7 +180,7 @@ const snapshotCanvas = await tools.regionToTargetCanvas({
 const png = snapshotCanvas.toDataURL("image/png")
 ```
 
-`regionToTargetCanvas()` returns an `HTMLCanvasElement` that is not mounted in the DOM. It force-draws the supplied Children in layer and `zIndex` order. A non-zero `progress` seeks animated Children to that millisecond time while static Children remain unchanged. The current truthy guard skips `progress: 0`; call `tools.progress({ timeMs: 0 })` first, then capture the current frame without a `progress` option.
+`regionToTargetCanvas()` returns an `HTMLCanvasElement` that is not mounted in the DOM. It force-draws the supplied Children in layer and `zIndex` order. When `progress` is supplied, animated Children seek to that millisecond time, including `progress: 0`, while static Children remain unchanged.
 
 The current implementation does not automatically translate `area` or scale it into `targetSize`; it is closer to drawing current scene coordinates onto another Canvas. For true crop or scale behavior, first export/import into the target coordinate system or apply an explicit application-level transform.
 

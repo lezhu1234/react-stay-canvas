@@ -9,6 +9,9 @@
 - [快速开始](./getting-started.md)：安装库，渲染第一个场景，并理解尺寸和容器布局。
 - [核心概念](./core-concepts.md)：认识 Canvas、图层、Child、Shape 和 StayTools 之间的关系。
 - [交互与事件](./interaction-and-events.md)：理解 Listener、selector、state、ActionEvent、手动动作和 Pointer Session。
+- [Shape 与动画](./shapes-and-animation.md)：使用内置 Shape、组合对象并构建显式关键帧时间线。
+- [场景与 StayTools](./scene-and-tools.md)：查询、变换、历史、场景传输和区域输出。
+- [当前限制](./known-limitations.md)：当前运行时尚不能可靠提供的行为。
 - [在线示例](https://lezhu1234.github.io/react-stay-canvas/)：10 个单项示例和 3 个集成示例，可直接操作并按页面验收手册回归。
 
 如果你第一次使用这个库，建议先完成“快速开始”，再阅读“核心概念”。不要从 API 列表开始；理解场景对象和事件模型后，具体接口会更容易使用。
@@ -20,11 +23,21 @@
 | 快速开始 | 已重写 | 安装、首个场景、布局、修改和删除对象 |
 | 核心概念 | 已重写 | 渲染模型、对象所有权、图层和交互入口 |
 | 交互与事件 | 已重写 | Listener、Event、selector、state、Pointer Session |
-| Shape 与动画 | 迁移中 | 内置 Shape、样式、关键帧和自定义 Shape |
-| 场景与工具 | 迁移中 | 查询、变换、历史、导入导出和截图 |
-| API 参考 | 迁移中 | `StayCanvas`、Child、Shape、Event、Listener、`StayTools` |
+| Shape 与动画 | 已重写 | 内置 Shape、样式、关键帧和动画约束 |
+| 场景与工具 | 已重写 | 查询、变换、历史、导入导出和截图 |
+| API 参考 | 已重写 | `StayCanvas`、Child、Shape、Event、Listener、`StayTools` |
+| 当前限制 | 已重写 | 可复现的渲染、动画、历史和场景操作缺口 |
 
-迁移期间，尚未重写的内容仍可在[旧版中文文档](../README.zh.md)中查阅。旧文档包含过时接口，只适合作为临时参考；公开类型和当前行为以包导出和仓库示例为准。
+## 进阶指南
+
+- [自定义 Shape](./advanced/custom-shapes.md)：实现绘制、边界、命中、复制、移动与更新协议。
+
+## API 参考
+
+- [StayCanvas](./api/stay-canvas.md)
+- [Child 与 Shape](./api/children-and-shapes.md)
+- [Event 与 Listener](./api/events-and-listeners.md)
+- [StayTools](./api/stay-tools.md)
 
 ## 文档与示例各自负责什么
 
@@ -44,7 +57,7 @@
 | Child | 场景中的可查询、可命中、可整体操作的对象 |
 | Shape | Child 内负责几何、绘制和命中判断的图形 |
 | Listener | 根据事件、状态和 selector 接收动作的监听器 |
-| Event | 把 DOM 输入或程序调用转换为动作的事件定义 |
+| Event | 把匹配的 DOM 输入转换为动作的定义；手动动作走直接派发路径 |
 | StayTools | 当前 Canvas 实例的场景操作入口 |
 
 ## 本地验证
@@ -56,4 +69,4 @@ npm ci --prefix example
 pnpm verify
 ```
 
-`pnpm verify` 会构建库、运行测试、检查示例 TypeScript 类型，并构建示例站点。
+`pnpm verify` 会检查中英文文档结构和本地链接，然后构建库、运行测试、检查示例 TypeScript 类型并构建示例站点。

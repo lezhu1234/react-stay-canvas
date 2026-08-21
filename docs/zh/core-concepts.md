@@ -133,9 +133,12 @@ selector 匹配的是 Child 的 `id` 和 `className`：
 - `.node`：匹配 `className` 为 `node` 的 Child（状态后缀形式如 `node:active` 也归入该类）
 - `#node-a`：匹配 id 为 `node-a` 的 Child
 - `.node|.label`：匹配两者之一
-- `.node&!.disabled`：匹配 node，但排除 disabled
+- `#node-a&.node`：同时匹配 id 和基础 class
+- `.node&!#node-a`：匹配 node，但排除指定 id
 
 同一套 selector 既可用于查询工具，也可限制 Listener 的目标。selector 不会直接返回某个 Shape；它返回符合条件的 Child。
+
+`className` 不是 DOM 的空格分隔 class 列表。一个 Child 只有一个基础 class，并可用冒号附加后缀，例如 `node:active`；`.node` 会匹配它，`.node:active` 匹配完整值。
 
 ## state：控制哪些 Listener 生效
 
@@ -147,8 +150,10 @@ Canvas 运行时维护一个当前 state。Listener 可以声明只在某个 sta
 
 事件系统分为两层：
 
-- Event 定义决定一个动作如何从 DOM 输入、帧更新或程序调用中产生。
+- Event 定义决定动作如何从匹配的 DOM 输入中产生。
 - Listener 根据事件名、state 和 selector 接收动作，并执行场景或应用逻辑。
+
+手动动作会直接派发给 Listener，不会求值已注册的 Event 定义。公开 trigger 类型虽然包含 `"frame"`，但当前 renderer 不会发出该 trigger。
 
 预定义事件已经覆盖 click、drag、move、wheel、键盘和历史快捷键等常见输入。多数应用只需要配置 Listener；只有需要改变触发条件或组合新动作时才需要自定义 Event。
 

@@ -55,9 +55,9 @@ npm ci --prefix example
 pnpm verify
 ```
 
-`pnpm verify` 会依次构建库、运行测试、检查示例 TypeScript 类型并构建示例站点。
+`pnpm verify` 会检查双语文档，然后依次构建库、运行测试、检查示例 TypeScript 类型并构建示例站点。
 
-`pnpm verify` builds the library, runs the tests, type-checks the examples, and builds the example gallery.
+`pnpm verify` checks the bilingual documentation, builds the library, runs the tests, type-checks the examples, and builds the example gallery.
 
 ## License
 

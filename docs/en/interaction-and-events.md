@@ -88,7 +88,7 @@ The main `ListenerProps` fields are:
 | `event` | One action name or an array of action names |
 | `state` | Canvas states in which the Listener is available; defaults to `default-state` |
 | `selector` | Children that may become targets; defaults to the `.stay-canvas` root Child |
-| `sortBy` | Candidate ordering; smaller bounding boxes are preferred by default |
+| `sortBy` | Candidate ordering; provide an explicit comparator for overlapping targets |
 | `callback` | Scene or application logic for accepted actions |
 
 Listeners run in registration order. State is read before each Listener and each action, so a synchronous `switchState` in an earlier Listener is visible to later Listeners.
@@ -101,15 +101,18 @@ Selectors match Children, not Shapes:
 
 ```text
 .node                 className is node
+.node:active          full className is node:active
 #node-a               id is node-a
 .node|.label          node or label
 .node&!#node-a        node except node-a
-(.node|.label)&!.off  parentheses make grouping explicit
+(.node|.label)&!#node-a parentheses make grouping explicit
 ```
 
 The selector language supports `&`, `|`, `!`, and parentheses. Do not put whitespace inside an expression. Use parentheses for complex expressions instead of relying on operator-precedence assumptions.
 
-For pointer actions, the router first selects candidate Children and then hit-tests them at the current Canvas coordinate. The default ordering prefers the smallest bounding box; provide `sortBy(a, b)` when overlapping objects need a different priority.
+A Child `className` is not a DOM-style whitespace-separated list. `node:active` has base class `node`; `.node` matches the base and `.node:active` matches the full value.
+
+For pointer actions, the router first selects candidate Children and then hit-tests them at the current Canvas coordinate. The current default comparator does not provide a stable ordering guarantee, so overlapping targets should always supply `sortBy(a, b)`.
 
 `withTargetConditionCallback` on an Event definition is a second target filter. It receives each candidate `target`; the Child it accepts is the same Child later exposed as `e.target`.
 

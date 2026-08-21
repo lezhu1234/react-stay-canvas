@@ -8,7 +8,8 @@
     "test": "npm test --prefix test",
     "typecheck:example": "npm run typecheck --prefix example",
     "build:example": "npm run build --prefix example",
-    "verify": "pnpm build && pnpm test && pnpm build:example"
+    "verify:docs": "node scripts/verify-docs.mjs",
+    "verify": "pnpm verify:docs && pnpm build && pnpm test && pnpm build:example"
   },
   "repository": {
     "type": "git",

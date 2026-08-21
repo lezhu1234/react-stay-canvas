@@ -1,0 +1,107 @@
+# StayTools API
+
+[English](../../en/api/stay-tools.md) · [场景与工具指南](../scene-and-tools.md)
+
+`StayTools` 是 `BasicTools & InstantTools & AnimatedTools` 的统一接口。每个 Canvas 都同时拥有静态、动画和历史工具；不存在需要选择的运行模式。
+
+## Child 与查询
+
+| 方法 | 签名摘要 | 说明 |
+| --- | --- | --- |
+| `appendChild` | `({ id?, className, shape }) => StayInstantChild` | 添加静态 Child；shape 可为单个、数组或 Map |
+| `removeChild` | `(childId) => Promise<void> \| void` | 删除 Child；root 不可删除 |
+| `hasChild` | `(id) => boolean` | 按 id 判断存在 |
+| `getChildrenWithoutRoot` | `() => StayInstantChild[]` | 返回应用 Child |
+| `getChildById` | `(id) => StayInstantChild \| void` | 按 id 取一项 |
+| `getChildBySelector` | `(selector) => StayInstantChild \| void` | 返回 selector 的第一项 |
+| `getChildrenBySelector` | `(selector, sortBy?) => StayInstantChild[]` | selector 查询并可排序 |
+| `getContainPointChildren` | `({ selector, point, ... }) => StayInstantChild[]` | 查询命中指定点的 Child |
+| `getChildrenByArea` | `(area, selector?) => StayInstantChild[]` | 查询 Shape 中心位于区域内的 Child |
+
+`getContainPointChildren` 选项：
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `selector` | 必填 | string、string[] 或函数 selector |
+| `point` | 必填 | Canvas 局部坐标 |
+| `returnFirst` | `false` | 是否最多返回排序后的第一项 |
+| `sortBy` | — | 命中结果排序 |
+| `withRoot` | `true` | 是否允许返回 root Child |
+
+## 状态与显示
+
+| 方法 | 说明 |
+| --- | --- |
+| `switchState(state)` | 切换 Canvas/Listener state，并清空 stateStore |
+| `getAvailiableStates(selector)` | 返回符合表达式的已知 state；名称保留当前历史拼写 |
+| `changeCursor(cursor)` | 设置顶层 Canvas cursor |
+| `refresh()` | 强制所有 layer 重绘 |
+
+## 场景变换
+
+| 方法 | 说明 |
+| --- | --- |
+| `moveStart()` | 保存全场景移动起点 |
+| `move(offsetX, offsetY, filter?)` | 平移场景；filter 可排除非 root Child |
+| `zoom(deltaY, center, filter?)` | 以 Canvas 局部点为中心缩放 |
+| `reset()` | 执行当前基于 root 的逆变换；场景移动后并不可靠 |
+
+`move()`、`zoom()`、`reset()` 返回下一次 runtime tick 完成的 Promise，不代表浏览器已经完成一帧合成。在移动快照问题修复前，不要把 `reset()` 当作恢复初始状态的入口；详见[当前限制](../known-limitations.md#场景操作)。
+
+## 历史
+
+| 方法 | 说明 |
+| --- | --- |
+| `log()` | 把由 append/remove 标记为待记录的静态 Child 差异提交为一个历史项 |
+| `undo()` | 撤销一个历史项；无可撤销项时只输出日志 |
+| `redo()` | 重做一个历史项；无可重做项时只输出日志 |
+
+动画 Child 不参与历史。调用边界与示例见[场景与工具：历史记录](../scene-and-tools.md#历史记录)。
+
+## 动画
+
+| 方法 | 签名摘要 | 说明 |
+| --- | --- | --- |
+| `createChild` | `({ id?, className }) => StayAnimatedChild` | 创建并加入动画 Child |
+| `progress` | `({ timeMs, bound?, beforeDrawCallback?, afterDrawCallback? }) => DrawReturn` | 推进所有动画 Child 并立即绘制 |
+
+`DrawReturn`：
+
+```ts
+interface DrawReturn {
+  updatedLayers: number[]
+  updatedChilds: Array<{
+    child: StayInstantChild
+    shapes: InstantShape[]
+  }>
+}
+```
+
+## 场景传输与输出
+
+| 方法 | 说明 |
+| --- | --- |
+| `exportChildren({ children, area? })` | 调用当前 Child copy 实现并连同源区域返回 |
+| `importChildren(exported, targetArea?)` | 等比例映射并以新 id 加入当前 Canvas |
+| `regionToTargetCanvas({ area, targetSize?, children, progress? })` | 把 Shape 绘制到新的 HTMLCanvasElement |
+
+`exportChildren()` 的参数类型在源码中名为 `ImportChildrenProps`，返回类型名为 `ExportChildrenProps`；这是现有类型命名，调用方向以上表为准。
+
+场景传输可以满足已测试的静态几何传输路径，但它不是完整序列化契约。copy 保真、动画时间线和 payload 复用限制见[当前限制](../known-limitations.md#场景操作)。
+
+## 动作与 Listener
+
+| 方法 | 说明 |
+| --- | --- |
+| `triggerAction(originEvent, triggerEvents, payload)` | 用显式原生 Event、普通 action 数据和业务 payload 手动路由动作 |
+| `deleteListener(name)` | 删除命名 Listener |
+
+```ts
+tools.triggerAction(
+  new Event("save"),
+  { save: { info: { state: "editing" } } },
+  { documentId: "doc-1" },
+)
+```
+
+`triggerEvents.*.info` 不能是原生 Event；跨 iframe 的原生 Event 也会被拒绝。完整契约见[手动触发动作](../interaction-and-events.md#手动触发动作)。

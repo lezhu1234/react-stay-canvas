@@ -12,7 +12,7 @@
 - [Shape 与动画](./shapes-and-animation.md)：使用内置 Shape、组合对象并构建显式关键帧时间线。
 - [场景与 StayTools](./scene-and-tools.md)：查询、变换、历史、场景传输和区域输出。
 - [当前限制](./known-limitations.md)：当前运行时尚不能可靠提供的行为。
-- [在线示例](https://lezhu1234.github.io/react-stay-canvas/)：通过 10 个单项示例和 3 个集成示例了解常用能力。
+- [在线示例](https://lezhu1234.github.io/react-stay-canvas/)：通过聚焦示例和集成示例了解常用能力。
 
 如果你第一次使用这个库，建议先完成“快速开始”，再阅读“核心概念”。不要从 API 列表开始；理解场景对象和事件模型后，具体接口会更容易使用。
 
@@ -27,11 +27,9 @@
 - [Event 与 Listener](./api/events-and-listeners.md)
 - [StayTools](./api/stay-tools.md)
 
-## 术语约定
+## 术语
 
-文档保留代码中的英文标识符，避免把类型名翻译成另一套名称。
-
-| 标识符 | 文档中的含义 |
+| 标识符 | 含义 |
 | --- | --- |
 | Canvas | 一组尺寸一致、上下叠放的原生 `<canvas>` 图层，以及管理它们的运行时 |
 | Child | 场景中的可查询、可命中、可整体操作的对象 |

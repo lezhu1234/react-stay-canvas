@@ -12,7 +12,7 @@
 - [Shapes and animation](./shapes-and-animation.md): use built-in Shapes, compose objects, and build explicit keyframe timelines.
 - [Scenes and StayTools](./scene-and-tools.md): query, transform, record, transfer, and render scenes.
 - [Current limitations](./known-limitations.md): behavior that the current runtime does not provide reliably.
-- [Example gallery](https://lezhu1234.github.io/react-stay-canvas/): explore common capabilities through 10 focused examples and 3 integrated workflows.
+- [Example gallery](https://lezhu1234.github.io/react-stay-canvas/): explore common capabilities through focused examples and integrated workflows.
 
 If this is your first time using the library, work through Getting started before reading Core concepts. The API reference is much easier to use once the scene and event models are familiar.
 
@@ -29,9 +29,7 @@ If this is your first time using the library, work through Getting started befor
 
 ## Terminology
 
-The documentation keeps public identifiers in English instead of inventing translated names for code concepts.
-
-| Identifier | Meaning in these docs |
+| Identifier | Meaning |
 | --- | --- |
 | Canvas | A stack of equally sized native `<canvas>` layers and the runtime that manages them |
 | Child | A queryable, hittable scene object that can be manipulated as one unit |

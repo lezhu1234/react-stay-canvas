@@ -2,7 +2,7 @@
 
 [Documentation home](./README.md) · [中文](../zh/getting-started.md)
 
-This guide creates a fixed-size Canvas scene, appends a rectangle when the runtime mounts, and then updates and removes that scene object from React controls.
+Create a fixed-size Canvas scene, append a rectangle when the runtime mounts, then update and remove that scene object from React controls.
 
 ## Install
 

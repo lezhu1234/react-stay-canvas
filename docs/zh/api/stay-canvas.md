@@ -35,7 +35,7 @@ import {
 <StayCanvas width={720} height={420} layers={3} />
 ```
 
-公开类型也接受 `ContextLayerSetFunction[]`，用于为每层返回自定义 2D context。当前 React 渲染路径尚不能可靠地按函数数组长度创建 Canvas，因此请在该问题修复前使用数字；详见[当前限制](../known-limitations.md#渲染与几何)。
+公开类型也接受 `ContextLayerSetFunction[]`，用于为每层返回自定义 2D context，但 React 渲染路径不能可靠地按函数数组长度创建 Canvas。请使用数字；详见[当前限制](../known-limitations.md#渲染与几何)。
 
 Shape 的 `layer` 从 0 开始。负索引会从末层换算，例如 `-1` 表示最后一层；正索引大于等于 layer 数量，或换算后仍为负数，都会抛出 `layer is out of range`。
 

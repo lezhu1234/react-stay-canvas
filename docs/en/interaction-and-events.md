@@ -451,7 +451,7 @@ A Pointer Session terminal—from EventRuntime evaluation through Listener dispa
 
 Do not synchronously create the next native `pointerdown` or `mousedown` with `canvas.dispatchEvent(...)` before a `dragend`, `moveend`, `mouseup`, or cancellation callback returns. The Canvas ignores that nested native start.
 
-Use `ref.trigger()` or `tools.triggerAction()` for application-level cascading actions. Tests that need another native Pointer Session should dispatch its down event only after the current terminal callback has returned.
+Use `ref.trigger()` or `tools.triggerAction()` for application-level cascading actions. Dispatch a new native down event only after the current terminal callback has returned.
 
 If an Event definition or Listener throws synchronously during terminal processing, the session's dynamic definitions, click pairing, and target are still removed in `finally`, after which the exception continues outward.
 

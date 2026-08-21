@@ -2,7 +2,7 @@
 
 [English](../../en/api/events-and-listeners.md) · [交互与事件指南](../interaction-and-events.md)
 
-本页是类型和字段速查。事件流、selector、状态、Pointer Session、macOS 修饰键和手动动作的完整说明见[交互与事件](../interaction-and-events.md)。
+事件流、selector、状态、Pointer Session、macOS 修饰键和手动动作见[交互与事件](../interaction-and-events.md)。
 
 ## ListenerProps
 

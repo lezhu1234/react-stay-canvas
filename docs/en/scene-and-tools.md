@@ -140,7 +140,7 @@ The transaction boundaries are:
 - animated Children never enter history and removing one cannot be undone;
 - `undo()` and `redo()` also restore the Canvas state captured with the item.
 
-A pure Shape `update()` does not currently add an existing Child to the pending-history set, so calling `log()` only at drag end does not reliably record that movement. When an update must be undoable, use an explicit remove/append replacement with the same id as demonstrated by the Annotator example, or wait for a dedicated update-history API. Do not assume that `log()` scans every Child.
+A pure Shape `update()` does not add an existing Child to the pending-history set, so calling `log()` only at drag end does not reliably record that movement. When an update must be undoable, use an explicit remove/append replacement with the same id as demonstrated by the Annotator example. Do not assume that `log()` scans every Child.
 
 ## Copy a scene between Canvases
 

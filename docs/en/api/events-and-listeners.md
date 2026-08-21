@@ -2,7 +2,7 @@
 
 [中文](../../zh/api/events-and-listeners.md) · [Interaction and events guide](../interaction-and-events.md)
 
-This page is a field and type reference. See [Interaction and events](../interaction-and-events.md) for the event flow, selectors, state, Pointer Sessions, macOS modifiers, and manual actions.
+For event flow, selectors, state, Pointer Sessions, macOS modifiers, and manual actions, see [Interaction and events](../interaction-and-events.md).
 
 ## ListenerProps
 

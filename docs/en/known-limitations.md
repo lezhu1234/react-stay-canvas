@@ -33,5 +33,3 @@ This page lists user-visible behavior that the current implementation does not p
 
 - The default target comparator does not provide a stable ordering guarantee. Supply `sortBy` when pointer targets overlap.
 - The public Event trigger type includes `"frame"`, but the current renderer does not emit frame actions through `EventRuntime`.
-
-Maintainer context and fix constraints are tracked in [Known design issues](../KNOWN_ISSUES.md), which is currently maintained in Chinese.

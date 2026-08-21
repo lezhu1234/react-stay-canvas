@@ -231,4 +231,3 @@ A custom Shape should verify at least:
 
 - [Children and Shapes API](../api/children-and-shapes.md)
 - [Shapes and animation](../shapes-and-animation.md)
-- [Source architecture](../../SOURCE_ARCHITECTURE.md)

@@ -12,21 +12,9 @@
 - [Shape 与动画](./shapes-and-animation.md)：使用内置 Shape、组合对象并构建显式关键帧时间线。
 - [场景与 StayTools](./scene-and-tools.md)：查询、变换、历史、场景传输和区域输出。
 - [当前限制](./known-limitations.md)：当前运行时尚不能可靠提供的行为。
-- [在线示例](https://lezhu1234.github.io/react-stay-canvas/)：10 个单项示例和 3 个集成示例，可直接操作并按页面验收手册回归。
+- [在线示例](https://lezhu1234.github.io/react-stay-canvas/)：通过 10 个单项示例和 3 个集成示例了解常用能力。
 
 如果你第一次使用这个库，建议先完成“快速开始”，再阅读“核心概念”。不要从 API 列表开始；理解场景对象和事件模型后，具体接口会更容易使用。
-
-## 文档地图
-
-| 主题 | 当前状态 | 内容 |
-| --- | --- | --- |
-| 快速开始 | 已重写 | 安装、首个场景、布局、修改和删除对象 |
-| 核心概念 | 已重写 | 渲染模型、对象所有权、图层和交互入口 |
-| 交互与事件 | 已重写 | Listener、Event、selector、state、Pointer Session |
-| Shape 与动画 | 已重写 | 内置 Shape、样式、关键帧和动画约束 |
-| 场景与工具 | 已重写 | 查询、变换、历史、导入导出和截图 |
-| API 参考 | 已重写 | `StayCanvas`、Child、Shape、Event、Listener、`StayTools` |
-| 当前限制 | 已重写 | 可复现的渲染、动画、历史和场景操作缺口 |
 
 ## 进阶指南
 
@@ -38,14 +26,6 @@
 - [Child 与 Shape](./api/children-and-shapes.md)
 - [Event 与 Listener](./api/events-and-listeners.md)
 - [StayTools](./api/stay-tools.md)
-
-## 文档与示例各自负责什么
-
-- 本文档解释概念、使用方式和公开行为。
-- TypeScript 导出声明决定 API 名称和类型签名。
-- [示例站点](https://lezhu1234.github.io/react-stay-canvas/)展示可运行的交互。
-- [验收手册](../../example/ACCEPTANCE.md)定义需要人工验证的场景、结果和证据。
-- [事件架构](../EVENT_ARCHITECTURE.md)和[源码架构](../SOURCE_ARCHITECTURE.md)面向维护者，不是入门教程。
 
 ## 术语约定
 
@@ -59,14 +39,3 @@
 | Listener | 根据事件、状态和 selector 接收动作的监听器 |
 | Event | 把匹配的 DOM 输入转换为动作的定义；手动动作走直接派发路径 |
 | StayTools | 当前 Canvas 实例的场景操作入口 |
-
-## 本地验证
-
-```bash
-pnpm install --frozen-lockfile
-npm ci --prefix test
-npm ci --prefix example
-pnpm verify
-```
-
-`pnpm verify` 会检查中英文文档结构和本地链接，然后构建库、运行测试、检查示例 TypeScript 类型并构建示例站点。

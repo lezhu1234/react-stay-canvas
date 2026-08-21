@@ -33,5 +33,3 @@
 
 - 默认目标 comparator 不提供稳定排序保证。指针目标重叠时请传入 `sortBy`。
 - 公开 Event trigger 类型包含 `"frame"`，但当前 renderer 不会通过 `EventRuntime` 发出 frame action。
-
-维护背景与修复约束记录在[已知设计问题](../KNOWN_ISSUES.md)中。

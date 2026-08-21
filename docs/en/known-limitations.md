@@ -6,7 +6,6 @@ The following user-visible behavior is not reliable in the current implementatio
 
 ## Rendering and geometry
 
-- Use a numeric `layers` value. The public function-array form does not currently create the corresponding number of native Canvas elements reliably.
 - `Circle` default hit testing throws because its `contains()` implementation expects a `Point` instance while public hit paths pass a plain coordinate.
 - `Line` and `StayText` do not provide default hit areas. Group them with a hittable Shape or provide an explicit selector/hit strategy.
 - `Point.getBound()` and `Path.getBound()` are not implemented. Normal rendering performs bounds-based viewport culling, so appending either Shape throws before it paints. `Point` remains usable as a standalone geometry helper; `Path.copy()` is also unimplemented.

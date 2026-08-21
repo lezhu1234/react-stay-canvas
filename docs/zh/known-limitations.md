@@ -6,7 +6,6 @@
 
 ## 渲染与几何
 
-- `layers` 请使用数字形式。公开类型允许的函数数组形式当前不能可靠创建对应数量的原生 Canvas。
 - `Circle` 默认命中会抛错：它的 `contains()` 要求 `Point` 实例，而公开命中路径传入普通坐标对象。
 - `Line` 和 `StayText` 没有默认命中区域。请把它们与可命中的 Shape 组合，或提供明确的 selector/命中策略。
 - `Point.getBound()` 和 `Path.getBound()` 尚未实现。正常渲染会先按边界判断 viewport，因此追加任意一个 Shape 都会在绘制前抛错；`Point` 仍可单独作为几何工具使用，`Path.copy()` 也尚未实现。

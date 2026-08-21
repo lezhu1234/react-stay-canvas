@@ -18,7 +18,7 @@ import {
 | --- | --- | --- | --- |
 | `width` | `number` | `500` | CSS and scene width; must be greater than zero |
 | `height` | `number` | `500` | CSS and scene height; must be greater than zero |
-| `layers` | `number \| ContextLayerSetFunction[]` | `2` | Canvas layer configuration; a positive integer is the stable path today |
+| `layers` | `number \| ContextLayerSetFunction[]` | `2` | Canvas layer count or one custom 2D-context setter per layer |
 | `className` | `string` | `""` | Class name on the outer `<div>` |
 | `eventList` | `EventProps[]` | `[]` | Event definitions registered during initialization |
 | `listenerList` | `ListenerProps[]` | `[]` | Listeners registered during initialization |
@@ -35,7 +35,7 @@ A numeric value uses `canvas.getContext("2d")` for every layer:
 <StayCanvas width={720} height={420} layers={3} />
 ```
 
-The public type also accepts `ContextLayerSetFunction[]` for returning a custom 2D context per layer, but the React render path does not reliably create the matching number of Canvas elements from that array. Use a number; see [Current limitations](../known-limitations.md#rendering-and-geometry).
+The function-array form creates one Canvas per entry and calls the corresponding function with that Canvas. The array must contain at least one function, and each function must return a usable 2D drawing context.
 
 Shape `layer` values are zero-based. Negative values count from the end, so `-1` means the last layer. A positive index greater than or equal to the layer count, or a negative index still below zero after conversion, throws `layer is out of range`.
 

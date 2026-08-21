@@ -32,10 +32,16 @@ describe("changeCursor", () => {
 describe("export / import children", () => {
   it("re-creates children in another stage", () => {
     const src = createStage().stage
-    src.tools.appendChild({ className: "r", shape: rect(10, 10, 20, 20) })
+    const sourceChild = src.tools.appendChild({ className: "r", shape: rect(10, 10, 20, 20) })
     const exported = src.tools.exportChildren({
       children: src.tools.getChildrenWithoutRoot(),
     })
+
+    expect(exported.children[0].sourceId).toBe(sourceChild.id)
+    expect(exported.children[0].className).toBe("r")
+    expect("copy" in sourceChild).toBe(false)
+    expect("copy" in exported.children[0]).toBe(false)
+    expect("canvas" in exported.children[0]).toBe(false)
 
     const dst = createStage().stage
     dst.tools.importChildren(exported)
@@ -56,7 +62,9 @@ describe("export / import children", () => {
       children: src.tools.getChildrenWithoutRoot(),
       area: { x: 0, y: 0, width: 100, height: 100 },
     })
-    const exportedShape = [...exported.children[0].shapeMap.values()][0]
+    const exportedShape = [...exported.children[0].shapes.values()][0]
+
+    expect(exportedShape.parent).toBeUndefined()
 
     const firstTarget = createStage().stage
     firstTarget.tools.importChildren(exported, { x: 20, y: 30, width: 100, height: 100 })
@@ -70,6 +78,35 @@ describe("export / import children", () => {
     expect(firstTarget.tools.getChildrenWithoutRoot()[0].shape.y).toBe(40)
     expect(secondTarget.tools.getChildrenWithoutRoot()[0].shape.x).toBe(50)
     expect(secondTarget.tools.getChildrenWithoutRoot()[0].shape.y).toBe(60)
+  })
+
+  it("captures an animated child's current projection without its timeline", () => {
+    const src = createStage().stage
+    const animated = src.tools.createChild({ className: "animated" })
+    animated.appendDefaultFrame(
+      new Rectangle({
+        x: 12,
+        y: 18,
+        width: 20,
+        height: 20,
+        fillConfig: { color: { r: 1, g: 2, b: 3, a: 1 } },
+        transition: { durationMs: 300, delayMs: 0 },
+      })
+    )
+    src.tools.progress({ timeMs: 300 })
+
+    const scene = src.tools.exportChildren({ children: [animated] })
+
+    expect(scene.children[0].sourceId).toBe(animated.id)
+    expect(scene.children[0].shapes.size).toBe(1)
+    expect("shapeFramesMap" in scene.children[0]).toBe(false)
+
+    const dst = createStage().stage
+    dst.tools.importChildren(scene)
+    const imported = dst.tools.getChildrenWithoutRoot()[0]
+    expect(imported.participatesInHistory).toBe(true)
+    expect((imported as any).shapeFramesMap).toBeUndefined()
+    expect(imported.shape.x).toBe(12)
   })
 })
 

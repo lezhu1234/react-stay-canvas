@@ -1,21 +1,19 @@
-import { StayInstantChild } from "./children/stayInstantChild"
+import { HistoryChildSnapshot } from "./historySnapshot"
 import { StackItem } from "./types"
 
 // Owns the undo/redo history *state*: the step stack + cursor (stackIndex), the
-// last snapshot of children (the baseline undo/redo diff against), and the set
-// of children mutated since that snapshot. Extracted from Stay so "history" is
-// one concern. The undo/redo/log *operations* stay in stayTools — they drive
-// children/layers/state and are reworked by the mode-merge later; this just
-// holds the state they read and write. Clones children via an injected provider
-// so History doesn't depend on the children store directly.
+// last static snapshot (the baseline undo/redo diff against), and the set of
+// children mutated since that snapshot. The undo/redo/log operations stay in
+// stayTools because they coordinate children, layers, and Canvas state. History
+// owns only its values and receives snapshots without depending on the store.
 export class History {
   stack: StackItem[] = []
   stackIndex = 0
-  historyChildren: Map<string, StayInstantChild>
+  historyChildren: Map<string, HistoryChildSnapshot>
   unLogedChildrenIds = new Set<string>()
 
-  constructor(private readonly getClonedChildren: () => Map<string, StayInstantChild>) {
-    this.historyChildren = getClonedChildren()
+  constructor(private readonly captureChildren: () => Map<string, HistoryChildSnapshot>) {
+    this.historyChildren = captureChildren()
   }
 
   // Push a step at the cursor, dropping any redo tail, then advance the cursor.
@@ -28,7 +26,7 @@ export class History {
   // Re-baseline: the current children become the diff baseline, and the
   // mutated-since set is cleared.
   snapshot() {
-    this.historyChildren = this.getClonedChildren()
+    this.historyChildren = this.captureChildren()
     this.unLogedChildrenIds.clear()
   }
 }

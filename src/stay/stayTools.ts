@@ -7,9 +7,9 @@ import type {
   AppendChildProps,
   ChildSortFunction,
   CreateChildProps,
-  ExportChildrenProps,
+  CaptureSceneProps,
   getContainPointChildrenProps,
-  ImportChildrenProps,
+  SceneFragment,
   RegionToTargetCanvasProps,
   SelectorFunc,
 } from "../types/children"
@@ -22,6 +22,8 @@ import { numberAlmostEqual } from "../utils/geometry"
 import { infixExpressionParser } from "../utils/selectors"
 import { StayAnimatedChild } from "./children/stayAnimatedChild"
 import { StayInstantChild } from "./children/stayInstantChild"
+import { captureHistoryChild, diffHistoryChild } from "./historySnapshot"
+import { captureScene, materializeSceneChild } from "./sceneTransfer"
 import { normalizeManualActions } from "./events/input/manualActionAdapter"
 import Stay from "./stay"
 import { StepProps } from "./types"
@@ -45,10 +47,8 @@ export function stayTools(this: Stay<any>): StayTools {
         canvas: this.root,
       })
       this.pushToChildren(child)
-      // Timeline (animated) children do NOT participate in undo/redo history:
-      // diff() would copyShapeMap() a frozen interpolated frame, and undo/redo
-      // would restore it as a plain instant child — destroying the timeline. So
-      // they are never tracked here; log() also filters them out defensively.
+      // A timeline is not a static undo/redo state. History captures only
+      // children whose participatesInHistory contract opts in.
       return child
     },
   }
@@ -78,11 +78,16 @@ export function stayTools(this: Stay<any>): StayTools {
     // },
     log: () => {
       const steps = [...this.unLogedChildrenIds]
-        // Only history-participating children are diffed. Timeline children opt
-        // out (participatesInHistory === false); a removed child looks up as
-        // undefined and defaults to true so its "remove" diff is still recorded.
+        // A removed child is absent from the store, so it remains eligible here;
+        // its prior snapshot determines the remove step.
         .filter((id) => this.getChildById(id)?.participatesInHistory ?? true)
-        .map((id) => StayInstantChild.diff(this.historyChildren.get(id), this.getChildById(id)))
+        .map((id) => {
+          const child = this.getChildById(id)
+          return diffHistoryChild(
+            this.historyChildren.get(id),
+            child?.participatesInHistory ? captureHistoryChild(child) : undefined
+          )
+        })
         .filter((o) => o) as StepProps[]
       this.pushToStack({
         state: this.state,
@@ -359,14 +364,12 @@ export function stayTools(this: Stay<any>): StayTools {
         this.nextTick(resolve)
       })
     },
-    exportChildren: ({ children, area }: ImportChildrenProps) => {
+    exportChildren: ({ children, area }: CaptureSceneProps) => {
       const rootChildShape = this.rootChild.getShape() as Rectangle
       area = area ?? { x: 0, y: 0, width: rootChildShape.width, height: rootChildShape.height }
-      children = children.map((child) => child.copy())
-
-      return { children, area }
+      return captureScene(children, area)
     },
-    importChildren: ({ children, area }: ExportChildrenProps, targetArea?: Area) => {
+    importChildren: ({ children, area }: SceneFragment, targetArea?: Area) => {
       const rootChildShape = this.rootChild.getShape() as Rectangle
       targetArea = targetArea ?? {
         x: 0,
@@ -383,12 +386,14 @@ export function stayTools(this: Stay<any>): StayTools {
       const [offsetX, offsetY] = [targetArea.x - area.x, targetArea.y - area.y]
       const scale = targetArea.width / area.width
 
-      children.forEach((child) => {
-        const importedChild = child.copy()
+      children.forEach((fragment) => {
+        const importedChild = materializeSceneChild(fragment, this.root)
+        importedChild.moveInit()
         importedChild.move(offsetX, offsetY)
         importedChild.zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
         this.tools.appendChild({
-          shape: importedChild.copyShapeMap(),
+          id: importedChild.id,
+          shape: importedChild.shapeMap,
           className: importedChild.className,
         })
       })

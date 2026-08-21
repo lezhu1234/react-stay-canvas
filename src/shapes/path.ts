@@ -18,7 +18,11 @@ export class Path extends InstantShape {
     context.fill(this.path)
   }
   copy(): Path {
-    throw new Error("Method not implemented.")
+    return new Path({
+      points: this.points.map((point) => point.copy()),
+      radius: this.radius,
+      ...this.copyProps(),
+    })
   }
   getBound(): Rect {
     throw new Error("Method not implemented.")
@@ -74,13 +78,6 @@ export class Path extends InstantShape {
   }
   // contains(point: Point, ctx: DrawCanvasContext): boolean {
   //   return ctx.isPointInPath(this.path, point.x, point.y)
-  // }
-  // copy(): Path {
-  //   return new Path({
-  //     radius: this.radius,
-  //     points: this.points.map((point) => point.copy()),
-  //     props: this._copy(),
-  //   })
   // }
   stroke({ context }: ShapeDrawProps): void {
     context.stroke(this.path)

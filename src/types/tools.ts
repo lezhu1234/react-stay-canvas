@@ -7,9 +7,9 @@ import type {
   AppendChildProps,
   ChildSortFunction,
   CreateChildProps,
-  ExportChildrenProps,
+  CaptureSceneProps,
   getContainPointChildrenProps,
-  ImportChildrenProps,
+  SceneFragment,
   RegionToTargetCanvasProps,
   SelectorFunc,
 } from "./children"
@@ -57,8 +57,8 @@ export interface BasicTools {
     filter?: (child: StayInstantChild) => boolean
   ) => Promise<void>
   reset: () => Promise<void>
-  exportChildren: (props: ImportChildrenProps) => ExportChildrenProps
-  importChildren: (props: ExportChildrenProps, targetArea?: Area) => void
+  exportChildren: (props: CaptureSceneProps) => SceneFragment
+  importChildren: (props: SceneFragment, targetArea?: Area) => void
   regionToTargetCanvas: (props: RegionToTargetCanvasProps) => Promise<HTMLCanvasElement>
   refresh: () => void
   triggerAction: <EventName extends string>(

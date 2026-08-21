@@ -143,12 +143,13 @@ export class StayText extends AnimatedShape {
       x: this.x,
       y: this.y,
       text: this.text,
-      font: this.font,
-      border: this.border,
+      font: { ...this.font },
+      border: this.border?.map((border) => ({ ...border })),
       textBaseline: this.textBaseline,
       textAlign: this.textAlign,
       offsetXRatio: this.offsetXRatio,
       offsetYRatio: this.offsetYRatio,
+      autoTransitionDiffText: this.autoTransitionDiffText,
       ...this.copyProps(),
     })
   }

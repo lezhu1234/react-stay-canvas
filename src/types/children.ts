@@ -47,13 +47,19 @@ export interface getContainPointChildrenProps {
 
 export type SortChildrenMethodsValues = valueof<typeof SORT_CHILDREN_METHODS>
 
-export interface ImportChildrenProps {
+export interface CaptureSceneProps {
   children: StayInstantChild[]
   area?: Area
 }
 
-export interface ExportChildrenProps {
-  children: StayInstantChild[]
+export interface SceneChildFragment<T extends InstantShape = InstantShape> {
+  sourceId: string
+  className: string
+  shapes: Map<string, T>
+}
+
+export interface SceneFragment {
+  children: SceneChildFragment[]
   area: Area
 }
 

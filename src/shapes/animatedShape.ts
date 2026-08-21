@@ -29,6 +29,13 @@ export abstract class AnimatedShape extends InstantShape {
     this.transition = { ...DefaultStayShapeTransitionConfig, ...props.transition }
   }
 
+  override copyProps(): AnimatedShapeProps {
+    return {
+      ...super.copyProps(),
+      transition: { ...this.transition },
+    }
+  }
+
   getNumberIntermediateState(
     before: number,
     after: number,

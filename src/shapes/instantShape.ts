@@ -139,11 +139,30 @@ export abstract class InstantShape {
     return color as CanvasGradient
   }
 
-  copyProps() {
+  copyProps(): ShapeProps {
     return {
-      parent: this.parent,
-      strokeConfig: this.strokeConfig,
-      fillConfig: this.fillConfig,
+      zoomY: this.zoomY,
+      zoomCenter: { ...this.zoomCenter },
+      state: this.state,
+      stateDrawFuncMap: Object.fromEntries(
+        Object.entries(this.stateDrawFuncMap).map(([name, drawFunctions]) => [
+          name,
+          { ...drawFunctions },
+        ])
+      ),
+      layer: this.layer,
+      zIndex: this.zIndex,
+      strokeConfig: {
+        ...this.strokeConfig,
+        color: { ...this.strokeConfig.color },
+        dash: [...this.strokeConfig.dash],
+      },
+      fillConfig: {
+        ...this.fillConfig,
+        color: { ...this.fillConfig.color },
+      },
+      globalConfig: { ...this.globalConfig },
+      shapeStore: new Map(this.shapeStore),
     }
   }
 

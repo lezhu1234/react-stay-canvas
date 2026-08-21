@@ -30,12 +30,10 @@
 | `zoom(deltaY, center)` | `void` | 整体缩放所有 Shape |
 | `getLayers()` | `Set<number>` | Child 使用的 layer 集合 |
 | `getShapes(layer)` | `T[]` | 指定 layer 中的 Shape |
-| `copyShapeMap()` | `Map<string, T>` | 复制全部 Shape，保留键 |
-| `copy()` | `StayInstantChild<T>` | 通过各 Shape 的 `copy()` 实现复制当前 `shapeMap` |
 
 `update(...)` 是历史恢复使用的内部替换原语。应用更新应调用 `child.shape.update(...)` 或从 `shapeMap` 取出具体 Shape 后调用它的 `update(...)`。
 
-`copy()` 当前不是完整保留状态或深复制的契约：部分 Shape 公共字段会遗漏，嵌套样式值可能仍被共享，动画 Child 还会退化为静态快照。详见[当前限制](../known-limitations.md#场景操作)。
+Child 是绑定 Canvas 的运行时实体，不提供复制操作。需要捕获并重复实例化场景时，使用 `exportChildren()` 和 `importChildren()`。
 
 ## StayAnimatedChild
 
@@ -173,7 +171,7 @@ abstract getBound(): Rect
 - `Line.contains()` 和 `StayText.contains()` 当前固定返回 false；
 - `Circle.contains()` 要求 `Point` 实例，而工具和 Listener 命中路径传入普通 `PointType`，因此当前默认命中会抛错；
 - `Point.getBound()` 尚未实现，因此追加到场景后会在正常渲染时抛错；
-- `Path.copy()` 与 `Path.getBound()` 尚未实现，因此追加 Path 也会在渲染时抛错；
+- `Path.getBound()` 尚未实现，因此追加 Path 会在渲染时抛错；
 - `Circle` 不继承 `AnimatedShape`，不能直接作为时间线关键帧；
 - `Root` 虽然从包入口导出，但属于运行时内部边界 Shape，不建议应用代码直接创建。
 

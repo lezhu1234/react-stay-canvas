@@ -144,7 +144,7 @@ tools.redo()
 
 ## 在 Canvas 之间复制场景
 
-`exportChildren()` 调用每个 Child 当前的 `copy()` 实现，并返回这些副本和源区域；`importChildren()` 把它们映射到目标区域：
+`exportChildren()` 把所选 Child 的当前 Shape 状态捕获为可复用的场景片段；`importChildren()` 在目标区域实例化该片段：
 
 ```ts
 const scene = sourceTools.exportChildren({
@@ -160,11 +160,11 @@ targetTools.importChildren(scene, {
 })
 ```
 
-目标区域与源区域必须保持相同宽高比，否则会抛出 `area not match`。导入会创建新的 Child id，并复制 className 和当前 `shapeMap`；不要依赖源 id 在目标 Canvas 中继续存在。
+目标区域与源区域必须保持相同宽高比，否则会抛出 `area not match`。每个导出 Child 片段包含 `sourceId`、`className` 和 `shapes`。导入会创建新的运行时 Child id；`sourceId` 只用于关联导入对象与源对象。
 
-这是几何传输路径，不是完整保留状态的序列化格式。内置 copy 当前会遗漏部分 Shape 公共状态，可能共享嵌套样式值，并把动画 Child 降级为静态快照。详见[当前限制](./known-limitations.md#场景操作)。
+这是场景传输路径，不是序列化格式。公共 Shape 状态和库拥有的可变样式值会被独立捕获；`shapeStore` 中的任意值仍然共享，因为库无法推断它们的所有权。Animated Child 只提供当前渲染投影，不传输时间线。
 
-`importChildren()` 会先复制 `scene.children`，再对内部副本执行 move/zoom，因此可以把同一个 exported payload 重复导入不同 Canvas 或目标区域，输入数据不会被修改。
+`importChildren()` 会先实例化新的 Shape，再对它们执行 move/zoom，因此可以把同一个 exported payload 重复导入不同 Canvas 或目标区域，输入数据不会被修改。
 
 如果 `exportChildren()` 省略 `area`，会使用源 Canvas 的 root 边界。如果 `importChildren()` 省略目标区域，会使用目标 Canvas 的 root 边界。
 

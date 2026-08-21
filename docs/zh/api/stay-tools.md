@@ -81,13 +81,13 @@ interface DrawReturn {
 
 | 方法 | 说明 |
 | --- | --- |
-| `exportChildren({ children, area? })` | 调用当前 Child copy 实现并连同源区域返回 |
-| `importChildren(exported, targetArea?)` | 等比例映射并以新 id 加入当前 Canvas |
+| `exportChildren({ children, area? })` | 把当前 Shape 捕获为可复用的 `SceneFragment` |
+| `importChildren(scene, targetArea?)` | 等比例实例化片段，并生成新的运行时 id |
 | `regionToTargetCanvas({ area, targetSize?, children, progress? })` | 把 Shape 绘制到新的 HTMLCanvasElement |
 
-`exportChildren()` 的参数类型在源码中名为 `ImportChildrenProps`，返回类型名为 `ExportChildrenProps`；这是现有类型命名，调用方向以上表为准。
+`CaptureSceneProps` 是导出参数；`SceneFragment` 包含 `area`，以及带 `sourceId`、`className`、`shapes` 的 Child 片段。`sourceId` 只作为关联元数据，不会复用为导入 Child 的 id。
 
-场景传输可以满足已测试的静态几何传输路径，但它不是完整序列化契约。copy 保真、动画时间线和 payload 复用限制见[当前限制](../known-limitations.md#场景操作)。
+场景传输会捕获公共 Shape 状态并隔离库拥有的样式容器。Animated Child 只捕获当前投影，不作为时间线序列化格式。
 
 ## 动作与 Listener
 

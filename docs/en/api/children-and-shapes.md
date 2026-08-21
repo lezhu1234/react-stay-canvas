@@ -30,12 +30,10 @@ Create a static Child with `tools.appendChild(...)`.
 | `zoom(deltaY, center)` | `void` | Zoom every Shape as a unit |
 | `getLayers()` | `Set<number>` | Layers used by the Child |
 | `getShapes(layer)` | `T[]` | Shapes on one layer |
-| `copyShapeMap()` | `Map<string, T>` | Copy every Shape while preserving map keys |
-| `copy()` | `StayInstantChild<T>` | Copy the current `shapeMap` through each Shape's `copy()` implementation |
 
 `update(...)` is an internal replacement primitive for history restoration. Application code should call `child.shape.update(...)` or retrieve a specific Shape from `shapeMap` and update that Shape.
 
-`copy()` is not currently a complete state-preserving or deep-copy contract. Some common Shape fields are omitted, nested style values may remain shared, and an animated Child becomes a static snapshot. See [Current limitations](../known-limitations.md#scene-operations).
+Children are Canvas-bound runtime entities and do not expose a copy operation. Use `exportChildren()` and `importChildren()` to capture and materialize a reusable scene fragment.
 
 ## StayAnimatedChild
 
@@ -173,7 +171,7 @@ See [Custom Shapes](../advanced/custom-shapes.md) for implementation guidance.
 - `Line.contains()` and `StayText.contains()` currently always return false;
 - `Circle.contains()` requires a `Point` instance, while tool and Listener hit paths pass a plain `PointType`, so default Circle hits currently throw;
 - `Point.getBound()` is not implemented, so an appended Point throws during normal rendering;
-- `Path.copy()` and `Path.getBound()` are not implemented, so an appended Path also throws during rendering;
+- `Path.getBound()` is not implemented, so an appended Path throws during rendering;
 - `Circle` does not extend `AnimatedShape` and cannot be used directly as a timeline keyframe;
 - `Root` is exported from the package entry point but is an internal runtime boundary Shape and should not normally be constructed by application code.
 

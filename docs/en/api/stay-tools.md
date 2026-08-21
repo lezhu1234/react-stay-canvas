@@ -81,13 +81,13 @@ interface DrawReturn {
 
 | Method | Meaning |
 | --- | --- |
-| `exportChildren({ children, area? })` | Call current Child copy implementations and return them with a source area |
-| `importChildren(exported, targetArea?)` | Map at equal aspect ratio and append with new ids |
+| `exportChildren({ children, area? })` | Capture current Shapes as a reusable `SceneFragment` |
+| `importChildren(scene, targetArea?)` | Materialize a fragment at equal aspect ratio with new runtime ids |
 | `regionToTargetCanvas({ area, targetSize?, children, progress? })` | Draw Shapes onto a new HTMLCanvasElement |
 
-The source type currently names the `exportChildren()` argument `ImportChildrenProps` and its return value `ExportChildrenProps`. These are existing type names; the call direction is the one shown above.
+`CaptureSceneProps` is the export input. `SceneFragment` contains an `area` and Child fragments with `sourceId`, `className`, and `shapes`. `sourceId` is correlation metadata; it is not reused as the imported Child id.
 
-Scene transfer preserves current geometry sufficiently for the tested static transfer path, but it is not a complete serialization contract. See [Current limitations](../known-limitations.md#scene-operations) for copy fidelity, animated timelines, and payload reuse.
+Scene transfer captures common Shape state and independently owned style containers. It intentionally captures only the current projection of an Animated Child and is not a timeline serialization format.
 
 ## Actions and Listeners
 

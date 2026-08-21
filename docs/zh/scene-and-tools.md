@@ -194,7 +194,7 @@ tools.deleteListener("temporary-listener")
 ```
 
 - `changeCursor()` 修改顶层 Canvas 的 CSS cursor；
-- `refresh()` 强制所有层重绘；同层 Shape 更新会自动标记当前 layer，修改 Shape `layer` 后、外部资源变化或诊断时需要显式调用；
+- `refresh()` 强制所有层重绘；Shape 更新会自动标记受影响的 layer，外部资源变化或诊断时可显式调用；
 - `switchState()` 切换 Listener state，并清空 `stateStore`；
 - `deleteListener()` 按 Listener 的唯一名称删除监听器；
 - `getAvailiableStates()` 返回符合状态表达式的已知 state。这个公开名称当前保留了历史拼写，调用时必须按现有名称书写。

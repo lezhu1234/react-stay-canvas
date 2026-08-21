@@ -116,7 +116,7 @@ child?.shape.update({
 })
 ```
 
-`update()` tells the owning Child that its current layer needs repainting. If the update changes `layer`, call `tools.refresh()` afterward: the current implementation dirties only the new layer and otherwise leaves stale pixels on the old Canvas. `StayInstantChild.update(...)` is an internal replacement primitive used by undo and redo; it is not the normal application-level mutation API.
+`update()` tells the owning Child which layers need repainting. A same-layer update dirties that layer; changing `layer` dirties both the previous and next layers so the old Canvas is cleared automatically. `StayInstantChild.update(...)` is an internal replacement primitive used by undo and redo; it is not the normal application-level mutation API.
 
 `move()` applies a relative offset. At the start of a continuous gesture, call `moveInit()` once, then pass offsets relative to that gesture start:
 

@@ -207,6 +207,7 @@ export abstract class InstantShape {
     strokeConfig,
     fillConfig,
   }: ShapeProps) {
+    const previousLayer = this.layer
     this.layer = layer ?? this.layer
     this.zIndex = zIndex ?? this.zIndex
     this.zoomY = zoomY ?? this.zoomY
@@ -226,7 +227,7 @@ export abstract class InstantShape {
       this.switchState(state)
     }
 
-    this.parent?.onChildShapeChange(this)
+    this.parent?.onChildShapeChange(this, previousLayer)
     return this
   }
 

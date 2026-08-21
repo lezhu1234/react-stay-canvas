@@ -116,7 +116,7 @@ child?.shape.update({
 })
 ```
 
-`update()` 会通知所属 Child 重绘 Shape 当前所在的 layer。如果更新同时修改了 `layer`，随后还要调用 `tools.refresh()`：当前实现只会标记新 layer，旧 Canvas 否则会残留像素。`StayInstantChild.update(...)` 是撤销/重做使用的内部替换原语，不应作为应用代码的常规更新入口。
+`update()` 会通知所属 Child 重绘相关 layer：同层更新只标记当前层，修改 `layer` 时会同时标记旧层和新层，旧 Canvas 会自动清除。`StayInstantChild.update(...)` 是撤销/重做使用的内部替换原语，不应作为应用代码的常规更新入口。
 
 `move()` 表示相对位移；连续手势开始前先调用 `moveInit()`，之后可以反复以“相对手势起点”的偏移调用 `move()`：
 

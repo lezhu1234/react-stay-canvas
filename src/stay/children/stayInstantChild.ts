@@ -189,8 +189,9 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     }
   }
 
-  onChildShapeChange(shape: T) {
+  onChildShapeChange(shape: T, previousLayer: number) {
     shape.layer = parseLayer(this.canvas.layers, shape.layer)
+    this.updatedLayers.add(previousLayer)
     this.updatedLayers.add(shape.layer)
   }
 

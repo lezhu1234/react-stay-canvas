@@ -152,7 +152,7 @@ The event system has two layers:
 
 Predefined Events cover common clicks, drags, moves, wheels, keyboard input, and history shortcuts. Most applications only configure Listeners. Define or override Events when you need different trigger conditions or a new composed action.
 
-Continuous gestures also have explicit start, continuation, normal end, and cancellation phases. Releases outside the Canvas, window blur, and browser cancellation converge on one terminal path. The Interaction and events guide will document those contracts in detail.
+Continuous gestures also have explicit start, continuation, normal end, and cancellation phases. Releases outside the Canvas, window blur, and browser cancellation converge on one terminal path. See [Interaction and events](./interaction-and-events.md) for the detailed contracts.
 
 ## Static and animated Children
 

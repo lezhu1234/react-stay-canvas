@@ -13,7 +13,7 @@ Shape 负责几何、绘制、命中和自身状态；Child 负责把一个或�
 | Shape | 主要参数 | 默认命中 | 关键帧插值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `Rectangle` | `x`、`y`、`width`、`height` | 是 | 是 | `x`、`y` 表示左上角 |
-| `Circle` | `x`、`y`、`radius` | 当前不可用 | 否 | `contains()` 需要 `Point` 实例，但公开命中路径传入普通坐标对象 |
+| `Circle` | `x`、`y`、`radius` | 是 | 否 | 使用普通坐标进行圆形半径命中 |
 | `Line` | `x1`、`y1`、`x2`、`y2` | 否 | 是 | 可用 `nearPoint` 做自定义线段命中 |
 | `StayText` | `x`、`y`、`text`、`font` | 否 | 是 | `(x, y)` 当前表示文字包围盒的上方中心 |
 | `StayImage` | `image`、`x`、`y`、`width`、`height`、`opacity` | 是 | 是 | 继承矩形边界；应在图片加载后创建 |
@@ -150,6 +150,8 @@ image.src = "/photo.png"
 ```
 
 跨域图片要遵守浏览器 Canvas 污染规则。如果后续需要调用 `toDataURL()` 或 `regionToTargetCanvas()`，图片响应必须允许对应的 CORS 使用方式。
+
+传入 `sx`、`sy`、`swidth` 和 `sheight` 可以裁剪源图片。显式裁剪尺寸会在构造、更新和复制时保留；省略时使用图片 natural size。自定义裁剪尺寸目前不会保留到时间线插值帧中。
 
 ## 显式时间线模型
 

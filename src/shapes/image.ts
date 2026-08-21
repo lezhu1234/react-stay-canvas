@@ -54,8 +54,8 @@ export class StayImage extends Rectangle {
     this.sheight = sheight
     this.image = image
     this.loadState = "loaded"
-    this.swidth = this.image.naturalWidth
-    this.sheight = this.image.naturalHeight
+    this.swidth = swidth ?? this.image.naturalWidth
+    this.sheight = sheight ?? this.image.naturalHeight
 
     this.ctx = null
     this.imageLoaded = imageLoaded
@@ -156,8 +156,8 @@ export class StayImage extends Rectangle {
     } else {
       this.image = src
       this.loadState = "loaded"
-      this.swidth = this.image.naturalWidth
-      this.sheight = this.image.naturalHeight
+      this.swidth = swidth ?? this.image.naturalWidth
+      this.sheight = sheight ?? this.image.naturalHeight
     }
     return this
   }

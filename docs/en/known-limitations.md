@@ -6,7 +6,6 @@ The following user-visible behavior is not reliable in the current implementatio
 
 ## Rendering and geometry
 
-- Use a numeric `layers` value. The public function-array form does not currently create the corresponding number of native Canvas elements reliably.
 - `Line` and `StayText` do not provide default hit areas. Group them with a hittable Shape or provide an explicit selector/hit strategy.
 - `Point.getBound()` and `Path.getBound()` are not implemented. Normal rendering performs bounds-based viewport culling, so appending either Shape throws before it paints. `Point` remains usable as a standalone geometry helper; `Path.copy()` is also unimplemented.
 - Changing a Shape's `layer` through `update()` dirties only the new layer and leaves stale pixels on the old one. Call `tools.refresh()` after a layer change.
@@ -25,8 +24,6 @@ The following user-visible behavior is not reliable in the current implementatio
 
 - `reset()` is not a reliable inverse after a scene move because it reuses the previous movement snapshot. Do not present it as a restore-to-initial-state operation.
 - Built-in `Shape.copy()` does not preserve every common field and may share nested mutable style values. `StayAnimatedChild.copy()` also loses its timeline and becomes a static snapshot. Consequently, history and scene transfer are not fully state-preserving for every Shape or animated scene.
-- `importChildren()` mutates the copied Children inside its input payload before appending another copy. Export again before importing the same scene into a different target area.
-- `regionToTargetCanvas({ progress: 0 })` skips timeline seeking because the current implementation uses a truthy check. Seek with `tools.progress({ timeMs: 0 })` first, then capture without the `progress` option.
 
 ## Events and targeting
 

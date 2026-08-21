@@ -16,6 +16,24 @@ import type { ContextLayerSetFunction } from "./types/canvas"
 import type { StayCanvasProps, StayCanvasRefType } from "./types/component"
 import type { PredefinedEventName } from "./types/events"
 
+const defaultContextLayerSetFunction: ContextLayerSetFunction = (canvas) =>
+  canvas.getContext("2d")
+
+function resolveContextLayerSetFunctions(
+  layers: number | ContextLayerSetFunction[]
+): ContextLayerSetFunction[] {
+  const contextSetters =
+    typeof layers === "number"
+      ? Array(layers).fill(defaultContextLayerSetFunction)
+      : layers
+
+  if (contextSetters.length < 1) {
+    throw new Error("layers must be greater than 0")
+  }
+
+  return contextSetters
+}
+
 const StayCanvas = forwardRef(
   <EventName extends string>(
     {
@@ -33,22 +51,10 @@ const StayCanvas = forwardRef(
     ref: Ref<StayCanvasRefType>
   ) => {
     const initialized = useRef(false)
-    let contextLayerSetFunctionList: ContextLayerSetFunction[] = []
-
-    if (typeof layers === "number") {
-      Array(layers)
-        .fill(0)
-        .forEach((_, i) => {
-          contextLayerSetFunctionList.push((canvas: HTMLCanvasElement) => {
-            return canvas.getContext("2d")
-          })
-        })
-    } else {
-      contextLayerSetFunctionList = layers
-    }
-    if (contextLayerSetFunctionList.length < 1) {
-      throw new Error("layers must be greater than 0")
-    }
+    const contextLayerSetFunctionList = resolveContextLayerSetFunctions(layers)
+    const layerCount = contextLayerSetFunctionList.length
+    const activeLayerCount = useRef(layerCount)
+    activeLayerCount.current = layerCount
 
     type GetNamePayloadPairType<T> = T extends {
       name: infer U
@@ -84,10 +90,19 @@ const StayCanvas = forwardRef(
       stay.current = undefined
     }
 
+    const getActiveCanvasLayers = () =>
+      canvasLayers.current.slice(0, activeLayerCount.current)
+
+    const focusTopCanvas = () => {
+      const activeCanvasLayers = getActiveCanvasLayers()
+      activeCanvasLayers[activeCanvasLayers.length - 1]?.focus()
+    }
+
     const init = () => {
       destroyCurrentStay()
+      const activeCanvasLayers = getActiveCanvasLayers()
       const nextStay = createStay(
-        canvasLayers.current,
+        activeCanvasLayers,
         contextLayerSetFunctionList,
         width,
         height,
@@ -108,7 +123,7 @@ const StayCanvas = forwardRef(
         }
 
         if (focusOnInit) {
-          canvasLayers.current[canvasLayers.current.length - 1].focus()
+          focusTopCanvas()
         }
       } catch (error) {
         if (stay.current === nextStay) destroyCurrentStay()
@@ -136,7 +151,7 @@ const StayCanvas = forwardRef(
             initRef.current()
           },
           focus() {
-            canvasLayers.current[canvasLayers.current.length - 1].focus()
+            focusTopCanvas()
           },
         }
       },
@@ -171,26 +186,24 @@ const StayCanvas = forwardRef(
             height: `${height}px`,
           }}
         >
-          {Array(layers)
-            .fill(0)
-            .map((_, index) => (
-              <canvas
-                key={index}
-                ref={(el) => {
-                  if (el) {
-                    canvasLayers.current[index] = el
-                  }
-                }}
-                tabIndex={1}
-                style={{
-                  position: "absolute",
-                  display: "block",
-                  outline: "none",
-                  left: 0,
-                  top: 0,
-                }}
-              ></canvas>
-            ))}
+          {Array.from({ length: layerCount }, (_, index) => (
+            <canvas
+              key={index}
+              ref={(el) => {
+                if (el) {
+                  canvasLayers.current[index] = el
+                }
+              }}
+              tabIndex={1}
+              style={{
+                position: "absolute",
+                display: "block",
+                outline: "none",
+                left: 0,
+                top: 0,
+              }}
+            ></canvas>
+          ))}
         </div>
       </>
     )

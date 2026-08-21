@@ -18,7 +18,7 @@ import {
 | --- | --- | --- | --- |
 | `width` | `number` | `500` | CSS 尺寸和场景宽度，必须大于 0 |
 | `height` | `number` | `500` | CSS 尺寸和场景高度，必须大于 0 |
-| `layers` | `number \| ContextLayerSetFunction[]` | `2` | Canvas 图层配置；当前稳定用法是正整数 |
+| `layers` | `number \| ContextLayerSetFunction[]` | `2` | Canvas 层数，或每层对应一个自定义 2D context setter |
 | `className` | `string` | `""` | 外层 `<div>` 的 className |
 | `eventList` | `EventProps[]` | `[]` | 初始化时注册的 Event 定义 |
 | `listenerList` | `ListenerProps[]` | `[]` | 初始化时注册的 Listener |
@@ -35,7 +35,7 @@ import {
 <StayCanvas width={720} height={420} layers={3} />
 ```
 
-公开类型也接受 `ContextLayerSetFunction[]`，用于为每层返回自定义 2D context，但 React 渲染路径不能可靠地按函数数组长度创建 Canvas。请使用数字；详见[当前限制](../known-limitations.md#渲染与几何)。
+函数数组形式会为每个数组项创建一个 Canvas，并把该 Canvas 传给对应函数。数组至少需要一个函数，并且每个函数都必须返回可用的 2D 绘制 context。
 
 Shape 的 `layer` 从 0 开始。负索引会从末层换算，例如 `-1` 表示最后一层；正索引大于等于 layer 数量，或换算后仍为负数，都会抛出 `layer is out of range`。
 

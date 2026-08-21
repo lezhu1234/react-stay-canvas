@@ -6,7 +6,6 @@
 
 ## 渲染与几何
 
-- `layers` 请使用数字形式。公开类型允许的函数数组形式当前不能可靠创建对应数量的原生 Canvas。
 - `Line` 和 `StayText` 没有默认命中区域。请把它们与可命中的 Shape 组合，或提供明确的 selector/命中策略。
 - `Point.getBound()` 和 `Path.getBound()` 尚未实现。正常渲染会先按边界判断 viewport，因此追加任意一个 Shape 都会在绘制前抛错；`Point` 仍可单独作为几何工具使用，`Path.copy()` 也尚未实现。
 - 通过 `update()` 修改 Shape 的 `layer` 时只会标记新 layer，旧 layer 会残留像素。修改后需要调用 `tools.refresh()`。
@@ -25,8 +24,6 @@
 
 - `reset()` 在场景移动后不能可靠执行逆变换，因为它会复用旧的移动快照。不要把它当成“恢复初始状态”的稳定入口。
 - 内置 `Shape.copy()` 不会保留所有公共字段，并可能共享嵌套的可变样式值；`StayAnimatedChild.copy()` 还会丢失时间线并退化为静态快照。因此历史和场景传输不能对所有 Shape 或动画场景保证完整保真。
-- `importChildren()` 会先修改输入 payload 内的 Child 副本，再向目标追加另一份副本。把同一场景导入不同目标区域前应重新导出。
-- `regionToTargetCanvas({ progress: 0 })` 会因为当前 truthy 判断而跳过时间线定位。请先调用 `tools.progress({ timeMs: 0 })`，再省略 `progress` 进行输出。
 
 ## 事件与目标
 

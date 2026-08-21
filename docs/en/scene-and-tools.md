@@ -194,7 +194,7 @@ tools.deleteListener("temporary-listener")
 ```
 
 - `changeCursor()` changes the CSS cursor on the top Canvas layer;
-- `refresh()` forces every layer to redraw. Same-layer Shape updates dirty their current layer automatically; use `refresh()` after changing a Shape's `layer`, for external-resource changes, or for diagnostics;
+- `refresh()` forces every layer to redraw. Shape updates dirty their affected layers automatically; use `refresh()` for external-resource changes or diagnostics;
 - `switchState()` changes Listener state and clears `stateStore`;
 - `deleteListener()` removes a Listener by its unique name;
 - `getAvailiableStates()` returns known states matching a state expression. The public method retains this historical spelling and must currently be called exactly as written.

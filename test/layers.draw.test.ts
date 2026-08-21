@@ -86,6 +86,55 @@ describe("real drawing (node-canvas ctx spy)", () => {
     expect(strokeRect).toHaveBeenCalledTimes(1)
   })
 
+  it("clears the old layer and paints the new layer after a Shape moves layers", () => {
+    const { stage, layers } = createStage({ layers: 2 })
+    const oldContext = layers[0].getContext("2d")!
+    const newContext = layers[1].getContext("2d")!
+    const clearOldLayer = vi.spyOn(oldContext, "clearRect")
+    const clearNewLayer = vi.spyOn(newContext, "clearRect")
+    const paintOldLayer = vi.spyOn(oldContext, "strokeRect")
+    const paintNewLayer = vi.spyOn(newContext, "strokeRect")
+    const child = stage.tools.appendChild({
+      className: "r",
+      shape: new Rectangle({
+        x: 2,
+        y: 3,
+        width: 4,
+        height: 5,
+        layer: 0,
+        strokeConfig: { color: rgba(1, 1, 1), lineWidth: 1 },
+      }),
+    })
+    stage.draw({})
+    clearOldLayer.mockClear()
+    clearNewLayer.mockClear()
+    paintOldLayer.mockClear()
+    paintNewLayer.mockClear()
+
+    child.shape.update({ layer: 1 })
+    const result = stage.draw({})
+
+    expect(result.updatedLayers).toEqual([0, 1])
+    expect(clearOldLayer).toHaveBeenCalledOnce()
+    expect(clearNewLayer).toHaveBeenCalledOnce()
+    expect(paintOldLayer).not.toHaveBeenCalled()
+    expect(paintNewLayer).toHaveBeenCalledWith(2, 3, 4, 5)
+  })
+
+  it("normalizes a negative target layer while dirtying both layers", () => {
+    const { stage } = createStage({ layers: 2 })
+    const child = stage.tools.appendChild({
+      className: "r",
+      shape: new Rectangle({ x: 0, y: 0, width: 4, height: 4, layer: 0 }),
+    })
+    stage.draw({})
+
+    child.shape.update({ layer: -1 })
+
+    expect(child.shape.layer).toBe(1)
+    expect(stage.draw({}).updatedLayers).toEqual([0, 1])
+  })
+
   // Refactor cut 1: appendChild now marks the shape's layer dirty, so an
   // appended-but-never-mutated shape paints on the next draw (no poke needed).
   // (Was the "[known issue] appendChild alone does not paint" tripwire.)

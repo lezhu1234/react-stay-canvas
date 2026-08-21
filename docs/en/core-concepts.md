@@ -133,9 +133,12 @@ Selectors match Child ids and class names:
 - `.node` matches Children whose `className` is `node` (state-suffixed values such as `node:active` belong to the same class);
 - `#node-a` matches the Child whose id is `node-a`;
 - `.node|.label` matches either class;
-- `.node&!.disabled` matches nodes but excludes disabled ones.
+- `#node-a&.node` matches both an id and its base class;
+- `.node&!#node-a` matches nodes except one explicit id.
 
 The same selector language powers query tools and Listener target filters. A selector returns Children, not individual Shapes.
+
+`className` is not a DOM-style whitespace-separated class list. A Child has one base class and may add a colon suffix such as `node:active`; `.node` matches it, while `.node:active` matches the full value.
 
 ## State gates Listeners
 
@@ -147,8 +150,10 @@ Changing state does not modify scene content. It changes which Listeners may han
 
 The event system has two layers:
 
-- An Event definition decides how an action is produced from DOM input, a frame, or a programmatic call.
+- An Event definition decides how an action is produced from matching DOM input.
 - A Listener receives actions selected by event name, state, and selector, then performs scene or application work.
+
+Manual actions are dispatched directly to Listeners and do not evaluate registered Event definitions. Although the public trigger type includes `"frame"`, the current renderer does not emit that trigger.
 
 Predefined Events cover common clicks, drags, moves, wheels, keyboard input, and history shortcuts. Most applications only configure Listeners. Define or override Events when you need different trigger conditions or a new composed action.
 

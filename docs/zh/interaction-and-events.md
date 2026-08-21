@@ -88,7 +88,7 @@ export function SelectableCanvas() {
 | `event` | 一个动作名或动作名数组 |
 | `state` | Listener 可用的 Canvas state，默认 `default-state` |
 | `selector` | 可成为目标的 Child，默认 `.stay-canvas` 根 Child |
-| `sortBy` | 多个候选 Child 的排序函数，默认优先较小的边界框 |
+| `sortBy` | 多个候选 Child 的排序函数；重叠目标应提供明确 comparator |
 | `callback` | 接收动作并执行场景或应用逻辑 |
 
 Listener 按注册顺序处理。state 会在处理每个 Listener、每个动作前实时读取，因此前面的 Listener 同步调用 `switchState` 后，后面的 Listener 会看到新 state。
@@ -101,15 +101,18 @@ selector 匹配 Child，而不是 Shape：
 
 ```text
 .node                 className 为 node
+.node:active          完整 className 为 node:active
 #node-a               id 为 node-a
 .node|.label          node 或 label
 .node&!#node-a        node，但排除 node-a
-(.node|.label)&!.off  使用括号明确组合关系
+(.node|.label)&!#node-a 使用括号明确组合关系
 ```
 
 支持 `&`、`|`、`!` 和括号。表达式中不要加入空格；组合复杂时应使用括号，不要依赖运算符优先级猜测结果。
 
-指针动作会先按 selector 找出候选 Child，再按当前 Canvas 坐标进行命中测试。默认排序优先返回边界框较小的对象，也可以传入 `sortBy(a, b)` 控制重叠对象的选择顺序。
+Child 的 `className` 不是 DOM 的空格分隔列表。`node:active` 以 `node` 为基础 class；`.node` 与 `.node:active` 分别匹配基础类和完整值。
+
+指针动作会先按 selector 找出候选 Child，再按当前 Canvas 坐标进行命中测试。当前默认 comparator 不提供稳定排序保证，因此重叠目标应始终传入 `sortBy(a, b)`。
 
 `withTargetConditionCallback` 是 Event 定义上的第二层目标判断。它收到候选 `target`，只有返回 `true` 的 Child 才能进入 Listener。通过这个判断的 Child 就是回调最终收到的 `e.target`。
 

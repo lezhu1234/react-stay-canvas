@@ -65,10 +65,16 @@ The package-root utility names remain stable even when their internal owner chan
 and `docs/en/`; both language trees cover the same public contracts but use natural prose rather
 than line-by-line translation. API text and examples are not duplicated in the root landing page.
 
-During the documentation migration, `docs/README.zh.md` and `docs/README.en.md` remain available as
-explicitly marked legacy references. New pages must use package exports and repository examples as
-their factual sources instead of copying declarations from those legacy files.
+The former monolithic content in `docs/README.zh.md` and `docs/README.en.md` has been replaced by
+small compatibility entry points so existing links continue to reach the topic indexes. Public
+documentation must use package exports, tests, and repository examples as factual sources instead
+of reintroducing another declaration copy in those files.
 
 Runnable behavior belongs in the example gallery. Manual regression procedures and evidence belong
 in `example/ACCEPTANCE.md` and its route handbooks. Maintainer architecture documents explain
 internal ownership and must not become a second user-facing API reference.
+
+`scripts/verify-docs.mjs` enforces matching Chinese and English page trees, validates local
+Markdown links, and derives documented member names from the selected public TypeScript
+declarations that own each API page. It checks documentation structure and API-name drift without
+becoming a second TypeScript compiler or a complete Markdown parser.

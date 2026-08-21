@@ -384,11 +384,12 @@ export function stayTools(this: Stay<any>): StayTools {
       const scale = targetArea.width / area.width
 
       children.forEach((child) => {
-        child.move(offsetX, offsetY)
-        child.zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
+        const importedChild = child.copy()
+        importedChild.move(offsetX, offsetY)
+        importedChild.zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
         this.tools.appendChild({
-          shape: child.copyShapeMap(),
-          className: child.className,
+          shape: importedChild.copyShapeMap(),
+          className: importedChild.className,
         })
       })
     },
@@ -416,7 +417,7 @@ export function stayTools(this: Stay<any>): StayTools {
 
       const childrenReady = Promise.all(
         children.map(async (c) => {
-          if (progress) {
+          if (progress !== undefined) {
             // no-op on static children (polymorphic), advances timeline children
             c.setCurrentTime({ time: progress })
           }

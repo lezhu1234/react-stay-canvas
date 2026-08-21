@@ -35,7 +35,7 @@ A numeric value uses `canvas.getContext("2d")` for every layer:
 <StayCanvas width={720} height={420} layers={3} />
 ```
 
-The public type also accepts `ContextLayerSetFunction[]` for returning a custom 2D context per layer. The current React render path does not reliably create the matching number of Canvas elements from that array, so use a number until this issue is fixed; see [Current limitations](../known-limitations.md#rendering-and-geometry).
+The public type also accepts `ContextLayerSetFunction[]` for returning a custom 2D context per layer, but the React render path does not reliably create the matching number of Canvas elements from that array. Use a number; see [Current limitations](../known-limitations.md#rendering-and-geometry).
 
 Shape `layer` values are zero-based. Negative values count from the end, so `-1` means the last layer. A positive index greater than or equal to the layer count, or a negative index still below zero after conversion, throws `layer is out of range`.
 

@@ -46,7 +46,7 @@
 | `zoom(deltaY, center, filter?)` | Zoom around a Canvas-local point |
 | `reset()` | Apply the current root-based inverse transform; not reliable after a scene move |
 
-`move()`, `zoom()`, and `reset()` return a Promise resolved on the next runtime tick; it does not mean the browser compositor has completed a frame. Do not use `reset()` as a restore-to-initial-state operation until its movement-snapshot issue is fixed; see [Current limitations](../known-limitations.md#scene-operations).
+`move()`, `zoom()`, and `reset()` return a Promise resolved on the next runtime tick; it does not mean the browser compositor has completed a frame. `reset()` is not a reliable restore-to-initial-state operation after scene movement; see [Current limitations](../known-limitations.md#scene-operations).
 
 ## History
 

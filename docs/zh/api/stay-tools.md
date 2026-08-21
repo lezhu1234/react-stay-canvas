@@ -46,7 +46,7 @@
 | `zoom(deltaY, center, filter?)` | 以 Canvas 局部点为中心缩放 |
 | `reset()` | 执行当前基于 root 的逆变换；场景移动后并不可靠 |
 
-`move()`、`zoom()`、`reset()` 返回下一次 runtime tick 完成的 Promise，不代表浏览器已经完成一帧合成。在移动快照问题修复前，不要把 `reset()` 当作恢复初始状态的入口；详见[当前限制](../known-limitations.md#场景操作)。
+`move()`、`zoom()`、`reset()` 返回下一次 runtime tick 完成的 Promise，不代表浏览器已经完成一帧合成。场景移动后，`reset()` 不能可靠地恢复初始状态；详见[当前限制](../known-limitations.md#场景操作)。
 
 ## 历史
 

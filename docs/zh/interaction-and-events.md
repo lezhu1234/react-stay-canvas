@@ -451,7 +451,7 @@ Pointer Session 的 terminal 从进入 EventRuntime、执行 Event 定义和 Lis
 
 不要在 `dragend`、`moveend`、`mouseup` 或取消回调尚未返回时，通过 `canvas.dispatchEvent(...)` 同步伪造下一次原生 `pointerdown`/`mousedown`。这类嵌套输入会被当前 Canvas 忽略。
 
-应用内级联动作应使用 `ref.trigger()` 或 `tools.triggerAction()`。测试下一条真实 Pointer Session 时，应等待当前 terminal 回调返回后再派发新的原生 down。
+应用内级联动作应使用 `ref.trigger()` 或 `tools.triggerAction()`。新的原生 down 应在当前 terminal 回调返回后再派发。
 
 即使 Event 定义或 Listener 在 terminal 中同步抛错，本次 Pointer Session 的动态定义、点击配对和目标仍会在 `finally` 中清理，然后异常继续向外抛出。
 

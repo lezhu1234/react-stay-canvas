@@ -4,11 +4,7 @@
 
 A layered Canvas rendering and interaction library for React, with shapes, children, selectors, state, history, animation, and composable events.
 
-[中文文档](./docs/zh/README.md) · [English documentation](./docs/en/README.md) · [示例 / Examples](https://lezhu1234.github.io/react-stay-canvas/) · [验收手册 / Acceptance handbook](./example/ACCEPTANCE.md)
-
-> 本页只作为项目入口。使用指南和 API 参考按主题维护在中英文文档中，不在根 README 维护第三份副本。
->
-> This page is only the project entry point. Guides and API reference are maintained by topic in the Chinese and English documentation instead of being copied here.
+[中文文档](./docs/zh/README.md) · [English documentation](./docs/en/README.md) · [示例 / Examples](https://lezhu1234.github.io/react-stay-canvas/)
 
 ## 安装 / Installation
 
@@ -42,22 +38,9 @@ export function Demo() {
 }
 ```
 
-完整的事件、selector、变换、历史记录、场景传输和集成示例请查看示例站点。建议先阅读对应语言的快速开始和核心概念，再按主题查阅后续文档。
+完整的事件、selector、变换、历史记录、场景传输和集成示例请查看示例站点。建议先阅读对应语言的快速开始和核心概念，再按需要阅读其他主题。
 
-See the example gallery for events, selectors, transforms, history, scene transfer, and integrated workflows. Start with Getting started and Core concepts in the language-specific documentation, then use the topic guides as reference.
-
-## 本地验证 / Local verification
-
-```bash
-pnpm install --frozen-lockfile
-npm ci --prefix test
-npm ci --prefix example
-pnpm verify
-```
-
-`pnpm verify` 会检查双语文档，然后依次构建库、运行测试、检查示例 TypeScript 类型并构建示例站点。
-
-`pnpm verify` checks the bilingual documentation, builds the library, runs the tests, type-checks the examples, and builds the example gallery.
+See the example gallery for events, selectors, transforms, history, scene transfer, and integrated workflows. Start with Getting started and Core concepts, then continue with the topics relevant to your application.
 
 ## License
 

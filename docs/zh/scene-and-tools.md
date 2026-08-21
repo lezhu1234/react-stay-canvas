@@ -140,7 +140,7 @@ tools.redo()
 - 动画 Child 不进入历史，移除后也不会被 undo 恢复；
 - `undo()` 和 `redo()` 会恢复当时的 Canvas state。
 
-当前纯 Shape `update()` 不会自动把 Child 加入待记录集合，因此只在拖动结束时调用 `log()` 不能可靠地记录已经存在对象的移动。需要可撤销更新时，应用必须像 Annotator 示例一样用同 id 的 remove/append replacement 建立显式历史差异，或者等待库补齐正式的 update-history API。不要在文档或产品代码中假定 `log()` 会扫描全部 Child。
+纯 Shape `update()` 不会自动把 Child 加入待记录集合，因此只在拖动结束时调用 `log()` 不能可靠地记录已经存在对象的移动。需要可撤销更新时，应用必须像 Annotator 示例一样用同 id 的 remove/append replacement 建立显式历史差异。不要假定 `log()` 会扫描全部 Child。
 
 ## 在 Canvas 之间复制场景
 

@@ -1,8 +1,4 @@
-# 文档已迁移
+# 中文文档
 
-中文文档现已按主题拆分维护。
-
-- [打开中文文档首页](./zh/README.md)
-- [查看当前运行时限制](./zh/known-limitations.md)
-
-本页仅用于兼容已有链接；旧版单文件文档不再在这里维护。
+- [使用指南与 API](./zh/README.md)
+- [当前限制](./zh/known-limitations.md)

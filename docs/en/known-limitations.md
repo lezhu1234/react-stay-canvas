@@ -2,7 +2,7 @@
 
 [中文](../zh/known-limitations.md) · [Documentation home](./README.md)
 
-This page lists user-visible behavior that the current implementation does not provide reliably. It describes the present runtime; it is not a promise that a future fix will preserve the same failure mode.
+The following user-visible behavior is not reliable in the current implementation.
 
 ## Rendering and geometry
 
@@ -18,7 +18,7 @@ This page lists user-visible behavior that the current implementation does not p
 ## Animation and history
 
 - `Circle`, `Point`, and `Path` are not animated Shapes.
-- A first keyframe appended with `prependZeroShape: false` and a non-zero duration cannot be sought safely at `timeMs: 0`. Keep the default zero frame until this path is fixed.
+- A first keyframe appended with `prependZeroShape: false` and a non-zero duration cannot be sought safely at `timeMs: 0`. Keep the default zero frame.
 - Animated Children do not participate in `log()`, `undo()`, or `redo()`.
 - Updating an existing Shape does not automatically mark its Child as a pending history change. `log()` only records static Children marked by append/remove operations.
 
@@ -33,5 +33,3 @@ This page lists user-visible behavior that the current implementation does not p
 
 - The default target comparator does not provide a stable ordering guarantee. Supply `sortBy` when pointer targets overlap.
 - The public Event trigger type includes `"frame"`, but the current renderer does not emit frame actions through `EventRuntime`.
-
-Maintainer context and fix constraints are tracked in [Known design issues](../KNOWN_ISSUES.md), which is currently maintained in Chinese.

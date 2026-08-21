@@ -2,7 +2,7 @@
 
 [English](../en/known-limitations.md) · [文档首页](./README.md)
 
-本页列出当前实现尚不能可靠提供的用户可见行为。它描述的是现状，不代表未来修复必须保留同一种失败方式。
+下面列出当前实现尚不能可靠提供的用户可见行为。
 
 ## 渲染与几何
 
@@ -18,7 +18,7 @@
 ## 动画与历史
 
 - `Circle`、`Point` 和 `Path` 不是动画 Shape。
-- 第一帧使用 `prependZeroShape: false` 且持续时间非零时，`timeMs: 0` 不能安全定位。该路径修复前请保留默认零帧。
+- 第一帧使用 `prependZeroShape: false` 且持续时间非零时，`timeMs: 0` 不能安全定位。请保留默认零帧。
 - 动画 Child 不参与 `log()`、`undo()` 或 `redo()`。
 - 更新已有 Shape 不会自动把 Child 标记为待记录历史；`log()` 只记录由 append/remove 标记的静态 Child。
 
@@ -33,5 +33,3 @@
 
 - 默认目标 comparator 不提供稳定排序保证。指针目标重叠时请传入 `sortBy`。
 - 公开 Event trigger 类型包含 `"frame"`，但当前 renderer 不会通过 `EventRuntime` 发出 frame action。
-
-维护背景与修复约束记录在[已知设计问题](../KNOWN_ISSUES.md)中。

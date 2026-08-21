@@ -2,7 +2,7 @@
 
 [文档首页](./README.md) · [English](../en/getting-started.md)
 
-这一页会创建一个固定尺寸的 Canvas 场景，在挂载时添加矩形，并通过 React 按钮修改和删除这个场景对象。
+先创建一个固定尺寸的 Canvas 场景，在挂载时添加矩形，再通过 React 按钮修改和删除这个场景对象。
 
 ## 安装
 

@@ -231,4 +231,3 @@ update(props: Partial<DiamondProps>) {
 
 - [Child 与 Shape API](../api/children-and-shapes.md)
 - [Shape 与动画](../shapes-and-animation.md)
-- [源码架构](../../SOURCE_ARCHITECTURE.md)

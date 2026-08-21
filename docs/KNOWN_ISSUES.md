@@ -32,11 +32,11 @@ Transform 示例提供 Canvas 外释放区域和可见会话状态。必须验�
 
 ## `layers` 函数数组与实际 Canvas 数量不一致
 
-状态：待处理
+状态：已修复，待随代码变更合入
 
 `StayCanvasProps.layers` 的公开类型允许 `number | ContextLayerSetFunction[]`。初始化逻辑能读取函数数组，但 React 渲染当前使用 `Array(layers)` 生成 `<canvas>`，数组参数会被当成一个元素而不是层数，因此无法可靠地创建与函数数量一致的 Canvas。
 
-文档在修复前只推荐数字形式。后续修复应以函数数组的 `length` 渲染 Canvas，并覆盖空数组、context 返回 null、重建、尺寸变化和多层绘制测试。这个问题涉及现有公开类型，修复时不能静默删除函数数组能力。
+React 渲染现在使用规范化后的 context setter 数量创建 Canvas，并在 `reCreate()` 时只传入当前有效图层。自动化测试覆盖函数数组的 Canvas 数量、setter 对应关系、空数组、null context、使用最新 setter 重建和尺寸触发的重建；数字形式与现有多层绘制路径保持不变。
 
 ## 部分导出 Shape 的场景协议不完整
 

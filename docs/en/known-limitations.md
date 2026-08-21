@@ -6,12 +6,11 @@ The following user-visible behavior is not reliable in the current implementatio
 
 ## Rendering and geometry
 
-- `Circle` default hit testing throws because its `contains()` implementation expects a `Point` instance while public hit paths pass a plain coordinate.
 - `Line` and `StayText` do not provide default hit areas. Group them with a hittable Shape or provide an explicit selector/hit strategy.
 - `Point.getBound()` and `Path.getBound()` are not implemented. Normal rendering performs bounds-based viewport culling, so appending either Shape throws before it paints. `Point` remains usable as a standalone geometry helper; `Path.copy()` is also unimplemented.
 - Changing a Shape's `layer` through `update()` dirties only the new layer and leaves stale pixels on the old one. Call `tools.refresh()` after a layer change.
 - `StayText({ x, y })` uses the upper center of the text bounding box as its current anchor. It does not use the visual center used by `Circle`.
-- `StayImage` overwrites explicit `swidth` and `sheight` with the image's natural dimensions during construction.
+- `StayImage` preserves explicit source-crop dimensions during construction, update, and copy, but custom `swidth` and `sheight` are not transition fields and are not preserved in interpolated timeline frames.
 - `CircleAttr.stroke`, `CircleAttr.fill`, and `StayText.decoration` are accepted by types but do not produce the corresponding stable drawing behavior. Use `strokeConfig` and `fillConfig` for Circle styling.
 
 ## Animation and history

@@ -6,12 +6,11 @@
 
 ## 渲染与几何
 
-- `Circle` 默认命中会抛错：它的 `contains()` 要求 `Point` 实例，而公开命中路径传入普通坐标对象。
 - `Line` 和 `StayText` 没有默认命中区域。请把它们与可命中的 Shape 组合，或提供明确的 selector/命中策略。
 - `Point.getBound()` 和 `Path.getBound()` 尚未实现。正常渲染会先按边界判断 viewport，因此追加任意一个 Shape 都会在绘制前抛错；`Point` 仍可单独作为几何工具使用，`Path.copy()` 也尚未实现。
 - 通过 `update()` 修改 Shape 的 `layer` 时只会标记新 layer，旧 layer 会残留像素。修改后需要调用 `tools.refresh()`。
 - `StayText({ x, y })` 当前以文字包围盒的上方中心为锚点，不是 `Circle` 所使用的视觉中心。
-- `StayImage` 构造时会用图片 natural size 覆盖显式传入的 `swidth` 和 `sheight`。
+- `StayImage` 会在构造、更新和复制时保留显式源裁剪尺寸，但自定义 `swidth`、`sheight` 尚未纳入 transition，时间线插值帧不会保留它们。
 - 类型接受 `CircleAttr.stroke`、`CircleAttr.fill` 和 `StayText.decoration`，但它们不会产生对应的稳定绘制效果。Circle 样式请使用 `strokeConfig` 和 `fillConfig`。
 
 ## 动画与历史

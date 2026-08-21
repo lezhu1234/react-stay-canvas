@@ -13,7 +13,7 @@ A Shape owns geometry, drawing, hit testing, and its own visual state. A Child g
 | Shape | Main geometry | Default hit testing | Keyframe interpolation | Notes |
 | --- | --- | --- | --- | --- |
 | `Rectangle` | `x`, `y`, `width`, `height` | Yes | Yes | `x` and `y` are the top-left corner |
-| `Circle` | `x`, `y`, `radius` | Currently unavailable | No | `contains()` requires a `Point` instance, while public hit paths pass a plain coordinate |
+| `Circle` | `x`, `y`, `radius` | Yes | No | Uses radial hit testing with plain coordinates |
 | `Line` | `x1`, `y1`, `x2`, `y2` | No | Yes | Use `nearPoint` for a custom line hit area |
 | `StayText` | `x`, `y`, `text`, `font` | No | Yes | `(x, y)` is currently the upper center of the text bounding box |
 | `StayImage` | `image`, `x`, `y`, `width`, `height`, `opacity` | Yes | Yes | Uses rectangular bounds; create it after the image loads |
@@ -150,6 +150,8 @@ image.src = "/photo.png"
 ```
 
 Cross-origin images follow the browser's Canvas tainting rules. If the scene will later call `toDataURL()` or `regionToTargetCanvas()`, the image response must allow the corresponding CORS use.
+
+Pass `sx`, `sy`, `swidth`, and `sheight` to crop the source image. Explicit crop dimensions are preserved during construction, update, and copy; omitted dimensions use the image's natural size. Custom crop dimensions are not currently preserved in interpolated timeline frames.
 
 ## Explicit timeline model
 

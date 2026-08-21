@@ -1,5 +1,4 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { Point } from "./point"
 
 import type {
   CanvasFillProps,
@@ -44,8 +43,8 @@ export class Circle extends InstantShape {
     this.radius = radius
     this.init() // set derived `center` (update() does this too; the ctor forgot)
   }
-  contains(point: Point): boolean {
-    return point.distance(this.center) < this.radius
+  contains(point: Coordinate): boolean {
+    return Math.hypot(point.x - this.center.x, point.y - this.center.y) < this.radius
   }
 
   copy(): Circle {

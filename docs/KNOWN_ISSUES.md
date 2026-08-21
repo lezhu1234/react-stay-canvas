@@ -45,8 +45,9 @@ React 渲染现在使用规范化后的 context setter 数量创建 Canvas，并
 - `Line.contains()` 和 `StayText.contains()` 固定返回 false，不能单独提供默认命中区域；
 - `Point.getBound()` 尚未实现；
 - `Path.copy()` 与 `Path.getBound()` 尚未实现；
-- `Circle.contains()` 要求 `Point` 实例，但工具和 Listener 的命中路径传入普通坐标对象，当前默认命中会抛错；
 - `Circle` 是 `InstantShape`，不支持关键帧插值。
+
+`Circle.contains()` 接受普通坐标的默认命中缺口已经修复，公开工具和 Listener 的命中路径不再需要构造 `Point` 实例。
 
 这些类型都从包入口导出。尤其是正常绘制会先通过 `getBound()` 判断 viewport，因此追加 `Point` 或 `Path` 会在真正 paint 前直接抛错；影响不只限于可选的查询、命中、历史快照或 `exportChildren()`。当前用户文档已按真实能力逐项标注。后续实现必须分别定义边界、命中容差、复制独立性和动画兼容性，不能只为消除异常返回一个没有几何依据的占位结果。
 
@@ -86,11 +87,11 @@ Shape 通过 `update({ layer })` 换层时也存在脏层缺口：`applyUpdate()
 
 ## `StayImage` 的源裁剪尺寸会被覆盖
 
-状态：待处理
+状态：静态 Shape 已修复，动画插值仍待设计
 
 `ImageProps` 公开了 `sx`、`sy`、`swidth` 和 `sheight`，但构造函数当前会把传入的 `swidth`、`sheight` 覆盖为图片 natural size。因此源坐标可改变，源裁剪尺寸却不能按公开参数稳定生效。
 
-后续修复应分别定义“省略时使用 natural size”和“显式传值时保留调用方裁剪”的行为，并覆盖复制、动画插值、跨域图片和区域输出。当前文档只把这些字段列为现有类型，不把自定义裁剪作为已验证能力。
+构造、更新和复制现在遵循“省略时使用 natural size，显式传值时保留调用方裁剪”，并有自动化回归测试。`swidth`、`sheight` 尚未纳入 transition；时间线中应插值、保持前帧还是切换到后帧仍需单独决定。跨域图片和区域输出继续遵循浏览器 Canvas 的既有规则。
 
 ## 区域输出无法通过 `progress: 0` 回到动画起点
 

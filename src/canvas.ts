@@ -1,5 +1,5 @@
-import { ContextLayerSetFunction, DrawCanvasContext } from "./types"
-import { Rect } from "./userTypes"
+import type { ContextLayerSetFunction, DrawCanvasContext } from "./types/canvas"
+import type { Rect } from "./types/geometry"
 
 function dprScale(
   canvas: HTMLCanvasElement,
@@ -43,7 +43,11 @@ export class Canvas {
     this.height = height
     this.status = "default"
     this.contexts = layers.map((layer, i) => {
-      return contextLayerSetFunctionList[i](layer) as DrawCanvasContext
+      const context = contextLayerSetFunctionList[i](layer)
+      if (!context) {
+        throw new Error(`Unable to get drawing context for layer ${i}`)
+      }
+      return context
     })
 
     this.bound = {

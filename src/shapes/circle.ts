@@ -1,16 +1,14 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { Point } from "./point"
 
-import {
+import type {
   CanvasFillProps,
   CanvasStrokeProps,
-  Coordinate,
-  Rect,
   ShapeDrawProps,
   ShapeProps,
-} from "../userTypes"
+} from "../types/shapes"
+import type { Coordinate, Rect } from "../types/geometry"
 import { BlackColor, InstantShape, ZeroColor } from "./instantShape"
-import { rgbaToString } from "../w3color"
+import { rgbaToString } from "../vendor/w3color"
 
 export interface CircleAttr extends ShapeProps {
   x: number
@@ -43,9 +41,10 @@ export class Circle extends InstantShape {
     this.x = x
     this.y = y
     this.radius = radius
+    this.init() // set derived `center` (update() does this too; the ctor forgot)
   }
-  contains(point: Point): boolean {
-    return point.distance(this.center) < this.radius
+  contains(point: Coordinate): boolean {
+    return Math.hypot(point.x - this.center.x, point.y - this.center.y) < this.radius
   }
 
   copy(): Circle {

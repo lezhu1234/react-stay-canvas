@@ -1,6 +1,8 @@
-import { AnimatedShapeProps, Border, EasingFunction, StayShapeTransitionConfig } from "../userTypes"
-import { applyEasing, fillSame, isBasicType, strokeSame } from "../utils"
-import { RGBA } from "../w3color"
+import type { EasingFunction, StayShapeTransitionConfig } from "../types/animation"
+import type { AnimatedShapeProps, Border } from "../types/shapes"
+import { applyEasing } from "../utils/easing"
+import { fillSame, isBasicType, strokeSame } from "../utils/equality"
+import { RGBA } from "../vendor/w3color"
 import { InstantShape, ZeroColor } from "./instantShape"
 
 // export const DefaultTransitionConfig: Required<AnimatedShapeTransitionConfig> = {
@@ -25,6 +27,13 @@ export abstract class AnimatedShape extends InstantShape {
   constructor(props: AnimatedShapeProps) {
     super(props)
     this.transition = { ...DefaultStayShapeTransitionConfig, ...props.transition }
+  }
+
+  override copyProps(): AnimatedShapeProps {
+    return {
+      ...super.copyProps(),
+      transition: { ...this.transition },
+    }
   }
 
   getNumberIntermediateState(

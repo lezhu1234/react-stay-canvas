@@ -1,99 +1,65 @@
 import { AnimatedShape } from "../shapes/animatedShape"
 import { InstantShape } from "../shapes/instantShape"
 import { Rectangle } from "../shapes/rectangle"
-import { UserCallback } from "../types"
-import { ALLSTATE, DEFAULTSTATE, SUPPORT_OPRATOR } from "../userConstants"
-import {
-  ActionCallbackProps,
-  ActionEvent,
-  AnimatedTools,
-  Area,
+import { ALLSTATE, SUPPORT_OPRATOR } from "../userConstants"
+import type { ProgressProps } from "../types/animation"
+import type {
+  AppendChildProps,
   ChildSortFunction,
-  Dict,
-  ExportChildrenProps,
+  CreateChildProps,
+  CaptureSceneProps,
   getContainPointChildrenProps,
-  ImportChildrenProps,
-  InstantMode,
-  InstantTools,
-  PointType,
-  PredefinedMouseEventName,
-  ProgressProps,
+  SceneFragment,
   RegionToTargetCanvasProps,
   SelectorFunc,
-  StayMode,
-  BasicTools,
-  StayTools,
-  AnimatedMode,
-  AppendChildProps,
-  CreateChildProps,
-  Cursor,
-  TriggerEvents,
-} from "../userTypes"
-import { assert, infixExpressionParser, isStayAnimatedChild, numberAlmostEqual } from "../utils"
-import { StayAnimatedChild } from "./child/stayAnimatedChild"
-import { StayInstantChild } from "./child/stayInstantChild"
+} from "../types/children"
+import type { Dict } from "../types/common"
+import type { ManualTriggerEvents } from "../types/manualActions"
+import type { Area, PointType } from "../types/geometry"
+import type { Cursor, StayTools } from "../types/tools"
+import { assert } from "../utils/assertions"
+import { numberAlmostEqual } from "../utils/geometry"
+import { infixExpressionParser } from "../utils/selectors"
+import { StayAnimatedChild } from "./children/stayAnimatedChild"
+import { StayInstantChild } from "./children/stayInstantChild"
+import {
+  captureHistoryChild,
+  diffHistoryChild,
+  materializeHistoryShapes,
+} from "./historySnapshot"
+import { captureScene, materializeSceneChild } from "./sceneTransfer"
+import { normalizeManualActions } from "./events/input/manualActionAdapter"
 import Stay from "./stay"
 import { StepProps } from "./types"
 
-export function isInstantMode(mode: StayMode): mode is InstantMode {
-  return mode === "instant"
-}
-
-export function stayTools(
-  this: Stay<any, InstantMode>,
-  mode: InstantMode
-): InstantTools & BasicTools
-export function stayTools(
-  this: Stay<any, AnimatedMode>,
-  mode: AnimatedMode
-): AnimatedTools & BasicTools
-export function stayTools(this: Stay<any, StayMode>, mode: StayMode): StayTools<StayMode>
-
-export function stayTools<Mode extends StayMode>(
-  this: Stay<any, Mode>,
-  mode: Mode
-): StayTools<StayMode> {
+// One factory, one unified tool surface. Every stage gets all tools.
+export function stayTools(this: Stay<any>): StayTools {
   const animatedTools = {
     progress: ({ timeMs: time, bound, beforeDrawCallback, afterDrawCallback }: ProgressProps) => {
-      if (this.mode === "instant") {
-        throw new Error(
-          "Instant Mode: you can't call progress, you need to switch to animated mode"
-        )
-      }
       this.updateChildrenTime({ time, bound })
+      this.forceUpdateAllLayers()
       return this.draw({
-        forceDraw: true,
         now: Date.now(),
         beforeDrawCallback,
         afterDrawCallback,
       })
     },
     createChild: ({ id, className }: CreateChildProps) => {
-      let child = new StayAnimatedChild({
+      const child = new StayAnimatedChild({
         id,
         className,
         canvas: this.root,
       })
-      const childProxy = new Proxy(child, {
-        set: (target, prop, value) => {
-          if (prop === "update") {
-            target.update(value)
-            this.unLogedChildrenIds.add(child.id)
-          }
-          return Reflect.set(target, prop, value)
-        },
-      })
-
-      this.pushToChildren(childProxy)
-      this.unLogedChildrenIds.add(childProxy.id)
-
-      return childProxy
+      this.pushToChildren(child)
+      // A timeline is not a static undo/redo state. History captures only
+      // children whose participatesInHistory contract opts in.
+      return child
     },
   }
 
   const instantTools = {
     // appendChild: ({ id, className, shape }: AppendChildProps<InstantShape>) => {
-    //   let child = new StayInstantChild({
+    //   const child = new StayInstantChild({
     //     id,
     //     className,
     //     shape,
@@ -116,7 +82,16 @@ export function stayTools<Mode extends StayMode>(
     // },
     log: () => {
       const steps = [...this.unLogedChildrenIds]
-        .map((id) => StayInstantChild.diff(this.historyChildren.get(id), this.getChildById(id)))
+        // A removed child is absent from the store, so it remains eligible here;
+        // its prior snapshot determines the remove step.
+        .filter((id) => this.getChildById(id)?.participatesInHistory ?? true)
+        .map((id) => {
+          const child = this.getChildById(id)
+          return diffHistoryChild(
+            this.historyChildren.get(id),
+            child?.participatesInHistory ? captureHistoryChild(child) : undefined
+          )
+        })
         .filter((o) => o) as StepProps[]
       this.pushToStack({
         state: this.state,
@@ -137,9 +112,9 @@ export function stayTools<Mode extends StayMode>(
       stepItem.steps.forEach((step) => {
         const stepChild = step.child
         if (step.action === "append") {
-          ;(this.tools as StayTools<"instant">).appendChild({
+          this.tools.appendChild({
             id: stepChild.id,
-            shape: stepChild.shape,
+            shape: materializeHistoryShapes(stepChild.shape),
             className: stepChild.className,
           })
         } else if (step.action === "remove") {
@@ -148,7 +123,7 @@ export function stayTools<Mode extends StayMode>(
           assert(stepChild.beforeShape)
           const child = this.findChildById(stepChild.id)!
 
-          child.update({ shape: stepChild.shape })
+          child.update({ shape: materializeHistoryShapes(stepChild.shape) })
         }
       })
 
@@ -174,17 +149,19 @@ export function stayTools<Mode extends StayMode>(
         if (step.action === "append") {
           this.tools.removeChild(stepChild.id)
         } else if (step.action === "remove") {
-          ;(this.tools as StayTools<"instant">).appendChild({
+          this.tools.appendChild({
             id: stepChild.id,
-            shape: stepChild.shape,
+            shape: materializeHistoryShapes(stepChild.shape),
             className: stepChild.className,
           })
         } else if (step.action === "update") {
-          assert(stepChild.beforeShape)
+          if (!stepChild.beforeShape) {
+            throw new Error("update history step requires beforeShape")
+          }
 
           this.getChildById(stepChild.id)!.update({
             className: stepChild.beforeName || stepChild.className,
-            shape: stepChild.beforeShape!,
+            shape: materializeHistoryShapes(stepChild.beforeShape),
           })
           // this.tools.updateChild({
           //   child: this.getChildById(stepChild.id)!,
@@ -200,32 +177,20 @@ export function stayTools<Mode extends StayMode>(
 
   const stayTools = {
     refresh: () => {
-      this.draw({
-        forceDraw: true,
-        now: Date.now(),
-      })
+      this.forceUpdateAllLayers()
+      this.draw({ now: Date.now() })
     },
-    appendChild: ({ id, className, shape }: AppendChildProps<InstantShape>) => {
-      let child = new StayInstantChild({
+    appendChild: <T extends InstantShape>({ id, className, shape }: AppendChildProps<T>) => {
+      const child = new StayInstantChild<T>({
         id,
         className,
         shape,
         canvas: this.root,
       })
-      const childProxy = new Proxy(child, {
-        set: (target, prop, value) => {
-          if (prop === "update") {
-            target.update(value)
-            this.unLogedChildrenIds.add(child.id)
-          }
-          return Reflect.set(target, prop, value)
-        },
-      })
+      this.pushToChildren(child)
+      this.unLogedChildrenIds.add(child.id)
 
-      this.pushToChildren(childProxy)
-      this.unLogedChildrenIds.add(childProxy.id)
-
-      return childProxy
+      return child
     },
     hasChild: (id: string) => {
       return this.getChildren().has(id)
@@ -238,7 +203,12 @@ export function stayTools<Mode extends StayMode>(
       const child = this.getChildById(childId)
       if (!child) return
       this.removeChildById(child.id)
-      this.unLogedChildrenIds.add(child.id)
+      // Only history-participating children are tracked for undo/redo. `child` is
+      // still the live instance here, so the check is reliable even though after
+      // removal getChildById()/the degraded snapshot clone no longer could be.
+      if (child.participatesInHistory) {
+        this.unLogedChildrenIds.add(child.id)
+      }
       return new Promise<void>((resolve) => {
         this.nextTick(resolve)
       })
@@ -268,17 +238,17 @@ export function stayTools<Mode extends StayMode>(
       })
       return selectedChildren
     },
-    getChildrenBySelector: (
+    getChildrenBySelector: <T extends InstantShape = InstantShape>(
       selector: string | SelectorFunc,
       sortBy?: ChildSortFunction
-    ): StayInstantChild[] => {
+    ): StayInstantChild<T>[] => {
       const children = this.getChildrenBySelector(selector)
 
       if (sortBy) {
         children.sort(sortBy)
       }
 
-      return children
+      return children as StayInstantChild<T>[]
     },
     getAvailiableStates: (selector: string): string[] => {
       const stateSelectors = selector
@@ -301,13 +271,13 @@ export function stayTools<Mode extends StayMode>(
         )
       }
     },
-    getContainPointChildren: ({
+    getContainPointChildren: <T extends InstantShape = InstantShape>({
       point,
       selector,
       sortBy,
       returnFirst = false,
       withRoot = true,
-    }: getContainPointChildrenProps): StayInstantChild[] => {
+    }: getContainPointChildrenProps): StayInstantChild<T>[] => {
       let _selector = selector
 
       if (selector && Array.isArray(selector)) {
@@ -328,7 +298,9 @@ export function stayTools<Mode extends StayMode>(
         hitChildren = hitChildren.filter((c) => c.id !== this.rootId)
       }
 
-      return returnFirst && hitChildren.length > 0 ? [hitChildren[0]] : hitChildren
+      return (
+        returnFirst && hitChildren.length > 0 ? [hitChildren[0]] : hitChildren
+      ) as StayInstantChild<T>[]
     },
     changeCursor: (cursor: Cursor) => {
       this.root.layers[this.root.layers.length - 1].style.cursor = cursor
@@ -398,14 +370,12 @@ export function stayTools<Mode extends StayMode>(
         this.nextTick(resolve)
       })
     },
-    exportChildren: ({ children, area }: ImportChildrenProps) => {
+    exportChildren: ({ children, area }: CaptureSceneProps) => {
       const rootChildShape = this.rootChild.getShape() as Rectangle
       area = area ?? { x: 0, y: 0, width: rootChildShape.width, height: rootChildShape.height }
-      children = children.map((child) => child.copy())
-
-      return { children, area }
+      return captureScene(children, area)
     },
-    importChildren: ({ children, area }: ExportChildrenProps, targetArea?: Area) => {
+    importChildren: ({ children, area }: SceneFragment, targetArea?: Area) => {
       const rootChildShape = this.rootChild.getShape() as Rectangle
       targetArea = targetArea ?? {
         x: 0,
@@ -422,12 +392,15 @@ export function stayTools<Mode extends StayMode>(
       const [offsetX, offsetY] = [targetArea.x - area.x, targetArea.y - area.y]
       const scale = targetArea.width / area.width
 
-      children.forEach((child) => {
-        child.move(offsetX, offsetY)
-        child.zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
-        ;(this.tools as StayTools<"instant">).appendChild({
-          shape: child.copyShapeMap(),
-          className: child.className,
+      children.forEach((fragment) => {
+        const importedChild = materializeSceneChild(fragment, this.root)
+        importedChild.moveInit()
+        importedChild.move(offsetX, offsetY)
+        importedChild.zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
+        this.tools.appendChild({
+          id: importedChild.id,
+          shape: importedChild.shapeMap,
+          className: importedChild.className,
         })
       })
     },
@@ -455,7 +428,8 @@ export function stayTools<Mode extends StayMode>(
 
       const childrenReady = Promise.all(
         children.map(async (c) => {
-          if (progress && isStayAnimatedChild(c)) {
+          if (progress !== undefined) {
+            // no-op on static children (polymorphic), advances timeline children
             c.setCurrentTime({ time: progress })
           }
           for (let layerIndex = 0; layerIndex < layerNumber; layerIndex++) {
@@ -484,125 +458,22 @@ export function stayTools<Mode extends StayMode>(
     },
     triggerAction: <T extends string>(
       originEvent: Event,
-      triggerEvents: TriggerEvents<T>,
+      triggerEvents: ManualTriggerEvents<T>,
       payload: Dict
-    ): void => {
-      const isMouseEvent = originEvent instanceof MouseEvent
-      interface CallBackType {
-        callback: UserCallback<any, any, Mode>
-        e: ActionEvent<T>
-        name: string
-      }
-
-      // let needUpdate = false
-      const callbackList: CallBackType[] = []
-      this.listeners.forEach(({ name, event, state, selector, sortBy, callback }) => {
-        if (!(name in this.composeStore)) {
-          this.composeStore[name] = {}
-        }
-
-        if (!Array.isArray(event)) {
-          event = [event]
-        }
-
-        event.forEach(async (actionEventName: string) => {
-          const avaliableSet = this.tools.getAvailiableStates(state || DEFAULTSTATE)
-
-          if (!avaliableSet.includes(this.state) || !(actionEventName in triggerEvents)) {
-            return false
-          }
-
-          const { info: actionEvent, event: preEvent } = triggerEvents[actionEventName]
-
-          const _actionEvent = actionEvent as ActionEvent<PredefinedMouseEventName>
-          if (preEvent.withTargetConditionCallback) {
-            const children = this.tools.getChildrenBySelector(selector)
-            let flag = false
-            for (let index = 0; index < children.length; index++) {
-              const child = children[index]
-
-              if (
-                preEvent.withTargetConditionCallback({
-                  e: _actionEvent as any,
-                  store: this.store,
-                  stateStore: this.stateStore,
-                  target: child,
-                  originEvent,
-                })
-              ) {
-                _actionEvent.target = child
-                flag = true
-                break
-              }
-            }
-
-            if (!flag) {
-              return false
-            }
-          }
-
-          if (isMouseEvent) {
-            if (actionEventName === "mouseleave") {
-              _actionEvent.target = this.rootChild
-            } else {
-              const children = this.tools.getContainPointChildren({
-                point: _actionEvent.point,
-                selector: selector,
-                sortBy: sortBy,
-              })
-
-              if (children.length === 0) {
-                return false
-              }
-              _actionEvent.target = children[0] as StayInstantChild
-            }
-          }
-
-          // needUpdate = true
-          callbackList.push({
-            callback,
-            e: actionEvent,
-            name,
-          })
-
-          if (callback) {
-            const eventFuncMap = await callback({
-              originEvent,
-              //@ts-ignore cannot understand
-              e: actionEvent,
-              store: this.store,
-              stateStore: this.stateStore,
-              composeStore: this.composeStore[name],
-              tools: this.getTools() as any,
-              canvas: this.root,
-              payload,
-            })
-
-            if (eventFuncMap !== undefined && actionEvent.name in eventFuncMap) {
-              // TODO: type
-              const particalComposeStore = (eventFuncMap as any)[actionEvent.name]()
-              this.composeStore[name] = {
-                ...this.composeStore[name],
-                ...particalComposeStore,
-              }
-            }
-          }
-        })
-      })
-
-      // if (needUpdate) {
-      //   this.draw()
-      // }
-    },
-    deleteListener: (name: string) => {
-      if (this.listeners.has(name)) {
-        this.listeners.delete(name)
-      }
-    },
+    ): void =>
+      this.actionRouter.dispatchManual(
+        originEvent,
+        normalizeManualActions(triggerEvents, this.state),
+        payload
+      ),
+    deleteListener: (name: string) => this.actionRouter.deleteListener(name),
   }
 
+  // Unified surface: every mode gets all tools (see StayTools). The three groups
+  // have no overlapping keys, so the merge is unambiguous — no branch, no cast.
   return {
     ...stayTools,
-    ...(isInstantMode(mode) ? instantTools : animatedTools),
-  } as any
+    ...instantTools,
+    ...animatedTools,
+  }
 }

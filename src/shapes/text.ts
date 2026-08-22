@@ -1,29 +1,25 @@
-import { DrawCanvasContext } from "../types"
+import type { EasingFunction } from "../types/animation"
+import type { DrawCanvasContext } from "../types/canvas"
+import type { Coordinate, Rect } from "../types/geometry"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import {
+import type {
   Border,
   CanvasFillProps,
   CanvasStrokeProps,
-  Coordinate,
   DiagonalDirection,
-  EasingFunction,
   Font,
   FourrDirection,
-  Rect,
   ShapeDrawProps,
   TextAttr,
-} from "../userTypes"
+} from "../types/shapes"
 import {
   borderSame,
   fillSame,
-  getDefaultFont,
-  getRGBAStr,
-  getSize,
-  isRGB,
-  isRGBA,
   strokeSame,
-} from "../utils"
-import { RGBA, rgbaToString } from "../w3color"
+} from "../utils/equality"
+import { getRGBAStr, isRGB, isRGBA } from "../utils/color"
+import { getDefaultFont, getSize } from "../utils/typography"
+import { RGBA, rgbaToString } from "../vendor/w3color"
 import { AnimatedShape } from "./animatedShape"
 import { BlackColor, InstantShape, ZeroColor } from "./instantShape"
 import { Rectangle } from "./rectangle"
@@ -147,12 +143,13 @@ export class StayText extends AnimatedShape {
       x: this.x,
       y: this.y,
       text: this.text,
-      font: this.font,
-      border: this.border,
+      font: { ...this.font },
+      border: this.border?.map((border) => ({ ...border })),
       textBaseline: this.textBaseline,
       textAlign: this.textAlign,
       offsetXRatio: this.offsetXRatio,
       offsetYRatio: this.offsetYRatio,
+      autoTransitionDiffText: this.autoTransitionDiffText,
       ...this.copyProps(),
     })
   }

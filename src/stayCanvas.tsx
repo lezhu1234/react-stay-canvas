@@ -11,12 +11,31 @@ import React, {
 } from "react"
 
 import * as PredefinedEventList from "./predefinedEvents"
-import StayStage from "./stay/stayStage"
-import { ContextLayerSetFunction, StayCanvasProps } from "./types"
-import { PredefinedEventName, StayCanvasRefType, StayMode } from "./userTypes"
+import Stay, { createStay } from "./stay/stay"
+import type { ContextLayerSetFunction } from "./types/canvas"
+import type { StayCanvasProps, StayCanvasRefType } from "./types/component"
+import type { PredefinedEventName } from "./types/events"
+
+const defaultContextLayerSetFunction: ContextLayerSetFunction = (canvas) =>
+  canvas.getContext("2d")
+
+function resolveContextLayerSetFunctions(
+  layers: number | ContextLayerSetFunction[]
+): ContextLayerSetFunction[] {
+  const contextSetters =
+    typeof layers === "number"
+      ? Array(layers).fill(defaultContextLayerSetFunction)
+      : layers
+
+  if (contextSetters.length < 1) {
+    throw new Error("layers must be greater than 0")
+  }
+
+  return contextSetters
+}
 
 const StayCanvas = forwardRef(
-  <EventName extends string, Mode extends StayMode>(
+  <EventName extends string>(
     {
       width = 500,
       height = 500,
@@ -26,29 +45,16 @@ const StayCanvas = forwardRef(
       layers = 2,
       className = "",
       passive = true,
-      mode,
       recreateOnResize = false,
       focusOnInit = true,
-    }: StayCanvasProps<"instant", EventName> | StayCanvasProps<"animated", EventName>,
+    }: StayCanvasProps<EventName>,
     ref: Ref<StayCanvasRefType>
   ) => {
     const initialized = useRef(false)
-    let contextLayerSetFunctionList: ContextLayerSetFunction[] = []
-
-    if (typeof layers === "number") {
-      Array(layers)
-        .fill(0)
-        .forEach((_, i) => {
-          contextLayerSetFunctionList.push((canvas: HTMLCanvasElement) => {
-            return canvas.getContext("2d")
-          })
-        })
-    } else {
-      contextLayerSetFunctionList = layers
-    }
-    if (contextLayerSetFunctionList.length < 1) {
-      throw new Error("layers must be greater than 0")
-    }
+    const contextLayerSetFunctionList = resolveContextLayerSetFunctions(layers)
+    const layerCount = contextLayerSetFunctionList.length
+    const activeLayerCount = useRef(layerCount)
+    activeLayerCount.current = layerCount
 
     type GetNamePayloadPairType<T> = T extends {
       name: infer U
@@ -67,7 +73,7 @@ const StayCanvas = forwardRef(
       : never
 
     const canvasLayers = useRef<HTMLCanvasElement[]>([])
-    const stay = useRef<StayStage<Mode>>()
+    const stay = useRef<Stay<string>>()
 
     // eventList = useMemo(() => eventList || [], [eventList])
     // listenerList = useMemo(() => listenerList || [], [listenerList])
@@ -79,32 +85,53 @@ const StayCanvas = forwardRef(
       : never
     type ListenerNames = GetListenerPairName<ListenerPair>
 
+    const destroyCurrentStay = () => {
+      stay.current?.destroy()
+      stay.current = undefined
+    }
+
+    const getActiveCanvasLayers = () =>
+      canvasLayers.current.slice(0, activeLayerCount.current)
+
+    const focusTopCanvas = () => {
+      const activeCanvasLayers = getActiveCanvasLayers()
+      activeCanvasLayers[activeCanvasLayers.length - 1]?.focus()
+    }
+
     const init = () => {
-      //@ts-ignore i cannot understand
-      stay.current = new StayStage(
-        canvasLayers.current,
+      destroyCurrentStay()
+      const activeCanvasLayers = getActiveCanvasLayers()
+      const nextStay = createStay(
+        activeCanvasLayers,
         contextLayerSetFunctionList,
         width,
         height,
-        passive,
-        mode
+        passive
       )
-      ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
-        stay.current!.registerEvent(event as any)
-      })
-      listenerList.forEach((listener) => {
-        stay.current!.addEventListener(listener)
-      })
+      stay.current = nextStay
 
-      if (mounted && stay.current) {
-        //@ts-ignore i cannot understand
-        mounted(stay.current.tools)
-      }
+      try {
+        ;[...Object.values(PredefinedEventList), ...eventList].forEach((event) => {
+          nextStay.registerEvent(event as any)
+        })
+        listenerList.forEach((listener) => {
+          nextStay.addEventListener(listener as any)
+        })
 
-      if (focusOnInit) {
-        canvasLayers.current[canvasLayers.current.length - 1].focus()
+        if (mounted) {
+          mounted(nextStay.tools)
+        }
+
+        if (focusOnInit) {
+          focusTopCanvas()
+        }
+      } catch (error) {
+        if (stay.current === nextStay) destroyCurrentStay()
+        throw error
       }
     }
+    const initRef = useRef(init)
+    initRef.current = init
 
     useImperativeHandle(
       ref,
@@ -113,18 +140,18 @@ const StayCanvas = forwardRef(
           trigger<T extends ListenerNames>(name: T, payload?: GetListenerPayloadByName<T>) {
             const customEvent = new Event(name as string)
             if (stay.current) {
-              stay.current.triggerAction(
+              stay.current.tools.triggerAction(
                 customEvent,
-                { [name as string]: { info: customEvent, event: customEvent } },
+                { [name as string]: { info: {} } },
                 payload || {}
               )
             }
           },
           reCreate() {
-            init()
+            initRef.current()
           },
           focus() {
-            canvasLayers.current[canvasLayers.current.length - 1].focus()
+            focusTopCanvas()
           },
         }
       },
@@ -137,6 +164,14 @@ const StayCanvas = forwardRef(
         initialized.current = true
       }
     }, [width, height])
+
+    useEffect(
+      () => () => {
+        destroyCurrentStay()
+        initialized.current = false
+      },
+      []
+    )
 
     return (
       <>
@@ -151,26 +186,24 @@ const StayCanvas = forwardRef(
             height: `${height}px`,
           }}
         >
-          {Array(layers)
-            .fill(0)
-            .map((_, index) => (
-              <canvas
-                key={index}
-                ref={(el) => {
-                  if (el) {
-                    canvasLayers.current[index] = el
-                  }
-                }}
-                tabIndex={1}
-                style={{
-                  position: "absolute",
-                  display: "block",
-                  outline: "none",
-                  left: 0,
-                  top: 0,
-                }}
-              ></canvas>
-            ))}
+          {Array.from({ length: layerCount }, (_, index) => (
+            <canvas
+              key={index}
+              ref={(el) => {
+                if (el) {
+                  canvasLayers.current[index] = el
+                }
+              }}
+              tabIndex={1}
+              style={{
+                position: "absolute",
+                display: "block",
+                outline: "none",
+                left: 0,
+                top: 0,
+              }}
+            ></canvas>
+          ))}
         </div>
       </>
     )

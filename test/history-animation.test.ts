@@ -1,0 +1,127 @@
+// @vitest-environment jsdom
+import { describe, it, expect } from "vitest"
+import { Rectangle } from "react-stay-canvas"
+import { createStage } from "./helpers/stage"
+
+// History and animation share one tool surface, while timeline children remain
+// outside the static history model.
+const stroke = { color: { r: 1, g: 2, b: 3, a: 1 }, lineWidth: 2 }
+
+class UnsnapshotableRectangle extends Rectangle {
+  override copy(): Rectangle {
+    throw new Error("animated frame must not enter history snapshots")
+  }
+}
+
+describe("history × animation (item 3 unit C)", () => {
+  it("log/undo do NOT freeze or remove an animated child's timeline (GAP-2)", () => {
+    const t = createStage({}).stage.tools as any
+    const child = t.createChild({ className: "a" })
+    child.appendKeyFrame(
+      "default",
+      new Rectangle({ x: 10, y: 10, width: 20, height: 20, strokeConfig: stroke, transition: { durationMs: 300, delayMs: 0 } })
+    )
+    const framesBefore = child.getSlice("default").length
+    t.log()
+    t.progress({ timeMs: 150 }) // seek to an interpolated frame
+    t.undo() // must not touch the animated child
+
+    expect(child.shapeFramesMap.size).toBeGreaterThan(0) // timeline survived
+    expect(child.getSlice("default").length).toBe(framesBefore) // frames intact
+    expect(t.getChildById(child.id)).toBeTruthy() // not removed by undo
+    expect(() => t.progress({ timeMs: 300 })).not.toThrow() // still seekable
+  })
+
+  it("does not snapshot the current projection of an animated child", () => {
+    const t = createStage({}).stage.tools as any
+    const child = t.createChild({ className: "animated" })
+    child.appendKeyFrame(
+      "default",
+      new UnsnapshotableRectangle({
+        x: 10,
+        y: 10,
+        width: 20,
+        height: 20,
+        transition: { durationMs: 300, delayMs: 0 },
+      })
+    )
+
+    t.progress({ timeMs: 300 })
+
+    expect(() => t.log()).not.toThrow()
+    expect(t.getChildById(child.id)).toBe(child)
+  })
+
+  it("removeChild of an animated child stays out of history — undo does NOT resurrect it (removal path)", () => {
+    const t = createStage({}).stage.tools as any
+    const child = t.createChild({ className: "a" })
+    child.appendKeyFrame(
+      "default",
+      new Rectangle({ x: 10, y: 10, width: 20, height: 20, strokeConfig: stroke, transition: { durationMs: 300, delayMs: 0 } })
+    )
+    t.log()
+    t.removeChild(child.id)
+    t.log()
+    const nonRootAfterRemove = t.getChildrenWithoutRoot().length
+    t.undo()
+    expect(t.getChildById(child.id)).toBeFalsy() // stays removed — not resurrected as an instant child
+    expect(t.getChildrenWithoutRoot().length).toBe(nonRootAfterRemove) // no phantom child
+  })
+
+  it("regular (instant) children ARE still tracked by history (undo removes an appended child)", () => {
+    // animated mode now also has appendChild/log/undo — the merge is symmetric
+    const t = createStage({}).stage.tools as any
+    const c = t.appendChild({
+      className: "b",
+      shape: new Rectangle({ x: 0, y: 0, width: 5, height: 5, strokeConfig: stroke }),
+    })
+    t.log()
+    expect(t.getChildById(c.id)).toBeTruthy()
+    t.undo()
+    expect(t.getChildById(c.id)).toBeFalsy() // instant child IS undoable — fix didn't over-reach
+  })
+
+  it("log() after removeChild does not throw (removed id still in the log set) (regression)", () => {
+    // removeChild adds the id back to unLogedChildrenIds while getChildById()
+    // becomes undefined; log()'s isStayAnimatedChild filter must be null-safe.
+    const t = createStage({}).stage.tools as any
+    const c = t.appendChild({
+      className: "b",
+      shape: new Rectangle({ x: 0, y: 0, width: 5, height: 5, strokeConfig: stroke }),
+    })
+    t.log()
+    t.removeChild(c.id)
+    expect(() => t.log()).not.toThrow()
+  })
+
+  it("progress() no longer throws in instant mode (the mode guard was removed)", () => {
+    const t = createStage({}).stage.tools as any
+    expect(() => t.progress({ timeMs: 0 })).not.toThrow()
+  })
+})
+
+// The instant/animated fork is now handled by POLYMORPHISM on the child, not by
+// `isStayAnimatedChild(child)` checks at call sites. These pin that contract.
+describe("child polymorphism (instant/animated fork lives in the type)", () => {
+  it("participatesInHistory: static child true, timeline child false", () => {
+    const t = createStage({}).stage.tools as any
+    const inst = t.appendChild({
+      className: "i",
+      shape: new Rectangle({ x: 0, y: 0, width: 1, height: 1, strokeConfig: stroke }),
+    })
+    const anim = t.createChild({ className: "a" })
+    expect(inst.participatesInHistory).toBe(true)
+    expect(anim.participatesInHistory).toBe(false)
+  })
+
+  it("setCurrentTime is a no-op on a static child (base), real on a timeline child", () => {
+    const t = createStage({}).stage.tools as any
+    const inst = t.appendChild({
+      className: "i",
+      shape: new Rectangle({ x: 0, y: 0, width: 1, height: 1, strokeConfig: stroke }),
+    })
+    // no-op: doesn't throw, doesn't grow a timeline
+    expect(() => inst.setCurrentTime({ time: 100 })).not.toThrow()
+    expect(inst.shapeFramesMap).toBeUndefined()
+  })
+})

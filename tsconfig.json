@@ -116,6 +116,9 @@
     "outDir": "dist",
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
-    "emitDeclarationOnly": true
-  }
+    "emitDeclarationOnly": true,
+    "stripInternal": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "workspace", "test", "example"]
 }

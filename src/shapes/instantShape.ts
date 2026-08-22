@@ -1,23 +1,23 @@
-import { shapeUpdateEventEmitter } from "../ShapeUpdateEventEmitter"
-import { StayInstantChild } from "../stay/child/stayInstantChild"
-import { valueof } from "../stay/types"
-import { DrawCanvasContext } from "../types"
+import { StayInstantChild } from "../stay/children/stayInstantChild"
+import { shapeUpdateEventEmitter } from "./shapeUpdateEventEmitter"
+import type { valueof } from "../types/common"
+import type { EasingFunction } from "../types/animation"
+import type { DrawCanvasContext } from "../types/canvas"
+import type { Dict } from "../types/common"
+import type { Coordinate, PointType, Rect } from "../types/geometry"
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import {
-  Dict,
-  EasingFunction,
+import type {
   ShapeDrawProps,
   ShapeProps,
-  PointType,
   Font,
-  Rect,
-  Coordinate,
   CanvasStrokeProps,
   CanvasFillProps,
   CanvasGlobalProps,
-} from "../userTypes"
-import { applyEasing, hasIntersection, isRGB, isRGBA } from "../utils"
-import W3Color, { RGB, RGBA, rgbaToString } from "../w3color"
+} from "../types/shapes"
+import { isRGB, isRGBA } from "../utils/color"
+import { applyEasing } from "../utils/easing"
+import { hasIntersection } from "../utils/geometry"
+import W3Color, { RGB, RGBA, rgbaToString } from "../vendor/w3color"
 
 export const ZeroColor: RGBA = { a: 0, r: 0, g: 0, b: 0 }
 export const BlackColor: RGBA = { a: 1, r: 0, g: 0, b: 0 }
@@ -139,11 +139,30 @@ export abstract class InstantShape {
     return color as CanvasGradient
   }
 
-  copyProps() {
+  copyProps(): ShapeProps {
     return {
-      parent: this.parent,
-      strokeConfig: this.strokeConfig,
-      fillConfig: this.fillConfig,
+      zoomY: this.zoomY,
+      zoomCenter: { ...this.zoomCenter },
+      state: this.state,
+      stateDrawFuncMap: Object.fromEntries(
+        Object.entries(this.stateDrawFuncMap).map(([name, drawFunctions]) => [
+          name,
+          { ...drawFunctions },
+        ])
+      ),
+      layer: this.layer,
+      zIndex: this.zIndex,
+      strokeConfig: {
+        ...this.strokeConfig,
+        color: { ...this.strokeConfig.color },
+        dash: [...this.strokeConfig.dash],
+      },
+      fillConfig: {
+        ...this.fillConfig,
+        color: { ...this.fillConfig.color },
+      },
+      globalConfig: { ...this.globalConfig },
+      shapeStore: new Map(this.shapeStore),
     }
   }
 
@@ -207,6 +226,7 @@ export abstract class InstantShape {
     strokeConfig,
     fillConfig,
   }: ShapeProps) {
+    const previousLayer = this.layer
     this.layer = layer ?? this.layer
     this.zIndex = zIndex ?? this.zIndex
     this.zoomY = zoomY ?? this.zoomY
@@ -226,7 +246,7 @@ export abstract class InstantShape {
       this.switchState(state)
     }
 
-    this.parent?.onChildShapeChange(this)
+    this.parent?.onChildShapeChange(this, previousLayer)
     return this
   }
 

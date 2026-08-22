@@ -1,9 +1,10 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { getCornersByCenterLine } from "../utils"
+import { getCornersByCenterLine } from "../utils/geometry"
 import { Line } from "./line"
 import { Point } from "./point"
-import { Coordinate, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
-import { DrawCanvasContext } from "../types"
+import type { DrawCanvasContext } from "../types/canvas"
+import type { Coordinate, Rect } from "../types/geometry"
+import type { ShapeDrawProps, ShapeProps } from "../types/shapes"
 import { InstantShape } from "./instantShape"
 
 export interface PathAttr extends ShapeProps {
@@ -17,7 +18,11 @@ export class Path extends InstantShape {
     context.fill(this.path)
   }
   copy(): Path {
-    throw new Error("Method not implemented.")
+    return new Path({
+      points: this.points.map((point) => point.copy()),
+      radius: this.radius,
+      ...this.copyProps(),
+    })
   }
   getBound(): Rect {
     throw new Error("Method not implemented.")
@@ -73,13 +78,6 @@ export class Path extends InstantShape {
   }
   // contains(point: Point, ctx: DrawCanvasContext): boolean {
   //   return ctx.isPointInPath(this.path, point.x, point.y)
-  // }
-  // copy(): Path {
-  //   return new Path({
-  //     radius: this.radius,
-  //     points: this.points.map((point) => point.copy()),
-  //     props: this._copy(),
-  //   })
   // }
   stroke({ context }: ShapeDrawProps): void {
     context.stroke(this.path)

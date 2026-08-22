@@ -1,9 +1,10 @@
 import { Rectangle } from "./rectangle"
 
-import { AnimatedShapeProps, EasingFunction, ShapeDrawProps, ShapeProps } from "../userTypes"
-import { isRGBA } from "../utils"
-import { DrawCanvasContext } from "../types"
-import { RGBA } from "../w3color"
+import type { EasingFunction } from "../types/animation"
+import type { DrawCanvasContext } from "../types/canvas"
+import type { AnimatedShapeProps, ShapeDrawProps, ShapeProps } from "../types/shapes"
+import { isRGBA } from "../utils/color"
+import { RGBA } from "../vendor/w3color"
 
 export interface ImageProps extends AnimatedShapeProps {
   image: HTMLImageElement
@@ -53,8 +54,8 @@ export class StayImage extends Rectangle {
     this.sheight = sheight
     this.image = image
     this.loadState = "loaded"
-    this.swidth = this.image.naturalWidth
-    this.sheight = this.image.naturalHeight
+    this.swidth = swidth ?? this.image.naturalWidth
+    this.sheight = sheight ?? this.image.naturalHeight
 
     this.ctx = null
     this.imageLoaded = imageLoaded
@@ -155,8 +156,8 @@ export class StayImage extends Rectangle {
     } else {
       this.image = src
       this.loadState = "loaded"
-      this.swidth = this.image.naturalWidth
-      this.sheight = this.image.naturalHeight
+      this.swidth = swidth ?? this.image.naturalWidth
+      this.sheight = sheight ?? this.image.naturalHeight
     }
     return this
   }

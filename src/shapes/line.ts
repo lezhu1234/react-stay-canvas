@@ -1,5 +1,7 @@
 import { Point } from "./point"
-import { Coordinate, EasingFunction, Rect, ShapeDrawProps, ShapeProps } from "../userTypes"
+import type { EasingFunction } from "../types/animation"
+import type { Coordinate, Rect } from "../types/geometry"
+import type { ShapeDrawProps, ShapeProps } from "../types/shapes"
 import { Vector } from "./vector"
 import { InstantShape } from "./instantShape"
 import { AnimatedShape } from "./animatedShape"

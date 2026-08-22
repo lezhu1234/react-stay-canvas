@@ -1,14 +1,13 @@
 import { SHAPE_DRAW_TYPES } from "../userConstants"
-import {
+import type { EasingFunction } from "../types/animation"
+import type { Coordinate, Rect } from "../types/geometry"
+import type {
   AnimatedShapeProps,
-  Coordinate,
-  EasingFunction,
-  Rect,
   ShapeDrawProps,
   ShapeProps,
-} from "../userTypes"
-import { isRGBA } from "../utils"
-import { RGBA } from "../w3color"
+} from "../types/shapes"
+import { isRGBA } from "../utils/color"
+import { RGBA } from "../vendor/w3color"
 import { AnimatedShape } from "./animatedShape"
 import { InstantShape, ZeroColor } from "./instantShape"
 import { Line } from "./line"

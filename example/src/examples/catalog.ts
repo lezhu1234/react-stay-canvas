@@ -1,0 +1,193 @@
+import { type LocalizedText } from "../i18n"
+import AnnotatorExample from "./integrated/AnnotatorExample"
+import DiagramExample from "./integrated/DiagramExample"
+import MotionStudioExample from "./integrated/MotionStudioExample"
+import ChildrenExample from "./simple/ChildrenExample"
+import EventsExample from "./simple/EventsExample"
+import HistoryExample from "./simple/HistoryExample"
+import LayersExample from "./simple/LayersExample"
+import SelectorsExample from "./simple/SelectorsExample"
+import ShapesExample from "./simple/ShapesExample"
+import StateExample from "./simple/StateExample"
+import TimelineExample from "./simple/TimelineExample"
+import TransferExample from "./simple/TransferExample"
+import TransformExample from "./simple/TransformExample"
+import { type ExampleDefinition } from "./types"
+
+const l = (en: string, zh: string): LocalizedText => ({ en, zh })
+
+export const catalog: ExampleDefinition[] = [
+  {
+    path: "/simple/shapes",
+    sourcePath: "./examples/simple/ShapesExample.tsx",
+    group: "Simple",
+    order: 1,
+    title: l("Shapes and drawing styles", "图形与绘制样式"),
+    shortTitle: l("Shapes", "图形"),
+    summary: l("Render the stable built-in primitives with fill, stroke, dash, opacity, text, and a raster image.", "集中展示内置图形，以及填充、描边、虚线、透明度、文字和图片等常用样式。"),
+    features: ["Rectangle", "Circle", "Line", "StayText", "StayImage"],
+    instructions: [l("Confirm all five shape families are visible.", "确认五种内容都能正常显示。"), l("Toggle the rectangle twice.", "连续切换两次矩形样式。"), l("Force a refresh after the canvas becomes idle.", "画布静止后点击一次“强制刷新”。")],
+    checklist: [l("Each primitive is labeled beside its own geometry.", "每种图形的名称都显示在对应图形旁边。"), l("Fill and stroke colors remain distinct.", "填充色和描边色清晰可辨。"), l("The dashed line retains round caps.", "虚线两端保持圆角。"), l("The image and text stay sharp at device pixel ratio.", "图片和文字显示清晰。"), l("Force refresh increments the visible refresh count.", "点击强制刷新后，刷新次数增加。"), l("Updating one Shape repaints without recreating the Canvas.", "修改单个 Shape 后能立即重绘，无需重新创建 Canvas。")],
+    component: ShapesExample,
+  },
+  {
+    path: "/simple/children",
+    sourcePath: "./examples/simple/ChildrenExample.tsx",
+    group: "Simple",
+    order: 2,
+    title: l("Child lifecycle", "Child 生命周期"),
+    shortTitle: l("Children", "Children"),
+    summary: l("Create, mutate, query, and remove Children, including a Child that owns multiple Shapes.", "演示 Child 从创建、更新、查询到删除的完整过程，以及一个 Child 管理多个 Shape 的用法。"),
+    features: ["appendChild", "shapeMap", "update", "removeChild", "hasChild"],
+    instructions: [l("Append three circular Children.", "添加三个圆形 Child。"), l("Move the multi-shape group.", "移动包含多个 Shape 的组合。"), l("Remove the most recent circle.", "删除最后添加的圆形。")],
+    checklist: [l("The Child count follows each operation.", "Child 数量会随操作正确增减。"), l("Rectangle and text move together.", "矩形和文字始终一起移动。"), l("Every added circle carries a stable sequence number.", "每个新增圆形都带有稳定序号。"), l("Removing a Child clears the same numbered circle without stale pixels.", "删除 Child 时，对应序号的圆形消失且没有残影。"), l("The multi-shape Child reports two Shapes.", "组合 Child 的 Shape 数量为 2。")],
+    component: ChildrenExample,
+  },
+  {
+    path: "/simple/layers",
+    sourcePath: "./examples/simple/LayersExample.tsx",
+    group: "Simple",
+    order: 3,
+    title: l("Layers and paint order", "图层与绘制顺序"),
+    shortTitle: l("Layers", "图层"),
+    summary: l("Route Shapes across three Canvas layers and reorder overlapping Shapes with zIndex.", "演示 Shape 在多个 Canvas 图层中的绘制顺序，以及 zIndex 对同层元素前后关系的影响。"),
+    features: ["layers", "Shape.layer", "zIndex", "dirty layers"],
+    instructions: [l("Observe the initial orange-over-blue stack.", "先确认橙色矩形盖在蓝色矩形上方。"), l("Swap zIndex repeatedly.", "多次点击“交换 zIndex”。"), l("Confirm the text overlay never moves behind the stack.", "确认顶部文字始终在两个矩形之上。")],
+    checklist: [l("Only the two Shapes on layer 1 exchange order.", "只有图层 1 上的两个 Shape 会交换前后顺序。"), l("The labels on both rectangles show their current layer and zIndex.", "两个矩形上的标签会显示当前 layer 和 zIndex。"), l("Layer 2 remains above layers 0 and 1.", "图层 2 始终显示在图层 0 和 1 之上。"), l("No cleared pixels leak between Canvas layers.", "切换过程中没有闪烁或残影。")],
+    component: LayersExample,
+  },
+  {
+    path: "/simple/events",
+    sourcePath: "./examples/simple/EventsExample.tsx",
+    group: "Simple",
+    order: 4,
+    title: l("Events and listeners", "事件与监听器"),
+    shortTitle: l("Events", "事件"),
+    summary: l("Exercise predefined pointer and key events, drag composeStore, focus, and programmatic custom actions.", "演示鼠标、键盘和拖拽事件，以及通过 React 主动触发自定义事件。"),
+    features: ["listenerList", "drag chain", "composeStore", "ref.trigger", "ref.reCreate", "payload"],
+    instructions: [l("Drag the blue rectangle, then capture the drag entries before continuing.", "拖动蓝色矩形，先确认拖拽日志，再进行下一步。"), l("Focus the Canvas and press a key.", "点击“聚焦 Canvas”，然后按任意键。"), l("Scroll over the Canvas.", "把鼠标移到 Canvas 上并滚动。"), l("Trigger the custom ping from React.", "点击按钮，从 React 触发一次自定义 ping。"), l("Note the Canvas instance count, click Recreate Canvas, then focus it and press one key.", "记下 Canvas 实例数，点击“重新创建 Canvas”，聚焦后只按一次按键。")],
+    checklist: [l("The log contains dragstart, drag, and dragend in emission order, displayed newest first.", "日志依次出现 dragstart、drag 和 dragend，并按最新事件在前显示。"), l("The rectangle and its drag label move together without jumping.", "矩形和“拖动我”文字一起移动，并且不会跳位。"), l("Dragging directly on the label moves the same Child.", "直接拖动文字时，移动的是同一个 Child。"), l("Focus requests increment immediately, then keyboard and wheel events reach listeners.", "点击聚焦后次数立即增加，随后按键和滚轮操作都能进入监听器。"), l("The custom payload is visible in the log.", "自定义事件携带的内容能在日志中看到。"), l("Recreate increments the Canvas instance count by one, restores the rectangle, and the single key press produces exactly one keydown log entry.", "重新创建后 Canvas 实例数只增加 1，矩形回到初始位置，并且单次按键只产生一条 keydown 日志。")],
+    component: EventsExample,
+  },
+  {
+    path: "/simple/selectors",
+    sourcePath: "./examples/simple/SelectorsExample.tsx",
+    group: "Simple",
+    order: 5,
+    title: l("Selectors and hit testing", "选择器与命中测试"),
+    shortTitle: l("Selectors", "选择器"),
+    summary: l("Query Children by class, id, logical expression, and pointer containment.", "演示按 class、id 和组合条件查找 Child，以及根据点击位置判断命中对象。"),
+    features: [".class", "#id", "& | !", "getContainPointChildren"],
+    instructions: [l("Run every preset selector.", "依次点击所有预设选择器。"), l("Enter .label|#box-b and run the query.", "输入 .label|#box-b，然后执行查询。"), l("Click each visible rectangle and the empty area.", "依次点击三个矩形和画布空白处。")],
+    checklist: [l("Every bbox displays the same id and class used by the selector controls.", "每个 bbox 内都显示与选择器控件一致的 id 和 class。"), l("Orange outlines match the reported ids.", "橙色描边对应状态栏中列出的 id。"), l("Logical NOT excludes box-a.", "带 ! 的查询结果中不包含 box-a。"), l("The custom query matches box-b and label-a.", "自定义查询只匹配 box-b 和 label-a。"), l("A blue outer outline marks the latest pointer hit without hiding query matches.", "蓝色外框标记最近一次点击命中，同时保留橙色查询结果。"), l("Clicking empty space clears the blue outline and reports no hit.", "点击空白处会清除蓝色外框并显示“未命中”。")],
+    component: SelectorsExample,
+  },
+  {
+    path: "/simple/state",
+    sourcePath: "./examples/simple/StateExample.tsx",
+    group: "Simple",
+    order: 6,
+    title: l("State and stores", "状态与存储"),
+    shortTitle: l("State", "状态"),
+    summary: l("Gate listeners by stage state while comparing persistent store with state-scoped store.", "演示监听器如何随状态启用或停用，并对比全局 store 与当前状态下的 stateStore。"),
+    features: ["switchState", "Listener.state", "store", "stateStore"],
+    instructions: [l("Create two circles in Draw mode.", "在绘制模式下点击两次，创建两个圆形。"), l("Switch to Select and select each numbered circle in turn.", "切换到选择模式，依次选择两个带编号的圆形。"), l("Click empty space to clear selection.", "点击空白处取消选择。"), l("Switch modes again and click the Canvas.", "再切换一次模式，然后点击 Canvas。")],
+    checklist: [l("Draw listeners do not fire in Select mode.", "选择模式下点击空白处不会新增圆形。"), l("Exactly one numbered circle is highlighted at a time.", "任意时刻只有一个带编号圆形处于高亮状态。"), l("The Selected status matches the number visible in the Canvas.", "“已选择”状态与 Canvas 中的圆形编号一致。"), l("Clicking empty space restores the previous circle style.", "点击空白处后，之前选中的圆形恢复默认样式。"), l("Persistent store keeps increasing.", "“持久 Store”的计数会一直累加。"), l("State store resets after every state change.", "每次切换模式后，“状态 Store”都会重新计数。")],
+    component: StateExample,
+  },
+  {
+    path: "/simple/history",
+    sourcePath: "./examples/simple/HistoryExample.tsx",
+    group: "Simple",
+    order: 7,
+    title: l("Undo and redo history", "撤销与重做历史"),
+    shortTitle: l("History", "历史"),
+    summary: l("Log deterministic append and remove operations, then travel backward and forward through snapshots.", "把添加和删除记录到历史中，再用撤销与重做检查每一步是否可恢复。"),
+    features: ["log", "undo", "redo", "snapshot"],
+    instructions: [l("Add and log three rectangles.", "添加并记录三个矩形。"), l("Undo to an empty Canvas, then press Undo once more and confirm the count stays at zero.", "撤销到空 Canvas，再按一次撤销并确认数量保持为零。"), l("Redo all three operations, then press Redo once more and confirm the count stays at three.", "重做三次操作，再按一次重做并确认数量保持为三。"), l("Remove the last rectangle and undo the removal.", "移除最后一个矩形，然后撤销该移除。"), l("Add and log one rectangle, then press Redo and confirm the count does not change.", "添加并记录一个矩形，再按重做并确认数量不变。")],
+    checklist: [l("Each effective history operation changes one visible numbered rectangle.", "每次有效的撤销或重做只改变一个带编号矩形。"), l("Undo and redo preserve each rectangle number.", "撤销和重做后，矩形编号保持不变。"), l("Undo stops safely at the beginning.", "已经撤销到最早状态时，继续撤销不会报错。"), l("Redo stops safely at the end.", "已经重做到最新状态时，继续重做不会报错。"), l("A new logged operation truncates the old redo tail.", "撤销后执行新操作，之前可重做的内容会被清除。")],
+    component: HistoryExample,
+  },
+  {
+    path: "/simple/transform",
+    sourcePath: "./examples/simple/TransformExample.tsx",
+    group: "Simple",
+    order: 8,
+    title: l("Pan and zoom transforms", "平移与缩放变换"),
+    shortTitle: l("Transform", "变换"),
+    summary: l("Move and scale the scene, then verify that a pointer session ends correctly after release outside the Canvas.", "平移和缩放场景，并验证指针在 Canvas 外释放后会话仍能正确结束。"),
+    features: ["moveStart", "move", "zoom", "pointer capture", "reset"],
+    instructions: [l("Pan and zoom with the toolbar, then use the wheel at two different points.", "先使用工具栏平移和缩放，再在两个不同位置使用滚轮。"), l("Focus the Canvas, hold Space and the primary button, then drag into the striped outside zone.", "聚焦 Canvas，按住空格键和鼠标主键，然后拖到条纹外部区域。"), l("Release the primary button in the outside zone while keeping Space held.", "保持空格键按下，在外部区域松开鼠标主键。"), l("Move the pointer back over the Canvas without pressing the primary button again, then reset.", "不要再次按下鼠标主键，直接把指针移回 Canvas，然后重置。")],
+    checklist: [l("Every Child keeps its relative position during pan and zoom.", "平移和缩放期间，各个 Child 的相对位置不变。"), l("The orange marker and Zoom origin status show the active zoom origin.", "橙色标记和“缩放原点”状态会显示当前缩放原点。"), l("While dragging, Session is Active and Pointer becomes Outside.", "拖动时，会话状态为“进行中”，指针位置变为 Canvas 外。"), l("Outside release changes Session to Ended, Primary button to Released, End count to 1, and Terminal reason to pointerup outside.", "在外部松开后，会话变为“已结束”，鼠标主键为“已松开”，结束次数为 1，结束原因为 Canvas 外 pointerup。"), l("Returning without pressing again does not move the scene or increment End count.", "未再次按键直接移回时，场景不会继续移动，结束次数也不会增加。"), l("Space-drag does not open a context menu or scroll the page.", "空格键 + 拖动不会弹出右键菜单或滚动页面。"), l("Reset restores the initial framing and center origin.", "重置后回到初始视图，缩放原点也回到中心。")],
+    component: TransformExample,
+  },
+  {
+    path: "/simple/timeline",
+    sourcePath: "./examples/simple/TimelineExample.tsx",
+    group: "Simple",
+    order: 9,
+    title: l("Keyframe timeline", "关键帧时间线"),
+    shortTitle: l("Timeline", "时间线"),
+    summary: l("Seek and play multiple animated Children with delay and easing on one explicit clock.", "用一条时间线控制多个动画 Child，并检查关键帧、延迟和缓动效果。"),
+    features: ["createChild", "appendKeyFrame", "progress", "easing", "delay"],
+    instructions: [l("Drag the time slider slowly through every segment.", "缓慢拖动时间滑块，完整经过所有动画区间。"), l("Play from the beginning.", "回到起点并完整播放一次。"), l("Jump directly to the end and back to zero.", "直接跳到终点，再回到起点。")],
+    checklist: [l("The Current time status follows the slider and playback.", "“当前时间”会跟随滑块和播放进度更新。"), l("K1, K2, and K3 labels identify the three milestone times.", "K1、K2、K3 标签标出三个关键时间点。"), l("The zero frame is transparent.", "起点没有显示尚未开始的动画内容。"), l("Geometry and color interpolate between keys.", "图形的位置、大小和颜色变化连贯。"), l("The delay window holds the previous frame.", "进入延迟区间时，画面保持上一关键帧。"), l("Exact end time lands on the final frame.", "跳到终点时准确显示最后一个关键帧。")],
+    component: TimelineExample,
+  },
+  {
+    path: "/simple/transfer",
+    sourcePath: "./examples/simple/TransferExample.tsx",
+    group: "Simple",
+    order: 10,
+    title: l("Import, export, and capture", "导入、导出与截图"),
+    shortTitle: l("Transfer", "传输"),
+    summary: l("Copy a scene between stages and render Children into a standalone target Canvas.", "把场景从一个 Canvas 复制到另一个 Canvas，并将指定区域导出为图片。"),
+    features: ["exportChildren", "importChildren", "regionToTargetCanvas"],
+    instructions: [l("Transfer the scene once.", "先复制一次场景。"), l("Move source asset A and confirm the target copy stays put.", "移动源对象 A，确认目标副本不受影响。"), l("Move the latest copy's asset A and confirm the source stays put.", "移动最新副本中的对象 A，确认源 Canvas 不受影响。"), l("Transfer again, then capture the source region.", "再次复制场景，然后截取源 Canvas。")],
+    checklist: [l("Target geometry matches the source on the first import.", "第一次导入后，目标内容与源内容位置一致。"), l("Asset A and its label move together.", "对象 A 与内部标签始终一起移动。"), l("Repeated imports are visibly offset and carry the same copy number in the Canvas and status.", "重复导入的副本会错开显示，并且 Canvas 标签与状态中的副本序号一致。"), l("The captured bitmap contains all source Shapes.", "导出的图片包含源 Canvas 中的全部 Shape。"), l("Source and target remain independently mutable.", "两边的内容可以分别修改，互不影响。")],
+    component: TransferExample,
+  },
+  {
+    path: "/integrations/annotator",
+    sourcePath: "./examples/integrated/AnnotatorExample.tsx",
+    group: "Integrated",
+    order: 11,
+    title: l("Image annotation workspace", "图像标注工作区"),
+    shortTitle: l("Annotator", "标注"),
+    summary: l("A complete draw, select, move, delete, undo, zoom, and export workflow over a raster image.", "在图片上完成框选标注，并串联选择、移动、删除、撤销、缩放和导出等常用操作。"),
+    features: ["StayImage", "layers", "state", "drag", "history", "capture"],
+    instructions: [l("Draw two numbered annotations.", "绘制两个带编号的标注框。"), l("Select each annotation, then click empty space.", "依次选择两个标注框，然后点击空白处。"), l("Select and move one annotation.", "重新选择并移动一个标注。"), l("Delete it, then undo and redo.", "删除该标注，然后撤销和重做。"), l("Zoom the scene, reset the view, and export.", "缩放场景、重置视图并导出。")],
+    checklist: [l("Annotations remain above the image layer.", "标注框始终显示在图片上方。"), l("Mode switching changes listener behavior and cursor.", "切换绘制/选择模式后，鼠标样式和交互行为会同步变化。"), l("Exactly one numbered annotation has a blue outline at a time.", "任意时刻只有一个带编号标注框显示蓝色描边。"), l("The Selected status matches the number inside the bbox.", "“已选择”状态与 bbox 内编号一致。"), l("Clicking empty space clears selection.", "点击空白处会取消选择。"), l("Creation, movement, and deletion participate in history without losing the number label.", "新增、移动和删除都参与历史记录，编号标签不会丢失。"), l("The exported bitmap includes image and annotations.", "导出的图片同时包含底图和标注框。")],
+    component: AnnotatorExample,
+  },
+  {
+    path: "/integrations/diagram",
+    sourcePath: "./examples/integrated/DiagramExample.tsx",
+    group: "Integrated",
+    order: 12,
+    title: l("Connected diagram editor", "连线图编辑器"),
+    shortTitle: l("Diagram", "图表"),
+    summary: l("Multi-shape nodes, dependent edges, state-driven connection mode, transforms, and scene transfer.", "把节点、连线、拖动、缩放和场景复制组合成一个可交互的流程图示例。"),
+    features: ["multi-shape Child", "Line", "stateStore", "drag", "import/export"],
+    instructions: [l("Select one node, then click empty space.", "选择一个节点，然后点击空白处。"), l("Drag each initial node and observe its edges.", "逐个拖动初始节点，观察连线是否跟随。"), l("Connect two nodes in Connect mode.", "切换到连接模式，依次点击两个节点。"), l("Add a node and zoom the diagram.", "添加一个节点，然后放大画布。"), l("Save the scene and import a copy.", "保存当前场景，再导入一份副本。"), l("Drag an offset imported node from its exposed edge and observe the copied edges.", "拖动错开显示的副本节点，观察副本中的连线。")],
+    checklist: [l("Node labels move with their rectangles.", "拖动节点时，文字与矩形一起移动。"), l("A blue outline marks the selected node and clears on empty space.", "蓝色外框标记当前选中节点，点击空白处后清除。"), l("A dashed orange outline marks the pending connection start.", "橙色虚线外框标记等待连接的起点。"), l("Edges follow both endpoints.", "任一端点移动后，连线都会立即更新。"), l("Connection feedback clears after the second node.", "选择第二个节点后，等待连接的反馈会清除。"), l("Canvas layers keep edges behind nodes.", "连线始终显示在节点后方。"), l("Imported nodes carry a visible Copy label and move independently from the originals.", "导入节点带有可见的“副本”标签，并可独立于原图移动。")],
+    component: DiagramExample,
+  },
+  {
+    path: "/integrations/motion-studio",
+    sourcePath: "./examples/integrated/MotionStudioExample.tsx",
+    group: "Integrated",
+    order: 13,
+    title: l("Motion composition studio", "动效编排工作室"),
+    shortTitle: l("Motion studio", "动效工作室"),
+    summary: l("Coordinate shape, line, and text tracks while static Children retain normal history semantics.", "用同一条时间线编排图形、线条和文字动画，同时让静态内容继续支持撤销。"),
+    features: ["multiple tracks", "progress bound", "layers", "static history"],
+    instructions: [l("Play and scrub the full timeline.", "播放完整时间线，并来回拖动滑块。"), l("Switch to the bounded middle range and scrub again.", "切换到限定区间，再次来回拖动。"), l("Add two static guides and undo them.", "添加两条静态参考线，然后逐一撤销。")],
+    checklist: [l("All animated tracks share one time value.", "图形、线条和文字始终同步播放。"), l("UI time and Effective time are equal in Full range.", "完整区间下，“滑块时间”和“实际时间”相同。"), l("Bound playback remaps Effective time into the middle sub-range.", "限定区间会把“实际时间”映射到时间线中间部分。"), l("Switching ranges immediately reapplies the current slider position.", "切换区间后，当前滑块位置会立即重新应用。"), l("Static guides can be undone.", "新增的静态参考线可以逐一撤销。"), l("Undo never removes or freezes timeline Children.", "撤销静态内容不会删除或卡住动画。"), l("Layer ordering stays stable while seeking.", "拖动时间线时，各图层的前后顺序保持不变。")],
+    component: MotionStudioExample,
+  },
+]
+
+export function getExampleByPath(path: string) {
+  return catalog.find((example) => example.path === path)
+}

@@ -7,7 +7,7 @@ The following user-visible behavior is not reliable in the current implementatio
 ## Rendering and geometry
 
 - `Line` and `StayText` do not provide default hit areas. Group them with a hittable Shape or provide an explicit selector/hit strategy.
-- `Point.getBound()` and `Path.getBound()` are not implemented. Normal rendering performs bounds-based viewport culling, so appending either Shape throws before it paints. `Point` remains usable as a standalone geometry helper; `Path.copy()` is also unimplemented.
+- `Point.getBound()` and `Path.getBound()` are not implemented. Normal rendering performs bounds-based viewport culling, so appending either Shape throws before it paints. `Point` remains usable as a standalone geometry helper.
 - `StayText({ x, y })` uses the upper center of the text bounding box as its current anchor. It does not use the visual center used by `Circle`.
 - `StayImage` preserves explicit source-crop dimensions during construction, update, and copy, but custom `swidth` and `sheight` are not transition fields and are not preserved in interpolated timeline frames.
 - `CircleAttr.stroke`, `CircleAttr.fill`, and `StayText.decoration` are accepted by types but do not produce the corresponding stable drawing behavior. Use `strokeConfig` and `fillConfig` for Circle styling.
@@ -22,7 +22,6 @@ The following user-visible behavior is not reliable in the current implementatio
 ## Scene operations
 
 - `reset()` is not a reliable inverse after a scene move because it reuses the previous movement snapshot. Do not present it as a restore-to-initial-state operation.
-- Built-in `Shape.copy()` does not preserve every common field and may share nested mutable style values. `StayAnimatedChild.copy()` also loses its timeline and becomes a static snapshot. Consequently, history and scene transfer are not fully state-preserving for every Shape or animated scene.
 
 ## Events and targeting
 

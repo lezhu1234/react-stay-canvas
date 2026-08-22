@@ -6,7 +6,7 @@ import type {
 import type { Area, Coordinate, PointType, Rect } from "../../types/geometry"
 import { uuid4 } from "../../utils/identifiers"
 import { parseLayer } from "../../utils/stage"
-import { SetShapeChildCurrentTime, StepProps } from "../types"
+import { SetShapeChildCurrentTime } from "../types"
 
 import { Canvas } from "../../canvas"
 
@@ -140,55 +140,6 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     return layers
   }
 
-  copyShapeMap(): Map<string, T> {
-    const shapeMap = new Map<string, T>()
-    this.shapeMap.forEach((shape, name) => {
-      shapeMap.set(name, shape.copy() as T)
-    })
-    return shapeMap
-  }
-
-  static diff<T extends InstantShape>(
-    history: StayInstantChild<T> | undefined,
-    now: StayInstantChild<T> | undefined
-  ): StepProps | undefined {
-    if (now && !history) {
-      return {
-        action: "append",
-        child: {
-          id: now.id,
-          className: now.className,
-          shape: now.copyShapeMap(),
-        },
-      }
-    }
-    if (history && !now) {
-      return {
-        action: "remove",
-        child: {
-          id: history.id,
-          className: history.className,
-          shape: history.copyShapeMap(),
-        },
-      }
-    }
-    if (history && now) {
-      if (history.id !== now.id) {
-        throw new Error("history id and now id must be the same")
-      }
-      return {
-        action: "update",
-        child: {
-          id: now.id,
-          className: now.className,
-          shape: now.copyShapeMap(),
-          beforeName: history.className,
-          beforeShape: history.copyShapeMap(),
-        },
-      }
-    }
-  }
-
   onChildShapeChange(shape: T, previousLayer: number) {
     shape.layer = parseLayer(this.canvas.layers, shape.layer)
     this.updatedLayers.add(previousLayer)
@@ -211,10 +162,6 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   // this is a no-op; StayAnimatedChild overrides it with the real interpolation.
   // Polymorphic so callers can tick every child uniformly.
   setCurrentTime(_props: SetShapeChildCurrentTime): void {}
-
-  copy(): StayInstantChild<T> {
-    return new StayInstantChild({ ...this, shape: this.copyShapeMap() })
-  }
 
   getShapes(layer: number): T[] {
     const shapes: T[] = []

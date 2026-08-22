@@ -71,11 +71,4 @@ export class ChildrenStore {
           selectorConvertFunc: (s) => this.findBySimpleSelector(s),
         })
   }
-
-  // Deep-ish clone (each child copied) — used for history snapshots.
-  clone(): Map<string, StayInstantChild> {
-    const cloned = new Map<string, StayInstantChild>()
-    this.#children.forEach((child, id) => cloned.set(id, child.copy()))
-    return cloned
-  }
 }

@@ -3,13 +3,15 @@ import { describe, it, expect } from "vitest"
 import { Rectangle } from "react-stay-canvas"
 import { createStage } from "./helpers/stage"
 
-// Item 3 unit C: the tool factory is merged, so history (log/undo/redo) and
-// animation (createChild/progress) now coexist in one mode. The hazard: diff()
-// would copyShapeMap() a timeline child's frozen interpolated frame and undo/redo
-// would restore it as a plain instant child — destroying the timeline. Fix:
-// createChild no longer tracks animated children for history, and log() filters
-// them out defensively. These tests pin that fix + the removed instant-mode guard.
+// History and animation share one tool surface, while timeline children remain
+// outside the static history model.
 const stroke = { color: { r: 1, g: 2, b: 3, a: 1 }, lineWidth: 2 }
+
+class UnsnapshotableRectangle extends Rectangle {
+  override copy(): Rectangle {
+    throw new Error("animated frame must not enter history snapshots")
+  }
+}
 
 describe("history × animation (item 3 unit C)", () => {
   it("log/undo do NOT freeze or remove an animated child's timeline (GAP-2)", () => {
@@ -20,7 +22,7 @@ describe("history × animation (item 3 unit C)", () => {
       new Rectangle({ x: 10, y: 10, width: 20, height: 20, strokeConfig: stroke, transition: { durationMs: 300, delayMs: 0 } })
     )
     const framesBefore = child.getSlice("default").length
-    t.log() // snapshot — the animated child must be EXCLUDED from the step
+    t.log()
     t.progress({ timeMs: 150 }) // seek to an interpolated frame
     t.undo() // must not touch the animated child
 
@@ -30,11 +32,27 @@ describe("history × animation (item 3 unit C)", () => {
     expect(() => t.progress({ timeMs: 300 })).not.toThrow() // still seekable
   })
 
+  it("does not snapshot the current projection of an animated child", () => {
+    const t = createStage({}).stage.tools as any
+    const child = t.createChild({ className: "animated" })
+    child.appendKeyFrame(
+      "default",
+      new UnsnapshotableRectangle({
+        x: 10,
+        y: 10,
+        width: 20,
+        height: 20,
+        transition: { durationMs: 300, delayMs: 0 },
+      })
+    )
+
+    t.progress({ timeMs: 300 })
+
+    expect(() => t.log()).not.toThrow()
+    expect(t.getChildById(child.id)).toBe(child)
+  })
+
   it("removeChild of an animated child stays out of history — undo does NOT resurrect it (removal path)", () => {
-    // Without the removeChild guard: removeChild re-adds the id, and after
-    // removal neither getChildById nor the (degraded) snapshot clone can tell it
-    // was animated, so log() would emit a "remove" step and undo would re-append
-    // it as a plain instant child. The guard excludes it while it's still live.
     const t = createStage({}).stage.tools as any
     const child = t.createChild({ className: "a" })
     child.appendKeyFrame(

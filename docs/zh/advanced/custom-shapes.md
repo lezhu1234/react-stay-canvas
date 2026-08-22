@@ -86,28 +86,7 @@ class Diamond extends InstantShape {
       y: this.y,
       halfWidth: this.halfWidth,
       halfHeight: this.halfHeight,
-      layer: this.layer,
-      zIndex: this.zIndex,
-      state: this.state,
-      stateDrawFuncMap: Object.fromEntries(
-        Object.entries(this.stateDrawFuncMap).map(([name, stages]) => [
-          name,
-          { ...stages },
-        ]),
-      ),
-      shapeStore: new Map(this.shapeStore),
-      zoomY: this.zoomY,
-      zoomCenter: { ...this.zoomCenter },
-      strokeConfig: {
-        ...this.strokeConfig,
-        color: { ...this.strokeConfig.color },
-        dash: [...this.strokeConfig.dash],
-      },
-      fillConfig: {
-        ...this.fillConfig,
-        color: { ...this.fillConfig.color },
-      },
-      globalConfig: { ...this.globalConfig },
+      ...this.copyProps(),
     })
   }
 
@@ -193,7 +172,7 @@ update(props: Partial<DiamondProps>) {
 
 ## copy 的独立性
 
-历史、`exportChildren()` 和导入流程都会调用 `copy()`。最低要求是：
+内部历史和场景快照都会调用各 Shape 的 `copy()` 实现。最低要求是：
 
 - 返回同一具体 Shape 类型；
 - 复制几何和绘制配置；
@@ -202,7 +181,7 @@ update(props: Partial<DiamondProps>) {
 
 如果自定义 Shape 持有数组或对象，需要在 `copy()` 中按它们的可变性决定浅拷贝或深拷贝。
 
-上例对 `shapeStore` 做了浅拷贝。如果 Map 的 value 本身可变，自定义 Shape 仍需按自己的数据模型复制这些 value；通用基类无法替应用判断任意业务对象的深拷贝规则。
+`copyProps()` 会创建新的 `shapeStore` Map，但保留其中的 value。如果 value 可变，自定义 Shape 仍需按自己的数据模型复制这些 value；通用基类无法替应用判断任意业务对象的深拷贝规则。
 
 ## 何时扩展 AnimatedShape
 

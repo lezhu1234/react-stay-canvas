@@ -144,7 +144,7 @@ A pure Shape `update()` does not add an existing Child to the pending-history se
 
 ## Copy a scene between Canvases
 
-`exportChildren()` calls each Child's current `copy()` implementation and returns those copies plus a source area. `importChildren()` maps them into a target area:
+`exportChildren()` captures the selected Children's current Shape state as a reusable scene fragment. `importChildren()` materializes that fragment in a target area:
 
 ```ts
 const scene = sourceTools.exportChildren({
@@ -160,11 +160,11 @@ targetTools.importChildren(scene, {
 })
 ```
 
-Source and target areas must have the same aspect ratio or the method throws `area not match`. Import creates new Child ids while copying class names and current `shapeMap` contents; do not expect source ids to survive in the target Canvas.
+Source and target areas must have the same aspect ratio or the method throws `area not match`. Each exported Child fragment contains `sourceId`, `className`, and `shapes`. Import creates a new runtime Child id; use `sourceId` only to correlate imported objects with their source objects.
 
-This is a geometry-transfer path, not a fully state-preserving serialization format. Built-in copies currently omit some common Shape state, may share nested style values, and reduce animated Children to static snapshots. See [Current limitations](./known-limitations.md#scene-operations).
+This is a scene-transfer path, not a serialization format. Common Shape state and library-owned mutable style values are captured independently. Arbitrary values inside `shapeStore` remain shared because the library cannot infer their ownership. Animated Children contribute their current rendered projection, not their timeline.
 
-`importChildren()` copies `scene.children` before moving and zooming its internal copies. The same exported payload can therefore be imported repeatedly into different Canvases or target areas without mutating the input data.
+`importChildren()` materializes fresh Shapes before moving and zooming them. The same exported payload can therefore be imported repeatedly into different Canvases or target areas without mutating the input data.
 
 When `exportChildren()` omits `area`, it uses the source root bounds. When `importChildren()` omits its target area, it uses the target root bounds.
 

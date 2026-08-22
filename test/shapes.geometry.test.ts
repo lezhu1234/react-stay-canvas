@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest"
-import { Rectangle, Circle, Line, Point } from "react-stay-canvas"
+import { describe, it, expect, vi } from "vitest"
+import { Rectangle, Circle, Line, Path, Point, StayText } from "react-stay-canvas"
 
 // Dimension 1 (Shapes): pure geometry — no canvas needed.
 
@@ -30,11 +30,101 @@ describe("Rectangle geometry", () => {
   })
 
   it("copy() is independent of the original", () => {
-    const r = rect()
+    const storeValue = { selected: true }
+    const r = new Rectangle({
+      x: 10,
+      y: 20,
+      width: 100,
+      height: 50,
+      layer: 2,
+      zIndex: 7,
+      zoomY: 1.5,
+      zoomCenter: { x: 4, y: 5 },
+      strokeConfig: {
+        color: { r: 1, g: 2, b: 3, a: 1 },
+        dash: [2, 4],
+      },
+      fillConfig: { color: { r: 4, g: 5, b: 6, a: 1 } },
+      globalConfig: { gco: "destination-over" },
+      transition: { type: "linear", durationMs: 20, delayMs: 10 },
+      shapeStore: new Map([["selection", storeValue]]),
+    })
     const c = r.copy()
+
     c.update({ x: 999 })
+    c.strokeConfig.color.r = 255
+    c.strokeConfig.dash.push(8)
+    c.fillConfig.color.g = 255
+    c.transition.durationMs = 100
+    c.shapeStore.set("copy-only", true)
+
     expect(r.x).toBe(10)
     expect(c.x).toBe(999)
+    expect(c).toMatchObject({ layer: 2, zIndex: 7, zoomY: 1.5 })
+    expect(c.zoomCenter).toEqual({ x: 4, y: 5 })
+    expect(c.globalConfig.gco).toBe("destination-over")
+    expect(r.strokeConfig.color.r).toBe(1)
+    expect(r.strokeConfig.dash).toEqual([2, 4])
+    expect(r.fillConfig.color.g).toBe(5)
+    expect(r.transition.durationMs).toBe(20)
+    expect(r.shapeStore.has("copy-only")).toBe(false)
+    expect(c.shapeStore.get("selection")).toBe(storeValue)
+  })
+})
+
+describe("Shape snapshots", () => {
+  it("copies Path points independently", () => {
+    const path = new Path({
+      points: [new Point({ x: 1, y: 2 }), new Point({ x: 3, y: 4 })],
+      radius: 5,
+      layer: 1,
+    })
+
+    const snapshot = path.copy()
+    snapshot.points[0].update({ x: 99, y: 2 })
+
+    expect(snapshot.layer).toBe(1)
+    expect(snapshot.radius).toBe(5)
+    expect(path.points[0].x).toBe(1)
+  })
+
+  it("isolates StayText-owned font and border values", () => {
+    vi.stubGlobal(
+      "OffscreenCanvas",
+      class {
+        constructor(
+          public width: number,
+          public height: number
+        ) {}
+
+        getContext() {
+          return {
+            measureText: () => ({
+              width: 24,
+              fontBoundingBoxAscent: 10,
+              fontBoundingBoxDescent: 2,
+            }),
+          }
+        }
+      }
+    )
+    const text = new StayText({
+      x: 0,
+      y: 0,
+      text: "copy",
+      font: { size: 12, fontWeight: 600 },
+      border: [{ direction: "bottom", type: "solid", color: "red", size: 2 }],
+      autoTransitionDiffText: false,
+    })
+
+    const snapshot = text.copy()
+    snapshot.font.size = 30
+    snapshot.border![0].color = "blue"
+
+    expect(snapshot.autoTransitionDiffText).toBe(false)
+    expect(text.font.size).toBe(12)
+    expect(text.border![0].color).toBe("red")
+    vi.unstubAllGlobals()
   })
 })
 

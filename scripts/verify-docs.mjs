@@ -224,8 +224,9 @@ function checkApiReference() {
       source: join(repositoryRoot, "src/types/children.ts"),
       declarations: [
         "getContainPointChildrenProps",
-        "ImportChildrenProps",
-        "ExportChildrenProps",
+        "CaptureSceneProps",
+        "SceneChildFragment",
+        "SceneFragment",
         "RegionToTargetCanvasProps",
       ],
       pages: ["zh/api/stay-tools.md", "en/api/stay-tools.md"],

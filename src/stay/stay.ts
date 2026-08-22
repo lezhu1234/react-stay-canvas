@@ -22,6 +22,7 @@ import { EventDispatcher } from "./events/input/eventDispatcher"
 import { ActionRouter } from "./events/routing/actionRouter"
 import { EventRuntime } from "./events/runtime/eventRuntime"
 import { History } from "./history"
+import { captureHistoryChildren, HistoryChildSnapshot } from "./historySnapshot"
 import { Renderer } from "./renderer"
 import { stayTools } from "./stayTools"
 import { SetShapeChildCurrentTime, StackItem } from "./types"
@@ -73,7 +74,7 @@ class Stay<EventName extends string> {
     this.state = DEFAULTSTATE
     this.stateSet = new Set([DEFAULTSTATE])
 
-    this.history = new History(() => this.cloneChildren())
+    this.history = new History(() => this.captureHistoryChildren())
 
     this.actionRouter = new ActionRouter<EventName>({
       canvas: this.root,
@@ -170,8 +171,8 @@ class Stay<EventName extends string> {
     this.actionRouter.clearListeners()
   }
 
-  cloneChildren(): Map<string, StayInstantChild> {
-    return this.children.clone()
+  captureHistoryChildren(): Map<string, HistoryChildSnapshot> {
+    return captureHistoryChildren(this.children.values())
   }
 
   updateChildrenTime(props: SetShapeChildCurrentTime) {

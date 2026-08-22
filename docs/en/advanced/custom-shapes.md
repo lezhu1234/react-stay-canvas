@@ -86,28 +86,7 @@ class Diamond extends InstantShape {
       y: this.y,
       halfWidth: this.halfWidth,
       halfHeight: this.halfHeight,
-      layer: this.layer,
-      zIndex: this.zIndex,
-      state: this.state,
-      stateDrawFuncMap: Object.fromEntries(
-        Object.entries(this.stateDrawFuncMap).map(([name, stages]) => [
-          name,
-          { ...stages },
-        ]),
-      ),
-      shapeStore: new Map(this.shapeStore),
-      zoomY: this.zoomY,
-      zoomCenter: { ...this.zoomCenter },
-      strokeConfig: {
-        ...this.strokeConfig,
-        color: { ...this.strokeConfig.color },
-        dash: [...this.strokeConfig.dash],
-      },
-      fillConfig: {
-        ...this.fillConfig,
-        color: { ...this.fillConfig.color },
-      },
-      globalConfig: { ...this.globalConfig },
+      ...this.copyProps(),
     })
   }
 
@@ -193,7 +172,7 @@ update(props: Partial<DiamondProps>) {
 
 ## Independent copies
 
-History, `exportChildren()`, and import flows all rely on `copy()`. At minimum it must:
+Internal history and scene snapshots rely on each Shape's `copy()` implementation. At minimum it must:
 
 - return the same concrete Shape type;
 - copy geometry and drawing configuration;
@@ -202,7 +181,7 @@ History, `exportChildren()`, and import flows all rely on `copy()`. At minimum i
 
 When a custom Shape owns arrays or objects, choose a shallow or deep copy based on whether those values can be mutated in place.
 
-The example shallow-copies `shapeStore`. If the Map values are mutable, the custom Shape must copy those values according to its own data model; the base class cannot infer a deep-copy policy for arbitrary application objects.
+`copyProps()` creates a new `shapeStore` Map while retaining its values. If those values are mutable, the custom Shape must copy them according to its own data model; the base class cannot infer a deep-copy policy for arbitrary application objects.
 
 ## When to extend AnimatedShape
 

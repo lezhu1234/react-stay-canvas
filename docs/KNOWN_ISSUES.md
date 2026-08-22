@@ -44,7 +44,7 @@ React 渲染现在使用规范化后的 context setter 数量创建 Canvas，并
 
 - `Line.contains()` 和 `StayText.contains()` 固定返回 false，不能单独提供默认命中区域；
 - `Point.getBound()` 尚未实现；
-- `Path.copy()` 与 `Path.getBound()` 尚未实现；
+- `Path.getBound()` 尚未实现；
 - `Circle` 是 `InstantShape`，不支持关键帧插值。
 
 `Circle.contains()` 接受普通坐标的默认命中缺口已经修复，公开工具和 Listener 的命中路径不再需要构造 `Point` 实例。
@@ -77,13 +77,13 @@ Shape 通过 `update({ layer })` 换层时的脏层缺口已经修复：`applyUp
 
 正式修复前需要决定 reset 的契约是“回到构造时快照”还是“root 回到当前 Canvas 的标准坐标与比例”。这会影响 resize、应用主动变换和 mounted 初始化，属于公开语义决定。确定后应建立单一变换快照所有者，并覆盖 move、zoom、连续 reset、resize 和过滤 Child。
 
-## 内置 `copy()` 与场景传输不能完整保真和隔离
+## Child 快照与场景传输职责混合
 
-状态：待处理
+状态：已修复，待随代码变更合入
 
-当前内置 Shape 的 `copyProps()` 只保留部分字段，可能遗漏 `layer`、`zIndex`、`state`、`stateDrawFuncMap`、`globalConfig`、`shapeStore`、缩放状态和动画 transition；stroke/fill 内的颜色对象、dash 数组等嵌套可变值也可能共享。`StayAnimatedChild` 没有专用 copy，导出后会丢失时间线并退化成当前静态 `shapeMap`。
+Child 是绑定 Canvas 的运行时实体，不再提供 `copy()` 或 `copyShapeMap()`。历史模块捕获仅包含 id、className 和 Shape 状态的静态快照，并在捕获前排除 Animated Child；场景工具捕获带 `sourceId`、className 和当前 Shape 投影的 `SceneFragment`，导入时再创建新的运行时 Child。
 
-因此 `copy()`、历史和 `exportChildren()`/`importChildren()` 目前只能视为有限的静态几何复制，不能作为完整序列化契约。后续需要先定义复制保真的字段集合、任意 `shapeStore` 的深浅复制责任和动画时间线语义，再统一实现并加入原件/副本隔离、layer/zIndex/state、嵌套样式与动画传输测试。
+内置 Shape 快照会保留公共 Shape 状态和动画 transition，并隔离颜色、dash、配置对象以及 Shape 自有的可变数据。`shapeStore` 会创建新 Map，但任意 value 保持共享，因为库无法推断应用数据所有权。场景传输明确只捕获 Animated Child 的当前投影，不传输时间线。
 
 ## `StayImage` 的源裁剪尺寸会被覆盖
 
@@ -105,9 +105,9 @@ Shape 通过 `update({ layer })` 换层时的脏层缺口已经修复：`applyUp
 
 状态：已修复，待随代码变更合入
 
-`exportChildren()` 不会修改源场景，它会先复制 Child；但 `importChildren()` 会直接对 payload 中这些副本执行 move/zoom，再复制到目标 Canvas。同一个 exported payload 连续导入到不同区域时，后一次会基于前一次已变换的坐标继续变换。
+场景传输曾返回绑定源 Canvas 的 Child 副本，`importChildren()` 需要再次复制并变换这些运行时对象，导致 payload 语义与 Child 生命周期混合。
 
-`importChildren()` 现在为每次导入创建临时 Child 副本，只对临时副本执行 move/zoom，输入 payload 保持不变。自动化测试覆盖同一份导出数据连续导入不同 Canvas 和目标区域。
+`exportChildren()` 现在返回与 Canvas 运行时分离的 `SceneFragment`。`importChildren()` 每次从 fragment 实例化新的 Shape，只变换本次实例，输入 payload 保持不变。自动化测试覆盖同一份导出数据连续导入不同 Canvas 和目标区域。
 
 ## 部分遗留 Shape 属性被类型接受但未绘制
 

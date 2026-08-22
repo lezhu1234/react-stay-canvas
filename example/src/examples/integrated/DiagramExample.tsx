@@ -250,17 +250,14 @@ export default function DiagramExample() {
     if (!saved || !tools) return
     const existingIds = new Set(tools.getChildrenWithoutRoot().map((child) => child.id))
     const copyNumber = ++copySequenceRef.current
-    const importedScene = {
-      ...saved.scene,
-      children: saved.scene.children.map((child) => child.copy()),
-    }
+    const importedScene = saved.scene
     tools.importChildren(importedScene, { x: 26, y: 26, width: 720, height: 420 })
     const imported = tools.getChildrenWithoutRoot().filter((child) => !existingIds.has(child.id))
     const importedByOriginalId = new Map<string, Child>()
     importedScene.children.forEach((child, index) => {
       const copy = imported[index]
       if (!copy) return
-      importedByOriginalId.set(child.id, copy)
+      importedByOriginalId.set(child.sourceId, copy)
       if (copy.className === "node") {
         nodesRef.current.set(copy.id, copy)
         nodeStackOrderRef.current.set(copy.id, stackSequenceRef.current++)
@@ -270,7 +267,7 @@ export default function DiagramExample() {
           outline.update({ strokeConfig: { color: { ...colors.blue, a: 0 }, lineWidth: 4, dash: [] } })
           nodeOutlinesRef.current.set(copy.id, outline)
         }
-        const originalLabel = nodeLabel(child.id)
+        const originalLabel = nodeLabel(child.sourceId)
         const copyLabel = `${originalLabel} · ${text(`Copy ${copyNumber}`, `副本 ${copyNumber}`)}`
         const textShape = [...copy.shapeMap.values()].find((shape) => shape instanceof StayText) as StayText | undefined
         textShape?.update({ text: copyLabel, font: { size: 12, fontWeight: 650 } })

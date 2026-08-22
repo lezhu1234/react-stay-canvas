@@ -15,7 +15,13 @@ export class Root extends Rectangle {
     this.initHeight = height
   }
   copy() {
-    return this
+    return new Root({
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+      ...this.copyProps(),
+    })
   }
   stroke() {}
 }

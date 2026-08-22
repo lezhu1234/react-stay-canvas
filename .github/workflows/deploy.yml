@@ -18,21 +18,25 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: example
     steps:
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Install deps
-        run: npm install
+      - name: Install library dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install example dependencies
+        run: npm ci --prefix example
 
       - name: Build
-        run: npm run build
+        run: npm run build --prefix example
         env:
           # Serve assets from the repo sub-path on github.io.
           BASE_PATH: /react-stay-canvas/

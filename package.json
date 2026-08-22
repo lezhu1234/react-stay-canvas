@@ -1,10 +1,10 @@
 {
   "name": "react-stay-canvas",
-  "version": "1.1.8",
+  "version": "1.2.0",
   "description": "stay-canvas for react",
   "scripts": {
     "build": "rollup -c",
-    "pub": "rollup -c && pnpm version patch && pnpm publish",
+    "pub": "pnpm verify && pnpm publish --access public",
     "test": "npm test --prefix test",
     "typecheck:example": "npm run typecheck --prefix example",
     "build:example": "npm run build --prefix example",

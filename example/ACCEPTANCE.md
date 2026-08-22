@@ -70,6 +70,46 @@ The gallery is accepted only when:
 - All 13 example routes have every expected result checked.
 - Required evidence is retained for every route.
 - No unresolved failure remains.
+- When an ECS dev release is in scope, the **Stay ECS dev deployment** scenario also passes.
+
+## Stay ECS dev deployment
+
+This scenario covers the tag-triggered deployment of the example gallery to `https://canvas.dev.staying.fun`. It is independent of the GitHub Pages deployment.
+
+### Environment and prerequisites
+
+- The target commit is present on the remote `dev` branch and all deterministic checks have passed.
+- GitHub Actions secrets `DEV_ACR_USERNAME`, `DEV_ACR_PASSWORD`, `DEV_ECS_HOST`, `DEV_ECS_USERNAME`, `DEV_ECS_PORT`, and `DEV_ECS_KEY` are configured.
+- The Aliyun ACR target is the private repository `lezhu-dev/react-stay-canvas` in the Shanghai personal instance.
+- The ECS Compose service, immutable image mapping, restricted deployer allowlist, loopback port `127.0.0.1:9006`, and Nginx route for `canvas.dev.staying.fun` are installed.
+- ECS available memory is at least 1 GiB and Docker disk availability is at least 20 GiB.
+- No other Stay dev release is in progress.
+
+### Operator actions
+
+1. Fetch `origin/dev` and tags, then record the full target commit SHA.
+2. Confirm the target commit is an ancestor of `origin/dev` and choose an unused `dev-vYYMMDD-N` tag. Never reuse a pushed tag.
+3. Push the tag and record the **DEV Docker Image** Actions run URL.
+4. Wait for the workflow to build and push both the release tag and `sha-<commit>` tag, then deploy the SHA-tagged image through `/usr/local/sbin/stay-deploy-dev canvas`.
+5. Confirm the Actions run succeeds and the ECS image mapping selects the expected SHA tag.
+6. Confirm the Canvas container is healthy with zero restarts and no OOM event, and that only `127.0.0.1:9006` is published.
+7. Request `/healthz`, the gallery root, one focused example route, and one integration route through `https://canvas.dev.staying.fun`.
+8. Record memory and Docker disk availability, scan bounded container logs for errors, and compare all prod container IDs, images, and states with the pre-deployment baseline.
+
+### Expected result
+
+- The release and SHA tags resolve to the same ACR manifest; ECS runs the SHA tag.
+- The Canvas service becomes healthy and the health endpoint returns HTTP 200.
+- The gallery and client-side routes load through HTTPS without asset or routing failures.
+- Resource gates remain satisfied and every prod container remains unchanged.
+
+### Failure criteria and evidence
+
+Acceptance fails if the tag does not belong to `dev`, build or push fails, the restricted deployer rejects the target, the container does not become healthy, the endpoint or assets fail, a resource gate is crossed, or any prod container changes. Preserve the Actions run URL, target SHA and tag, ACR manifest digest, container ID/image/health/restart/OOM fields, endpoint status codes, bounded error logs, resource figures, and the before/after prod comparison.
+
+### Cleanup and rollback
+
+On deployment failure, the restricted deployer must restore the previous Canvas image and wait for it to become healthy. Do not delete the pushed tag, the current image, or the rollback image. The gallery creates no server-side data, so acceptance requests require no data cleanup.
 
 ## Cleanup
 

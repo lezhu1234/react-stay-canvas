@@ -168,7 +168,7 @@ update(props: Partial<DiamondProps>) {
 }
 ```
 
-`applyUpdate()` merges `layer`, `zIndex`, zoom fields, `state`, `stateDrawFuncMap`, `strokeConfig`, and `fillConfig`, then marks the Shape's current layer dirty through `parent.onChildShapeChange()`. It does not merge `globalConfig` or `shapeStore`. When an update changes `layer`, call `tools.refresh()` because the old layer is not dirtied automatically. Omitting `applyUpdate()` can leave data updated while the screen remains stale.
+`applyUpdate()` merges `layer`, `zIndex`, zoom fields, `state`, `stateDrawFuncMap`, `strokeConfig`, and `fillConfig`, then reports both the previous and current layer through `parent.onChildShapeChange()`. The owning Child dirties one layer for same-layer updates and both layers for a layer change. It does not merge `globalConfig` or `shapeStore`. Omitting `applyUpdate()` can leave data updated while the screen remains stale.
 
 ## Independent copies
 

@@ -1,0 +1,62 @@
+name: DEV Docker Image
+
+on:
+  push:
+    tags:
+      - "dev-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.ref_name }}
+      DEPLOY_TAG: sha-${{ github.sha }}
+      USER_NAME: ${{ secrets.DEV_ACR_USERNAME }}
+      ALIYUN_REGISTRY_HOST: crpi-dr29ks3qtccsnym1.cn-shanghai.personal.cr.aliyuncs.com
+      ALIYUN_REGISTRY_SECRET: ${{ secrets.DEV_ACR_PASSWORD }}
+      NAMESPACE: lezhu-dev
+      REPOSITORY: react-stay-canvas
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify the tag belongs to dev
+        run: |
+          set -euo pipefail
+          git fetch origin dev --no-tags
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/dev
+
+      - name: Build the Docker image
+        run: |
+          docker build . --file Dockerfile.dev \
+            --tag "$ALIYUN_REGISTRY_HOST/$NAMESPACE/$REPOSITORY:$TAG" \
+            --tag "$ALIYUN_REGISTRY_HOST/$NAMESPACE/$REPOSITORY:$DEPLOY_TAG"
+
+      - name: Login and push image to Aliyun
+        uses: nick-fields/retry@v3
+        with:
+          max_attempts: 3
+          timeout_minutes: 10
+          command: |
+            set -euo pipefail
+            printf '%s' "$ALIYUN_REGISTRY_SECRET" | docker login --username="$USER_NAME" --password-stdin "$ALIYUN_REGISTRY_HOST"
+            docker push "$ALIYUN_REGISTRY_HOST/$NAMESPACE/$REPOSITORY:$TAG"
+            docker push "$ALIYUN_REGISTRY_HOST/$NAMESPACE/$REPOSITORY:$DEPLOY_TAG"
+
+      - name: Deploy to Stay dev ECS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEV_ECS_HOST }}
+          username: ${{ secrets.DEV_ECS_USERNAME }}
+          key: ${{ secrets.DEV_ECS_KEY }}
+          port: ${{ secrets.DEV_ECS_PORT }}
+          envs: USER_NAME,ALIYUN_REGISTRY_HOST,DEPLOY_TAG,ALIYUN_REGISTRY_SECRET,NAMESPACE,REPOSITORY
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+            printf '%s' "$ALIYUN_REGISTRY_SECRET" | sudo -n /usr/local/sbin/stay-deploy-dev login "$USER_NAME" "$ALIYUN_REGISTRY_HOST"
+            sudo -n /usr/local/sbin/stay-deploy-dev canvas "$ALIYUN_REGISTRY_HOST/$NAMESPACE/$REPOSITORY:$DEPLOY_TAG"

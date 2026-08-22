@@ -28,6 +28,12 @@ export function captureHistoryChildren(
   return snapshots
 }
 
+export function materializeHistoryShapes(
+  shapes: ReadonlyMap<string, InstantShape>
+): Map<string, InstantShape> {
+  return snapshotShapeMap(shapes)
+}
+
 function snapshotStepChild(child: HistoryChildSnapshot) {
   return {
     id: child.id,

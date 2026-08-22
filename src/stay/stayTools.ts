@@ -22,7 +22,11 @@ import { numberAlmostEqual } from "../utils/geometry"
 import { infixExpressionParser } from "../utils/selectors"
 import { StayAnimatedChild } from "./children/stayAnimatedChild"
 import { StayInstantChild } from "./children/stayInstantChild"
-import { captureHistoryChild, diffHistoryChild } from "./historySnapshot"
+import {
+  captureHistoryChild,
+  diffHistoryChild,
+  materializeHistoryShapes,
+} from "./historySnapshot"
 import { captureScene, materializeSceneChild } from "./sceneTransfer"
 import { normalizeManualActions } from "./events/input/manualActionAdapter"
 import Stay from "./stay"
@@ -110,7 +114,7 @@ export function stayTools(this: Stay<any>): StayTools {
         if (step.action === "append") {
           this.tools.appendChild({
             id: stepChild.id,
-            shape: stepChild.shape,
+            shape: materializeHistoryShapes(stepChild.shape),
             className: stepChild.className,
           })
         } else if (step.action === "remove") {
@@ -119,7 +123,7 @@ export function stayTools(this: Stay<any>): StayTools {
           assert(stepChild.beforeShape)
           const child = this.findChildById(stepChild.id)!
 
-          child.update({ shape: stepChild.shape })
+          child.update({ shape: materializeHistoryShapes(stepChild.shape) })
         }
       })
 
@@ -147,15 +151,17 @@ export function stayTools(this: Stay<any>): StayTools {
         } else if (step.action === "remove") {
           this.tools.appendChild({
             id: stepChild.id,
-            shape: stepChild.shape,
+            shape: materializeHistoryShapes(stepChild.shape),
             className: stepChild.className,
           })
         } else if (step.action === "update") {
-          assert(stepChild.beforeShape)
+          if (!stepChild.beforeShape) {
+            throw new Error("update history step requires beforeShape")
+          }
 
           this.getChildById(stepChild.id)!.update({
             className: stepChild.beforeName || stepChild.className,
-            shape: stepChild.beforeShape!,
+            shape: materializeHistoryShapes(stepChild.beforeShape),
           })
           // this.tools.updateChild({
           //   child: this.getChildById(stepChild.id)!,

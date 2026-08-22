@@ -168,7 +168,7 @@ update(props: Partial<DiamondProps>) {
 }
 ```
 
-`applyUpdate()` 会合并 `layer`、`zIndex`、缩放字段、`state`、`stateDrawFuncMap`、`strokeConfig` 和 `fillConfig`，并通过 `parent.onChildShapeChange()` 标记 Shape 当前所在的 layer。它不会合并 `globalConfig` 或 `shapeStore`。更新修改 `layer` 时还要调用 `tools.refresh()`，因为旧 layer 不会被自动标记。遗漏 `applyUpdate()` 时，数据可能已经变化，但屏幕仍不更新。
+`applyUpdate()` 会合并 `layer`、`zIndex`、缩放字段、`state`、`stateDrawFuncMap`、`strokeConfig` 和 `fillConfig`，并通过 `parent.onChildShapeChange()` 上报修改前后的 layer。所属 Child 会为同层更新标记一个 layer，换层时标记新旧两个 layer。它不会合并 `globalConfig` 或 `shapeStore`。遗漏 `applyUpdate()` 时，数据可能已经变化，但屏幕仍不更新。
 
 ## copy 的独立性
 

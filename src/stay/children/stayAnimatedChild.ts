@@ -159,7 +159,7 @@ export class StayAnimatedChild<
     return false
   }
 
-  onChildShapeChange(shape: T) {
+  onChildShapeChange(shape: T, _previousLayer: number) {
     shape.layer = parseLayer(this.canvas.layers, shape.layer)
     console.warn("change property of AnimatedShape may cause unexpected behavior")
   }

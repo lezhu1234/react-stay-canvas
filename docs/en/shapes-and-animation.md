@@ -13,7 +13,7 @@ A Shape owns geometry, drawing, hit testing, and its own visual state. A Child g
 | Shape | Main geometry | Default hit testing | Keyframe interpolation | Notes |
 | --- | --- | --- | --- | --- |
 | `Rectangle` | `x`, `y`, `width`, `height` | Yes | Yes | `x` and `y` are the top-left corner |
-| `Circle` | `x`, `y`, `radius` | Currently unavailable | No | `contains()` requires a `Point` instance, while public hit paths pass a plain coordinate |
+| `Circle` | `x`, `y`, `radius` | Yes | No | Uses radial hit testing with plain coordinates |
 | `Line` | `x1`, `y1`, `x2`, `y2` | No | Yes | Use `nearPoint` for a custom line hit area |
 | `StayText` | `x`, `y`, `text`, `font` | No | Yes | `(x, y)` is currently the upper center of the text bounding box |
 | `StayImage` | `image`, `x`, `y`, `width`, `height`, `opacity` | Yes | Yes | Uses rectangular bounds; create it after the image loads |
@@ -116,7 +116,7 @@ child?.shape.update({
 })
 ```
 
-`update()` tells the owning Child that its current layer needs repainting. If the update changes `layer`, call `tools.refresh()` afterward: the current implementation dirties only the new layer and otherwise leaves stale pixels on the old Canvas. `StayInstantChild.update(...)` is an internal replacement primitive used by undo and redo; it is not the normal application-level mutation API.
+`update()` tells the owning Child which layers need repainting. A same-layer update dirties that layer; changing `layer` dirties both the previous and next layers so the old Canvas is cleared automatically. `StayInstantChild.update(...)` is an internal replacement primitive used by undo and redo; it is not the normal application-level mutation API.
 
 `move()` applies a relative offset. At the start of a continuous gesture, call `moveInit()` once, then pass offsets relative to that gesture start:
 
@@ -150,6 +150,8 @@ image.src = "/photo.png"
 ```
 
 Cross-origin images follow the browser's Canvas tainting rules. If the scene will later call `toDataURL()` or `regionToTargetCanvas()`, the image response must allow the corresponding CORS use.
+
+Pass `sx`, `sy`, `swidth`, and `sheight` to crop the source image. Explicit crop dimensions are preserved during construction, update, and copy; omitted dimensions use the image's natural size. Custom crop dimensions are not currently preserved in interpolated timeline frames.
 
 ## Explicit timeline model
 

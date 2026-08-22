@@ -108,7 +108,7 @@ interface CanvasGlobalProps {
 
 Every constructor also accepts common `ShapeProps`. `Rectangle`, `StayText`, and `StayImage` additionally accept `transition`. `Line` is implemented as an animated Shape, but its current exported `LineProps` does not accept `transition`.
 
-`StayImage` currently overwrites `swidth` and `sheight` with the image's natural size during construction. Do not treat custom source-crop dimensions as stable behavior; see [Current limitations](../known-limitations.md#rendering-and-geometry).
+`StayImage` uses the image's natural size when `swidth` or `sheight` is omitted. Explicit source-crop dimensions are preserved during construction, update, and copy. Timeline interpolation does not currently preserve custom crop dimensions; see [Current limitations](../known-limitations.md#rendering-and-geometry).
 
 `CircleAttr` also retains `stroke` and `fill` fields, but the current constructor does not use them; use `strokeConfig` and `fillConfig` consistently. `StayText` likewise does not carry `decoration` into its current drawing state, so do not rely on it as a stable visual effect.
 
@@ -169,7 +169,6 @@ See [Custom Shapes](../advanced/custom-shapes.md) for implementation guidance.
 ## Current limitations
 
 - `Line.contains()` and `StayText.contains()` currently always return false;
-- `Circle.contains()` requires a `Point` instance, while tool and Listener hit paths pass a plain `PointType`, so default Circle hits currently throw;
 - `Point.getBound()` is not implemented, so an appended Point throws during normal rendering;
 - `Path.getBound()` is not implemented, so an appended Path throws during rendering;
 - `Circle` does not extend `AnimatedShape` and cannot be used directly as a timeline keyframe;

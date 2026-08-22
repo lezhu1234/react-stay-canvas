@@ -108,7 +108,7 @@ interface CanvasGlobalProps {
 
 全部构造参数还可包含通用 `ShapeProps`；`Rectangle`、`StayText` 和 `StayImage` 还可包含 `transition`。`Line` 的实现属于动画 Shape，但当前导出的 `LineProps` 不接受 `transition`。
 
-`StayImage` 的 `swidth`、`sheight` 当前会在构造时被 natural size 覆盖，不应把自定义源裁剪尺寸视为稳定能力；见[当前限制](../known-limitations.md#渲染与几何)。
+`StayImage` 在省略 `swidth` 或 `sheight` 时使用图片 natural size；显式源裁剪尺寸会在构造、更新和复制时保留。时间线插值目前不会保留自定义裁剪尺寸；见[当前限制](../known-limitations.md#渲染与几何)。
 
 `CircleAttr` 还保留 `stroke` 和 `fill` 字段，但当前构造函数不会使用它们；统一使用 `strokeConfig` 和 `fillConfig`。`StayText` 的 `decoration` 当前也没有进入构造后的绘制状态，不应作为稳定效果使用。
 
@@ -169,7 +169,6 @@ abstract getBound(): Rect
 ## 当前限制
 
 - `Line.contains()` 和 `StayText.contains()` 当前固定返回 false；
-- `Circle.contains()` 要求 `Point` 实例，而工具和 Listener 命中路径传入普通 `PointType`，因此当前默认命中会抛错；
 - `Point.getBound()` 尚未实现，因此追加到场景后会在正常渲染时抛错；
 - `Path.getBound()` 尚未实现，因此追加 Path 会在渲染时抛错；
 - `Circle` 不继承 `AnimatedShape`，不能直接作为时间线关键帧；

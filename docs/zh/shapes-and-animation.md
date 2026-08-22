@@ -13,7 +13,7 @@ Shape 负责几何、绘制、命中和自身状态；Child 负责把一个或�
 | Shape | 主要参数 | 默认命中 | 关键帧插值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `Rectangle` | `x`、`y`、`width`、`height` | 是 | 是 | `x`、`y` 表示左上角 |
-| `Circle` | `x`、`y`、`radius` | 当前不可用 | 否 | `contains()` 需要 `Point` 实例，但公开命中路径传入普通坐标对象 |
+| `Circle` | `x`、`y`、`radius` | 是 | 否 | 使用普通坐标进行圆形半径命中 |
 | `Line` | `x1`、`y1`、`x2`、`y2` | 否 | 是 | 可用 `nearPoint` 做自定义线段命中 |
 | `StayText` | `x`、`y`、`text`、`font` | 否 | 是 | `(x, y)` 当前表示文字包围盒的上方中心 |
 | `StayImage` | `image`、`x`、`y`、`width`、`height`、`opacity` | 是 | 是 | 继承矩形边界；应在图片加载后创建 |
@@ -116,7 +116,7 @@ child?.shape.update({
 })
 ```
 
-`update()` 会通知所属 Child 重绘 Shape 当前所在的 layer。如果更新同时修改了 `layer`，随后还要调用 `tools.refresh()`：当前实现只会标记新 layer，旧 Canvas 否则会残留像素。`StayInstantChild.update(...)` 是撤销/重做使用的内部替换原语，不应作为应用代码的常规更新入口。
+`update()` 会通知所属 Child 重绘相关 layer：同层更新只标记当前层，修改 `layer` 时会同时标记旧层和新层，旧 Canvas 会自动清除。`StayInstantChild.update(...)` 是撤销/重做使用的内部替换原语，不应作为应用代码的常规更新入口。
 
 `move()` 表示相对位移；连续手势开始前先调用 `moveInit()`，之后可以反复以“相对手势起点”的偏移调用 `move()`：
 
@@ -150,6 +150,8 @@ image.src = "/photo.png"
 ```
 
 跨域图片要遵守浏览器 Canvas 污染规则。如果后续需要调用 `toDataURL()` 或 `regionToTargetCanvas()`，图片响应必须允许对应的 CORS 使用方式。
+
+传入 `sx`、`sy`、`swidth` 和 `sheight` 可以裁剪源图片。显式裁剪尺寸会在构造、更新和复制时保留；省略时使用图片 natural size。自定义裁剪尺寸目前不会保留到时间线插值帧中。
 
 ## 显式时间线模型
 

@@ -70,9 +70,11 @@ small compatibility entry points so existing links continue to reach the topic i
 documentation must use package exports, tests, and repository examples as factual sources instead
 of reintroducing another declaration copy in those files.
 
-Runnable behavior belongs in the example gallery. Manual regression procedures and evidence belong
-in `example/ACCEPTANCE.md` and its route handbooks. Maintainer architecture documents explain
-internal ownership and must not become a second user-facing API reference.
+Runnable behavior belongs in the GitHub Pages example gallery. Each route presents only the live
+result and the exact component source rendered by that result. Automated regression coverage stays
+with the source and tests; machine-local operator evidence does not belong in the published gallery
+or the repository documentation. Maintainer architecture documents explain internal ownership and
+must not become a second user-facing API reference.
 
 `scripts/verify-docs.mjs` enforces matching Chinese and English page trees, validates local
 Markdown links, and derives documented member names from the selected public TypeScript

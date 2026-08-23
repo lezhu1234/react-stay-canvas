@@ -11,7 +11,5 @@ export interface ExampleDefinition {
   shortTitle: LocalizedText
   summary: LocalizedText
   features: string[]
-  instructions: LocalizedText[]
-  checklist: LocalizedText[]
   component: ComponentType
 }

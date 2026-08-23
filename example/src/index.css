@@ -1180,24 +1180,111 @@ input:focus-visible {
   background: #26324d;
 }
 
-.source-panel pre {
+.source-code {
   max-height: 68dvh;
   margin: 0;
-  padding: 22px;
+  padding: 18px 0;
   overflow: auto;
   tab-size: 2;
+  outline: none;
 }
 
-.example-active .source-panel pre {
+.example-active .source-code {
   height: 100%;
   max-height: none;
 }
 
-.source-panel code {
+.source-code:focus-visible {
+  box-shadow: inset 0 0 0 2px #618ae8;
+}
+
+.source-code code {
+  display: block;
+  min-width: max-content;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   line-height: 1.65;
   white-space: pre;
+}
+
+.source-code-line {
+  display: block;
+  min-height: 1.65em;
+  padding-right: 20px;
+}
+
+.source-code-line:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.source-line-number {
+  display: inline-block;
+  width: 54px;
+  margin-right: 18px;
+  padding-right: 14px;
+  border-right: 1px solid #303742;
+  color: #667180;
+  text-align: right;
+  user-select: none;
+}
+
+.source-code .token.comment,
+.source-code .token.prolog,
+.source-code .token.doctype,
+.source-code .token.cdata {
+  color: #6a9955;
+}
+
+.source-code .token.punctuation {
+  color: #d4d4d4;
+}
+
+.source-code .token.property,
+.source-code .token.tag,
+.source-code .token.constant,
+.source-code .token.symbol,
+.source-code .token.deleted {
+  color: #569cd6;
+}
+
+.source-code .token.boolean,
+.source-code .token.number {
+  color: #b5cea8;
+}
+
+.source-code .token.selector,
+.source-code .token.attr-name,
+.source-code .token.string,
+.source-code .token.char,
+.source-code .token.builtin,
+.source-code .token.inserted {
+  color: #ce9178;
+}
+
+.source-code .token.operator,
+.source-code .token.entity,
+.source-code .token.url,
+.source-code .token.variable {
+  color: #9cdcfe;
+}
+
+.source-code .token.atrule,
+.source-code .token.attr-value,
+.source-code .token.keyword {
+  color: #c586c0;
+}
+
+.source-code .token.function {
+  color: #dcdcaa;
+}
+
+.source-code .token.class-name {
+  color: #4ec9b0;
+}
+
+.source-code .token.regex,
+.source-code .token.important {
+  color: #d16969;
 }
 
 .not-found,

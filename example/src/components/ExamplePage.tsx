@@ -1,7 +1,9 @@
-import { useState } from "react"
+import { lazy, Suspense, useState } from "react"
 
 import { ExampleDefinition } from "../examples/types"
 import { useI18n } from "../i18n"
+
+const SourceCode = lazy(() => import("./SourceCode"))
 
 type Tab = "result" | "source"
 
@@ -19,6 +21,7 @@ export function ExamplePage({
     result: text("Result", "效果"),
     source: text("Source", "源码"),
   }
+  const sourceLabel = text("TypeScript source code", "TypeScript 源码")
 
   return (
     <article className="example-page workspace-page">
@@ -58,7 +61,11 @@ export function ExamplePage({
           <p>{text("This is the exact component rendered by the live result.", "这里展示运行结果所使用的完整组件源码。")}</p>
           <button onClick={() => navigator.clipboard?.writeText(source)}>{text("Copy source", "复制源码")}</button>
         </div>
-        <pre><code>{source}</code></pre>
+        {tab === "source" && (
+          <Suspense fallback={<pre aria-label={sourceLabel} className="source-code source-code-loading"><code>{source}</code></pre>}>
+            <SourceCode label={sourceLabel} source={source} />
+          </Suspense>
+        )}
       </section>
     </article>
   )

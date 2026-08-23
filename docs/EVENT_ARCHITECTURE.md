@@ -111,11 +111,11 @@ src/stay/events/
 
 - `DomInputAdapter` 只将顶层 Canvas 和必要的 window/document 终止信号标准化为 runtime input，并对所有绑定提供对称解绑。
 - `PressedInputState` 是键盘按键和鼠标按钮状态的唯一所有者；每次派发获得独立快照，销毁时统一清空。
-- Canvas 内开始的主指针会话通过 Pointer Capture 延续到 Canvas 外；`pointerup`、`pointercancel`、`lostpointercapture`、window blur 和 document hidden 统一终止且只终止一次。
+- Canvas 内开始的主指针会话通过 Pointer Capture 延续到 Canvas 外；`pointerup`、`pointercancel`、`lostpointercapture`、window blur 和 document hidden 统一终止且只终止一次。initiating button 已松开后的 `lostpointercapture` 属于正常隐式释放，按键仍按下时的异常 Capture 丢失才属于取消。
 - Pointer Session 正在同步派发 terminal input 时不接受新的原生 down；被忽略的输入不得修改 pressed state、获取 Pointer Capture 或注册动态 gesture definition。
 - Pointer Capture 不可用时，window terminal listener 是释放兜底；多个 Canvas 的会话状态彼此隔离。
 - Canvas path 内或经 Pointer Capture 重定向到 Canvas 的释放由 Canvas target listener 处理；window capture listener 只处理 composed path 不含 Canvas 的外部释放。
-- `pointercancel`、`lostpointercapture`、blur 和 visibilitychange 保留真正的原生 cause Event；terminal 坐标独立取自 session 的最后 pointer sample。
+- `pointercancel`、异常 `lostpointercapture`、blur 和 visibilitychange 保留真正的原生 cause Event；terminal 坐标独立取自 session 的最后 pointer sample。
 - `EventDispatcher` 仅协调 input adapter、pressed state 与 `EventRuntime`，不保存事件定义或 listener 状态。
 - `Stay.destroy()` 是 DOM 监听、render loop、事件定义、gesture owner 和 listener 状态的统一终止出口。
 - React unmount、显式 `reCreate()` 和 resize recreate 都必须先销毁旧 Stay，不能遗留 DOM listener 或 animation frame。

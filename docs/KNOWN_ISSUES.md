@@ -19,7 +19,7 @@
 ### 修复约束
 
 - Canvas 内开始的主指针会话无论在哪里释放，都只结束一次；
-- `pointerup`、`pointercancel`、`lostpointercapture`、窗口失焦、页面隐藏和销毁进入统一清理路径；
+- `pointerup`、`pointercancel`、`lostpointercapture`、窗口失焦、页面隐藏和销毁进入统一清理路径；松键后的 `lostpointercapture` 正常结束，按键仍按下时的异常 Capture 丢失才取消；
 - 正常结束与取消都会清理本会话的按钮状态、动态事件、点击配对和 gesture owner；
 - 手势开始时确定的逻辑目标持续拥有后续 move/end；
 - 多个 Canvas 实例互不共享会话状态；

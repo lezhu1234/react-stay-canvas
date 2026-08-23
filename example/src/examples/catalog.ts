@@ -145,8 +145,8 @@ export const catalog: ExampleDefinition[] = [
     order: 12,
     title: l("Connected diagram editor", "连线图编辑器"),
     shortTitle: l("Diagram", "图表"),
-    summary: l("Multi-shape nodes, dependent edges, state-driven connection mode, transforms, and scene transfer.", "把节点、连线、拖动、缩放和场景复制组合成一个可交互的流程图示例。"),
-    features: ["multi-shape Child", "Line", "stateStore", "drag", "import/export"],
+    summary: l("A complete workflow editor with multi-select, box selection, port connections, resize handles, history, and JSON transfer.", "一个完整的流程图编辑器，支持多选、框选、端口连线、八向缩放、历史和 JSON 导入导出。"),
+    features: ["multi-shape Child", "ports + arrows", "multi-select", "history", "JSON"],
     component: DiagramExample,
   },
   {

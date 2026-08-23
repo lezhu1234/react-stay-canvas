@@ -131,16 +131,17 @@ tools.undo()
 tools.redo()
 ```
 
+For an initialized editor, call `resetHistory()` after loading non-undoable background content. It clears both history stacks and treats the current static scene as the new baseline.
+
 The transaction boundaries are:
 
-- `appendChild()` and `removeChild()` mark static Children as pending history changes;
+- `appendChild()`, `removeChild()`, and normal Shape mutations mark static Children as pending history changes;
 - `log()` groups changes since the previous snapshot into one history item;
+- `resetHistory()` clears undo/redo and makes the current static scene the baseline;
 - several mutations followed by one `log()` become one undo unit;
 - recording a new operation after `undo()` truncates the previous redo tail;
 - animated Children never enter history and removing one cannot be undone;
 - `undo()` and `redo()` also restore the Canvas state captured with the item.
-
-A pure Shape `update()` does not add an existing Child to the pending-history set, so calling `log()` only at drag end does not reliably record that movement. When an update must be undoable, use an explicit remove/append replacement with the same id as demonstrated by the Annotator example. Do not assume that `log()` scans every Child.
 
 ## Copy a scene between Canvases
 

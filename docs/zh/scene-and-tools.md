@@ -131,16 +131,17 @@ tools.undo()
 tools.redo()
 ```
 
+编辑器完成初始化后，可在加载不可撤销的背景内容之后调用 `resetHistory()`。它会清空 undo/redo，并把当前静态场景作为新的历史基线。
+
 边界规则：
 
-- `appendChild()` 和 `removeChild()` 会把静态 Child 标记为待记录；
+- `appendChild()`、`removeChild()` 和正常 Shape 变更都会把静态 Child 标记为待记录；
 - `log()` 把从上一次快照到当前状态的变化组成一个历史项；
+- `resetHistory()` 清空 undo/redo，并把当前静态场景设为基线；
 - 多个变更后只调用一次 `log()`，它们会成为同一个撤销单位；
 - `undo()` 后再记录新操作，会截断旧的 redo 尾部；
 - 动画 Child 不进入历史，移除后也不会被 undo 恢复；
 - `undo()` 和 `redo()` 会恢复当时的 Canvas state。
-
-纯 Shape `update()` 不会自动把 Child 加入待记录集合，因此只在拖动结束时调用 `log()` 不能可靠地记录已经存在对象的移动。需要可撤销更新时，应用必须像 Annotator 示例一样用同 id 的 remove/append replacement 建立显式历史差异。不要假定 `log()` 会扫描全部 Child。
 
 ## 在 Canvas 之间复制场景
 

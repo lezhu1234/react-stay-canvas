@@ -85,6 +85,7 @@ export interface AnimatedTools {
 export interface InstantTools {
   log: () => void
   redo: () => void
+  resetHistory: () => void
   undo: () => void
 }
 

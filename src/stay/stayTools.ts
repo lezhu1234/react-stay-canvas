@@ -93,6 +93,10 @@ export function stayTools(this: Stay<any>): StayTools {
           )
         })
         .filter((o) => o) as StepProps[]
+      if (steps.length === 0) {
+        this.snapshotChildren()
+        return
+      }
       this.pushToStack({
         state: this.state,
         steps,
@@ -130,6 +134,10 @@ export function stayTools(this: Stay<any>): StayTools {
       this.tools.switchState(stepItem.state)
       this.snapshotChildren()
       this.stackIndex++
+    },
+
+    resetHistory: () => {
+      this.history.reset()
     },
 
     undo: () => {
@@ -186,6 +194,7 @@ export function stayTools(this: Stay<any>): StayTools {
         className,
         shape,
         canvas: this.root,
+        onShapeChange: (childId) => this.markHistoryChildChanged(childId),
       })
       this.pushToChildren(child)
       this.unLogedChildrenIds.add(child.id)

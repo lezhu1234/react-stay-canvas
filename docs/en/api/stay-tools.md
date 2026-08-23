@@ -52,9 +52,10 @@
 
 | Method | Meaning |
 | --- | --- |
-| `log()` | Commit static-Child diffs marked pending by append/remove as one history item |
+| `log()` | Commit pending static-Child diffs, including Shape mutations, as one history item |
 | `undo()` | Undo one item; logs when none remain |
 | `redo()` | Redo one item; logs when none remain |
+| `resetHistory()` | Clear undo/redo and use the current static scene as the new baseline |
 
 Animated Children do not participate in history. See [Scenes and tools: History transactions](../scene-and-tools.md#history-transactions) for boundaries and examples.
 

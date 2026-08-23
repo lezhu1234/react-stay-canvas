@@ -114,7 +114,7 @@ export default function App() {
   )
 
   return (
-    <div className="app-shell">
+    <div className={active ? "app-shell example-active" : "app-shell"}>
       <header className="topbar">
         <RouteLink className="brand" path="/">
           <span className="brand-mark" aria-hidden="true" />

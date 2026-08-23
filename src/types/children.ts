@@ -78,6 +78,7 @@ export interface StayInstantChildProps<T extends InstantShape> {
   className: string
   shape: T | T[] | Map<string, T>
   canvas: Canvas
+  onShapeChange?: (childId: string) => void
 }
 
 export interface StayAnimatedChildProps<T extends AnimatedShape> {

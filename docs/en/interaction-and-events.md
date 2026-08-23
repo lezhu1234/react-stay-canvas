@@ -290,16 +290,20 @@ pointer move inside or outside
   → continue the same session and retain the start target
 pointer up
   → normal terminal
-pointercancel / lostpointercapture / window blur / document hidden
+lostpointercapture after the initiating button is released
+  → normal implicit-release terminal
+pointercancel / unexpected lostpointercapture / window blur / document hidden
   → cancelled terminal
 ```
 
 When Pointer Events are available, the runtime requests Pointer Capture at the start. If capture is unavailable or never becomes active, window terminal listeners provide an outside-release fallback. Releases delivered to the Canvas, including capture-retargeted releases, still run through the Canvas's own DOM listener.
 
+Browsers may emit `lostpointercapture` after the initiating button has already been released. The runtime treats that signal as a normal implicit release. Capture loss is a cancellation only while the initiating button is still pressed.
+
 Every normal or cancelled path terminates once. Cancellation has these semantics:
 
 - `dragend` or `moveend` may receive `e.cancelled === true`;
-- `e.cancelReason` is `pointercancel`, `lostpointercapture`, `blur`, or `visibilitychange`;
+- `e.cancelReason` is `pointercancel`, `lostpointercapture`, `blur`, or `visibilitychange`; `lostpointercapture` appears only for unexpected capture loss while the initiating button remains pressed;
 - coordinates come from the last pointer sample in the session;
 - `originEvent` remains the real native event that caused cancellation;
 - cancellation emits no `click` and is not disguised as an ordinary `mouseup`.

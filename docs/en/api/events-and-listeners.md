@@ -58,7 +58,7 @@ Optional by input source:
 | Field | Present when |
 | --- | --- |
 | `target` | Selector routing resolves a Child |
-| `x`, `y`, `point` | Pointer, mouse, wheel, or explicit manual coordinates exist |
+| `x`, `y`, `point` | Pointer, mouse, wheel, or explicit manual coordinates exist; native input is Canvas-local logical space even when CSS scales the display |
 | `key` | Keyboard input or an explicit manual key exists |
 | `deltaX`, `deltaY`, `deltaZ` | Wheel input or explicit manual deltas exist |
 | `pointerId`, `pointerType` | Input came from Pointer Events |

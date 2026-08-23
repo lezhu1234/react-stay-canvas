@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest"
-import { Rectangle } from "react-stay-canvas"
+import { Rectangle, StayImage } from "react-stay-canvas"
 import { createStage } from "./helpers/stage"
 
 const rect = (x: number, y: number, w = 10, h = 10) =>
@@ -64,5 +64,103 @@ describe("undo / redo / log", () => {
     expect(count()).toBe(1)
     redo()
     expect(count()).toBe(2)
+  })
+
+  it("tracks Shape updates without replacing the owning Child", () => {
+    const { stage } = createStage()
+    const child = stage.tools.appendChild({ className: "box", shape: rect(10, 20, 30, 40) })
+    stage.tools.log()
+
+    child.shape.update({ x: 70, width: 90 })
+    stage.tools.log()
+    stage.tools.undo()
+    expect(stage.tools.getChildById<Rectangle>(child.id)?.shape.getBound()).toEqual({
+      x: 10,
+      y: 20,
+      width: 30,
+      height: 40,
+    })
+
+    stage.tools.redo()
+    expect(stage.tools.getChildById<Rectangle>(child.id)?.shape.getBound()).toEqual({
+      x: 70,
+      y: 20,
+      width: 90,
+      height: 40,
+    })
+  })
+
+  it("can set the current scene as a non-undoable history baseline", () => {
+    const { stage } = createStage()
+    const background = stage.tools.appendChild({ className: "background", shape: rect(0, 0) })
+    stage.tools.resetHistory()
+
+    const annotation = stage.tools.appendChild({ className: "annotation", shape: rect(20, 20) })
+    stage.tools.log()
+    stage.tools.undo()
+
+    expect(stage.tools.getChildById(background.id)).toBeTruthy()
+    expect(stage.tools.getChildById(annotation.id)).toBeUndefined()
+    stage.tools.undo()
+    expect(stage.tools.getChildById(background.id)).toBeTruthy()
+  })
+
+  it("restores root and Child geometry after a logged scene transform", () => {
+    const { stage } = createStage()
+    const child = stage.tools.appendChild({ className: "box", shape: rect(10, 20) })
+    const root = stage.tools.getChildBySelector<Rectangle>(".stay-canvas")!
+    stage.tools.resetHistory()
+
+    stage.tools.moveStart()
+    void stage.tools.move(30, 40)
+    stage.tools.log()
+    expect(root.shape.getBound()).toMatchObject({ x: 30, y: 40 })
+    expect(child.shape.getBound()).toMatchObject({ x: 40, y: 60 })
+
+    stage.tools.undo()
+    expect(root.shape.getBound()).toMatchObject({ x: 0, y: 0 })
+    expect(child.shape.getBound()).toMatchObject({ x: 10, y: 20 })
+  })
+
+  it("does not add an equivalent snapshot or discard the redo tail", () => {
+    const { stage } = createStage()
+    const first = stage.tools.appendChild({ className: "box", shape: rect(0, 0) })
+    stage.tools.log()
+    const second = stage.tools.appendChild({ className: "box", shape: rect(20, 20) })
+    stage.tools.log()
+    stage.tools.undo()
+
+    first.moveInit()
+    first.move(0, 0)
+    stage.tools.log()
+    stage.tools.redo()
+
+    expect(stage.tools.getChildById(second.id)).toBeTruthy()
+  })
+
+  it("preserves native object identity when diffing Shape snapshots", () => {
+    const { stage } = createStage()
+    const firstImage = document.createElement("img")
+    const secondImage = document.createElement("img")
+    const child = stage.tools.appendChild({
+      className: "image",
+      shape: new StayImage({
+        image: firstImage,
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        opacity: 1,
+      }),
+    })
+    stage.tools.log()
+
+    child.shape.update({ image: secondImage })
+    stage.tools.log()
+    stage.tools.undo()
+    expect(stage.tools.getChildById<StayImage>(child.id)?.shape.image).toBe(firstImage)
+
+    stage.tools.redo()
+    expect(stage.tools.getChildById<StayImage>(child.id)?.shape.image).toBe(secondImage)
   })
 })

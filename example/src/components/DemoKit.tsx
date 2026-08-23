@@ -1,9 +1,114 @@
-import { ReactNode, useEffect, useRef, useState } from "react"
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react"
+
+import { type StayCanvasProps, type StayTools } from "react-stay-canvas"
 
 import { useI18n } from "../i18n"
 
 export function DemoLayout({ children }: { children: ReactNode }) {
-  return <div className="demo-layout">{children}</div>
+  const [primary, ...controls] = Children.toArray(children)
+
+  return (
+    <div className="demo-layout">
+      <div className="demo-primary">{primary}</div>
+      {controls.length > 0 && <div className="demo-controls">{controls}</div>}
+    </div>
+  )
+}
+
+type CanvasScenePlacement = {
+  offsetX: number
+  offsetY: number
+}
+
+type CanvasChild = ReturnType<StayTools["appendChild"]>
+
+const scenePlacementByTools = new WeakMap<StayTools, CanvasScenePlacement>()
+const placedSceneChildren = new WeakSet<CanvasChild>()
+
+function useInitialViewportSize(viewportRef: RefObject<HTMLDivElement>) {
+  const [size, setSize] = useState<{ height: number; width: number }>()
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    setSize({
+      height: Math.max(1, Math.floor(viewport.clientHeight)),
+      width: Math.max(1, Math.floor(viewport.clientWidth)),
+    })
+  }, [viewportRef])
+
+  return size
+}
+
+function getScenePlacement(tools: StayTools) {
+  return scenePlacementByTools.get(tools) ?? { offsetX: 0, offsetY: 0 }
+}
+
+export function scenePoint(tools: StayTools, x: number, y: number) {
+  const { offsetX, offsetY } = getScenePlacement(tools)
+  return { x: x + offsetX, y: y + offsetY }
+}
+
+export function sceneArea(tools: StayTools, width: number, height: number) {
+  const { offsetX, offsetY } = getScenePlacement(tools)
+  return { x: offsetX, y: offsetY, width, height }
+}
+
+export function sceneCanvasArea(tools: StayTools, sceneWidth: number, sceneHeight: number) {
+  const { offsetX, offsetY } = getScenePlacement(tools)
+  return {
+    x: 0,
+    y: 0,
+    width: sceneWidth + offsetX * 2,
+    height: sceneHeight + offsetY * 2,
+  }
+}
+
+export function sceneLine(
+  tools: StayTools,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+) {
+  const start = scenePoint(tools, x1, y1)
+  const end = scenePoint(tools, x2, y2)
+  return { x1: start.x, y1: start.y, x2: end.x, y2: end.y }
+}
+
+export function placeSceneChild<T extends CanvasChild>(tools: StayTools, child: T): T {
+  if (placedSceneChildren.has(child)) return child
+  placedSceneChildren.add(child)
+  const { offsetX, offsetY } = getScenePlacement(tools)
+  if (offsetX === 0 && offsetY === 0) return child
+  child.moveInit()
+  child.move(offsetX, offsetY)
+  return child
+}
+
+export function resetScene(tools: StayTools) {
+  // reset() consumes the current move baseline; capture it after the latest pan.
+  tools.moveStart()
+  return tools.reset()
+}
+
+function mountPlacedScene(
+  tools: StayTools,
+  placement: CanvasScenePlacement,
+  mounted?: StayCanvasProps["mounted"],
+) {
+  scenePlacementByTools.set(tools, placement)
+  mounted?.(tools)
 }
 
 export function CanvasCard({
@@ -17,13 +122,36 @@ export function CanvasCard({
   children: ReactNode
   wide?: boolean
 }) {
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const viewportSize = useInitialViewportSize(viewportRef)
+  const canvas = isValidElement<StayCanvasProps>(children) && viewportSize
+    ? (() => {
+        const sceneWidth = children.props.width ?? 500
+        const sceneHeight = children.props.height ?? 500
+        const width = Math.max(sceneWidth, viewportSize.width)
+        const height = Math.max(sceneHeight, viewportSize.height)
+        const placement = {
+          offsetX: Math.max(0, (width - sceneWidth) / 2),
+          offsetY: Math.max(0, (height - sceneHeight) / 2),
+        }
+
+        return cloneElement(children, {
+          height,
+          mounted: (tools) => mountPlacedScene(tools, placement, children.props.mounted),
+          width,
+        })
+      })()
+    : isValidElement<StayCanvasProps>(children)
+      ? null
+      : children
+
   return (
     <section className={wide ? "canvas-card wide" : "canvas-card"}>
       <div className="canvas-card-heading">
         <h2>{title}</h2>
         {description && <p>{description}</p>}
       </div>
-      <div className="canvas-viewport">{children}</div>
+      <div className="canvas-viewport" ref={viewportRef}>{canvas}</div>
     </section>
   )
 }

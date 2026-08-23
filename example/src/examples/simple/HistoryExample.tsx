@@ -1,7 +1,7 @@
 import { useRef, useState } from "react"
 import { Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, EventLog, placeSceneChild, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 
 export default function HistoryExample() {
@@ -25,7 +25,7 @@ export default function HistoryExample() {
     const index = sequence.current++
     const name = text(`Item ${index + 1}`, `矩形 ${index + 1}`)
     const palette = [colors.blue, colors.green, colors.orange]
-    const child = tools.appendChild({
+    const child = placeSceneChild(tools, tools.appendChild({
       id: `history-item-${index + 1}`,
       className: "history-item",
       shape: [
@@ -45,7 +45,7 @@ export default function HistoryExample() {
           fillConfig: { color: colors.ink },
         }),
       ],
-    })
+    }))
     tools.log()
     sync(text(`${name} appended and logged`, `已添加并记录 ${name}`))
   }

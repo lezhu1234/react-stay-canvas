@@ -5,7 +5,10 @@ import { Circle, Line, Rectangle, StayText } from "react-stay-canvas"
 import {
   type DiagramDocument,
   type DiagramEngine,
+  DiagramClickEvent,
+  DiagramDragStartEvent,
   DiagramDoubleClickEvent,
+  DiagramSpaceStartMoveEvent,
   addDiagramNode,
   createDiagramListeners,
   navigateDiagramHistory,
@@ -70,14 +73,19 @@ async function doubleClick(target: HTMLCanvasElement, point: [number, number]) {
 }
 
 function key(target: HTMLCanvasElement, type: "keydown" | "keyup", value: string) {
-  target.dispatchEvent(new KeyboardEvent(type, { key: value, bubbles: true, cancelable: true }))
+  const event = new KeyboardEvent(type, { key: value, bubbles: true, cancelable: true })
+  target.dispatchEvent(event)
+  return event
 }
 
 function createDiagram() {
   const { stage, top } = createStage({ width: 900, height: 560, layers: 3 })
   const state = engine()
   seedDiagram(stage.tools, state, (en) => en)
+  stage.registerEvent(DiagramClickEvent)
   stage.registerEvent(DiagramDoubleClickEvent)
+  stage.registerEvent(DiagramDragStartEvent)
+  stage.registerEvent(DiagramSpaceStartMoveEvent)
   createDiagramListeners(state).forEach((listener) => stage.addEventListener(listener))
   return { stage, state, top }
 }
@@ -149,6 +157,23 @@ describe("integrated diagram example", () => {
     await doubleClick(top, [300, 250])
     expect(state.edit).toHaveBeenCalledWith("node-2")
 
+    const selectionBeforeSpaceDoubleClick = new Set(state.selected)
+    const edgeBeforeSpaceDoubleClick = state.selectedEdge
+    key(top, "keydown", " ")
+    await click(top, [300, 250])
+    top.dispatchEvent(md(300, 250)); await tick()
+    key(top, "keyup", " ")
+    top.dispatchEvent(mu(300, 250)); await tick()
+    await doubleClick(top, [300, 250])
+    expect(state.edit).toHaveBeenCalledTimes(1)
+    expect(state.selected).toEqual(selectionBeforeSpaceDoubleClick)
+    expect(state.selectedEdge).toBe(edgeBeforeSpaceDoubleClick)
+
+    await click(top, [300, 250])
+    await click(top, [300, 250])
+    await doubleClick(top, [300, 250])
+    expect(state.edit).toHaveBeenCalledTimes(2)
+
     const labelledEdge = stage.tools.getChildById("edge-3")!
     const edgeLabel = labelledEdge.shapeMap.get("7") as StayText
     const labelBound = edgeLabel.getBound()
@@ -180,12 +205,37 @@ describe("integrated diagram example", () => {
     expect(state.viewport.scale).toBeCloseTo(1.1)
     expect(state.viewport.x).toBeCloseTo(-45)
     expect(state.viewport.y).toBeCloseTo(-28)
+    const viewportBeforeControlDrag = { ...state.viewport }
     key(top, "keydown", "Control")
     await drag(top, [20, 20], [50, 60])
     key(top, "keyup", "Control")
+    expect(state.viewport).toEqual(viewportBeforeControlDrag)
+
+    const selectedBeforeSpaceClick = state.selectedEdge
+    key(top, "keydown", " ")
+    await click(top, [20, 20])
+    key(top, "keyup", " ")
+    expect(state.selectedEdge).toBe(selectedBeforeSpaceClick)
+    expect(state.viewport).toEqual(viewportBeforeControlDrag)
+
+    const spaceDown = key(top, "keydown", " ")
+    expect(spaceDown.defaultPrevented).toBe(true)
+    expect(top.style.cursor).toBe("grab")
+    await drag(top, [300, 250], [330, 290])
+    key(top, "keyup", " ")
+    expect(top.style.cursor).toBe("default")
     expect(state.viewport.scale).toBeCloseTo(1.1)
     expect(state.viewport.x).toBeCloseTo(-15)
     expect(state.viewport.y).toBeCloseTo(12)
+    expect(toDiagramDocument(stage.tools)).toEqual(documentBeforeViewportChange)
+
+    const settledViewport = { ...state.viewport }
+    key(top, "keydown", " ")
+    top.dispatchEvent(md(300, 250)); await tick()
+    top.dispatchEvent(mm(350, 300)); await tick()
+    expect(state.viewport).not.toEqual(settledViewport)
+    window.dispatchEvent(new Event("blur")); await tick()
+    expect(state.viewport).toEqual(settledViewport)
     expect(toDiagramDocument(stage.tools)).toEqual(documentBeforeViewportChange)
   })
 

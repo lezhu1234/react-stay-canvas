@@ -7,6 +7,7 @@ import {
   Line,
   type ListenerProps,
   MOUSE_EVENTS,
+  PredefinedEventList,
   Rectangle,
   type ShapeDrawProps,
   StayCanvas,
@@ -137,10 +138,69 @@ const nodeKind = (child: NodeChild): NodeKind => bodyOf(child).shapeStore.get(NO
 const edgeLabelOf = (child: EdgeChild) => child.shapeMap.get("7") as StayText
 const edgeHandleOf = (child: EdgeChild, end: "from" | "to") => child.shapeMap.get(end === "from" ? "5" : "6") as Circle
 
+const isSpacePressed = (pressedKeys: Set<string>) =>
+  pressedKeys.has(" ") || pressedKeys.has("Spacebar")
+
 export const DiagramDoubleClickEvent: EventProps<"dblclick"> = {
   name: "dblclick",
   trigger: MOUSE_EVENTS.DB_CLICK,
-  conditionCallback: () => true,
+  conditionCallback: ({ e, store }) =>
+    !isSpacePressed(e.pressedKeys) && !store.get("diagramSpaceActivation"),
+}
+
+const diagramSpaceMoveEndEvent: EventProps<string> = {
+  name: "moveend",
+  trigger: MOUSE_EVENTS.MOUSE_UP,
+  conditionCallback: ({ e, store }) => Boolean(
+    e.cancelled || store.get("diagramSpacePointer") || store.get("diagramSpaceMoving"),
+  ),
+  successCallback: ({ store, deleteEvent }) => {
+    store.set("diagramSpacePointer", false)
+    store.set("diagramSpaceMoving", false)
+    deleteEvent("move")
+    deleteEvent("moveend")
+  },
+}
+
+const diagramSpaceMoveEvent: EventProps<string> = {
+  name: "move",
+  trigger: MOUSE_EVENTS.MOUSE_MOVE,
+  conditionCallback: ({ e }) => isSpacePressed(e.pressedKeys) && e.pressedKeys.has("mouse0"),
+  successCallback: ({ store }) => {
+    store.set("diagramSpaceMoving", true)
+    return diagramSpaceMoveEndEvent
+  },
+}
+
+export const DiagramSpaceStartMoveEvent: EventProps<string> = {
+  name: "startmove",
+  trigger: MOUSE_EVENTS.MOUSE_DOWN,
+  conditionCallback: ({ e }) => isSpacePressed(e.pressedKeys) && e.pressedKeys.has("mouse0"),
+  successCallback: ({ store }) => {
+    store.set("diagramSpacePointer", true)
+    // Native dblclick arrives after mouseup, so retain the mode that owned its pointer sequence.
+    store.set("diagramSpaceActivation", true)
+    store.set("diagramSpaceMoving", false)
+    return [diagramSpaceMoveEvent, diagramSpaceMoveEndEvent]
+  },
+}
+
+export const DiagramDragStartEvent: typeof PredefinedEventList.DragStartEvent = {
+  ...PredefinedEventList.DragStartEvent,
+  conditionCallback: ({ e }) =>
+    e.pressedKeys.has("mouse0") &&
+    !e.pressedKeys.has("Control") &&
+    !isSpacePressed(e.pressedKeys),
+}
+
+export const DiagramClickEvent: typeof PredefinedEventList.ClickEvent = {
+  ...PredefinedEventList.ClickEvent,
+  conditionCallback: (props) =>
+    !props.store.get("diagramSpacePointer") &&
+    Boolean(PredefinedEventList.ClickEvent.conditionCallback?.(props)),
+  successCallback: ({ store }) => {
+    store.set("diagramSpaceActivation", false)
+  },
 }
 
 function nextDiagramId(tools: StayTools, engine: DiagramEngine, prefix: "node" | "edge") {
@@ -1328,6 +1388,12 @@ export function createDiagramListeners(engine: DiagramEngine): ListenerProps[] {
           tools.changeCursor("default")
           return
         }
+        if (isSpacePressed(e.pressedKeys)) {
+          engine.hovered = undefined
+          paintControls(tools, engine)
+          tools.changeCursor("grab")
+          return
+        }
         const node = hitNode(tools, e.point)
         const port = hitPort(tools, engine, e.point)
         const nextHovered = node?.id ?? port?.child.id
@@ -1360,10 +1426,11 @@ export function createDiagramListeners(engine: DiagramEngine): ListenerProps[] {
       name: "diagram-pan",
       selector: ".stay-canvas",
       event: ["startmove", "move", "moveend"],
-      callback: ({ e, composeStore, originEvent }) => ({
+      callback: ({ e, composeStore, originEvent, tools }) => ({
         startmove: () => {
           const pointer = originEvent as MouseEvent
           const viewport = engine.viewport ?? { scale: 1, x: 0, y: 0 }
+          tools.changeCursor("grabbing")
           return {
             startX: pointer.clientX,
             startY: pointer.clientY,
@@ -1384,6 +1451,7 @@ export function createDiagramListeners(engine: DiagramEngine): ListenerProps[] {
         moveend: () => {
           const viewport = engine.viewport ?? { scale: 1, x: 0, y: 0 }
           if (e.cancelled) engine.setViewport({ ...viewport, x: composeStore.originX, y: composeStore.originY })
+          tools.changeCursor(isSpacePressed(e.pressedKeys) ? "grab" : "default")
           return { startX: undefined }
         },
       }),
@@ -1402,6 +1470,15 @@ export function createDiagramListeners(engine: DiagramEngine): ListenerProps[] {
           x: current.x + e.point.x * (current.scale - nextScale),
           y: current.y + e.point.y * (current.scale - nextScale),
         })
+      },
+    },
+    {
+      name: "diagram-space-key",
+      event: ["keydown", "keyup"],
+      callback: ({ e, originEvent, tools }) => {
+        if (e.key !== " " && e.key !== "Spacebar") return
+        originEvent.preventDefault()
+        tools.changeCursor(e.name === "keydown" ? "grab" : "default")
       },
     },
     {
@@ -1629,14 +1706,19 @@ export default function DiagramExample() {
           <CanvasCard
             title={text("Workflow diagram editor", "流程图编辑器")}
             description={text(
-              "Drag shapes in, double-click labels, connect blue ports, and Ctrl-drag to pan.",
-              "拖入图形，双击编辑文字，拖动蓝色连接点连线，Ctrl 拖动画布。",
+              "Drag shapes in, double-click labels, connect blue ports, and hold Space to pan.",
+              "拖入图形，双击编辑文字，拖动蓝色连接点连线，按住空格拖动画布。",
             )}
             wide
           >
             <StayCanvas
               className="demo-canvas demo-canvas-grid diagram-canvas"
-              eventList={[DiagramDoubleClickEvent as EventProps<string>]}
+              eventList={[
+                DiagramClickEvent as EventProps<string>,
+                DiagramDoubleClickEvent as EventProps<string>,
+                DiagramDragStartEvent as EventProps<string>,
+                DiagramSpaceStartMoveEvent,
+              ]}
               height={SCENE_HEIGHT}
               layers={3}
               listenerList={listeners}

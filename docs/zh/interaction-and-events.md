@@ -275,7 +275,7 @@ function hasPointerTarget<EventName extends string>(
 
 键盘动作只在顶层 Canvas 获得焦点时产生。`focusOnInit` 默认开启，也可以调用 `StayCanvasRef.focus()` 主动聚焦。按键在 Canvas 外松开时，库会对账内部按键状态，但不会伪造一条 Canvas `keyup` 动作。
 
-当前预定义 `startmove`、`undo` 和 `redo` 使用 Control，不会自动把 macOS Command 当作 Control。macOS 的 Control + 主键还可能触发系统右键菜单。需要跨平台平移时，推荐像 Transform 示例一样覆盖为“空格 + 主键”；需要 macOS 快捷键时，应显式支持 `Meta`。
+当前预定义 `startmove`、`undo` 和 `redo` 使用 Control，不会自动把 macOS Command 当作 Control。`startmove` 条件仅为兼容旧行为而保留；macOS 把 Control + 主键保留给辅助点按/右键菜单，产品交互不得将它作为可用组合。跨平台平移必须像 Transform 示例一样覆盖为“空格 + 主键”；macOS 标准快捷键必须显式支持 `Meta`。
 
 如果 Wheel Listener 调用 `originEvent.preventDefault()`，请给 `StayCanvas` 设置 `passive={false}`。
 

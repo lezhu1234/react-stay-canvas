@@ -275,7 +275,7 @@ The default Event definitions provide these commonly used actions:
 
 Keyboard actions are emitted only while the top Canvas has focus. `focusOnInit` is enabled by default, and `StayCanvasRef.focus()` can restore focus. Releasing a key outside the Canvas reconciles internal pressed state but does not synthesize a Canvas `keyup` action.
 
-The predefined `startmove`, `undo`, and `redo` actions currently use Control and do not map macOS Command to Control. On macOS, Control-click may also open a context menu. For cross-platform panning, prefer a Space-plus-primary override like the Transform example. Add explicit `Meta` support for standard macOS shortcuts.
+The predefined `startmove`, `undo`, and `redo` actions currently use Control and do not map macOS Command to Control. The `startmove` condition remains for backward compatibility, but Control plus the primary button must not be exposed as a macOS product interaction because macOS reserves Control-click for secondary click. Cross-platform panning must override it with Space plus the primary button, as in the Transform example. Add explicit `Meta` support for standard macOS shortcuts.
 
 Set `passive={false}` on `StayCanvas` when a Wheel Listener needs to call `originEvent.preventDefault()`.
 

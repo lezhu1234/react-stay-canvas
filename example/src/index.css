@@ -1060,6 +1060,189 @@ input:focus-visible {
   accent-color: var(--accent);
 }
 
+.diagram-stage-shell {
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.diagram-workspace {
+  display: grid;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.diagram-palette {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.diagram-palette > strong,
+.diagram-document-controls > strong {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.diagram-palette > p {
+  margin: 2px 0 12px;
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.diagram-palette button {
+  display: grid;
+  min-height: 70px;
+  padding: 9px 4px 7px;
+  border: 0;
+  border-radius: 7px;
+  place-items: center;
+  gap: 6px;
+  color: var(--muted);
+  background: transparent;
+  cursor: grab;
+  font-size: 9px;
+  transition: color 150ms ease, background 150ms ease, transform 120ms ease;
+}
+
+.diagram-palette button:hover,
+.diagram-palette button:focus-visible {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.diagram-palette button:active {
+  cursor: grabbing;
+  transform: scale(0.97);
+}
+
+.diagram-palette-shape {
+  display: block;
+  width: 56px;
+  height: 30px;
+  border: 2px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.diagram-palette-shape.start,
+.diagram-palette-shape.end {
+  border-radius: 999px;
+}
+
+.diagram-palette-shape.decision {
+  width: 38px;
+  height: 38px;
+  transform: rotate(45deg) scale(0.72);
+}
+
+.diagram-canvas-area {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.diagram-canvas-area > .canvas-card {
+  height: 100%;
+}
+
+.diagram-canvas-area .canvas-viewport {
+  overflow: hidden;
+}
+
+.diagram-canvas {
+  transition: transform 80ms linear;
+  will-change: transform;
+}
+
+.diagram-floating-toolbar {
+  position: absolute;
+  z-index: 4;
+  top: 52px;
+  left: 12px;
+  display: flex;
+  min-height: 32px;
+  padding: 3px;
+  border: 1px solid rgba(86, 98, 116, 0.28);
+  border-radius: 8px;
+  gap: 2px;
+  align-items: center;
+  background: rgba(250, 250, 247, 0.94);
+  box-shadow: 0 5px 18px rgba(44, 54, 68, 0.14);
+  backdrop-filter: blur(8px);
+}
+
+.diagram-floating-toolbar button {
+  min-width: 27px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--ink);
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.diagram-floating-toolbar button:hover:not(:disabled),
+.diagram-floating-toolbar button:focus-visible {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.diagram-floating-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.32;
+}
+
+.diagram-floating-toolbar > span {
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--line);
+}
+
+.diagram-floating-toolbar output {
+  min-width: 34px;
+  color: var(--muted);
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+}
+
+.diagram-inline-editor {
+  position: absolute;
+  z-index: 6;
+  height: 34px;
+  padding: 0 9px;
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 6px 20px rgba(44, 54, 68, 0.18);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+}
+
+.diagram-document-controls {
+  display: grid;
+  gap: 8px;
+}
+
 .diagram-inspector {
   display: grid;
   gap: 9px;
@@ -1561,6 +1744,39 @@ input:focus-visible {
     height: 100%;
     min-height: 0;
     max-height: none;
+  }
+
+  .diagram-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 70px minmax(0, 1fr);
+  }
+
+  .diagram-palette {
+    padding: 6px 8px;
+    overflow-x: auto;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .diagram-palette > strong,
+  .diagram-palette > p {
+    display: none;
+  }
+
+  .diagram-palette button {
+    min-width: 82px;
+    min-height: 56px;
+    padding: 4px;
+  }
+
+  .diagram-palette-shape {
+    width: 42px;
+    height: 22px;
+  }
+
+  .diagram-palette-shape.decision {
+    width: 28px;
+    height: 28px;
   }
 
   .annotator-rail {

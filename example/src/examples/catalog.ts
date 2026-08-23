@@ -143,10 +143,10 @@ export const catalog: ExampleDefinition[] = [
     sourcePath: "./examples/integrated/DiagramExample.tsx",
     group: "Integrated",
     order: 12,
-    title: l("Connected diagram editor", "连线图编辑器"),
+    title: l("Classic workflow editor", "经典流程图编辑器"),
     shortTitle: l("Diagram", "图表"),
-    summary: l("A complete workflow editor with multi-select, box selection, port connections, resize handles, history, and JSON transfer.", "一个完整的流程图编辑器，支持多选、框选、端口连线、八向缩放、历史和 JSON 导入导出。"),
-    features: ["multi-shape Child", "ports + arrows", "multi-select", "history", "JSON"],
+    summary: l("A classic flowchart workspace with a shape palette, true flowchart nodes, inline labels, orthogonal reconnectable edges, pan and zoom.", "一个经典的流程图工作区，提供图形库、标准流程图节点、原位文字编辑、可重连正交连线以及画布缩放和平移。"),
+    features: ["shape palette", "orthogonal edges", "inline edit", "pan + zoom", "history + JSON"],
     component: DiagramExample,
   },
   {

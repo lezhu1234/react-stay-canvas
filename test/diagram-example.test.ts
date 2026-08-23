@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest"
-import { Line, Rectangle, StayText } from "react-stay-canvas"
+import { Circle, Line, Rectangle, StayText } from "react-stay-canvas"
 
 import {
   type DiagramDocument,
   type DiagramEngine,
+  DiagramDoubleClickEvent,
   addDiagramNode,
   createDiagramListeners,
   navigateDiagramHistory,
@@ -25,17 +26,31 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 const body = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("0") as Rectangle
 const label = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("1") as StayText
 const mainLine = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("0") as Line
+const edgeGeometry = (child: { shapeMap: Map<string, unknown> }) => ({
+  lines: [0, 1, 2, 3, 4].map((index) => {
+    const line = child.shapeMap.get(String(index)) as Line
+    return { x1: line.x1, y1: line.y1, x2: line.x2, y2: line.y2 }
+  }),
+  handles: [5, 6].map((index) => {
+    const handle = child.shapeMap.get(String(index)) as Circle
+    return { x: handle.x, y: handle.y, radius: handle.radius }
+  }),
+})
 
 function engine(): DiagramEngine {
-  return {
+  const state: DiagramEngine = {
     selected: new Set(),
     nodeSequence: 0,
     edgeSequence: 0,
     changed: vi.fn(),
+    edit: vi.fn(),
+    viewport: { scale: 1, x: 0, y: 0 },
+    setViewport: vi.fn((viewport) => { state.viewport = viewport }),
     say: vi.fn(),
     save: vi.fn(),
     import: vi.fn(),
   }
+  return state
 }
 
 async function drag(target: HTMLCanvasElement, from: [number, number], to: [number, number]) {
@@ -49,6 +64,11 @@ async function click(target: HTMLCanvasElement, point: [number, number]) {
   target.dispatchEvent(mu(...point)); await tick()
 }
 
+async function doubleClick(target: HTMLCanvasElement, point: [number, number]) {
+  target.dispatchEvent(new MouseEvent("dblclick", { clientX: point[0], clientY: point[1], bubbles: true }))
+  await tick()
+}
+
 function key(target: HTMLCanvasElement, type: "keydown" | "keyup", value: string) {
   target.dispatchEvent(new KeyboardEvent(type, { key: value, bubbles: true, cancelable: true }))
 }
@@ -57,6 +77,7 @@ function createDiagram() {
   const { stage, top } = createStage({ width: 900, height: 560, layers: 3 })
   const state = engine()
   seedDiagram(stage.tools, state, (en) => en)
+  stage.registerEvent(DiagramDoubleClickEvent)
   createDiagramListeners(state).forEach((listener) => stage.addEventListener(listener))
   return { stage, state, top }
 }
@@ -69,7 +90,8 @@ describe("integrated diagram example", () => {
     expect(nodes).toHaveLength(5)
     expect(edges).toHaveLength(5)
     expect(nodes[0].shapeMap).toHaveLength(15)
-    expect(edges[0].shapeMap).toHaveLength(3)
+    expect(edges[0].shapeMap).toHaveLength(8)
+    expect(nodes.map((node) => body(node).state)).toEqual(["start", "process", "decision", "end", "process"])
 
     await click(top, [300, 250])
     key(top, "keydown", "Control")
@@ -80,17 +102,17 @@ describe("integrated diagram example", () => {
     const connectingEdge = stage.tools.getChildById("edge-2")!
     const beforeEnd = mainLine(connectingEdge).endPoint.x
     await drag(top, [300, 250], [330, 280])
-    expect(body(stage.tools.getChildById("node-2")!).getBound()).toEqual({ x: 268, y: 244, width: 146, height: 92 })
-    expect(body(stage.tools.getChildById("node-3")!).getBound()).toEqual({ x: 490, y: 244, width: 146, height: 92 })
-    expect(mainLine(connectingEdge).endPoint.x).toBe(beforeEnd + 30)
+    expect(body(stage.tools.getChildById("node-2")!).getBound()).toEqual({ x: 278, y: 254, width: 146, height: 92 })
+    expect(body(stage.tools.getChildById("node-3")!).getBound()).toEqual({ x: 500, y: 254, width: 146, height: 92 })
+    expect(mainLine(connectingEdge).endPoint.x).toBe(beforeEnd + 40)
 
     navigateDiagramHistory(stage.tools, state, "undo")
     expect(body(stage.tools.getChildById("node-2")!).x).toBe(238)
     expect(body(stage.tools.getChildById("node-3")!).x).toBe(460)
     navigateDiagramHistory(stage.tools, state, "redo")
-    expect(body(stage.tools.getChildById("node-2")!).x).toBe(268)
-    expect(body(stage.tools.getChildById("node-3")!).x).toBe(490)
-    expect(mainLine(stage.tools.getChildById("edge-2")!).endPoint.x).toBe(beforeEnd + 30)
+    expect(body(stage.tools.getChildById("node-2")!).x).toBe(278)
+    expect(body(stage.tools.getChildById("node-3")!).x).toBe(500)
+    expect(mainLine(stage.tools.getChildById("edge-2")!).endPoint.x).toBe(beforeEnd + 40)
   })
 
   it("resizes with eight handles, connects from ports, and box-selects", async () => {
@@ -101,19 +123,70 @@ describe("integrated diagram example", () => {
     top.dispatchEvent(mm(178, 294)); await tick()
     expect(top.style.cursor).toBe("nwse-resize")
     await drag(top, [178, 294], [208, 324])
-    expect(body(stage.tools.getChildById("node-1")!).getBound()).toEqual({ x: 54, y: 226, width: 154, height: 98 })
+    expect(body(stage.tools.getChildById("node-1")!).getBound()).toEqual({ x: 54, y: 226, width: 146, height: 94 })
     expect(stage.tools.getChildById("node-1")?.shapeMap).toHaveLength(15)
 
-    await drag(top, [221, 275], [220, 120])
+    await drag(top, [213, 273], [220, 120])
     expect(stage.tools.getChildrenBySelector(".edge")).toHaveLength(5)
     expect(state.say).toHaveBeenCalledWith("Connection cancelled", "已取消连接")
-    await drag(top, [221, 275], [520, 250])
+    await drag(top, [213, 273], [520, 250])
     expect(stage.tools.getChildrenBySelector(".edge")).toHaveLength(6)
-    expect(stage.tools.getChildrenBySelector(".edge").at(-1)?.shapeMap).toHaveLength(3)
+    expect(stage.tools.getChildrenBySelector(".edge").at(-1)?.shapeMap).toHaveLength(8)
 
     await drag(top, [210, 170], [650, 330])
     expect(state.selected).toEqual(new Set(["node-2", "node-3"]))
     expect(stage.tools.getChildrenBySelector(".diagram-marquee")).toHaveLength(0)
+  })
+
+  it("uses classic palette, inline edit, edge selection, reconnect, zoom, and pan paths", async () => {
+    const { stage, state, top } = createDiagram()
+    const node2 = stage.tools.getChildById("node-2")!
+    const northPort = node2.shapeMap.get("2") as Circle
+    expect(northPort.strokeConfig.color.a).toBe(0)
+    top.dispatchEvent(mm(300, 250)); await tick()
+    expect(northPort.strokeConfig.color.a).toBe(1)
+
+    await doubleClick(top, [300, 250])
+    expect(state.edit).toHaveBeenCalledWith("node-2")
+
+    const labelledEdge = stage.tools.getChildById("edge-3")!
+    const edgeLabel = labelledEdge.shapeMap.get("7") as StayText
+    const labelBound = edgeLabel.getBound()
+    await doubleClick(top, [labelBound.x + labelBound.width / 2, labelBound.y + labelBound.height / 2])
+    expect(state.edit).toHaveBeenCalledWith("edge-3")
+
+    const mixedDirectionEdge = stage.tools.getChildById("edge-5")!
+    const routedLines = [0, 1, 2].map((index) => mixedDirectionEdge.shapeMap.get(String(index)) as Line)
+    expect(routedLines.every((line) => line.x1 === line.x2 || line.y1 === line.y2)).toBe(true)
+    expect(routedLines[2].x1).toBe(routedLines[2].x2)
+
+    await click(top, [205, 260])
+    expect(state.selectedEdge).toBe("edge-1")
+    expect((stage.tools.getChildById("edge-1")!.shapeMap.get("5") as Circle).strokeConfig.color.a).toBe(1)
+    await drag(top, [225, 260], [520, 250])
+    expect(toDiagramDocument(stage.tools).edges.find(({ id }) => id === "edge-1")?.to).toBe("node-3")
+
+    const transfer = { getData: (type: string) => type === "application/x-diagram-node-kind" ? "decision" : "" }
+    const drop = new MouseEvent("drop", { clientX: 650, clientY: 480, bubbles: true, cancelable: true })
+    Object.defineProperty(drop, "dataTransfer", { value: transfer })
+    top.dispatchEvent(drop); await tick()
+    const created = stage.tools.getChildrenBySelector(".node").at(-1)!
+    expect(body(created).state).toBe("decision")
+    expect(body(created).getBound()).toEqual({ x: 580, y: 440, width: 148, height: 96 })
+    const documentBeforeViewportChange = toDiagramDocument(stage.tools)
+
+    top.dispatchEvent(new WheelEvent("wheel", { clientX: 450, clientY: 280, deltaY: -100, bubbles: true, cancelable: true }))
+    await tick()
+    expect(state.viewport.scale).toBeCloseTo(1.1)
+    expect(state.viewport.x).toBeCloseTo(-45)
+    expect(state.viewport.y).toBeCloseTo(-28)
+    key(top, "keydown", "Control")
+    await drag(top, [20, 20], [50, 60])
+    key(top, "keyup", "Control")
+    expect(state.viewport.scale).toBeCloseTo(1.1)
+    expect(state.viewport.x).toBeCloseTo(-15)
+    expect(state.viewport.y).toBeCloseTo(12)
+    expect(toDiagramDocument(stage.tools)).toEqual(documentBeforeViewportChange)
   })
 
   it("round-trips graph metadata through import, undo, and redo without damaging invalid input", () => {
@@ -186,7 +259,7 @@ describe("integrated diagram example", () => {
         { id: "alpha", kind: "start", label: "Alpha", x: 100, y: 100, width: 142, height: 76 },
         { id: "beta", kind: "end", label: "Beta", x: 400, y: 100, width: 142, height: 76 },
       ],
-      edges: [{ id: "node-6", from: "alpha", fromPort: "e", to: "beta", toPort: "w" }],
+      edges: [{ id: "node-6", from: "alpha", fromPort: "e", to: "beta", toPort: "w", label: "" }],
     } satisfies DiagramDocument)
     expect(addDiagramNode(nodeStage.stage.tools, nodeStage.state).id).toBe("node-7")
 
@@ -216,6 +289,7 @@ describe("integrated diagram example", () => {
         fromPort: "e",
         to: "beta",
         toPort: "w",
+        label: "",
       }],
     } satisfies DiagramDocument)
     expect(addDiagramNode(unsafeStage.stage.tools, unsafeStage.state).id).toBe("node-6")
@@ -234,6 +308,27 @@ describe("integrated diagram example", () => {
 
     expect(body(stage.tools.getChildById("node-2")!).getBound()).toEqual(original)
     expect(state.selected).toEqual(new Set(["node-1"]))
+    expect(state.say).toHaveBeenCalledWith("Change cancelled", "已取消更改")
+  })
+
+  it("restores edge geometry, relation, and selection when reconnect fails or is cancelled", async () => {
+    const { stage, state, top } = createDiagram()
+    await click(top, [205, 260])
+    const original = toDiagramDocument(stage.tools)
+    const originalGeometry = edgeGeometry(stage.tools.getChildById("edge-1")!)
+
+    await drag(top, [225, 260], [400, 100])
+    expect(toDiagramDocument(stage.tools)).toEqual(original)
+    expect(edgeGeometry(stage.tools.getChildById("edge-1")!)).toEqual(originalGeometry)
+    expect(state.selectedEdge).toBe("edge-1")
+    expect(state.say).toHaveBeenCalledWith("Connection unchanged", "连线未更改")
+
+    top.dispatchEvent(md(225, 260)); await tick()
+    top.dispatchEvent(mm(520, 250)); await tick()
+    window.dispatchEvent(new Event("blur")); await tick()
+    expect(toDiagramDocument(stage.tools)).toEqual(original)
+    expect(edgeGeometry(stage.tools.getChildById("edge-1")!)).toEqual(originalGeometry)
+    expect(state.selectedEdge).toBe("edge-1")
     expect(state.say).toHaveBeenCalledWith("Change cancelled", "已取消更改")
   })
 

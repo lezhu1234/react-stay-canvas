@@ -4,7 +4,7 @@ import { type LocalizedText } from "../i18n"
 
 export interface ExampleDefinition {
   path: string
-  sourcePath: string
+  sourcePaths: readonly [string, ...string[]]
   group: "Simple" | "Integrated"
   order: number
   title: LocalizedText

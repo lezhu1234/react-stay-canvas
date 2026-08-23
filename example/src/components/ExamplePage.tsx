@@ -7,21 +7,35 @@ const SourceCode = lazy(() => import("./SourceCode"))
 
 type Tab = "result" | "source"
 
+export interface ExampleSourceFile {
+  path: string
+  source: string
+}
+
+const sourceFileName = (path: string) => {
+  const segments = path.split("/")
+  return segments[segments.length - 1] || path
+}
+
 export function ExamplePage({
   definition,
-  source,
+  sources,
 }: {
   definition: ExampleDefinition
-  source: string
+  sources: readonly ExampleSourceFile[]
 }) {
   const [tab, setTab] = useState<Tab>("result")
+  const [activeSourcePath, setActiveSourcePath] = useState(sources[0]?.path)
   const { localized, text } = useI18n()
   const Demo = definition.component
+  const activeSource = sources.find(({ path }) => path === activeSourcePath) ?? sources[0]
   const tabLabels: Record<Tab, string> = {
     result: text("Result", "效果"),
     source: text("Source", "源码"),
   }
-  const sourceLabel = text("TypeScript source code", "TypeScript 源码")
+  const sourceLabel = activeSource && sources.length > 1
+    ? text(`TypeScript source code: ${sourceFileName(activeSource.path)}`, `TypeScript 源码：${sourceFileName(activeSource.path)}`)
+    : text("TypeScript source code", "TypeScript 源码")
 
   return (
     <article className="example-page workspace-page">
@@ -56,14 +70,37 @@ export function ExamplePage({
         <Demo />
       </section>
 
-      <section aria-labelledby="source-tab" className="tab-panel source-panel" hidden={tab !== "source"} id="source-panel" role="tabpanel">
+      <section
+        aria-labelledby="source-tab"
+        className={`tab-panel source-panel${sources.length > 1 ? " source-panel-multiple" : ""}`}
+        hidden={tab !== "source"}
+        id="source-panel"
+        role="tabpanel"
+      >
         <div className="source-heading">
-          <p>{text("This is the exact component rendered by the live result.", "这里展示运行结果所使用的完整组件源码。")}</p>
-          <button onClick={() => navigator.clipboard?.writeText(source)}>{text("Copy source", "复制源码")}</button>
+          <p>{sources.length > 1
+            ? text("These are all source files used by the live result.", "这里展示运行结果使用的全部源码文件。")
+            : text("This is the exact component rendered by the live result.", "这里展示运行结果所使用的完整组件源码。")}</p>
+          <button disabled={!activeSource} onClick={() => activeSource && navigator.clipboard?.writeText(activeSource.source)}>{text("Copy source", "复制源码")}</button>
         </div>
-        {tab === "source" && (
-          <Suspense fallback={<pre aria-label={sourceLabel} className="source-code source-code-loading"><code>{source}</code></pre>}>
-            <SourceCode label={sourceLabel} source={source} />
+        {sources.length > 1 && (
+          <nav aria-label={text("Source files", "源码文件")} className="source-files">
+            {sources.map(({ path }) => (
+              <button
+                aria-pressed={path === activeSource?.path}
+                className={path === activeSource?.path ? "active" : ""}
+                key={path}
+                onClick={() => setActiveSourcePath(path)}
+                type="button"
+              >
+                {sourceFileName(path)}
+              </button>
+            ))}
+          </nav>
+        )}
+        {tab === "source" && activeSource && (
+          <Suspense fallback={<pre aria-label={sourceLabel} className="source-code source-code-loading"><code>{activeSource.source}</code></pre>}>
+            <SourceCode key={activeSource.path} label={sourceLabel} source={activeSource.source} />
           </Suspense>
         )}
       </section>

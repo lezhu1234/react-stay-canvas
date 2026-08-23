@@ -19,7 +19,7 @@ const l = (en: string, zh: string): LocalizedText => ({ en, zh })
 export const catalog: ExampleDefinition[] = [
   {
     path: "/simple/shapes",
-    sourcePath: "./examples/simple/ShapesExample.tsx",
+    sourcePaths: ["./examples/simple/ShapesExample.tsx"],
     group: "Simple",
     order: 1,
     title: l("Shapes and drawing styles", "图形与绘制样式"),
@@ -30,7 +30,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/simple/children",
-    sourcePath: "./examples/simple/ChildrenExample.tsx",
+    sourcePaths: ["./examples/simple/ChildrenExample.tsx"],
     group: "Simple",
     order: 2,
     title: l("Child lifecycle", "Child 生命周期"),
@@ -41,7 +41,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/simple/layers",
-    sourcePath: "./examples/simple/LayersExample.tsx",
+    sourcePaths: ["./examples/simple/LayersExample.tsx"],
     group: "Simple",
     order: 3,
     title: l("Layers and paint order", "图层与绘制顺序"),
@@ -52,7 +52,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/simple/events",
-    sourcePath: "./examples/simple/EventsExample.tsx",
+    sourcePaths: ["./examples/simple/EventsExample.tsx"],
     group: "Simple",
     order: 4,
     title: l("Events and listeners", "事件与监听器"),
@@ -63,7 +63,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/simple/selectors",
-    sourcePath: "./examples/simple/SelectorsExample.tsx",
+    sourcePaths: ["./examples/simple/SelectorsExample.tsx"],
     group: "Simple",
     order: 5,
     title: l("Selectors and hit testing", "选择器与命中测试"),
@@ -74,7 +74,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/simple/state",
-    sourcePath: "./examples/simple/StateExample.tsx",
+    sourcePaths: ["./examples/simple/StateExample.tsx"],
     group: "Simple",
     order: 6,
     title: l("State and stores", "状态与存储"),
@@ -85,7 +85,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/simple/history",
-    sourcePath: "./examples/simple/HistoryExample.tsx",
+    sourcePaths: ["./examples/simple/HistoryExample.tsx"],
     group: "Simple",
     order: 7,
     title: l("Undo and redo history", "撤销与重做历史"),
@@ -96,7 +96,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/simple/transform",
-    sourcePath: "./examples/simple/TransformExample.tsx",
+    sourcePaths: ["./examples/simple/TransformExample.tsx"],
     group: "Simple",
     order: 8,
     title: l("Pan and zoom transforms", "平移与缩放变换"),
@@ -107,7 +107,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/simple/timeline",
-    sourcePath: "./examples/simple/TimelineExample.tsx",
+    sourcePaths: ["./examples/simple/TimelineExample.tsx"],
     group: "Simple",
     order: 9,
     title: l("Keyframe timeline", "关键帧时间线"),
@@ -118,7 +118,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/simple/transfer",
-    sourcePath: "./examples/simple/TransferExample.tsx",
+    sourcePaths: ["./examples/simple/TransferExample.tsx"],
     group: "Simple",
     order: 10,
     title: l("Import, export, and capture", "导入、导出与截图"),
@@ -129,7 +129,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/integrations/annotator",
-    sourcePath: "./examples/integrated/AnnotatorExample.tsx",
+    sourcePaths: ["./examples/integrated/AnnotatorExample.tsx"],
     group: "Integrated",
     order: 11,
     title: l("Image annotation workspace", "图像标注工作区"),
@@ -140,7 +140,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/integrations/diagram",
-    sourcePath: "./examples/integrated/DiagramExample.tsx",
+    sourcePaths: ["./examples/integrated/DiagramExample.tsx"],
     group: "Integrated",
     order: 12,
     title: l("Classic workflow editor", "经典流程图编辑器"),
@@ -151,7 +151,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/integrations/motion-studio",
-    sourcePath: "./examples/integrated/MotionStudioExample.tsx",
+    sourcePaths: ["./examples/integrated/MotionStudioExample.tsx"],
     group: "Integrated",
     order: 13,
     title: l("Motion composition studio", "动效编排工作室"),

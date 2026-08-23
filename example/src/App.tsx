@@ -5,7 +5,10 @@ import { ExamplePage } from "./components/ExamplePage"
 import { catalog, getExampleByPath } from "./examples/catalog"
 import { type Locale, useI18n } from "./i18n"
 
-const sourceModules = import.meta.glob("./examples/**/*.tsx", {
+const sourceModules = import.meta.glob([
+  "./examples/simple/*.tsx",
+  "./examples/integrated/**/*.{ts,tsx}",
+], {
   query: "?raw",
   import: "default",
   eager: true,
@@ -158,7 +161,10 @@ export default function App() {
           <ErrorBoundary key={active.path}>
             <ExamplePage
               definition={active}
-              source={sourceModules[active.sourcePath] ?? text("Source unavailable.", "源码暂不可用。")}
+              sources={active.sourcePaths.map((path) => ({
+                path,
+                source: sourceModules[path] ?? text("Source unavailable.", "源码暂不可用。"),
+              }))}
             />
           </ErrorBoundary>
         ) : path === "/" ? (

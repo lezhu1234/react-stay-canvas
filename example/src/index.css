@@ -537,12 +537,14 @@ input:focus-visible {
 .demo-layout {
   display: grid;
   height: 100%;
+  min-width: 0;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr) 112px;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 248px;
+  gap: 8px;
 }
 
 .demo-primary {
+  min-width: 0;
   min-height: 0;
 }
 
@@ -552,21 +554,37 @@ input:focus-visible {
 
 .demo-controls {
   display: flex;
-  height: 112px;
   min-width: 0;
-  gap: 10px;
-  align-items: stretch;
-  overflow-x: auto;
-  overflow-y: hidden;
+  min-height: 0;
+  padding: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  flex-direction: column;
+  background: var(--surface);
   scrollbar-gutter: stable;
 }
 
-.demo-controls > * {
-  flex: 1 0 min(280px, 34vw);
-  height: 100%;
-  min-width: 220px;
-  min-height: 0;
-  overflow: auto;
+.demo-control-panel {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.demo-control-panel:first-child {
+  padding-top: 2px;
+}
+
+.demo-control-panel:last-child {
+  padding-bottom: 2px;
+  border-bottom: 0;
+}
+
+.demo-control-panel > * {
+  width: 100%;
+  min-width: 0;
 }
 
 .canvas-card {
@@ -574,7 +592,7 @@ input:focus-visible {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: 52px minmax(0, 1fr);
+  grid-template-rows: 44px minmax(0, 1fr);
 }
 
 .canvas-card-heading {
@@ -586,17 +604,17 @@ input:focus-visible {
 .canvas-card-heading h2 {
   margin: 0;
   overflow: hidden;
-  font-size: 16px;
+  font-size: 13px;
   letter-spacing: -0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .canvas-card-heading p {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 10px;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -632,12 +650,19 @@ input:focus-visible {
   align-items: center;
 }
 
-.demo-controls > .toolbar {
-  align-content: flex-start;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-strong);
+.demo-control-panel > .toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.demo-control-panel > .toolbar .control-button {
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: normal;
 }
 
 .control-button,
@@ -997,7 +1022,7 @@ input:focus-visible {
 }
 
 .demo-controls .status-grid {
-  grid-template-columns: repeat(4, minmax(96px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .demo-controls .status-grid div {
@@ -1005,8 +1030,17 @@ input:focus-visible {
 }
 
 .demo-controls .event-log {
-  height: 100%;
+  min-height: 84px;
+  max-height: 132px;
   padding: 8px 10px;
+}
+
+.demo-controls .query-control {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.demo-controls .query-control label {
+  margin-bottom: -4px;
 }
 
 .timeline-heading {
@@ -1102,7 +1136,7 @@ input:focus-visible {
 }
 
 .demo-controls .snapshot-preview {
-  max-height: 108px;
+  max-height: 180px;
 }
 
 .snapshot-preview img {
@@ -1323,6 +1357,10 @@ input:focus-visible {
     grid-template-columns: minmax(0, 1fr) 220px;
   }
 
+  .demo-layout {
+    grid-template-columns: minmax(0, 1fr) 220px;
+  }
+
   .annotator-help {
     display: none;
   }
@@ -1429,6 +1467,43 @@ input:focus-visible {
   .annotator-workspace {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) 92px;
+  }
+
+  .demo-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 92px;
+  }
+
+  .demo-controls {
+    gap: 8px;
+    padding: 7px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-direction: row;
+  }
+
+  .demo-control-panel {
+    flex: 0 0 180px;
+    height: 100%;
+    padding: 3px 8px;
+    overflow: auto;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+  }
+
+  .demo-control-panel:first-child {
+    padding-top: 3px;
+  }
+
+  .demo-control-panel:last-child {
+    padding-bottom: 3px;
+    border-right: 0;
+  }
+
+  .demo-controls .event-log {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
   }
 
   .annotator-rail {

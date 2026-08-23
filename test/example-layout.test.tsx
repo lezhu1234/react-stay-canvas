@@ -5,14 +5,22 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { Rectangle, StayCanvas, type StayTools } from "react-stay-canvas"
 
 import {
+  Button,
   CanvasCard,
+  DemoLayout,
+  EventLog,
   placeSceneChild,
   resetScene,
   sceneArea,
   sceneCanvasArea,
   sceneLine,
   scenePoint,
+  StatusGrid,
+  Toolbar,
 } from "../example/src/components/DemoKit"
+import { ExamplePage } from "../example/src/components/ExamplePage"
+import { type ExampleDefinition } from "../example/src/examples/types"
+import { I18nProvider } from "../example/src/i18n"
 
 let root: Root | undefined
 let originalClientHeight: PropertyDescriptor | undefined
@@ -20,6 +28,7 @@ let originalClientWidth: PropertyDescriptor | undefined
 
 beforeEach(() => {
   ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
+  window.localStorage.clear()
   window.requestAnimationFrame = () => 1
   window.cancelAnimationFrame = () => {}
   originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight")
@@ -47,6 +56,64 @@ afterEach(() => {
 })
 
 describe("Example Canvas workspace", () => {
+  it("uses the compact workspace shell for every example definition", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+    const definition: ExampleDefinition = {
+      path: "/simple/test",
+      sourcePath: "./TestExample.tsx",
+      group: "Simple",
+      order: 1,
+      title: { en: "Test workspace", zh: "测试工作区" },
+      shortTitle: { en: "Test", zh: "测试" },
+      summary: { en: "A test Canvas workspace.", zh: "测试 Canvas 工作区。" },
+      features: ["Canvas"],
+      component: () => <div data-testid="example-result" />,
+    }
+
+    act(() => {
+      root?.render(
+        <I18nProvider>
+          <ExamplePage definition={definition} source="export default function Test() {}" />
+        </I18nProvider>,
+      )
+    })
+
+    expect(container.querySelector("article.example-page.workspace-page")).not.toBeNull()
+    expect(container.querySelector("#result-panel [data-testid='example-result']")).not.toBeNull()
+  })
+
+  it("keeps the stage and every control group in separate workspace regions", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(
+        <I18nProvider>
+          <DemoLayout>
+            <div data-testid="stage" />
+            <Toolbar><Button onClick={() => {}}>Reset</Button></Toolbar>
+            <StatusGrid items={[["Children", 3]]} />
+            <EventLog entries={["ready"]} />
+          </DemoLayout>
+        </I18nProvider>,
+      )
+    })
+
+    const layout = container.querySelector(".demo-layout")
+    const primary = layout?.querySelector(":scope > .demo-primary")
+    const controls = layout?.querySelector(":scope > .demo-controls")
+    expect(primary?.querySelector("[data-testid='stage']")).not.toBeNull()
+    expect(controls?.tagName).toBe("ASIDE")
+    expect(controls?.getAttribute("aria-label")).toBe("Example controls")
+    expect(controls?.querySelectorAll(":scope > .demo-control-panel")).toHaveLength(3)
+    expect(controls?.querySelector(".toolbar")).not.toBeNull()
+    expect(controls?.querySelector(".status-grid")).not.toBeNull()
+    expect(controls?.querySelector(".event-log")).not.toBeNull()
+  })
+
   it("uses the full stable stage and keeps initial and later scene children aligned", async () => {
     let initialChild: ReturnType<StayTools["appendChild"]> | undefined
     let tools: StayTools | undefined

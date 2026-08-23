@@ -21,7 +21,7 @@ export function ExamplePage({
   }
 
   return (
-    <article className={definition.presentation === "workspace" ? "example-page workspace-page" : "example-page"}>
+    <article className="example-page workspace-page">
       <header className="example-header">
         <div>
           <p className="example-kind">{definition.group === "Simple" ? text("Simple example", "简单示例") : text("Integrated example", "集成示例")}</p>

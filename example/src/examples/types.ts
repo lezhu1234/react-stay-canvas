@@ -11,6 +11,5 @@ export interface ExampleDefinition {
   shortTitle: LocalizedText
   summary: LocalizedText
   features: string[]
-  presentation?: "workspace"
   component: ComponentType
 }

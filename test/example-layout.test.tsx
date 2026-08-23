@@ -20,6 +20,7 @@ import {
 } from "../example/src/components/DemoKit"
 import { ExamplePage } from "../example/src/components/ExamplePage"
 import DiagramExample from "../example/src/examples/integrated/DiagramExample"
+import MotionStudioExample from "../example/src/examples/integrated/MotionStudioExample"
 import { type ExampleDefinition } from "../example/src/examples/types"
 import { I18nProvider } from "../example/src/i18n"
 
@@ -134,6 +135,23 @@ describe("Example Canvas workspace", () => {
     const workspace = container.querySelector(".diagram-stage-shell.diagram-workspace")
     expect(workspace?.querySelector(":scope > .diagram-palette")).not.toBeNull()
     expect(workspace?.querySelector(":scope > .diagram-canvas-area .diagram-canvas")).not.toBeNull()
+  })
+
+  it("keeps Motion layers, Canvas, inspector, and timeline in one fixed workspace", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(<I18nProvider><MotionStudioExample /></I18nProvider>)
+    })
+
+    const workspace = container.querySelector(".motion-workspace")
+    expect(workspace?.querySelector(":scope > .motion-layers")).not.toBeNull()
+    expect(workspace?.querySelector(":scope > .motion-stage-area .motion-canvas")).not.toBeNull()
+    expect(workspace?.querySelector(":scope > .motion-inspector")).not.toBeNull()
+    expect(workspace?.querySelector(":scope > .motion-timeline")).not.toBeNull()
+    expect(workspace?.querySelectorAll(".motion-keyframe")).toHaveLength(9)
   })
 
   it("uses the full stable stage and keeps initial and later scene children aligned", async () => {

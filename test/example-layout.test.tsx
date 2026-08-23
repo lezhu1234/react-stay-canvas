@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React, { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { Rectangle, StayCanvas, type StayTools } from "react-stay-canvas"
 
 import {
@@ -19,8 +19,16 @@ import {
   Toolbar,
 } from "../example/src/components/DemoKit"
 import { ExamplePage } from "../example/src/components/ExamplePage"
+import DiagramExample from "../example/src/examples/integrated/DiagramExample"
 import { type ExampleDefinition } from "../example/src/examples/types"
 import { I18nProvider } from "../example/src/i18n"
+
+vi.stubGlobal("OffscreenCanvas", class {
+  constructor(public width: number, public height: number) {}
+  getContext() {
+    return { measureText: () => ({ width: 56, fontBoundingBoxAscent: 10, fontBoundingBoxDescent: 2 }) }
+  }
+})
 
 let root: Root | undefined
 let originalClientHeight: PropertyDescriptor | undefined
@@ -112,6 +120,20 @@ describe("Example Canvas workspace", () => {
     expect(controls?.querySelector(".toolbar")).not.toBeNull()
     expect(controls?.querySelector(".status-grid")).not.toBeNull()
     expect(controls?.querySelector(".event-log")).not.toBeNull()
+  })
+
+  it("keeps the diagram palette and Canvas in the same two-column primary workspace", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(<I18nProvider><DiagramExample /></I18nProvider>)
+    })
+
+    const workspace = container.querySelector(".diagram-stage-shell.diagram-workspace")
+    expect(workspace?.querySelector(":scope > .diagram-palette")).not.toBeNull()
+    expect(workspace?.querySelector(":scope > .diagram-canvas-area .diagram-canvas")).not.toBeNull()
   })
 
   it("uses the full stable stage and keeps initial and later scene children aligned", async () => {

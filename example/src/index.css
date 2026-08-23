@@ -456,8 +456,7 @@ input:focus-visible {
   margin-top: 20px;
 }
 
-.live-panel,
-.acceptance-panel {
+.live-panel {
   padding: clamp(18px, 3.5vw, 40px);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -767,164 +766,6 @@ input:focus-visible {
   white-space: pre;
 }
 
-.acceptance-panel {
-  display: grid;
-  gap: 28px;
-}
-
-.acceptance-summary {
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
-  align-items: flex-end;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--line);
-}
-
-.acceptance-summary p {
-  margin: 0 0 7px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.acceptance-summary h2 {
-  margin: 0;
-  font-size: clamp(22px, 3vw, 32px);
-  letter-spacing: -0.035em;
-}
-
-.acceptance-progress {
-  display: grid;
-  min-width: 124px;
-  padding-left: 18px;
-  border-left: 3px solid var(--line);
-}
-
-.acceptance-progress.complete {
-  border-color: var(--accent);
-}
-
-.acceptance-progress strong {
-  color: var(--accent-strong);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 20px;
-}
-
-.acceptance-progress span {
-  color: var(--muted);
-  font-size: 10px;
-}
-
-.acceptance-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-  gap: 30px 56px;
-}
-
-.acceptance-section {
-  align-content: start;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-}
-
-.acceptance-actions,
-.acceptance-results,
-.acceptance-cleanup {
-  grid-column: 1 / -1;
-}
-
-.acceptance-section h3 {
-  margin: 0 0 14px;
-  font-size: 14px;
-  letter-spacing: -0.015em;
-}
-
-.acceptance-actions h3 + ul {
-  margin-bottom: 30px;
-}
-
-.acceptance-section ol,
-.acceptance-section ul {
-  display: grid;
-  gap: 10px;
-  margin: 0;
-  padding-left: 22px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.acceptance-section li::marker {
-  color: var(--accent);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-weight: 700;
-}
-
-.acceptance-section code {
-  color: var(--ink);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.92em;
-}
-
-.acceptance-section-heading {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.acceptance-section-heading h3 {
-  margin: 0;
-}
-
-.acceptance-section-heading button {
-  border: 0;
-  color: var(--accent-strong);
-  background: transparent;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.acceptance-checks {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 24px;
-}
-
-.acceptance-check {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 11px;
-  align-items: start;
-  padding: 12px 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
-  cursor: pointer;
-}
-
-.acceptance-check input {
-  width: 17px;
-  height: 17px;
-  margin: 1px 0 0;
-  accent-color: var(--accent);
-}
-
-.acceptance-check:has(input:checked) span {
-  color: var(--ink);
-}
-
-.acceptance-cleanup p {
-  max-width: 76ch;
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
 .not-found,
 .error-boundary {
   padding: 48px;
@@ -1030,8 +871,7 @@ input:focus-visible {
   .catalog-grid,
   .catalog-grid-featured,
   .dual-canvas,
-  .pointer-session-demo,
-  .acceptance-panel {
+  .pointer-session-demo {
     grid-template-columns: 1fr;
   }
 
@@ -1060,18 +900,8 @@ input:focus-visible {
     padding-inline: 12px;
   }
 
-  .live-panel,
-  .acceptance-panel {
+  .live-panel {
     padding: 16px;
-  }
-
-  .acceptance-summary {
-    align-items: flex-start;
-  }
-
-  .acceptance-grid,
-  .acceptance-checks {
-    grid-template-columns: 1fr;
   }
 
   .status-grid {

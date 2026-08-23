@@ -10,7 +10,7 @@
 
 ## 指针在 Canvas 外释放后，输入状态可能无法结束
 
-状态：已在 Pointer Session 中修复；自动化测试已覆盖，仍需按示例验收手册做浏览器手工回归
+状态：已在 Pointer Session 中修复；自动化测试已覆盖
 
 ### 原问题
 
@@ -26,9 +26,9 @@
 - 卸载和重新创建后不残留全局 listener 或 Pointer Capture；
 - 现有 `dragstart/drag/dragend`、`startmove/move/moveend` 名称保持兼容。
 
-### 验收
+### 示例效果
 
-Transform 示例提供 Canvas 外释放区域和可见会话状态。必须验证外部释放后只增加一次 End count，主键状态变为 Released，指针移回但不再次按下时场景不再移动；同时覆盖取消、失焦、多 Canvas 和销毁的自动化测试。
+Transform 示例展示 Canvas 外释放区域和可见会话状态：外部释放后只增加一次 End count，主键状态变为 Released，指针移回但不再次按下时场景不再移动。取消、失焦、多 Canvas 和销毁由自动化测试覆盖。
 
 ## `layers` 函数数组与实际 Canvas 数量不一致
 

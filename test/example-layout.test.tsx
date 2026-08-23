@@ -70,7 +70,7 @@ describe("Example Canvas workspace", () => {
     root = createRoot(container)
     const definition: ExampleDefinition = {
       path: "/simple/test",
-      sourcePath: "./TestExample.tsx",
+      sourcePaths: ["./TestExample.tsx"],
       group: "Simple",
       order: 1,
       title: { en: "Test workspace", zh: "测试工作区" },
@@ -83,7 +83,7 @@ describe("Example Canvas workspace", () => {
     act(() => {
       root?.render(
         <I18nProvider>
-          <ExamplePage definition={definition} source="export default function Test() {}" />
+          <ExamplePage definition={definition} sources={[{ path: definition.sourcePaths[0], source: "export default function Test() {}" }]} />
         </I18nProvider>,
       )
     })

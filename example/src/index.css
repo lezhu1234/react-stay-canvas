@@ -1394,6 +1394,10 @@ input:focus-visible {
   background: var(--code);
 }
 
+.source-panel-multiple {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
 .example-active .source-panel:not([hidden]) {
   display: grid;
 }
@@ -1418,6 +1422,39 @@ input:focus-visible {
   padding: 0 10px;
   color: #dce5fb;
   background: #26324d;
+}
+
+.source-files {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px 0;
+  overflow-x: auto;
+  border-bottom: 1px solid #303742;
+  background: #171b22;
+}
+
+.source-files button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 7px 7px 0 0;
+  color: #8792a2;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.source-files button:hover,
+.source-files button.active {
+  color: #dce5fb;
+  background: #242b36;
+}
+
+.source-files button.active {
+  border-color: #303742;
 }
 
 .source-code {

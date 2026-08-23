@@ -197,6 +197,11 @@ describe("integrated diagram example", () => {
     expect(document.edges).toHaveLength(5)
     expect(document.nodes[0]).toMatchObject({ id: "node-1", kind: "start", label: "Brief", x: 54, y: 226 })
 
+    const legacyDocument = structuredClone(document)
+    delete legacyDocument.edges[0].label
+    replaceDiagramFromDocument(stage.tools, state, legacyDocument)
+    expect(toDiagramDocument(stage.tools)).toEqual(document)
+
     const imported: DiagramDocument = structuredClone(document)
     imported.nodes[1].label = "Prototype"
     imported.nodes[1].kind = "decision"

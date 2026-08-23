@@ -21,12 +21,9 @@ export class StayAnimatedChild<
   shapeFramesMap: Map<string, T[]>
   totalDurationMs: number
 
-  private intermidateShapeCache = new Map<
-    string,
-    {
-      shape: T
-      hit: number
-    }
+  private intermidateShapeCache = new WeakMap<
+    T[],
+    Map<string, { shape: T; hit: number }>
   >()
   private intermidateShapeCacheSize = 10
 
@@ -69,22 +66,24 @@ export class StayAnimatedChild<
     const transitionType = transition?.type ?? "linear"
 
     const key = `${bound.beforeIndex}-${bound.afterIndex}-${ratio}-${transitionType}`
+    const sliceCache = this.intermidateShapeCache.get(slice) ?? new Map()
+    this.intermidateShapeCache.set(slice, sliceCache)
 
-    const cachedShape = this.intermidateShapeCache.get(key)
+    const cachedShape = sliceCache.get(key)
     if (cachedShape) {
       cachedShape.hit++
       return cachedShape.shape
     }
-    if (this.intermidateShapeCache.size > this.intermidateShapeCacheSize) {
+    if (sliceCache.size > this.intermidateShapeCacheSize) {
       let minCacheHit = Infinity,
         minCacheHitKey = ""
-      this.intermidateShapeCache.forEach((value, key) => {
+      sliceCache.forEach((value, key) => {
         if (value.hit < minCacheHit) {
           minCacheHit = value.hit
           minCacheHitKey = key
         }
       })
-      this.intermidateShapeCache.delete(minCacheHitKey)
+      sliceCache.delete(minCacheHitKey)
     }
 
     const intermediateShape = afterShape.intermediateState(
@@ -93,7 +92,7 @@ export class StayAnimatedChild<
       ratio,
       transitionType
     ) as T
-    this.intermidateShapeCache.set(key, { shape: intermediateShape, hit: 1 })
+    sliceCache.set(key, { shape: intermediateShape, hit: 1 })
     return intermediateShape
   }
 

@@ -9,7 +9,7 @@ import {
   StayTools,
 } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, placeSceneChild, ResetButton, scenePoint, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 
 function makeSampleImage() {
@@ -45,7 +45,7 @@ export default function ShapesExample() {
       font: { size: 12, fontWeight: 700 },
       fillConfig: { color: colors.ink },
     })
-    rectangleRef.current = tools.appendChild({
+    rectangleRef.current = placeSceneChild(tools, tools.appendChild({
       id: "shape-rectangle",
       className: "shape",
       shape: [
@@ -59,8 +59,8 @@ export default function ShapesExample() {
         }),
         rectangleLabelRef.current,
       ],
-    })
-    tools.appendChild({
+    }))
+    placeSceneChild(tools, tools.appendChild({
       className: "shape",
       shape: [
         new Circle({
@@ -72,8 +72,8 @@ export default function ShapesExample() {
         }),
         new StayText({ x: 220, y: 118, text: "Circle", font: { size: 12, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
       ],
-    })
-    tools.appendChild({
+    }))
+    placeSceneChild(tools, tools.appendChild({
       className: "shape",
       shape: [
         new Line({
@@ -85,8 +85,8 @@ export default function ShapesExample() {
         }),
         new StayText({ x: 347, y: 118, text: "Line", font: { size: 12, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
       ],
-    })
-    tools.appendChild({
+    }))
+    placeSceneChild(tools, tools.appendChild({
       className: "label",
       shape: new StayText({
         x: 220,
@@ -95,11 +95,11 @@ export default function ShapesExample() {
         font: { size: 18, fontWeight: 650 },
         fillConfig: { color: colors.ink },
       }),
-    })
+    }))
 
     const image = new Image()
     image.onload = () => {
-      tools.appendChild({
+      const imageChild = tools.appendChild({
         className: "image",
         shape: new StayImage({
           image,
@@ -111,20 +111,25 @@ export default function ShapesExample() {
           strokeConfig: { color: colors.ink, lineWidth: 1 },
         }),
       })
+      placeSceneChild(tools, imageChild)
     }
     image.src = makeSampleImage()
   }
 
   const changeRectangle = () => {
+    const tools = toolsRef.current
     const rectangle = rectangleRef.current?.shape as Rectangle | undefined
-    if (!rectangle) return
+    if (!tools || !rectangle) return
+    const expanding = rectangle.width === 112
+    const rectanglePosition = scenePoint(tools, expanding ? 54 : 28, 32)
+    const labelPosition = scenePoint(tools, expanding ? 129 : 84, 118)
     rectangle.update({
-      x: rectangle.x === 28 ? 54 : 28,
-      width: rectangle.width === 112 ? 150 : 112,
-      fillConfig: { color: rectangle.width === 112 ? colors.orangeSoft : colors.blueSoft },
+      x: rectanglePosition.x,
+      width: expanding ? 150 : 112,
+      fillConfig: { color: expanding ? colors.orangeSoft : colors.blueSoft },
     })
-    rectangleLabelRef.current?.update({ x: rectangle.width === 150 ? 129 : 84 })
-    setVariant(rectangle.width === 150 ? text("Updated geometry", "已修改") : text("Default geometry", "默认状态"))
+    rectangleLabelRef.current?.update({ x: labelPosition.x })
+    setVariant(expanding ? text("Updated geometry", "已修改") : text("Default geometry", "默认状态"))
   }
 
   const forceRefresh = () => {

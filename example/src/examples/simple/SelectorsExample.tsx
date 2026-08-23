@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react"
 import { ListenerProps, Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, placeSceneChild, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition } from "../actionEventGuards"
 
@@ -82,7 +82,7 @@ export default function SelectorsExample() {
         strokeConfig: { color: { ...colors.blue, a: 0 }, lineWidth: 4 },
       })
       visuals.current.set(box.id, { box: rectangle, hitOutline })
-      tools.appendChild({
+      placeSceneChild(tools, tools.appendChild({
         id: box.id,
         className: box.className,
         shape: [
@@ -97,7 +97,7 @@ export default function SelectorsExample() {
           }),
           hitOutline,
         ],
-      })
+      }))
     })
     requestAnimationFrame(() => runQuery(".box"))
   }

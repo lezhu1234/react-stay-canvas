@@ -530,7 +530,7 @@ input:focus-visible {
 }
 
 .example-active .live-panel {
-  padding: 12px;
+  padding: 10px;
   overflow: hidden;
 }
 
@@ -538,7 +538,7 @@ input:focus-visible {
   display: grid;
   height: 100%;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) 112px;
   gap: 10px;
 }
 
@@ -551,56 +551,71 @@ input:focus-visible {
 }
 
 .demo-controls {
-  display: grid;
+  display: flex;
+  height: 112px;
   min-width: 0;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
+}
+
+.demo-controls > * {
+  flex: 1 0 min(280px, 34vw);
+  height: 100%;
+  min-width: 220px;
+  min-height: 0;
+  overflow: auto;
 }
 
 .canvas-card {
-  display: flex;
+  display: grid;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  flex-direction: column;
+  grid-template-rows: 52px minmax(0, 1fr);
 }
 
 .canvas-card-heading {
-  flex: 0 0 auto;
-  margin-bottom: 8px;
+  min-width: 0;
+  padding: 0 2px 8px;
+  overflow: hidden;
 }
 
 .canvas-card-heading h2 {
   margin: 0;
+  overflow: hidden;
   font-size: 16px;
   letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .canvas-card-heading p {
-  max-width: 72ch;
-  margin: 6px 0 0;
+  margin: 4px 0 0;
+  overflow: hidden;
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .canvas-viewport {
   width: 100%;
   min-width: 0;
   min-height: 0;
-  flex: 1 1 auto;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: auto;
   scrollbar-gutter: stable;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--surface-inset);
+  background: #f6f7f2;
   box-shadow: inset 0 1px 3px var(--shadow);
 }
 
 .demo-canvas {
+  display: block;
   background: #f6f7f2;
 }
 
@@ -615,6 +630,14 @@ input:focus-visible {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.demo-controls > .toolbar {
+  align-content: flex-start;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-strong);
 }
 
 .control-button,
@@ -739,6 +762,10 @@ input:focus-visible {
   padding: 9px 11px;
 }
 
+.demo-controls .status-grid {
+  grid-template-columns: repeat(4, minmax(96px, 1fr));
+}
+
 .demo-controls .status-grid div {
   padding: 7px 8px;
 }
@@ -779,9 +806,9 @@ input:focus-visible {
 
 .pointer-session-demo {
   display: grid;
-  grid-template-columns: minmax(0, 440px) minmax(190px, 1fr);
+  grid-template-columns: minmax(0, 1fr) 210px;
   gap: 16px;
-  align-items: end;
+  align-items: stretch;
 }
 
 .outside-release-zone {
@@ -804,6 +831,7 @@ input:focus-visible {
 }
 
 .demo-primary .outside-release-zone {
+  height: 100%;
   min-height: 0;
 }
 
@@ -977,11 +1005,6 @@ input:focus-visible {
     gap: 0;
   }
 
-  .example-active .demo-controls {
-    grid-auto-columns: minmax(220px, 1fr);
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
 }
 
 @media (max-width: 900px) {
@@ -1049,12 +1072,6 @@ input:focus-visible {
     gap: 0;
   }
 
-  .demo-controls {
-    grid-auto-columns: minmax(220px, 1fr);
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-
   .example-header {
     grid-template-columns: 1fr;
     gap: 24px;
@@ -1096,9 +1113,13 @@ input:focus-visible {
 
   .catalog-grid,
   .catalog-grid-featured,
-  .dual-canvas,
-  .pointer-session-demo {
+  .dual-canvas {
     grid-template-columns: 1fr;
+  }
+
+  .pointer-session-demo {
+    grid-template-columns: minmax(0, 1fr) 132px;
+    gap: 10px;
   }
 
   .outside-release-zone {

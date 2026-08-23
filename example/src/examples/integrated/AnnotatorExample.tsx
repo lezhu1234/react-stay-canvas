@@ -8,7 +8,7 @@ import {
   StayTools,
 } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, EventLog, placeSceneChild, ResetButton, resetScene, sceneCanvasArea, scenePoint, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition, hasPointerTarget } from "../actionEventGuards"
 
@@ -184,16 +184,17 @@ export default function AnnotatorExample() {
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
     tools.switchState("draw")
-    tools.appendChild({
+    placeSceneChild(tools, tools.appendChild({
       className: "background-matte",
       shape: new Rectangle({ x: 0, y: 0, width: 720, height: 420, layer: 0, fillConfig: { color: colors.paper } }),
-    })
+    }))
     const image = new Image()
     image.onload = () => {
-      tools.appendChild({
+      const background = tools.appendChild({
         className: "background-image",
         shape: new StayImage({ image, x: 0, y: 0, width: 720, height: 420, opacity: 1, layer: 0 }),
       })
+      placeSceneChild(tools, background)
       tools.log()
       push(text("background ready", "背景已就绪"))
     }
@@ -223,9 +224,10 @@ export default function AnnotatorExample() {
   const capture = async () => {
     const tools = toolsRef.current
     if (!tools) return
+    const canvasArea = sceneCanvasArea(tools, 720, 420)
     const canvas = await tools.regionToTargetCanvas({
-      area: { x: 0, y: 0, width: 720, height: 420 },
-      targetSize: { width: 720, height: 420 },
+      area: canvasArea,
+      targetSize: { width: canvasArea.width, height: canvasArea.height },
       children: tools.getChildrenWithoutRoot(),
     })
     setSnapshot(canvas.toDataURL("image/png"))
@@ -252,8 +254,18 @@ export default function AnnotatorExample() {
         <Button disabled={!selectedRef.current} onClick={removeSelected}>{text("Delete selected", "删除所选")}</Button>
         <Button onClick={() => navigateHistory("undo")}>{text("Undo", "撤销")}</Button>
         <Button onClick={() => navigateHistory("redo")}>{text("Redo", "重做")}</Button>
-        <Button onClick={() => { void toolsRef.current?.zoom(-100, { x: 360, y: 210 }); push(text("zoom in", "放大")) }}>{text("Zoom in", "放大")}</Button>
-        <Button onClick={() => { void toolsRef.current?.reset(); push(text("transform reset", "变换已重置")) }}>{text("Reset view", "重置视图")}</Button>
+        <Button onClick={() => {
+          const tools = toolsRef.current
+          if (!tools) return
+          void tools.zoom(-100, scenePoint(tools, 360, 210))
+          push(text("zoom in", "放大"))
+        }}>{text("Zoom in", "放大")}</Button>
+        <Button onClick={() => {
+          const tools = toolsRef.current
+          if (!tools) return
+          void resetScene(tools)
+          push(text("transform reset", "变换已重置"))
+        }}>{text("Reset view", "重置视图")}</Button>
         <Button onClick={capture}>{text("Export image", "导出图像")}</Button>
         <ResetButton />
       </Toolbar>

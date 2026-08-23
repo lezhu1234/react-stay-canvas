@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react"
 import { Circle, ListenerProps, Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, EventLog, placeSceneChild, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition } from "../actionEventGuards"
 
@@ -107,10 +107,10 @@ export default function StateExample() {
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
     tools.switchState("draw")
-    tools.appendChild({
+    placeSceneChild(tools, tools.appendChild({
       className: "guide",
       shape: new Rectangle({ x: 18, y: 18, width: 404, height: 224, strokeConfig: { color: colors.gray, lineWidth: 1, dash: [5, 6] } }),
-    })
+    }))
   }
 
   const switchMode = (next: Mode) => {

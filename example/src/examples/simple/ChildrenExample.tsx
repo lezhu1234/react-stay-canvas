@@ -1,7 +1,7 @@
 import { useRef, useState } from "react"
 import { Circle, Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, placeSceneChild, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 
 export default function ChildrenExample() {
@@ -18,7 +18,7 @@ export default function ChildrenExample() {
 
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
-    groupRef.current = tools.appendChild({
+    groupRef.current = placeSceneChild(tools, tools.appendChild({
       id: "multi-shape-child",
       className: "group",
       shape: [
@@ -38,7 +38,7 @@ export default function ChildrenExample() {
           fillConfig: { color: colors.ink },
         }),
       ],
-    })
+    }))
     requestAnimationFrame(updateCount)
   }
 
@@ -48,7 +48,7 @@ export default function ChildrenExample() {
     const index = createdIds.current.length
     const sequence = ++sequenceRef.current
     const name = text(`Child ${sequence}`, `Child ${sequence}`)
-    const child = tools.appendChild({
+    const child = placeSceneChild(tools, tools.appendChild({
       className: "badge",
       shape: [
         new Circle({
@@ -65,7 +65,7 @@ export default function ChildrenExample() {
           fillConfig: { color: colors.paper },
         }),
       ],
-    })
+    }))
     createdIds.current.push(child.id)
     childNamesRef.current.set(child.id, name)
     setLastAction(text(`${name} appended`, `已添加 ${name}`))

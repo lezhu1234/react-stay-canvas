@@ -8,7 +8,7 @@ import {
   StayTools,
 } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, EventLog, placeSceneChild, ResetButton, resetScene, sceneArea, scenePoint, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition, hasPointerTarget } from "../actionEventGuards"
 
@@ -98,7 +98,7 @@ export default function DiagramExample() {
       zIndex: 4,
       strokeConfig: { color: { ...colors.blue, a: 0 }, lineWidth: 4, dash: [] },
     })
-    const child = tools.appendChild({
+    const child = placeSceneChild(tools, tools.appendChild({
       id,
       className: "node",
       shape: [
@@ -123,7 +123,7 @@ export default function DiagramExample() {
         }),
         outline,
       ],
-    })
+    }))
     nodesRef.current.set(id, child)
     nodeOutlinesRef.current.set(id, outline)
     nodeLabelsRef.current.set(id, label)
@@ -238,7 +238,7 @@ export default function DiagramExample() {
     const tools = toolsRef.current
     if (!tools) return
     savedGraphRef.current = {
-      scene: tools.exportChildren({ children: tools.getChildrenWithoutRoot(), area: { x: 0, y: 0, width: 720, height: 420 } }),
+      scene: tools.exportChildren({ children: tools.getChildrenWithoutRoot(), area: sceneArea(tools, 720, 420) }),
       edges: edgesRef.current.map(({ childId, from, to }) => ({ childId, from, to })),
     }
     push(text("scene saved in memory", "场景已保存到内存"))
@@ -251,7 +251,8 @@ export default function DiagramExample() {
     const existingIds = new Set(tools.getChildrenWithoutRoot().map((child) => child.id))
     const copyNumber = ++copySequenceRef.current
     const importedScene = saved.scene
-    tools.importChildren(importedScene, { x: 26, y: 26, width: 720, height: 420 })
+    const targetScene = sceneArea(tools, 720, 420)
+    tools.importChildren(importedScene, { ...targetScene, x: targetScene.x + 26, y: targetScene.y + 26 })
     const imported = tools.getChildrenWithoutRoot().filter((child) => !existingIds.has(child.id))
     const importedByOriginalId = new Map<string, Child>()
     importedScene.children.forEach((child, index) => {
@@ -296,8 +297,18 @@ export default function DiagramExample() {
         <Button active={mode === "select"} onClick={() => switchMode("select")}>{text("Select", "选择")}</Button>
         <Button active={mode === "connect"} onClick={() => switchMode("connect")}>{text("Connect", "连接")}</Button>
         <Button onClick={() => { const node = addNode(); if (node) { toolsRef.current?.log(); push(text(`added ${nodeLabel(node.id)}`, `已添加 ${nodeLabel(node.id)}`)) } }}>{text("Add node", "添加节点")}</Button>
-        <Button onClick={() => { void toolsRef.current?.zoom(-100, { x: 360, y: 210 }); push(text("zoom in", "放大")) }}>{text("Zoom in", "放大")}</Button>
-        <Button onClick={() => { void toolsRef.current?.reset(); push(text("view reset", "视图已重置")) }}>{text("Reset view", "重置视图")}</Button>
+        <Button onClick={() => {
+          const tools = toolsRef.current
+          if (!tools) return
+          void tools.zoom(-100, scenePoint(tools, 360, 210))
+          push(text("zoom in", "放大"))
+        }}>{text("Zoom in", "放大")}</Button>
+        <Button onClick={() => {
+          const tools = toolsRef.current
+          if (!tools) return
+          void resetScene(tools)
+          push(text("view reset", "视图已重置"))
+        }}>{text("Reset view", "重置视图")}</Button>
         <Button onClick={save}>{text("Save scene", "保存场景")}</Button>
         <Button disabled={!savedGraphRef.current} onClick={restoreCopy}>{text("Import copy", "导入副本")}</Button>
         <ResetButton />

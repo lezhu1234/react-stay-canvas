@@ -16,11 +16,18 @@ import { useI18n } from "../i18n"
 
 export function DemoLayout({ children }: { children: ReactNode }) {
   const [primary, ...controls] = Children.toArray(children)
+  const { text } = useI18n()
 
   return (
     <div className="demo-layout">
       <div className="demo-primary">{primary}</div>
-      {controls.length > 0 && <div className="demo-controls">{controls}</div>}
+      {controls.length > 0 && (
+        <aside className="demo-controls" aria-label={text("Example controls", "示例控制区")}>
+          {controls.map((control, index) => (
+            <div className="demo-control-panel" key={index}>{control}</div>
+          ))}
+        </aside>
+      )}
     </div>
   )
 }

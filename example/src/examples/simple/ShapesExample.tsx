@@ -142,7 +142,7 @@ export default function ShapesExample() {
         <Button onClick={forceRefresh}>{text("Force refresh", "强制刷新")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[[text("Variant", "当前状态"), variant], [text("Refreshes", "刷新次数"), refreshCount], ["Canvas", "440 × 330"], [text("Layers", "图层"), "2"]]} />
+      <StatusGrid items={[[text("Variant", "当前状态"), variant], [text("Refreshes", "刷新次数"), refreshCount], ["Canvas", text("Responsive", "自适应")], [text("Layers", "图层"), "2"]]} />
     </DemoLayout>
   )
 }

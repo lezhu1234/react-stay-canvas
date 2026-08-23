@@ -1,9 +1,40 @@
-import { ReactNode, useEffect, useRef, useState } from "react"
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react"
+
+import { type StayCanvasProps } from "react-stay-canvas"
 
 import { useI18n } from "../i18n"
 
 export function DemoLayout({ children }: { children: ReactNode }) {
-  return <div className="demo-layout">{children}</div>
+  const [primary, ...controls] = Children.toArray(children)
+
+  return (
+    <div className="demo-layout">
+      <div className="demo-primary">{primary}</div>
+      {controls.length > 0 && <div className="demo-controls">{controls}</div>}
+    </div>
+  )
+}
+
+function useInitialViewportWidth(viewportRef: RefObject<HTMLDivElement>) {
+  const [width, setWidth] = useState<number>()
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    setWidth(Math.max(1, Math.floor(viewport.clientWidth)))
+  }, [viewportRef])
+
+  return width
 }
 
 export function CanvasCard({
@@ -17,13 +48,23 @@ export function CanvasCard({
   children: ReactNode
   wide?: boolean
 }) {
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const viewportWidth = useInitialViewportWidth(viewportRef)
+  const canvas = isValidElement<StayCanvasProps>(children)
+    ? viewportWidth
+      ? cloneElement(children, {
+          width: viewportWidth,
+        })
+      : null
+    : children
+
   return (
     <section className={wide ? "canvas-card wide" : "canvas-card"}>
       <div className="canvas-card-heading">
         <h2>{title}</h2>
         {description && <p>{description}</p>}
       </div>
-      <div className="canvas-viewport">{children}</div>
+      <div className="canvas-viewport" ref={viewportRef}>{canvas}</div>
     </section>
   )
 }

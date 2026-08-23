@@ -82,6 +82,13 @@ input:focus-visible {
   min-height: 100dvh;
 }
 
+.app-shell.example-active {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  grid-template-rows: 64px minmax(0, 1fr);
+}
+
 .topbar {
   position: sticky;
   top: 0;
@@ -226,12 +233,28 @@ input:focus-visible {
   padding: 46px clamp(24px, 5vw, 76px) 96px;
 }
 
+.example-active .content {
+  height: 100%;
+  min-height: 0;
+  padding: 16px 20px 20px;
+  overflow: hidden;
+}
+
 .catalog-home,
 .example-page,
 .not-found,
 .error-boundary {
   width: min(1120px, 100%);
   margin: 0 auto;
+}
+
+.example-active .example-page {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
 }
 
 .catalog-intro {
@@ -379,6 +402,13 @@ input:focus-visible {
   padding: 18px 0 42px;
 }
 
+.example-active .example-header {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
+  gap: 24px;
+  align-items: center;
+  padding: 0;
+}
+
 .example-header h1 {
   max-width: 800px;
   margin: 0;
@@ -386,6 +416,11 @@ input:focus-visible {
   font-weight: 680;
   letter-spacing: -0.055em;
   line-height: 1;
+}
+
+.example-active .example-header h1 {
+  font-size: clamp(25px, 2.8vw, 36px);
+  line-height: 1.05;
 }
 
 .example-header > div > p:last-child {
@@ -396,11 +431,26 @@ input:focus-visible {
   line-height: 1.6;
 }
 
+.example-active .example-kind {
+  margin-bottom: 5px;
+}
+
+.example-active .example-header > div > p:last-child {
+  max-width: 80ch;
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .feature-list {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
   justify-content: flex-end;
+}
+
+.example-active .feature-list {
+  max-width: 430px;
 }
 
 .feature-list span {
@@ -426,6 +476,12 @@ input:focus-visible {
   backdrop-filter: blur(16px);
 }
 
+.example-active .tabs {
+  position: static;
+  padding: 5px;
+  border-radius: 10px;
+}
+
 .tabs button,
 .source-heading button {
   border: 0;
@@ -442,6 +498,10 @@ input:focus-visible {
   padding: 0 16px;
 }
 
+.example-active .tabs button {
+  min-height: 32px;
+}
+
 .tabs button:hover,
 .tabs button.active {
   color: var(--ink);
@@ -456,6 +516,12 @@ input:focus-visible {
   margin-top: 20px;
 }
 
+.example-active .tab-panel {
+  min-height: 0;
+  height: 100%;
+  margin-top: 0;
+}
+
 .live-panel {
   padding: clamp(18px, 3.5vw, 40px);
   border: 1px solid var(--line);
@@ -463,17 +529,47 @@ input:focus-visible {
   background: var(--surface);
 }
 
+.example-active .live-panel {
+  padding: 12px;
+  overflow: hidden;
+}
+
 .demo-layout {
   display: grid;
-  gap: 20px;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.demo-primary {
+  min-height: 0;
+}
+
+.demo-primary > * {
+  height: 100%;
+}
+
+.demo-controls {
+  display: grid;
+  min-width: 0;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
 }
 
 .canvas-card {
+  display: flex;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
+  flex-direction: column;
 }
 
 .canvas-card-heading {
-  margin-bottom: 14px;
+  flex: 0 0 auto;
+  margin-bottom: 8px;
 }
 
 .canvas-card-heading h2 {
@@ -491,9 +587,13 @@ input:focus-visible {
 }
 
 .canvas-viewport {
-  width: fit-content;
-  max-width: 100%;
-  overflow: auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface-inset);
@@ -580,8 +680,8 @@ input:focus-visible {
 }
 
 .event-log {
-  min-height: 86px;
-  max-height: 164px;
+  min-height: 72px;
+  max-height: 108px;
   overflow: auto;
   padding: 12px 14px;
   border-radius: 10px;
@@ -634,6 +734,20 @@ input:focus-visible {
   background: var(--surface-strong);
 }
 
+.demo-controls .timeline-controls {
+  gap: 7px;
+  padding: 9px 11px;
+}
+
+.demo-controls .status-grid div {
+  padding: 7px 8px;
+}
+
+.demo-controls .event-log {
+  height: 100%;
+  padding: 8px 10px;
+}
+
 .timeline-heading {
   display: flex;
   justify-content: space-between;
@@ -655,6 +769,12 @@ input:focus-visible {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.demo-primary .dual-canvas,
+.demo-primary .pointer-session-demo {
+  height: 100%;
+  min-height: 0;
 }
 
 .pointer-session-demo {
@@ -681,6 +801,10 @@ input:focus-visible {
     rgba(54, 105, 221, 0.08) 14px,
     rgba(54, 105, 221, 0.08) 28px
   );
+}
+
+.demo-primary .outside-release-zone {
+  min-height: 0;
 }
 
 .outside-release-zone span {
@@ -715,6 +839,10 @@ input:focus-visible {
   background: var(--surface-inset);
 }
 
+.demo-controls .snapshot-preview {
+  max-height: 108px;
+}
+
 .snapshot-preview img {
   display: block;
   max-width: 100%;
@@ -723,10 +851,15 @@ input:focus-visible {
 }
 
 .source-panel {
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   border-radius: 14px;
   color: var(--code-ink);
   background: var(--code);
+}
+
+.example-active .source-panel:not([hidden]) {
+  display: grid;
 }
 
 .source-heading {
@@ -759,6 +892,11 @@ input:focus-visible {
   tab-size: 2;
 }
 
+.example-active .source-panel pre {
+  height: 100%;
+  max-height: none;
+}
+
 .source-panel code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
@@ -780,6 +918,70 @@ input:focus-visible {
   border-radius: 8px;
   color: var(--code-ink);
   background: var(--code);
+}
+
+@media (min-width: 901px) and (max-width: 1040px) {
+  .app-shell.example-active {
+    display: block;
+  }
+
+  .example-active .topbar {
+    position: sticky;
+  }
+
+  .example-active .sidebar {
+    position: sticky;
+    top: 64px;
+    z-index: 15;
+    display: flex;
+    gap: 6px;
+    height: 53px;
+    padding: 9px 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .example-active .sidebar-group {
+    display: contents;
+  }
+
+  .example-active .sidebar-group h2,
+  .example-active .sidebar a span {
+    display: none;
+  }
+
+  .example-active .sidebar a {
+    flex: 0 0 auto;
+    min-height: 34px;
+    white-space: nowrap;
+  }
+
+  .example-active .sidebar-home,
+  .example-active .sidebar-group + .sidebar-group {
+    margin: 0;
+  }
+
+  .example-active .content {
+    height: calc(100dvh - 117px);
+    padding: 12px 16px 16px;
+  }
+
+  .example-active .feature-list {
+    display: none;
+  }
+
+  .example-active .example-header {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .example-active .demo-controls {
+    grid-auto-columns: minmax(220px, 1fr);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
 }
 
 @media (max-width: 900px) {
@@ -827,6 +1029,30 @@ input:focus-visible {
 
   .content {
     padding: 34px 20px 72px;
+  }
+
+  .example-active .sidebar {
+    height: 53px;
+  }
+
+  .example-active .content {
+    height: calc(100dvh - 117px);
+    padding: 12px 16px 16px;
+  }
+
+  .example-active .feature-list {
+    display: none;
+  }
+
+  .example-active .example-header {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .demo-controls {
+    grid-auto-columns: minmax(220px, 1fr);
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
   .example-header {
@@ -877,6 +1103,18 @@ input:focus-visible {
 
   .outside-release-zone {
     min-height: 180px;
+  }
+
+  .example-active .outside-release-zone {
+    min-height: 0;
+  }
+
+  .example-active .example-header h1 {
+    font-size: 24px;
+  }
+
+  .example-active .example-header > div > p:last-child {
+    display: none;
   }
 
   .catalog-grid-featured .catalog-card:last-child {

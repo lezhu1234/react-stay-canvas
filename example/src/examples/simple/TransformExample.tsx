@@ -63,7 +63,8 @@ export default function TransformExample() {
   const [endCount, setEndCount] = useState(0)
   const [terminalReason, setTerminalReason] = useState(text("None", "无"))
 
-  const isInsideCanvas = (x: number, y: number) => x >= 0 && x <= 440 && y >= 0 && y <= 290
+  const isInsideCanvas = (x: number, y: number, width: number, height: number) =>
+    x >= 0 && x <= width && y >= 0 && y <= height
 
   const markZoomOrigin = (x: number, y: number) => {
     originMarkerRef.current?.update({ x, y })
@@ -95,7 +96,7 @@ export default function TransformExample() {
     {
       name: "space-pan",
       event: ["startmove", "move", "moveend"],
-      callback: ({ e, composeStore, tools }) => {
+      callback: ({ e, composeStore, tools, canvas }) => {
         if (!hasPointerPosition(e)) return
         return {
           startmove: () => {
@@ -108,12 +109,12 @@ export default function TransformExample() {
             setSessionState(text("Active", "进行中"))
             setPrimaryButton(text("Pressed", "按下中"))
             setTerminalReason(text("None", "无"))
-            setPointerPosition(isInsideCanvas(e.x, e.y)
+            setPointerPosition(isInsideCanvas(e.x, e.y, canvas.width, canvas.height)
               ? text("Inside", "Canvas 内")
               : text("Outside", "Canvas 外"))
           },
           moveend: () => {
-            const outside = !isInsideCanvas(e.x, e.y)
+            const outside = !isInsideCanvas(e.x, e.y, canvas.width, canvas.height)
             const cancelled = e.cancelled ?? false
             setAction(cancelled
               ? text("Space-drag cancelled", "空格拖动已取消")

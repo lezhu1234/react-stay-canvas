@@ -144,6 +144,22 @@ describe("animated: intermediate-shape cache (getTimelineShapeByBound)", () => {
     // never trips the size-10 eviction — both load-bearing for this assertion.
     expect(second).toBe(first) // cache hit returns the identical instance
   })
+
+  it("isolates bounded interpolation cache entries between named slices", () => {
+    const { stage } = createStage({})
+    const child = stage.tools.createChild({ className: "motion-object" })
+    const transition = { durationMs: 300, delayMs: 0, type: "linear" as const }
+
+    child.appendKeyFrame("a", new Rectangle({ x: 0, y: 0, width: 10, height: 10, strokeConfig: stroke, transition }))
+    child.appendKeyFrame("a", new Rectangle({ x: 300, y: 0, width: 10, height: 10, strokeConfig: stroke, transition }))
+    child.appendKeyFrame("b", new Rectangle({ x: 100, y: 20, width: 10, height: 10, strokeConfig: stroke, transition }))
+    child.appendKeyFrame("b", new Rectangle({ x: 400, y: 20, width: 10, height: 10, strokeConfig: stroke, transition }))
+
+    stage.tools.progress({ timeMs: 300, bound: { beforeMs: 150, afterMs: 450 } })
+
+    expect((child.shapeMap.get("a") as Rectangle).x).toBeCloseTo(75)
+    expect((child.shapeMap.get("b") as Rectangle).x).toBeCloseTo(175)
+  })
 })
 
 describe("animated: progress({ bound }) sub-range seek (the seek path the merge keeps)", () => {

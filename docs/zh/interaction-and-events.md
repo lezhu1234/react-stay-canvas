@@ -290,16 +290,20 @@ pointer move inside or outside
   → continue the same session and retain the start target
 pointer up
   → normal terminal
-pointercancel / lostpointercapture / window blur / document hidden
+initiating button 已松开后的 lostpointercapture
+  → 正常的 implicit-release terminal
+pointercancel / 异常 lostpointercapture / window blur / document hidden
   → cancelled terminal
 ```
 
 浏览器支持 Pointer Events 时，库会在开始阶段请求 Pointer Capture。Capture 不可用或没有建立时，window 上的终止监听器作为外部释放兜底。Canvas 内或被 capture 重定向回 Canvas 的松开仍由 Canvas 自己的 DOM listener 处理。
 
+浏览器可能在 initiating button 已经松开后才派发 `lostpointercapture`，此时运行时将其视为正常的隐式释放。只有 initiating button 仍处于按下状态时，Capture 丢失才属于取消。
+
 所有正常和取消路径只终止一次。取消终止具有以下行为：
 
 - `dragend` 或 `moveend` 可收到 `e.cancelled === true`；
-- `e.cancelReason` 为 `pointercancel`、`lostpointercapture`、`blur` 或 `visibilitychange`；
+- `e.cancelReason` 为 `pointercancel`、`lostpointercapture`、`blur` 或 `visibilitychange`；其中 `lostpointercapture` 只表示 initiating button 仍按下时发生的异常 Capture 丢失；
 - 坐标使用本次会话最后收到的指针位置；
 - `originEvent` 保留真正导致取消的原生 Event；
 - 不产生 `click`，也不把取消伪装成普通 `mouseup`。

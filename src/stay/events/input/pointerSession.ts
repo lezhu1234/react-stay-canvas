@@ -127,6 +127,21 @@ export class PointerSession {
     this.cancel(event, reason)
   }
 
+  lostPointerCapture(event: PointerEvent) {
+    const session = this.active
+    if (!session || !this.belongsTo(session, event)) return
+    this.syncMouseButtons(event)
+    if (!isMouseButtonPressed(event.buttons, session.ref.initiatingButton)) {
+      this.finish(event, {
+        phase: "end",
+        outcome: "implicit-release",
+        rawTrigger: MOUSE_EVENTS.MOUSE_UP,
+      })
+      return
+    }
+    this.cancel(event, "lostpointercapture")
+  }
+
   cancel(cause: Event, reason: PointerSessionCancelReason) {
     if (!this.active) return
     this.finish(cause, {

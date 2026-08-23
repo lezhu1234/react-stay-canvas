@@ -1,277 +1,869 @@
-import { useMemo, useRef, useState } from "react"
 import {
-  ListenerProps,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+import {
+  type Coordinate,
+  type Cursor,
+  type ListenerProps,
   Rectangle,
   StayCanvas,
   StayImage,
+  type StayInstantChild,
   StayText,
-  StayTools,
+  type StayTools,
 } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, EventLog, placeSceneChild, ResetButton, resetScene, sceneCanvasArea, scenePoint, StatusGrid, Toolbar } from "../../components/DemoKit"
+import {
+  Button,
+  colors,
+  ResetButton,
+  rgba,
+} from "../../components/DemoKit"
+import annotationImageUrl from "../../assets/annotation-traffic.jpg"
 import { useI18n } from "../../i18n"
-import { hasPointerPosition, hasPointerTarget } from "../actionEventGuards"
+import { hasPointerPosition } from "../actionEventGuards"
 
-type Mode = "draw" | "select"
-
-function createAnnotationImage(label: string) {
-  const canvas = document.createElement("canvas")
-  canvas.width = 720
-  canvas.height = 420
-  const context = canvas.getContext("2d")!
-  context.fillStyle = "#e8eae4"
-  context.fillRect(0, 0, 720, 420)
-  context.fillStyle = "#c8d0c5"
-  context.fillRect(42, 42, 636, 336)
-  context.fillStyle = "#77958a"
-  context.fillRect(76, 82, 280, 250)
-  context.fillStyle = "#435e6d"
-  context.fillRect(392, 82, 250, 110)
-  context.fillStyle = "#d5a27d"
-  context.fillRect(392, 222, 250, 110)
-  context.fillStyle = "rgba(255,255,255,.86)"
-  context.font = "600 24px system-ui"
-  context.fillText(label, 102, 296)
-  return canvas.toDataURL("image/png")
+type BoxChild = StayInstantChild<Rectangle | StayText>
+type Handle = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw"
+export type AnnotatorEngine = {
+  selected: Set<string>
+  sequence: number
+  changed: () => void
+  say: (english: string, chinese: string) => void
+  save: () => void
+  import: () => void
 }
 
-export default function AnnotatorExample() {
-  const { text } = useI18n()
-  const toolsRef = useRef<StayTools | null>(null)
-  const selectedRef = useRef<string | null>(null)
-  const sequenceRef = useRef(0)
-  const annotationNamesRef = useRef(new Map<string, string>())
-  const [mode, setMode] = useState<Mode>("draw")
-  const [selected, setSelected] = useState(text("None", "无"))
-  const [count, setCount] = useState(0)
-  const [entries, setEntries] = useState<string[]>([])
-  const [snapshot, setSnapshot] = useState<string | null>(null)
-
-  const push = (message: string) => setEntries((current) => [message, ...current].slice(0, 8))
-  const syncCount = (tools: StayTools) => setCount(tools.getChildrenBySelector(".annotation").length)
-  const annotationName = (id: string) => annotationNamesRef.current.get(id) ?? id
-
-  const clearSelection = (tools: StayTools) => {
-    if (selectedRef.current) {
-      tools.getChildById<Rectangle>(selectedRef.current)?.shape.update({
-        strokeConfig: { color: colors.orange, lineWidth: 3 },
-      })
-    }
-    selectedRef.current = null
-    setSelected(text("None", "无"))
+const SOURCE_WIDTH = 1100
+const SOURCE_HEIGHT = 733
+const HANDLE_SIZE = 12
+const MIN_SIZE = 12
+const HANDLE_ORDER: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"]
+const boxOf = (child: BoxChild) => child.shapeMap.get("0") as Rectangle
+const labelOf = (child: BoxChild) => child.shapeMap.get("1") as StayText
+const handlesOf = (child: BoxChild) => HANDLE_ORDER.map((handle, index) => ({
+  handle,
+  shape: child.shapeMap.get(String(index + 2)) as Rectangle,
+}))
+const annotations = (tools: StayTools) =>
+  tools.getChildrenBySelector<Rectangle | StayText>(".annotation") as BoxChild[]
+const imageBound = (tools: StayTools) =>
+  tools.getChildBySelector<StayImage>(".background-image")?.shape.getBound() ??
+  tools.getChildBySelector<Rectangle>(".stay-canvas")?.shape.getBound() ?? {
+    x: 0,
+    y: 0,
+    width: SOURCE_WIDTH,
+    height: SOURCE_HEIGHT,
   }
 
-  const listeners = useMemo<ListenerProps[]>(() => [
+const hitBox = (tools: StayTools, point: Coordinate) => annotations(tools)
+  .filter((child) => boxOf(child).contains(point))
+  .sort((a, b) => boxOf(a).area - boxOf(b).area)[0]
+
+function handleCenters(shape: Rectangle): Record<Handle, Coordinate> {
+  const left = shape.x
+  const centerX = shape.x + shape.width / 2
+  const right = shape.x + shape.width
+  const top = shape.y
+  const centerY = shape.y + shape.height / 2
+  const bottom = shape.y + shape.height
+  return {
+    nw: { x: left, y: top }, n: { x: centerX, y: top }, ne: { x: right, y: top },
+    e: { x: right, y: centerY }, se: { x: right, y: bottom },
+    s: { x: centerX, y: bottom }, sw: { x: left, y: bottom },
+    w: { x: left, y: centerY },
+  }
+}
+
+function syncHandles(child: BoxChild) {
+  const centers = handleCenters(boxOf(child))
+  handlesOf(child).forEach(({ handle, shape }) => {
+    const center = centers[handle]
+    shape.update({
+      x: center.x - HANDLE_SIZE / 2,
+      y: center.y - HANDLE_SIZE / 2,
+      width: HANDLE_SIZE,
+      height: HANDLE_SIZE,
+    })
+  })
+}
+
+function resizeAxis(
+  start: number,
+  size: number,
+  boundStart: number,
+  boundSize: number,
+  moveStart: boolean,
+  moveEnd: boolean,
+  pointer: number,
+) {
+  const minimum = Math.min(MIN_SIZE, boundSize)
+  const boundEnd = boundStart + boundSize
+  let low = start
+  let high = start + size
+  if (moveStart) {
+    low = Math.max(boundStart, Math.min(pointer, high - minimum))
+    high = Math.min(boundEnd, Math.max(high, low + minimum))
+  }
+  if (moveEnd) {
+    high = Math.min(boundEnd, Math.max(pointer, low + minimum))
+    low = Math.max(boundStart, Math.min(low, high - minimum))
+  }
+  return { start: low, size: high - low }
+}
+
+function resize(
+  shape: Rectangle,
+  origin: Rectangle,
+  handle: Handle,
+  point: Coordinate,
+  bound: ReturnType<typeof imageBound>,
+) {
+  const horizontal = resizeAxis(
+    origin.x,
+    origin.width,
+    bound.x,
+    bound.width,
+    handle.includes("w"),
+    handle.includes("e"),
+    point.x,
+  )
+  const vertical = resizeAxis(
+    origin.y,
+    origin.height,
+    bound.y,
+    bound.height,
+    handle.includes("n"),
+    handle.includes("s"),
+    point.y,
+  )
+  shape.update({
+    x: horizontal.start,
+    y: vertical.start,
+    width: horizontal.size,
+    height: vertical.size,
+  })
+}
+
+function boxBetween(
+  start: Coordinate,
+  end: Coordinate,
+  bound: ReturnType<typeof imageBound>,
+) {
+  const width = Math.min(bound.width, Math.max(MIN_SIZE, Math.abs(end.x - start.x)))
+  const height = Math.min(bound.height, Math.max(MIN_SIZE, Math.abs(end.y - start.y)))
+  const intendedX = end.x < start.x ? start.x - width : start.x
+  const intendedY = end.y < start.y ? start.y - height : start.y
+  return {
+    x: Math.max(bound.x, Math.min(intendedX, bound.x + bound.width - width)),
+    y: Math.max(bound.y, Math.min(intendedY, bound.y + bound.height - height)),
+    width,
+    height,
+  }
+}
+
+function clampPoint(point: Coordinate, bound: ReturnType<typeof imageBound>) {
+  return {
+    x: Math.max(bound.x, Math.min(point.x, bound.x + bound.width)),
+    y: Math.max(bound.y, Math.min(point.y, bound.y + bound.height)),
+  }
+}
+
+function containsPoint(bound: ReturnType<typeof imageBound>, point: Coordinate) {
+  return point.x >= bound.x &&
+    point.x <= bound.x + bound.width &&
+    point.y >= bound.y &&
+    point.y <= bound.y + bound.height
+}
+
+function moveLimits(tools: StayTools, ids: string[]) {
+  const boxes = ids
+    .map((id) => tools.getChildById<Rectangle | StayText>(id) as BoxChild | undefined)
+    .filter((child): child is BoxChild => Boolean(child))
+    .map(boxOf)
+  const bound = imageBound(tools)
+  return {
+    minX: bound.x - Math.min(...boxes.map((box) => box.x)),
+    maxX: bound.x + bound.width - Math.max(...boxes.map((box) => box.x + box.width)),
+    minY: bound.y - Math.min(...boxes.map((box) => box.y)),
+    maxY: bound.y + bound.height - Math.max(...boxes.map((box) => box.y + box.height)),
+  }
+}
+
+function addBox(
+  tools: StayTools,
+  engine: AnnotatorEngine,
+  rect: { x: number; y: number; width: number; height: number },
+) {
+  const number = ++engine.sequence
+  const transparent = rgba(0, 0, 0, 0)
+  const child = tools.appendChild<Rectangle | StayText>({
+    id: `annotation-${number}`,
+    className: "annotation",
+    shape: [
+      new Rectangle({
+        ...rect,
+        layer: 1,
+        fillConfig: { color: colors.orangeSoft },
+        strokeConfig: { color: colors.orange, lineWidth: 3 },
+      }),
+      new StayText({
+        x: rect.x + 8,
+        y: rect.y + 16,
+        text: `#${number}`,
+        layer: 1,
+        zIndex: 2,
+        font: { size: 12, fontWeight: 700 },
+        fillConfig: { color: colors.ink },
+      }),
+      ...HANDLE_ORDER.map(() => new Rectangle({
+        x: rect.x,
+        y: rect.y,
+        width: HANDLE_SIZE,
+        height: HANDLE_SIZE,
+        layer: 1,
+        zIndex: 3,
+        fillConfig: { color: transparent },
+        strokeConfig: { color: transparent, lineWidth: 2 },
+      })),
+    ],
+  }) as BoxChild
+  syncHandles(child)
+  return child
+}
+
+function paintSelection(tools: StayTools, selected: Set<string>) {
+  annotations(tools).forEach((child) => {
+    const active = selected.has(child.id)
+    boxOf(child).update({
+      strokeConfig: {
+        color: active ? colors.blue : colors.orange,
+        lineWidth: active ? 5 : 3,
+      },
+    })
+    handlesOf(child).forEach(({ shape }) => shape.update({
+      fillConfig: { color: active ? colors.paper : rgba(0, 0, 0, 0) },
+      strokeConfig: {
+        color: active ? colors.blue : rgba(0, 0, 0, 0),
+        lineWidth: 2,
+      },
+    }))
+  })
+}
+
+function select(
+  tools: StayTools,
+  engine: AnnotatorEngine,
+  child?: BoxChild,
+  additive = false,
+) {
+  if (!additive) engine.selected.clear()
+  if (child) {
+    if (additive && engine.selected.has(child.id)) engine.selected.delete(child.id)
+    else engine.selected.add(child.id)
+  }
+  paintSelection(tools, engine.selected)
+  engine.changed()
+}
+
+function commit(tools: StayTools, engine: AnnotatorEngine) {
+  paintSelection(tools, new Set())
+  tools.log()
+  paintSelection(tools, engine.selected)
+  engine.changed()
+}
+
+function selectedHandle(tools: StayTools, engine: AnnotatorEngine, point: Coordinate) {
+  const children = annotations(tools)
+    .filter((child) => engine.selected.has(child.id))
+    .sort((a, b) => boxOf(a).area - boxOf(b).area)
+  for (const child of children) {
+    const box = boxOf(child)
+    const insetX = Math.min(HANDLE_SIZE / 2, box.width / 3)
+    const insetY = Math.min(HANDLE_SIZE / 2, box.height / 3)
+    const inMoveZone =
+      point.x >= box.x + insetX &&
+      point.x <= box.x + box.width - insetX &&
+      point.y >= box.y + insetY &&
+      point.y <= box.y + box.height - insetY
+    if (inMoveZone) return
+    const match = handlesOf(child)
+      .filter(({ shape }) => shape.contains(point))
+      .sort((a, b) => {
+        const aCenter = a.shape.getCenterPoint()
+        const bCenter = b.shape.getCenterPoint()
+        const aDistance = (aCenter.x - point.x) ** 2 + (aCenter.y - point.y) ** 2
+        const bDistance = (bCenter.x - point.x) ** 2 + (bCenter.y - point.y) ** 2
+        return aDistance - bDistance
+      })[0]
+    if (match) return { child, handle: match.handle }
+  }
+}
+
+function snapshotBoxes(tools: StayTools, ids: string[]) {
+  return new Map(ids.flatMap((id) => {
+    const child = tools.getChildById<Rectangle | StayText>(id) as BoxChild | undefined
+    if (!child) return []
+    return [[id, [...child.shapeMap.values()].map((shape) => shape.copy())]]
+  }))
+}
+
+function cancelGesture(
+  tools: StayTools,
+  engine: AnnotatorEngine,
+  session: Record<string, any>,
+) {
+  if (session.kind === "draw" && session.child) tools.removeChild(session.child.id)
+  session.origins?.forEach((shapes: Array<Rectangle | StayText>, id: string) => {
+    const child = tools.getChildById<Rectangle | StayText>(id)
+    child?.update({ shape: shapes })
+  })
+  engine.selected.clear()
+  session.selected?.forEach((id: string) => engine.selected.add(id))
+  paintSelection(tools, engine.selected)
+  engine.changed()
+}
+
+const cursors: Record<Handle, Cursor> = {
+  n: "ns-resize",
+  ne: "nesw-resize",
+  e: "ew-resize",
+  se: "nwse-resize",
+  s: "ns-resize",
+  sw: "nesw-resize",
+  w: "ew-resize",
+  nw: "nwse-resize",
+}
+
+function runShortcut(
+  engine: AnnotatorEngine,
+  tools: StayTools,
+  key: string,
+  redo: boolean,
+) {
+  if (key === "s") engine.save()
+  else if (key === "i") engine.import()
+  else if (key === "z") {
+    navigateWorkspaceHistory(tools, engine, redo ? "redo" : "undo")
+    engine.say(redo ? "Redo" : "Undo", redo ? "重做" : "撤销")
+  } else return false
+  return true
+}
+
+export function navigateWorkspaceHistory(
+  tools: StayTools,
+  engine: AnnotatorEngine,
+  direction: "undo" | "redo",
+) {
+  select(tools, engine)
+  tools[direction]()
+  engine.changed()
+}
+
+export function bindWorkspaceShortcuts(
+  engine: AnnotatorEngine,
+  getTools: () => StayTools | undefined,
+) {
+  const listener = (event: KeyboardEvent) => {
+    if (event.target instanceof HTMLCanvasElement) return
+    if (!event.metaKey && !event.ctrlKey) return
+    const tools = getTools()
+    if (tools && runShortcut(engine, tools, event.key.toLowerCase(), event.shiftKey)) {
+      event.preventDefault()
+    }
+  }
+  window.addEventListener("keydown", listener)
+  return () => window.removeEventListener("keydown", listener)
+}
+
+export function createAnnotatorListeners(engine: AnnotatorEngine): ListenerProps[] {
+  return [
     {
-      name: "draw-annotation",
-      state: "draw",
+      name: "annotate",
       selector: ".stay-canvas",
-      event: ["dragstart", "drag", "dragend"],
-      callback: ({ e, composeStore, tools }) => {
-        if (!hasPointerPosition(e)) return
+      event: ["drag", "dragend"],
+      callback: ({ e, composeStore, store, tools }) => {
+        if (e.name === "drag" && !hasPointerPosition(e)) return
         return {
-          dragstart: () => {
-            const index = ++sequenceRef.current
-            const name = text(`Annotation ${index}`, `标注 ${index}`)
-            const box = new Rectangle({
-              x: e.x,
-              y: e.y,
-              width: 0,
-              height: 0,
-              layer: 1,
-              fillConfig: { color: colors.orangeSoft },
-              strokeConfig: { color: colors.orange, lineWidth: 3 },
-            })
-            const label = new StayText({
-              x: e.x + 18,
-              y: e.y + 8,
-              text: `#${index}`,
-              font: { size: 12, fontWeight: 700 },
-              layer: 1,
-              zIndex: 2,
-              fillConfig: { color: colors.ink },
-            })
-            const child = tools.appendChild({
-              className: "annotation",
-              shape: [box, label],
-            })
-            annotationNamesRef.current.set(child.id, name)
-            push(text(`${name} started`, `${name}已开始`))
-            return { start: e.point, child, box, label }
-          },
           drag: () => {
-            const start = composeStore.start
-            const x = Math.min(start.x, e.x)
-            const y = Math.min(start.y, e.y)
-            composeStore.box.update({
-              x,
-              y,
-              width: Math.abs(e.x - start.x),
-              height: Math.abs(e.y - start.y),
+            if (!hasPointerPosition(e)) return composeStore
+            let session = composeStore
+            if (!session.kind) {
+              const start = store.get("dragStartPosition") as Coordinate
+              const selected = [...engine.selected]
+              const edge = selectedHandle(tools, engine, start)
+              const target = hitBox(tools, start)
+              const invalidStart = !containsPoint(imageBound(tools), start)
+              if (invalidStart || e.pressedKeys.has("Meta") || e.pressedKeys.has("Control")) {
+                session = { kind: "idle", selected, start }
+              } else if (edge) {
+                session = {
+                  kind: "resize",
+                  id: edge.child.id,
+                  handle: edge.handle,
+                  origin: boxOf(edge.child).copy(),
+                  origins: snapshotBoxes(tools, [edge.child.id]),
+                  selected,
+                }
+              } else if (target && engine.selected.has(target.id)) {
+                const ids = [...engine.selected]
+                const origins = snapshotBoxes(tools, ids)
+                ids.forEach((id) => tools.getChildById(id)?.moveInit())
+                session = {
+                  kind: "move",
+                  ids,
+                  start,
+                  limits: moveLimits(tools, ids),
+                  origins,
+                  selected,
+                }
+              } else {
+                select(tools, engine)
+                session = { kind: "draw", start, selected }
+              }
+            }
+            if (session.kind === "move") {
+              const point = e.point
+              const offsetX = Math.max(
+                session.limits.minX,
+                Math.min(point.x - session.start.x, session.limits.maxX),
+              )
+              const offsetY = Math.max(
+                session.limits.minY,
+                Math.min(point.y - session.start.y, session.limits.maxY),
+              )
+              session.ids.forEach((id: string) => {
+                tools.getChildById(id)?.move(offsetX, offsetY)
+              })
+              return session
+            }
+            if (session.kind === "resize") {
+              const child = tools.getChildById<Rectangle | StayText>(session.id) as
+                | BoxChild
+                | undefined
+              if (!child) return session
+              const bound = imageBound(tools)
+              resize(
+                boxOf(child),
+                session.origin,
+                session.handle,
+                clampPoint(e.point, bound),
+                bound,
+              )
+              labelOf(child).update({ x: boxOf(child).x + 8, y: boxOf(child).y + 16 })
+              syncHandles(child)
+              return session
+            }
+            if (session.kind !== "draw") return session
+            const point = e.point
+            const child = session.child ?? addBox(tools, engine, {
+              x: point.x,
+              y: point.y,
+              width: MIN_SIZE,
+              height: MIN_SIZE,
             })
-            composeStore.label.update({ x: x + 18, y: y + 8 })
+            const bound = imageBound(tools)
+            const rect = boxBetween(session.start, clampPoint(point, bound), bound)
+            boxOf(child).update(rect)
+            labelOf(child).update({ x: rect.x + 8, y: rect.y + 16 })
+            syncHandles(child)
+            return { ...session, child }
           },
           dragend: () => {
-            tools.log()
-            syncCount(tools)
-            push(text(`${annotationName(composeStore.child.id)} committed to history`, `${annotationName(composeStore.child.id)}已写入历史`))
+            if (!composeStore.kind || composeStore.kind === "idle") {
+              return { kind: undefined, child: undefined }
+            }
+            if (e.cancelled) {
+              cancelGesture(tools, engine, composeStore)
+              engine.say("Change cancelled", "已取消更改")
+              return { kind: undefined, child: undefined }
+            }
+            if (composeStore.child) select(tools, engine, composeStore.child)
+            commit(tools, engine)
+            const created = composeStore.kind === "draw"
+            engine.say(
+              created ? "Annotation created" : "Annotation updated",
+              created ? "已创建标注" : "已更新标注",
+            )
+            return { kind: undefined, child: undefined }
           },
         }
       },
     },
     {
-      name: "select-annotation",
-      state: "select",
+      name: "select",
       selector: ".stay-canvas",
       event: "click",
       callback: ({ e, tools }) => {
         if (!hasPointerPosition(e)) return
-        const target = tools.getContainPointChildren<Rectangle>({
-          point: e.point,
-          selector: ".annotation",
-          withRoot: false,
-        })[0]
-        clearSelection(tools)
-        if (!target) {
-          push(text("selection cleared", "已取消选择"))
-          return
-        }
-        target.shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
-        selectedRef.current = target.id
-        const name = annotationName(target.id)
-        setSelected(name)
-        push(text(`${name} selected`, `已选择${name}`))
+        const target = hitBox(tools, e.point)
+        const additive = Boolean(
+          target && (e.pressedKeys.has("Meta") || e.pressedKeys.has("Control")),
+        )
+        select(tools, engine, target, additive)
+        engine.say(
+          target ? "Selection changed" : "Selection cleared",
+          target ? "已更新选择" : "已取消选择",
+        )
       },
     },
     {
-      name: "move-annotation",
-      state: "select",
-      selector: ".annotation",
-      event: ["dragstart", "drag", "dragend"],
-      callback: ({ e, composeStore, tools }) => {
-        if (!hasPointerTarget(e)) return
-        return {
-          dragstart: () => {
-            clearSelection(tools)
-            e.target.moveInit()
-            const shape = e.target.shape as Rectangle
-            shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
-            selectedRef.current = e.target.id
-            setSelected(annotationName(e.target.id))
-            return { start: e.point, child: e.target }
-          },
-          drag: () => composeStore.child.move(e.x - composeStore.start.x, e.y - composeStore.start.y),
-          dragend: () => {
-            const child = composeStore.child
-            const historyShapes = [...child.shapeMap.values()].map((shape) => shape.copy())
-            const historyShape = historyShapes.find((shape) => shape instanceof Rectangle) as Rectangle
-            historyShape.update({ strokeConfig: { color: colors.orange, lineWidth: 3 } })
-            tools.removeChild(child.id)
-            const replacement = tools.appendChild({
-              id: child.id,
-              className: child.className,
-              shape: historyShapes,
-            })
-            tools.log()
-            replacement.shape.update({ strokeConfig: { color: colors.blue, lineWidth: 5 } })
-            push(text(`${annotationName(child.id)} moved and logged`, `${annotationName(child.id)}已移动并记录`))
-          },
+      name: "cursor",
+      selector: ".stay-canvas",
+      event: ["mousemove", "mouseleave"],
+      callback: ({ e, tools }) => {
+        if (e.name === "mouseleave" || !hasPointerPosition(e)) {
+          tools.changeCursor("crosshair")
+          return
         }
+        const point = e.point
+        const edge = selectedHandle(tools, engine, point)
+        const target = hitBox(tools, point)
+        const cursor = edge?.handle
+          ? cursors[edge.handle]
+          : target && engine.selected.has(target.id) ? "move" : "crosshair"
+        tools.changeCursor(cursor)
       },
     },
-  ], [text])
+    {
+      name: "shortcuts", event: "keydown",
+      callback: ({ e, originEvent, tools }) => {
+        const modifier = e.pressedKeys.has("Meta") || e.pressedKeys.has("Control")
+        const key = e.key?.toLowerCase() ?? ""
+        if (!modifier) return
+        const handled = runShortcut(engine, tools, key, e.pressedKeys.has("Shift"))
+        if (handled) originEvent.preventDefault()
+      },
+    },
+  ]
+}
+
+export function toCoco(tools: StayTools) {
+  const image = tools.getChildBySelector<StayImage>(".background-image")?.shape
+  const origin = image?.getBound() ?? imageBound(tools)
+  const scaleX = SOURCE_WIDTH / origin.width
+  const scaleY = SOURCE_HEIGHT / origin.height
+  return {
+    images: [{
+      id: 1,
+      file_name: "annotation-traffic.jpg",
+      width: SOURCE_WIDTH,
+      height: SOURCE_HEIGHT,
+    }],
+    annotations: annotations(tools).map((child, index) => {
+      const box = boxOf(child)
+      const bbox = [
+        (box.x - origin.x) * scaleX,
+        (box.y - origin.y) * scaleY,
+        box.width * scaleX,
+        box.height * scaleY,
+      ]
+      return {
+        id: index + 1,
+        image_id: 1,
+        category_id: 1,
+        bbox,
+        area: bbox[2] * bbox[3],
+        iscrowd: 0,
+      }
+    }),
+    categories: [{ id: 1, name: "vehicle", supercategory: "object" }],
+  }
+}
+
+export function replaceAnnotationsFromCoco(
+  tools: StayTools,
+  engine: AnnotatorEngine,
+  data: unknown,
+) {
+  const source = data as { annotations?: unknown }
+  if (!source || !Array.isArray(source.annotations)) {
+    throw new Error("COCO annotations must be an array")
+  }
+  const origin = imageBound(tools)
+  const boxes = source.annotations.map((item) => {
+    const bbox = (item as { bbox?: unknown })?.bbox
+    const box = Array.isArray(bbox) ? bbox : []
+    const valid =
+      box.length === 4 &&
+      box.every((value) => typeof value === "number" && Number.isFinite(value)) &&
+      box[0] >= 0 &&
+      box[1] >= 0 &&
+      box[2] > 0 &&
+      box[3] > 0 &&
+      box[0] + box[2] <= SOURCE_WIDTH &&
+      box[1] + box[3] <= SOURCE_HEIGHT
+    if (!valid) throw new Error("COCO annotation has an invalid bbox")
+    return box as number[]
+  })
+  select(tools, engine)
+  annotations(tools).forEach((child) => tools.removeChild(child.id))
+  const scaleX = origin.width / SOURCE_WIDTH
+  const scaleY = origin.height / SOURCE_HEIGHT
+  boxes.forEach(([x, y, width, height]) => {
+    addBox(tools, engine, {
+      x: x * scaleX + origin.x,
+      y: y * scaleY + origin.y,
+      width: width * scaleX,
+      height: height * scaleY,
+    })
+  })
+  commit(tools, engine)
+  return boxes.length
+}
+
+export function fitCanvasToHost(width: number, height: number) {
+  const scale = Math.min(width / SOURCE_WIDTH, height / SOURCE_HEIGHT)
+  return {
+    width: Math.max(1, Math.floor(SOURCE_WIDTH * scale)),
+    height: Math.max(1, Math.floor(SOURCE_HEIGHT * scale)),
+  }
+}
+
+export function observeFittedCanvas(
+  host: HTMLDivElement,
+  onSize: (size: { width: number; height: number }) => void,
+) {
+  let frame = 0
+  const measure = () => {
+    cancelAnimationFrame(frame)
+    frame = requestAnimationFrame(() => {
+      if (host.clientWidth > 0 && host.clientHeight > 0) {
+        onSize(fitCanvasToHost(host.clientWidth, host.clientHeight))
+      }
+    })
+  }
+  const observer = typeof ResizeObserver === "function"
+    ? new ResizeObserver(measure)
+    : undefined
+  observer?.observe(host)
+  if (!observer) window.addEventListener("resize", measure)
+  measure()
+  return () => {
+    cancelAnimationFrame(frame)
+    observer?.disconnect()
+    if (!observer) window.removeEventListener("resize", measure)
+  }
+}
+
+function useFittedCanvas(hostRef: RefObject<HTMLDivElement>) {
+  const [size, setSize] = useState<{ width: number; height: number }>()
+
+  useLayoutEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    return observeFittedCanvas(host, (next) => setSize((current) =>
+      current?.width === next.width && current.height === next.height ? current : next,
+    ))
+  }, [hostRef])
+
+  return size
+}
+
+export default function AnnotatorExample() {
+  const { text } = useI18n()
+  const toolsRef = useRef<StayTools>()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const canvasHostRef = useRef<HTMLDivElement>(null)
+  const canvasSize = useFittedCanvas(canvasHostRef)
+  const [summary, setSummary] = useState({ count: 0, selected: 0 })
+  const [entries, setEntries] = useState<string[]>([])
+  const engineRef = useRef<AnnotatorEngine>({
+    selected: new Set(),
+    sequence: 0,
+    changed: () => {},
+    say: () => {},
+    save: () => {},
+    import: () => {},
+  })
+  const engine = engineRef.current
+  engine.changed = () => setSummary({
+    count: toolsRef.current ? annotations(toolsRef.current).length : 0,
+    selected: engine.selected.size,
+  })
+  engine.say = (english, chinese) => {
+    setEntries((current) => [text(english, chinese), ...current].slice(0, 6))
+  }
+  engine.import = () => inputRef.current?.click()
+  engine.save = () => {
+    if (!toolsRef.current) return
+    const contents = JSON.stringify(toCoco(toolsRef.current), null, 2)
+    const url = URL.createObjectURL(new Blob([contents], { type: "application/json" }))
+    const link = Object.assign(document.createElement("a"), {
+      href: url,
+      download: "annotations.coco.json",
+    })
+    link.click()
+    URL.revokeObjectURL(url)
+    engine.say("COCO JSON saved", "COCO JSON 已保存")
+  }
+  const listeners = useMemo(() => createAnnotatorListeners(engine), [engine])
+  useEffect(() => bindWorkspaceShortcuts(engine, () => toolsRef.current), [engine])
 
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
-    tools.switchState("draw")
-    placeSceneChild(tools, tools.appendChild({
-      className: "background-matte",
-      shape: new Rectangle({ x: 0, y: 0, width: 720, height: 420, layer: 0, fillConfig: { color: colors.paper } }),
-    }))
+    tools.changeCursor("crosshair")
     const image = new Image()
     image.onload = () => {
-      const background = tools.appendChild({
+      tools.appendChild({
         className: "background-image",
-        shape: new StayImage({ image, x: 0, y: 0, width: 720, height: 420, opacity: 1, layer: 0 }),
+        shape: new StayImage({
+          image,
+          x: 0,
+          y: 0,
+          width: SOURCE_WIDTH,
+          height: SOURCE_HEIGHT,
+          opacity: 1,
+          layer: 0,
+        }),
       })
-      placeSceneChild(tools, background)
-      tools.log()
-      push(text("background ready", "背景已就绪"))
+      const seed = (x: number, y: number, width: number, height: number) =>
+        addBox(tools, engine, { x, y, width, height })
+      seed(138, 548, 236, 168)
+      seed(466, 572, 112, 82)
+      seed(870, 516, 106, 76)
+      seed(442, 396, 84, 162)
+      tools.resetHistory()
+      engine.changed()
+      engine.say("Workspace ready", "工作区已就绪")
     }
-    image.src = createAnnotationImage(text("sample workspace", "示例工作区"))
+    image.src = annotationImageUrl
   }
 
-  const switchMode = (next: Mode) => {
-    if (toolsRef.current) clearSelection(toolsRef.current)
-    toolsRef.current?.switchState(next)
-    toolsRef.current?.changeCursor(next === "draw" ? "crosshair" : "default")
-    setMode(next)
-    push(text(`mode: ${next}`, `模式：${next === "draw" ? "绘制" : "选择"}`))
+  const importCoco = async (file?: File) => {
+    const tools = toolsRef.current
+    if (!tools || !file) return
+    try {
+      const data = JSON.parse(await file.text())
+      const count = replaceAnnotationsFromCoco(tools, engine, data)
+      engine.say(`Imported ${count} annotations`, `已导入 ${count} 个标注`)
+    } catch {
+      engine.say("Invalid COCO JSON", "COCO JSON 无效")
+    }
   }
 
   const removeSelected = () => {
     const tools = toolsRef.current
-    const id = selectedRef.current
-    if (!tools || !id) return
-    tools.removeChild(id)
-    tools.log()
-    selectedRef.current = null
-    setSelected(text("None", "无"))
-    syncCount(tools)
-    push(text(`${annotationName(id)} removed`, `${annotationName(id)}已移除`))
-  }
-
-  const capture = async () => {
-    const tools = toolsRef.current
     if (!tools) return
-    const canvasArea = sceneCanvasArea(tools, 720, 420)
-    const canvas = await tools.regionToTargetCanvas({
-      area: canvasArea,
-      targetSize: { width: canvasArea.width, height: canvasArea.height },
-      children: tools.getChildrenWithoutRoot(),
-    })
-    setSnapshot(canvas.toDataURL("image/png"))
-    push(text("canvas captured", "Canvas 已截取"))
+    engine.selected.forEach((id) => tools.removeChild(id))
+    engine.selected.clear()
+    commit(tools, engine)
+    engine.say("Selection deleted", "已删除所选标注")
   }
 
   const navigateHistory = (direction: "undo" | "redo") => {
     const tools = toolsRef.current
     if (!tools) return
-    clearSelection(tools)
-    tools[direction]()
-    requestAnimationFrame(() => syncCount(tools))
-    push(direction === "undo" ? text("undo", "撤销") : text("redo", "重做"))
+    navigateWorkspaceHistory(tools, engine, direction)
   }
 
   return (
-    <DemoLayout>
-      <CanvasCard title={text("Image annotation workspace", "图像标注工作区")} description={text("Each box has a stable number. Blue outlines show the current selection; click empty space to clear it.", "每个标注框都有稳定编号；蓝色描边表示当前选中，点击空白处可取消选择。")} wide>
-        <StayCanvas className="demo-canvas" height={420} layers={2} listenerList={listeners} mounted={mounted} width={720} />
-      </CanvasCard>
-      <Toolbar>
-        <Button active={mode === "draw"} onClick={() => switchMode("draw")}>{text("Draw", "绘制")}</Button>
-        <Button active={mode === "select"} onClick={() => switchMode("select")}>{text("Select", "选择")}</Button>
-        <Button disabled={!selectedRef.current} onClick={removeSelected}>{text("Delete selected", "删除所选")}</Button>
-        <Button onClick={() => navigateHistory("undo")}>{text("Undo", "撤销")}</Button>
-        <Button onClick={() => navigateHistory("redo")}>{text("Redo", "重做")}</Button>
-        <Button onClick={() => {
-          const tools = toolsRef.current
-          if (!tools) return
-          void tools.zoom(-100, scenePoint(tools, 360, 210))
-          push(text("zoom in", "放大"))
-        }}>{text("Zoom in", "放大")}</Button>
-        <Button onClick={() => {
-          const tools = toolsRef.current
-          if (!tools) return
-          void resetScene(tools)
-          push(text("transform reset", "变换已重置"))
-        }}>{text("Reset view", "重置视图")}</Button>
-        <Button onClick={capture}>{text("Export image", "导出图像")}</Button>
-        <ResetButton />
-      </Toolbar>
-      <StatusGrid items={[[text("Mode", "模式"), mode === "draw" ? text("draw", "绘制") : text("select", "选择")], [text("Annotations", "标注"), count], [text("Selected", "已选择"), selected], [text("Export", "导出"), snapshot ? text("Ready", "已就绪") : text("Not captured", "未截取")]]} />
-      <EventLog entries={entries} />
-      {snapshot && <div className="snapshot-preview"><img alt={text("Exported annotation canvas", "已导出的标注 Canvas")} src={snapshot} /></div>}
-    </DemoLayout>
+    <div className="annotator-workspace">
+      <section className="annotator-stage">
+        <header className="annotator-stage-header">
+          <div>
+            <h2>{text("Traffic annotation", "道路交通标注")}</h2>
+            <p>{text("Drag to draw. Select a box to move it or use its eight handles.", "拖拽绘制。选中标注框后可移动，或使用八个手柄缩放。")}</p>
+          </div>
+          <span>{canvasSize ? `${canvasSize.width} × ${canvasSize.height}` : text("Fitting image", "正在适配图片")}</span>
+        </header>
+        <div className="annotator-canvas-host" ref={canvasHostRef}>
+          {canvasSize && (
+            <div
+              className="annotator-canvas-frame"
+              style={{ width: canvasSize.width, height: canvasSize.height }}
+            >
+              <div
+                className="annotator-canvas-scale"
+                style={{
+                  transform: `scale(${canvasSize.width / SOURCE_WIDTH}, ${canvasSize.height / SOURCE_HEIGHT})`,
+                }}
+              >
+                <StayCanvas
+                  className="annotator-canvas"
+                  height={SOURCE_HEIGHT}
+                  layers={2}
+                  listenerList={listeners}
+                  mounted={mounted}
+                  width={SOURCE_WIDTH}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <aside className="annotator-rail">
+        <section className="annotator-panel annotator-overview">
+          <div>
+            <span>{text("Annotations", "标注数")}</span>
+            <strong>{summary.count}</strong>
+          </div>
+          <div>
+            <span>{text("Selected", "已选择")}</span>
+            <strong>{summary.selected}</strong>
+          </div>
+        </section>
+
+        <section className="annotator-panel">
+          <h3>{text("Edit", "编辑")}</h3>
+          <div className="annotator-action-grid">
+            <Button disabled={summary.selected === 0} onClick={removeSelected}>
+              {text("Delete", "删除")}
+            </Button>
+            <Button onClick={() => navigateHistory("undo")}>{text("Undo", "撤销")}</Button>
+            <Button onClick={() => navigateHistory("redo")}>{text("Redo", "重做")}</Button>
+            <ResetButton />
+          </div>
+        </section>
+
+        <section className="annotator-panel">
+          <h3>{text("COCO data", "COCO 数据")}</h3>
+          <div className="annotator-action-grid">
+            <Button onClick={engine.save}>{text("Export", "导出")}</Button>
+            <Button onClick={engine.import}>{text("Import", "导入")}</Button>
+          </div>
+          <input
+            ref={inputRef}
+            hidden
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => {
+              void importCoco(event.target.files?.[0])
+              event.target.value = ""
+            }}
+          />
+        </section>
+
+        <section className="annotator-panel annotator-help">
+          <h3>{text("Shortcuts", "快捷键")}</h3>
+          <dl>
+            <div><dt>⌘/Ctrl Z</dt><dd>{text("Undo", "撤销")}</dd></div>
+            <div><dt>⇧⌘/Ctrl Z</dt><dd>{text("Redo", "重做")}</dd></div>
+            <div><dt>⌘/Ctrl S</dt><dd>{text("Export", "导出")}</dd></div>
+            <div><dt>⌘/Ctrl I</dt><dd>{text("Import", "导入")}</dd></div>
+          </dl>
+        </section>
+
+        <section className="annotator-panel annotator-activity" aria-live="polite">
+          <h3>{text("Activity", "最近操作")}</h3>
+          <p>{entries[0] ?? text("Workspace loading", "工作区加载中")}</p>
+        </section>
+
+        <a
+          className="annotator-photo-source"
+          href="https://pixnio.com/es/arquitectura/centro-ciudad/carretera-calle-trafico-ciudad-centro-vehiculo-coche-urbanita"
+          rel="noreferrer"
+          target="_blank"
+        >
+          {text("Traffic photo: Pixnio, CC0", "交通图片：Pixnio，CC0")}
+        </a>
+      </aside>
+    </div>
   )
 }

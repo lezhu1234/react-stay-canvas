@@ -124,7 +124,7 @@ export class DomInputAdapter {
       this.pointerSession.pointerCancel(event, "pointercancel")
     })
     this.addBinding(this.target, "lostpointercapture", (event: PointerEvent) => {
-      this.pointerSession.pointerCancel(event, "lostpointercapture")
+      this.pointerSession.lostPointerCapture(event)
     })
     this.addBinding(
       window,

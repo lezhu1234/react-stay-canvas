@@ -134,8 +134,9 @@ export const catalog: ExampleDefinition[] = [
     order: 11,
     title: l("Image annotation workspace", "图像标注工作区"),
     shortTitle: l("Annotator", "标注"),
-    summary: l("A complete draw, select, move, delete, undo, zoom, and export workflow over a raster image.", "在图片上完成框选标注，并串联选择、移动、删除、撤销、缩放和导出等常用操作。"),
-    features: ["StayImage", "layers", "state", "drag", "history", "capture"],
+    summary: l("A COCO box annotator with smallest-area hit testing, multi-select, move, eight-way resize, history, and JSON transfer.", "一个完整的 COCO 框标注工具，支持最小面积命中、多选、移动、八向缩放、历史和 JSON 导入导出。"),
+    features: ["multi-shape Child", "eight handles", "multi-select", "history", "COCO"],
+    presentation: "workspace",
     component: AnnotatorExample,
   },
   {

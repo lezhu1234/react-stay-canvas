@@ -493,7 +493,7 @@ describe("pointer session lifecycle", () => {
     expect([...pressedState.snapshot()]).toEqual([])
   })
 
-  it("uses lostpointercapture and document hiding as idempotent cancellation paths", () => {
+  it("uses unexpected lostpointercapture and document hiding as cancellation paths", () => {
     const { stage, top } = createStage()
     const reasons: Array<string | undefined> = []
 
@@ -504,7 +504,7 @@ describe("pointer session lifecycle", () => {
     })
 
     top.dispatchEvent(pointer("pointerdown", 10, 10, { button: 0, buttons: 1 }))
-    top.dispatchEvent(pointer("lostpointercapture", 10, 10, { buttons: 0 }))
+    top.dispatchEvent(pointer("lostpointercapture", 10, 10, { buttons: 1 }))
 
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
@@ -514,6 +514,35 @@ describe("pointer session lifecycle", () => {
     document.dispatchEvent(new Event("visibilitychange"))
 
     expect(reasons).toEqual(["lostpointercapture", "visibilitychange"])
+  })
+
+  it("treats capture loss after button release as a non-cancelled terminal", () => {
+    const { stage, top } = createStage()
+    const terminal: Array<{
+      cancelled?: boolean
+      origin: string
+      reason?: string
+    }> = []
+
+    stage.addEventListener({
+      name: "capture-release",
+      event: "dragend",
+      callback: ({ e, originEvent }) => terminal.push({
+        cancelled: e.cancelled,
+        origin: originEvent.type,
+        reason: e.cancelReason,
+      }),
+    })
+
+    top.dispatchEvent(pointer("pointerdown", 10, 10, { button: 0, buttons: 1 }))
+    top.dispatchEvent(pointer("pointermove", 40, 30, { buttons: 1 }))
+    top.dispatchEvent(pointer("lostpointercapture", 40, 30, { buttons: 0 }))
+
+    expect(terminal).toEqual([{
+      cancelled: false,
+      origin: "lostpointercapture",
+      reason: undefined,
+    }])
   })
 
   it("falls back to window mouseup when Pointer Events are unavailable", () => {

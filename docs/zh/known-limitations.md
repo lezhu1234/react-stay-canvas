@@ -17,7 +17,6 @@
 - `Circle`、`Point` 和 `Path` 不是动画 Shape。
 - 第一帧使用 `prependZeroShape: false` 且持续时间非零时，`timeMs: 0` 不能安全定位。请保留默认零帧。
 - 动画 Child 不参与 `log()`、`undo()` 或 `redo()`。
-- 更新已有 Shape 不会自动把 Child 标记为待记录历史；`log()` 只记录由 append/remove 标记的静态 Child。
 
 ## 场景操作
 

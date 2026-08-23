@@ -17,7 +17,6 @@ The following user-visible behavior is not reliable in the current implementatio
 - `Circle`, `Point`, and `Path` are not animated Shapes.
 - A first keyframe appended with `prependZeroShape: false` and a non-zero duration cannot be sought safely at `timeMs: 0`. Keep the default zero frame.
 - Animated Children do not participate in `log()`, `undo()`, or `redo()`.
-- Updating an existing Shape does not automatically mark its Child as a pending history change. `log()` only records static Children marked by append/remove operations.
 
 ## Scene operations
 

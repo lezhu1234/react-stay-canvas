@@ -16,13 +16,21 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
 
   shapeMap: Map<string, T>
   canvas: Canvas
+  private readonly onShapeChange?: (childId: string) => void
   protected updatedLayers = new Set<number>()
 
   //   history
-  constructor({ id, className, shape, canvas }: StayInstantChildProps<T>) {
+  constructor({
+    id,
+    className,
+    shape,
+    canvas,
+    onShapeChange,
+  }: StayInstantChildProps<T>) {
     this.id = id ?? uuid4()
     this.className = className
     this.canvas = canvas
+    this.onShapeChange = onShapeChange
     this.shapeMap = this.assignShapes(shape)
   }
 
@@ -144,6 +152,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     shape.layer = parseLayer(this.canvas.layers, shape.layer)
     this.updatedLayers.add(previousLayer)
     this.updatedLayers.add(shape.layer)
+    this.onShapeChange?.(this.id)
   }
 
   layerDraw(layer: number) {

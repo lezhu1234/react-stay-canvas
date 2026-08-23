@@ -67,6 +67,7 @@ class Stay<EventName extends string> {
       }),
       canvas: this.root,
       className: ROOTNAME,
+      onShapeChange: (childId) => this.markHistoryChildChanged(childId),
     })
     this.children.add(this.rootChild)
     this.store = new Map<string, any>()
@@ -154,6 +155,10 @@ class Stay<EventName extends string> {
   }
   get unLogedChildrenIds() {
     return this.history.unLogedChildrenIds
+  }
+
+  markHistoryChildChanged(childId: string) {
+    this.unLogedChildrenIds.add(childId)
   }
 
   clearEventListeners() {

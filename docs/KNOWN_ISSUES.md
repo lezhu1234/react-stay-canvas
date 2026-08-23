@@ -53,14 +53,6 @@ React 渲染现在使用规范化后的 context setter 数量创建 Canvas，并
 
 Shape 通过 `update({ layer })` 换层时的脏层缺口已经修复：`applyUpdate()` 会把变更前的 layer 交给 Child，Child 规范化新 layer 后同时标记新旧两层。自动化测试覆盖旧层清除、新层绘制和负 layer 规范化。
 
-## 纯 Shape 更新不会自动进入历史
-
-状态：待处理
-
-`appendChild()` 与 `removeChild()` 会把静态 Child id 加入待记录集合，但 Shape 的 `update()` 当前只标记绘制 layer，不会标记历史。已有 Child 移动或改样式后单独调用 `log()`，不会可靠地产生 update step。
-
-当前需要撤销的集成场景通过保留 id 的 remove/append replacement 显式制造历史差异。正式修复应建立清晰的公开更新入口，让一次业务操作可以标记 Child、保留变更前快照并在手势结束时提交；不能在每个 `mousemove` 自动写历史，也不能重新公开 `StayInstantChild.update()` 这个不负责正常脏层语义的内部原语。
-
 ## 关闭动画零帧后无法安全定位到时间 0
 
 状态：待处理

@@ -29,4 +29,10 @@ export class History {
     this.historyChildren = this.captureChildren()
     this.unLogedChildrenIds.clear()
   }
+
+  reset() {
+    this.stack = []
+    this.stackIndex = 0
+    this.snapshot()
+  }
 }

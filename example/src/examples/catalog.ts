@@ -135,7 +135,8 @@ export const catalog: ExampleDefinition[] = [
     title: l("Image annotation workspace", "图像标注工作区"),
     shortTitle: l("Annotator", "标注"),
     summary: l("A COCO box annotator with smallest-area hit testing, multi-select, move, eight-way resize, history, and JSON transfer.", "一个完整的 COCO 框标注工具，支持最小面积命中、多选、移动、八向缩放、历史和 JSON 导入导出。"),
-    features: ["StayImage", "hit testing", "multi-select", "resize cursors", "history", "COCO"],
+    features: ["multi-shape Child", "eight handles", "multi-select", "history", "COCO"],
+    presentation: "workspace",
     component: AnnotatorExample,
   },
   {

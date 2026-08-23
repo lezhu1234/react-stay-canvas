@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import {
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import {
   type Coordinate,
   type Cursor,
@@ -13,15 +20,11 @@ import {
 
 import {
   Button,
-  CanvasCard,
   colors,
-  DemoLayout,
-  EventLog,
-  placeSceneChild,
   ResetButton,
-  StatusGrid,
-  Toolbar,
+  rgba,
 } from "../../components/DemoKit"
+import annotationImageUrl from "../../assets/annotation-traffic.jpg"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition } from "../actionEventGuards"
 
@@ -36,42 +39,58 @@ export type AnnotatorEngine = {
   import: () => void
 }
 
-const EDGE = 8
+const SOURCE_WIDTH = 1100
+const SOURCE_HEIGHT = 733
+const HANDLE_SIZE = 12
 const MIN_SIZE = 12
+const HANDLE_ORDER: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"]
 const boxOf = (child: BoxChild) => child.shapeMap.get("0") as Rectangle
 const labelOf = (child: BoxChild) => child.shapeMap.get("1") as StayText
+const handlesOf = (child: BoxChild) => HANDLE_ORDER.map((handle, index) => ({
+  handle,
+  shape: child.shapeMap.get(String(index + 2)) as Rectangle,
+}))
 const annotations = (tools: StayTools) =>
   tools.getChildrenBySelector<Rectangle | StayText>(".annotation") as BoxChild[]
 const imageBound = (tools: StayTools) =>
-  tools.getChildBySelector<StayImage>(".background-image")?.shape.getBound() ?? {
+  tools.getChildBySelector<StayImage>(".background-image")?.shape.getBound() ??
+  tools.getChildBySelector<Rectangle>(".stay-canvas")?.shape.getBound() ?? {
     x: 0,
     y: 0,
-    width: 720,
-    height: 420,
+    width: SOURCE_WIDTH,
+    height: SOURCE_HEIGHT,
   }
 
 const hitBox = (tools: StayTools, point: Coordinate) => annotations(tools)
   .filter((child) => boxOf(child).contains(point))
   .sort((a, b) => boxOf(a).area - boxOf(b).area)[0]
 
-function handleAt(shape: Rectangle, point: Coordinate): Handle | undefined {
+function handleCenters(shape: Rectangle): Record<Handle, Coordinate> {
+  const left = shape.x
+  const centerX = shape.x + shape.width / 2
   const right = shape.x + shape.width
+  const top = shape.y
+  const centerY = shape.y + shape.height / 2
   const bottom = shape.y + shape.height
-  const outsideBox =
-    point.x < shape.x - EDGE ||
-    point.x > right + EDGE ||
-    point.y < shape.y - EDGE ||
-    point.y > bottom + EDGE
-  if (outsideBox) return
+  return {
+    nw: { x: left, y: top }, n: { x: centerX, y: top }, ne: { x: right, y: top },
+    e: { x: right, y: centerY }, se: { x: right, y: bottom },
+    s: { x: centerX, y: bottom }, sw: { x: left, y: bottom },
+    w: { x: left, y: centerY },
+  }
+}
 
-  const horizontal = Math.abs(point.x - shape.x) <= EDGE
-    ? "w"
-    : Math.abs(point.x - right) <= EDGE ? "e" : ""
-  const vertical = Math.abs(point.y - shape.y) <= EDGE
-    ? "n"
-    : Math.abs(point.y - bottom) <= EDGE ? "s" : ""
-  const handle = `${vertical}${horizontal}`
-  return handle ? handle as Handle : undefined
+function syncHandles(child: BoxChild) {
+  const centers = handleCenters(boxOf(child))
+  handlesOf(child).forEach(({ handle, shape }) => {
+    const center = centers[handle]
+    shape.update({
+      x: center.x - HANDLE_SIZE / 2,
+      y: center.y - HANDLE_SIZE / 2,
+      width: HANDLE_SIZE,
+      height: HANDLE_SIZE,
+    })
+  })
 }
 
 function resizeAxis(
@@ -182,7 +201,8 @@ function addBox(
   rect: { x: number; y: number; width: number; height: number },
 ) {
   const number = ++engine.sequence
-  return tools.appendChild<Rectangle | StayText>({
+  const transparent = rgba(0, 0, 0, 0)
+  const child = tools.appendChild<Rectangle | StayText>({
     id: `annotation-${number}`,
     className: "annotation",
     shape: [
@@ -201,8 +221,20 @@ function addBox(
         font: { size: 12, fontWeight: 700 },
         fillConfig: { color: colors.ink },
       }),
+      ...HANDLE_ORDER.map(() => new Rectangle({
+        x: rect.x,
+        y: rect.y,
+        width: HANDLE_SIZE,
+        height: HANDLE_SIZE,
+        layer: 1,
+        zIndex: 3,
+        fillConfig: { color: transparent },
+        strokeConfig: { color: transparent, lineWidth: 2 },
+      })),
     ],
   }) as BoxChild
+  syncHandles(child)
+  return child
 }
 
 function paintSelection(tools: StayTools, selected: Set<string>) {
@@ -214,6 +246,13 @@ function paintSelection(tools: StayTools, selected: Set<string>) {
         lineWidth: active ? 5 : 3,
       },
     })
+    handlesOf(child).forEach(({ shape }) => shape.update({
+      fillConfig: { color: active ? colors.paper : rgba(0, 0, 0, 0) },
+      strokeConfig: {
+        color: active ? colors.blue : rgba(0, 0, 0, 0),
+        lineWidth: 2,
+      },
+    }))
   })
 }
 
@@ -240,11 +279,30 @@ function commit(tools: StayTools, engine: AnnotatorEngine) {
 }
 
 function selectedHandle(tools: StayTools, engine: AnnotatorEngine, point: Coordinate) {
-  return annotations(tools)
+  const children = annotations(tools)
     .filter((child) => engine.selected.has(child.id))
     .sort((a, b) => boxOf(a).area - boxOf(b).area)
-    .map((child) => ({ child, handle: handleAt(boxOf(child), point) }))
-    .find(({ handle }) => handle)
+  for (const child of children) {
+    const box = boxOf(child)
+    const insetX = Math.min(HANDLE_SIZE / 2, box.width / 3)
+    const insetY = Math.min(HANDLE_SIZE / 2, box.height / 3)
+    const inMoveZone =
+      point.x >= box.x + insetX &&
+      point.x <= box.x + box.width - insetX &&
+      point.y >= box.y + insetY &&
+      point.y <= box.y + box.height - insetY
+    if (inMoveZone) return
+    const match = handlesOf(child)
+      .filter(({ shape }) => shape.contains(point))
+      .sort((a, b) => {
+        const aCenter = a.shape.getCenterPoint()
+        const bCenter = b.shape.getCenterPoint()
+        const aDistance = (aCenter.x - point.x) ** 2 + (aCenter.y - point.y) ** 2
+        const bDistance = (bCenter.x - point.x) ** 2 + (bCenter.y - point.y) ** 2
+        return aDistance - bDistance
+      })[0]
+    if (match) return { child, handle: match.handle }
+  }
 }
 
 function snapshotBoxes(tools: StayTools, ids: string[]) {
@@ -342,7 +400,7 @@ export function createAnnotatorListeners(engine: AnnotatorEngine): ListenerProps
               const target = hitBox(tools, start)
               const invalidStart = !containsPoint(imageBound(tools), start)
               if (invalidStart || e.pressedKeys.has("Meta") || e.pressedKeys.has("Control")) {
-                session = { kind: "idle", selected }
+                session = { kind: "idle", selected, start }
               } else if (edge) {
                 session = {
                   kind: "resize",
@@ -370,13 +428,14 @@ export function createAnnotatorListeners(engine: AnnotatorEngine): ListenerProps
               }
             }
             if (session.kind === "move") {
+              const point = e.point
               const offsetX = Math.max(
                 session.limits.minX,
-                Math.min(e.x - session.start.x, session.limits.maxX),
+                Math.min(point.x - session.start.x, session.limits.maxX),
               )
               const offsetY = Math.max(
                 session.limits.minY,
-                Math.min(e.y - session.start.y, session.limits.maxY),
+                Math.min(point.y - session.start.y, session.limits.maxY),
               )
               session.ids.forEach((id: string) => {
                 tools.getChildById(id)?.move(offsetX, offsetY)
@@ -397,19 +456,22 @@ export function createAnnotatorListeners(engine: AnnotatorEngine): ListenerProps
                 bound,
               )
               labelOf(child).update({ x: boxOf(child).x + 8, y: boxOf(child).y + 16 })
+              syncHandles(child)
               return session
             }
             if (session.kind !== "draw") return session
+            const point = e.point
             const child = session.child ?? addBox(tools, engine, {
-              x: e.x,
-              y: e.y,
+              x: point.x,
+              y: point.y,
               width: MIN_SIZE,
               height: MIN_SIZE,
             })
             const bound = imageBound(tools)
-            const rect = boxBetween(session.start, clampPoint(e.point, bound), bound)
+            const rect = boxBetween(session.start, clampPoint(point, bound), bound)
             boxOf(child).update(rect)
             labelOf(child).update({ x: rect.x + 8, y: rect.y + 16 })
+            syncHandles(child)
             return { ...session, child }
           },
           dragend: () => {
@@ -459,8 +521,9 @@ export function createAnnotatorListeners(engine: AnnotatorEngine): ListenerProps
           tools.changeCursor("crosshair")
           return
         }
-        const edge = selectedHandle(tools, engine, e.point)
-        const target = hitBox(tools, e.point)
+        const point = e.point
+        const edge = selectedHandle(tools, engine, point)
+        const target = hitBox(tools, point)
         const cursor = edge?.handle
           ? cursors[edge.handle]
           : target && engine.selected.has(target.id) ? "move" : "crosshair"
@@ -483,21 +546,29 @@ export function createAnnotatorListeners(engine: AnnotatorEngine): ListenerProps
 export function toCoco(tools: StayTools) {
   const image = tools.getChildBySelector<StayImage>(".background-image")?.shape
   const origin = image?.getBound() ?? imageBound(tools)
+  const scaleX = SOURCE_WIDTH / origin.width
+  const scaleY = SOURCE_HEIGHT / origin.height
   return {
     images: [{
       id: 1,
-      file_name: "street-scene.png",
-      width: origin.width,
-      height: origin.height,
+      file_name: "annotation-traffic.jpg",
+      width: SOURCE_WIDTH,
+      height: SOURCE_HEIGHT,
     }],
     annotations: annotations(tools).map((child, index) => {
       const box = boxOf(child)
+      const bbox = [
+        (box.x - origin.x) * scaleX,
+        (box.y - origin.y) * scaleY,
+        box.width * scaleX,
+        box.height * scaleY,
+      ]
       return {
         id: index + 1,
         image_id: 1,
         category_id: 1,
-        bbox: [box.x - origin.x, box.y - origin.y, box.width, box.height],
-        area: box.area,
+        bbox,
+        area: bbox[2] * bbox[3],
         iscrowd: 0,
       }
     }),
@@ -525,47 +596,81 @@ export function replaceAnnotationsFromCoco(
       box[1] >= 0 &&
       box[2] > 0 &&
       box[3] > 0 &&
-      box[0] + box[2] <= origin.width &&
-      box[1] + box[3] <= origin.height
+      box[0] + box[2] <= SOURCE_WIDTH &&
+      box[1] + box[3] <= SOURCE_HEIGHT
     if (!valid) throw new Error("COCO annotation has an invalid bbox")
     return box as number[]
   })
   select(tools, engine)
   annotations(tools).forEach((child) => tools.removeChild(child.id))
+  const scaleX = origin.width / SOURCE_WIDTH
+  const scaleY = origin.height / SOURCE_HEIGHT
   boxes.forEach(([x, y, width, height]) => {
-    addBox(tools, engine, { x: x + origin.x, y: y + origin.y, width, height })
+    addBox(tools, engine, {
+      x: x * scaleX + origin.x,
+      y: y * scaleY + origin.y,
+      width: width * scaleX,
+      height: height * scaleY,
+    })
   })
   commit(tools, engine)
   return boxes.length
 }
 
-function backgroundSource() {
-  const canvas = document.createElement("canvas")
-  canvas.width = 720
-  canvas.height = 420
-  const context = canvas.getContext("2d")!
-  const blocks: Array<[string, number, number, number, number]> = [
-    ["#b9d8e8", 0, 0, 720, 250], ["#d9c7a6", 36, 72, 210, 190],
-    ["#c26f51", 270, 105, 150, 157], ["#617681", 448, 48, 220, 214],
-    ["#667078", 0, 250, 720, 170], ["#d95d4f", 92, 276, 188, 82],
-    ["#d95d4f", 125, 250, 96, 34], ["#e8edf1", 139, 260, 68, 24],
-    ["#28404f", 112, 344, 38, 28], ["#28404f", 228, 344, 38, 28],
-    ["#e2b64e", 430, 286, 174, 66], ["#e2b64e", 466, 265, 82, 27],
-    ["#273c48", 456, 341, 34, 26], ["#273c48", 550, 341, 34, 26],
-  ]
-  blocks.forEach(([color, x, y, width, height]) => {
-    context.fillStyle = color
-    context.fillRect(x, y, width, height)
-  })
-  context.fillStyle = "#f4e5a0"
-  for (let x = 20; x < 720; x += 96) context.fillRect(x, 332, 54, 7)
-  return canvas.toDataURL("image/png")
+export function fitCanvasToHost(width: number, height: number) {
+  const scale = Math.min(width / SOURCE_WIDTH, height / SOURCE_HEIGHT)
+  return {
+    width: Math.max(1, Math.floor(SOURCE_WIDTH * scale)),
+    height: Math.max(1, Math.floor(SOURCE_HEIGHT * scale)),
+  }
+}
+
+export function observeFittedCanvas(
+  host: HTMLDivElement,
+  onSize: (size: { width: number; height: number }) => void,
+) {
+  let frame = 0
+  const measure = () => {
+    cancelAnimationFrame(frame)
+    frame = requestAnimationFrame(() => {
+      if (host.clientWidth > 0 && host.clientHeight > 0) {
+        onSize(fitCanvasToHost(host.clientWidth, host.clientHeight))
+      }
+    })
+  }
+  const observer = typeof ResizeObserver === "function"
+    ? new ResizeObserver(measure)
+    : undefined
+  observer?.observe(host)
+  if (!observer) window.addEventListener("resize", measure)
+  measure()
+  return () => {
+    cancelAnimationFrame(frame)
+    observer?.disconnect()
+    if (!observer) window.removeEventListener("resize", measure)
+  }
+}
+
+function useFittedCanvas(hostRef: RefObject<HTMLDivElement>) {
+  const [size, setSize] = useState<{ width: number; height: number }>()
+
+  useLayoutEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    return observeFittedCanvas(host, (next) => setSize((current) =>
+      current?.width === next.width && current.height === next.height ? current : next,
+    ))
+  }, [hostRef])
+
+  return size
 }
 
 export default function AnnotatorExample() {
   const { text } = useI18n()
   const toolsRef = useRef<StayTools>()
   const inputRef = useRef<HTMLInputElement>(null)
+  const canvasHostRef = useRef<HTMLDivElement>(null)
+  const canvasSize = useFittedCanvas(canvasHostRef)
   const [summary, setSummary] = useState({ count: 0, selected: 0 })
   const [entries, setEntries] = useState<string[]>([])
   const engineRef = useRef<AnnotatorEngine>({
@@ -605,26 +710,29 @@ export default function AnnotatorExample() {
     tools.changeCursor("crosshair")
     const image = new Image()
     image.onload = () => {
-      const background = placeSceneChild(tools, tools.appendChild({
+      tools.appendChild({
         className: "background-image",
         shape: new StayImage({
           image,
           x: 0,
           y: 0,
-          width: 720,
-          height: 420,
+          width: SOURCE_WIDTH,
+          height: SOURCE_HEIGHT,
           opacity: 1,
           layer: 0,
         }),
-      }))
-      const { x, y } = background.shape
-      addBox(tools, engine, { x: x + 82, y: y + 244, width: 210, height: 132 })
-      addBox(tools, engine, { x: x + 430, y: y + 257, width: 178, height: 112 })
+      })
+      const seed = (x: number, y: number, width: number, height: number) =>
+        addBox(tools, engine, { x, y, width, height })
+      seed(138, 548, 236, 168)
+      seed(466, 572, 112, 82)
+      seed(870, 516, 106, 76)
+      seed(442, 396, 84, 162)
       tools.resetHistory()
       engine.changed()
       engine.say("Workspace ready", "工作区已就绪")
     }
-    image.src = backgroundSource()
+    image.src = annotationImageUrl
   }
 
   const importCoco = async (file?: File) => {
@@ -655,51 +763,107 @@ export default function AnnotatorExample() {
   }
 
   return (
-    <DemoLayout>
-      <CanvasCard
-        title={text("COCO image annotator", "COCO 图像标注工具")}
-        description={text(
-          "Drag to draw by default. Click a box to select it, then drag it to move or drag its edges and corners to resize.",
-          "默认拖拽绘制；先点击标注框选中，再拖拽移动，或拖拽其边和四角调整大小。",
-        )}
-        wide
-      >
-        <StayCanvas
-          className="demo-canvas"
-          height={420}
-          layers={2}
-          listenerList={listeners}
-          mounted={mounted}
-          width={720}
-        />
-      </CanvasCard>
-      <Toolbar>
-        <Button disabled={summary.selected === 0} onClick={removeSelected}>
-          {text("Delete selected", "删除所选")}
-        </Button>
-        <Button onClick={() => navigateHistory("undo")}>{text("Undo", "撤销")}</Button>
-        <Button onClick={() => navigateHistory("redo")}>{text("Redo", "重做")}</Button>
-        <Button onClick={engine.save}>{text("Export COCO", "导出 COCO")}</Button>
-        <Button onClick={engine.import}>{text("Import COCO", "导入 COCO")}</Button>
-        <ResetButton />
-        <input
-          ref={inputRef}
-          hidden
-          type="file"
-          accept="application/json,.json"
-          onChange={(event) => {
-            void importCoco(event.target.files?.[0])
-            event.target.value = ""
-          }}
-        />
-      </Toolbar>
-      <StatusGrid items={[
-        [text("Annotations", "标注数"), summary.count],
-        [text("Selected", "已选择"), summary.selected],
-        [text("Draw", "绘制"), text("Drag empty space", "空白处拖拽")],
-        [text("Shortcuts", "快捷键"), "⌘/Ctrl Z · ⇧⌘/Ctrl Z · ⌘/Ctrl S · ⌘/Ctrl I"],
-      ]} />
-      <EventLog entries={entries} />
-    </DemoLayout>
+    <div className="annotator-workspace">
+      <section className="annotator-stage">
+        <header className="annotator-stage-header">
+          <div>
+            <h2>{text("Traffic annotation", "道路交通标注")}</h2>
+            <p>{text("Drag to draw. Select a box to move it or use its eight handles.", "拖拽绘制。选中标注框后可移动，或使用八个手柄缩放。")}</p>
+          </div>
+          <span>{canvasSize ? `${canvasSize.width} × ${canvasSize.height}` : text("Fitting image", "正在适配图片")}</span>
+        </header>
+        <div className="annotator-canvas-host" ref={canvasHostRef}>
+          {canvasSize && (
+            <div
+              className="annotator-canvas-frame"
+              style={{ width: canvasSize.width, height: canvasSize.height }}
+            >
+              <div
+                className="annotator-canvas-scale"
+                style={{
+                  transform: `scale(${canvasSize.width / SOURCE_WIDTH}, ${canvasSize.height / SOURCE_HEIGHT})`,
+                }}
+              >
+                <StayCanvas
+                  className="annotator-canvas"
+                  height={SOURCE_HEIGHT}
+                  layers={2}
+                  listenerList={listeners}
+                  mounted={mounted}
+                  width={SOURCE_WIDTH}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <aside className="annotator-rail">
+        <section className="annotator-panel annotator-overview">
+          <div>
+            <span>{text("Annotations", "标注数")}</span>
+            <strong>{summary.count}</strong>
+          </div>
+          <div>
+            <span>{text("Selected", "已选择")}</span>
+            <strong>{summary.selected}</strong>
+          </div>
+        </section>
+
+        <section className="annotator-panel">
+          <h3>{text("Edit", "编辑")}</h3>
+          <div className="annotator-action-grid">
+            <Button disabled={summary.selected === 0} onClick={removeSelected}>
+              {text("Delete", "删除")}
+            </Button>
+            <Button onClick={() => navigateHistory("undo")}>{text("Undo", "撤销")}</Button>
+            <Button onClick={() => navigateHistory("redo")}>{text("Redo", "重做")}</Button>
+            <ResetButton />
+          </div>
+        </section>
+
+        <section className="annotator-panel">
+          <h3>{text("COCO data", "COCO 数据")}</h3>
+          <div className="annotator-action-grid">
+            <Button onClick={engine.save}>{text("Export", "导出")}</Button>
+            <Button onClick={engine.import}>{text("Import", "导入")}</Button>
+          </div>
+          <input
+            ref={inputRef}
+            hidden
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => {
+              void importCoco(event.target.files?.[0])
+              event.target.value = ""
+            }}
+          />
+        </section>
+
+        <section className="annotator-panel annotator-help">
+          <h3>{text("Shortcuts", "快捷键")}</h3>
+          <dl>
+            <div><dt>⌘/Ctrl Z</dt><dd>{text("Undo", "撤销")}</dd></div>
+            <div><dt>⇧⌘/Ctrl Z</dt><dd>{text("Redo", "重做")}</dd></div>
+            <div><dt>⌘/Ctrl S</dt><dd>{text("Export", "导出")}</dd></div>
+            <div><dt>⌘/Ctrl I</dt><dd>{text("Import", "导入")}</dd></div>
+          </dl>
+        </section>
+
+        <section className="annotator-panel annotator-activity" aria-live="polite">
+          <h3>{text("Activity", "最近操作")}</h3>
+          <p>{entries[0] ?? text("Workspace loading", "工作区加载中")}</p>
+        </section>
+
+        <a
+          className="annotator-photo-source"
+          href="https://pixnio.com/es/arquitectura/centro-ciudad/carretera-calle-trafico-ciudad-centro-vehiculo-coche-urbanita"
+          rel="noreferrer"
+          target="_blank"
+        >
+          {text("Traffic photo: Pixnio, CC0", "交通图片：Pixnio，CC0")}
+        </a>
+      </aside>
+    </div>
   )
 }

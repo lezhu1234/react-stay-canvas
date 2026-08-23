@@ -6,7 +6,9 @@ import {
   type AnnotatorEngine,
   bindWorkspaceShortcuts,
   createAnnotatorListeners,
+  fitCanvasToHost,
   navigateWorkspaceHistory,
+  observeFittedCanvas,
   replaceAnnotationsFromCoco,
   toCoco,
 } from "../example/src/examples/integrated/AnnotatorExample"
@@ -56,10 +58,13 @@ describe("integrated annotator example", () => {
     const children = stage.tools.getChildrenBySelector<Rectangle | StayText>(".annotation")
     const [small, large] = [...children].sort((a, b) => box(a).area - box(b).area)
     expect(children).toHaveLength(2)
+    expect(small.shapeMap.size).toBe(10)
     expect(box(small).getBound()).toEqual({ x: 70, y: 70, width: 50, height: 50 })
 
     await click(top, [90, 90])
     expect([...engine.selected]).toEqual([small.id])
+    expect([...small.shapeMap.values()].slice(2)).toHaveLength(8)
+    expect(([...small.shapeMap.values()][2] as Rectangle).fillConfig.color.a).toBe(1)
 
     key(top, "keydown", "Control")
     await click(top, [50, 50])
@@ -99,7 +104,7 @@ describe("integrated annotator example", () => {
   })
 
   it("serializes annotation Child geometry as COCO boxes", async () => {
-    const { stage, top } = createStage({ width: 720, height: 420 })
+    const { stage, top } = createStage({ width: 550, height: 733 })
     const engine: AnnotatorEngine = {
       selected: new Set(), sequence: 0, changed: vi.fn(), say: vi.fn(), save: vi.fn(), import: vi.fn(),
     }
@@ -108,20 +113,20 @@ describe("integrated annotator example", () => {
 
     const coco = toCoco(stage.tools)
     expect(coco).toMatchObject({
-      images: [{ id: 1, width: 720, height: 420 }],
-      annotations: [{ image_id: 1, category_id: 1, bbox: [25, 35, 100, 60], area: 6000, iscrowd: 0 }],
+      images: [{ id: 1, width: 1100, height: 733 }],
+      annotations: [{ image_id: 1, category_id: 1, bbox: [50, 35, 200, 60], area: 12000, iscrowd: 0 }],
       categories: [{ id: 1, name: "vehicle" }],
     })
 
-    const target = createStage({ width: 720, height: 420 }).stage
+    const target = createStage({ width: 1100, height: 733 }).stage
     const targetEngine: AnnotatorEngine = {
       selected: new Set(), sequence: 0, changed: vi.fn(), say: vi.fn(), save: vi.fn(), import: vi.fn(),
     }
     expect(replaceAnnotationsFromCoco(target.tools, targetEngine, coco)).toBe(1)
     expect(box(target.tools.getChildrenBySelector(".annotation")[0]).getBound()).toEqual({
-      x: 25,
+      x: 50,
       y: 35,
-      width: 100,
+      width: 200,
       height: 60,
     })
     expect(() => replaceAnnotationsFromCoco(target.tools, targetEngine, {})).toThrow(
@@ -137,12 +142,54 @@ describe("integrated annotator example", () => {
     })
     createAnnotatorListeners(targetEngine).forEach((listener) => target.addEventListener(listener))
     await click(target.root.layers[1], [0.5, 0.5])
-    await drag(target.root.layers[1], [0.5, 0.5], [12, 12])
+    await drag(target.root.layers[1], [0.9, 0.9], [12, 12])
     expect(box(target.tools.getChildrenBySelector(".annotation")[0]).getBound()).toEqual({
       x: 0,
       y: 0,
       width: 12,
       height: 12,
+    })
+    await drag(target.root.layers[1], [6, 6], [20, 20])
+    expect(box(target.tools.getChildrenBySelector(".annotation")[0]).getBound()).toEqual({
+      x: 14,
+      y: 14,
+      width: 12,
+      height: 12,
+    })
+  })
+
+  it("uses the library-normalized coordinates for a CSS-scaled workspace", async () => {
+    const { stage, layers, top } = createStage({ width: 1100, height: 733 })
+    const bound = {
+      left: 0,
+      top: 0,
+      x: 0,
+      y: 0,
+      width: 550,
+      height: 366.5,
+      right: 550,
+      bottom: 366.5,
+      toJSON: () => ({}),
+    }
+    layers.forEach((layer) => {
+      layer.getBoundingClientRect = () => bound
+    })
+    const engine: AnnotatorEngine = {
+      selected: new Set(),
+      sequence: 0,
+      changed: vi.fn(),
+      say: vi.fn(),
+      save: vi.fn(),
+      import: vi.fn(),
+    }
+    createAnnotatorListeners(engine).forEach((listener) => stage.addEventListener(listener))
+
+    await drag(top, [20, 30], [70, 80])
+    expect(box(stage.tools.getChildrenBySelector(".annotation")[0]).getBound()).toEqual({
+      x: 40,
+      y: 60,
+      width: 100,
+      height: 100,
     })
   })
 
@@ -262,5 +309,44 @@ describe("integrated annotator example", () => {
     expect(engine.save).toHaveBeenCalledOnce()
     unbind()
     button.remove()
+  })
+
+  it("refits the fixed source canvas whenever its host changes size", () => {
+    let width = 900
+    let height = 600
+    let resize: (() => void) | undefined
+    const host = document.createElement("div")
+    Object.defineProperties(host, {
+      clientWidth: { configurable: true, get: () => width },
+      clientHeight: { configurable: true, get: () => height },
+    })
+    const originalObserver = globalThis.ResizeObserver
+    const originalRaf = globalThis.requestAnimationFrame
+    const originalCancelRaf = globalThis.cancelAnimationFrame
+    class ResizeObserverMock {
+      constructor(callback: () => void) { resize = callback }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    }
+    globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver
+    globalThis.requestAnimationFrame = (callback) => {
+      callback(0)
+      return 1
+    }
+    globalThis.cancelAnimationFrame = () => {}
+    const sizes: Array<{ width: number; height: number }> = []
+
+    const cleanup = observeFittedCanvas(host, (size) => sizes.push(size))
+    expect(sizes).toEqual([fitCanvasToHost(900, 600)])
+    width = 480
+    height = 700
+    resize?.()
+    expect(sizes.at(-1)).toEqual(fitCanvasToHost(480, 700))
+    cleanup()
+
+    globalThis.ResizeObserver = originalObserver
+    globalThis.requestAnimationFrame = originalRaf
+    globalThis.cancelAnimationFrame = originalCancelRaf
   })
 })

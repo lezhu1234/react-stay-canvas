@@ -88,7 +88,12 @@ width: <width>px;
 height: <height>px;
 ```
 
-Each Canvas is absolutely positioned at `(0, 0)`. `width` and `height` define the real drawing size; a wider parent does not stretch it automatically. Responsive layouts should compute explicit numeric dimensions in application code and enable `recreateOnResize` when rebuilding is intended.
+Each Canvas is absolutely positioned at `(0, 0)`. `width` and `height` define the logical scene and bitmap resolution; a wider parent does not stretch it automatically. Responsive layouts have two distinct options:
+
+- Change the logical drawing size by passing explicit numeric dimensions and enable `recreateOnResize` when rebuilding the scene is intended.
+- Preserve the logical scene while applying a positive, axis-aligned CSS scale to the rendered Canvas or one of its wrappers. Native pointer input is normalized from the rendered bounding rectangle into Canvas-local logical coordinates before event routing.
+
+The second option preserves scene content and history but only changes presentation. Keep the rendered scale stable during an active Pointer Session; changing layout in the middle of one interaction is outside this contract. Display scaling does not increase bitmap resolution, and it does not define coordinate behavior for rotation, skew, or mirroring.
 
 ## Related reference
 

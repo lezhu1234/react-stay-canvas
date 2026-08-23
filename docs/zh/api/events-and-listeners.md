@@ -58,7 +58,7 @@ Listener 的目标在标准 drag/move 手势开始时确定，后续 continuatio
 | 字段 | 出现条件 |
 | --- | --- |
 | `target` | selector 成功解析出 Child |
-| `x`, `y`, `point` | 指针、鼠标、wheel 或显式提供坐标的手动 action |
+| `x`, `y`, `point` | 指针、鼠标、wheel 或显式提供坐标的手动 action；即使 CSS 缩放显示，原生输入仍是 Canvas 局部逻辑坐标 |
 | `key` | 键盘 action 或显式提供 key 的手动 action |
 | `deltaX`, `deltaY`, `deltaZ` | wheel action 或显式提供 delta 的手动 action |
 | `pointerId`, `pointerType` | Pointer Events 输入 |

@@ -63,7 +63,7 @@ Colors currently use RGBA objects shaped as `{ r, g, b, a }`, with RGB values fr
 }
 ```
 
-Use the outer layout to control spacing, scrolling, and responsive placement. Do not rely on CSS scaling of the internal Canvas as a substitute for `width` and `height`: CSS scaling changes the presentation without updating scene coordinates or bitmap resolution.
+Use the outer layout to control spacing, scrolling, and responsive placement. Axis-aligned CSS scaling may change the displayed size: native pointer coordinates are normalized back into the `width` × `height` scene before event conditions, target hit testing, and Listeners run. Display scaling does not change scene geometry or bitmap resolution; change `width` and `height` and rebuild when the logical drawing resolution must change. Rotation, skew, and mirroring are not supported coordinate transforms.
 
 The `layers` prop controls how many native Canvas elements form the scene. For example, `layers={3}` creates three equally sized, overlapping layers—not three side-by-side scenes.
 

@@ -5,17 +5,21 @@ import { Circle, Line, Rectangle, StayText } from "react-stay-canvas"
 import {
   type DiagramDocument,
   type DiagramEngine,
+} from "../example/src/examples/integrated/diagram/model"
+import {
+  addDiagramNode,
+  navigateDiagramHistory,
+  replaceDiagramFromDocument,
+  toDiagramDocument,
+} from "../example/src/examples/integrated/diagram/document"
+import {
   DiagramClickEvent,
   DiagramDragStartEvent,
   DiagramDoubleClickEvent,
   DiagramSpaceStartMoveEvent,
-  addDiagramNode,
   createDiagramListeners,
-  navigateDiagramHistory,
-  replaceDiagramFromDocument,
-  seedDiagram,
-  toDiagramDocument,
-} from "../example/src/examples/integrated/DiagramExample"
+} from "../example/src/examples/integrated/diagram/interactions"
+import { seedDiagram } from "../example/src/examples/integrated/diagram/scene"
 import { createStage, md, mm, mu } from "./helpers/stage"
 
 vi.stubGlobal("OffscreenCanvas", class {
@@ -26,16 +30,16 @@ vi.stubGlobal("OffscreenCanvas", class {
 })
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
-const body = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("0") as Rectangle
-const label = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("1") as StayText
-const mainLine = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("0") as Line
+const body = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("body") as Rectangle
+const label = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("label") as StayText
+const mainLine = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("segment:0") as Line
 const edgeGeometry = (child: { shapeMap: Map<string, unknown> }) => ({
-  lines: [0, 1, 2, 3, 4].map((index) => {
-    const line = child.shapeMap.get(String(index)) as Line
+  lines: ["segment:0", "segment:1", "segment:2", "arrow:0", "arrow:1"].map((key) => {
+    const line = child.shapeMap.get(key) as Line
     return { x1: line.x1, y1: line.y1, x2: line.x2, y2: line.y2 }
   }),
-  handles: [5, 6].map((index) => {
-    const handle = child.shapeMap.get(String(index)) as Circle
+  handles: ["handle:from", "handle:to"].map((key) => {
+    const handle = child.shapeMap.get(key) as Circle
     return { x: handle.x, y: handle.y, radius: handle.radius }
   }),
 })
@@ -99,6 +103,15 @@ describe("integrated diagram example", () => {
     expect(edges).toHaveLength(5)
     expect(nodes[0].shapeMap).toHaveLength(15)
     expect(edges[0].shapeMap).toHaveLength(8)
+    expect([...nodes[0].shapeMap.keys()]).toEqual([
+      "body", "label", "port:n", "port:e", "port:s", "port:w",
+      "handle:nw", "handle:n", "handle:ne", "handle:e",
+      "handle:se", "handle:s", "handle:sw", "handle:w", "outline",
+    ])
+    expect([...edges[0].shapeMap.keys()]).toEqual([
+      "segment:0", "segment:1", "segment:2", "arrow:0", "arrow:1",
+      "handle:from", "handle:to", "label",
+    ])
     expect(nodes.map((node) => body(node).state)).toEqual(["start", "process", "decision", "end", "process"])
 
     await click(top, [300, 250])
@@ -149,7 +162,7 @@ describe("integrated diagram example", () => {
   it("uses classic palette, inline edit, edge selection, reconnect, zoom, and pan paths", async () => {
     const { stage, state, top } = createDiagram()
     const node2 = stage.tools.getChildById("node-2")!
-    const northPort = node2.shapeMap.get("2") as Circle
+    const northPort = node2.shapeMap.get("port:n") as Circle
     expect(northPort.strokeConfig.color.a).toBe(0)
     top.dispatchEvent(mm(300, 250)); await tick()
     expect(northPort.strokeConfig.color.a).toBe(1)
@@ -175,19 +188,20 @@ describe("integrated diagram example", () => {
     expect(state.edit).toHaveBeenCalledTimes(2)
 
     const labelledEdge = stage.tools.getChildById("edge-3")!
-    const edgeLabel = labelledEdge.shapeMap.get("7") as StayText
+    const edgeLabel = labelledEdge.shapeMap.get("label") as StayText
     const labelBound = edgeLabel.getBound()
     await doubleClick(top, [labelBound.x + labelBound.width / 2, labelBound.y + labelBound.height / 2])
     expect(state.edit).toHaveBeenCalledWith("edge-3")
 
     const mixedDirectionEdge = stage.tools.getChildById("edge-5")!
-    const routedLines = [0, 1, 2].map((index) => mixedDirectionEdge.shapeMap.get(String(index)) as Line)
+    const routedLines = ["segment:0", "segment:1", "segment:2"]
+      .map((key) => mixedDirectionEdge.shapeMap.get(key) as Line)
     expect(routedLines.every((line) => line.x1 === line.x2 || line.y1 === line.y2)).toBe(true)
     expect(routedLines[2].x1).toBe(routedLines[2].x2)
 
     await click(top, [205, 260])
     expect(state.selectedEdge).toBe("edge-1")
-    expect((stage.tools.getChildById("edge-1")!.shapeMap.get("5") as Circle).strokeConfig.color.a).toBe(1)
+    expect((stage.tools.getChildById("edge-1")!.shapeMap.get("handle:from") as Circle).strokeConfig.color.a).toBe(1)
     await drag(top, [225, 260], [520, 250])
     expect(toDiagramDocument(stage.tools).edges.find(({ id }) => id === "edge-1")?.to).toBe("node-3")
 

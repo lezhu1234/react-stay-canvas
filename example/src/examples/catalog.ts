@@ -140,7 +140,13 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/integrations/diagram",
-    sourcePaths: ["./examples/integrated/DiagramExample.tsx"],
+    sourcePaths: [
+      "./examples/integrated/DiagramExample.tsx",
+      "./examples/integrated/diagram/model.ts",
+      "./examples/integrated/diagram/scene.ts",
+      "./examples/integrated/diagram/document.ts",
+      "./examples/integrated/diagram/interactions.ts",
+    ],
     group: "Integrated",
     order: 12,
     title: l("Classic workflow editor", "经典流程图编辑器"),

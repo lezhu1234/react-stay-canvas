@@ -1,5 +1,6 @@
 import Canvas from "../../../canvas"
 import type { EventProps, StayEventProps } from "../../../types/events"
+import type { PointType } from "../../../types/geometry"
 import type {
   ActionRoutePort,
   EvaluatedActions,
@@ -48,11 +49,12 @@ export class EventRuntime<EventName extends string> {
   }
 
   handleInput(input: EventInput) {
-    this.beginClickCandidate(input)
+    const point = this.canvasPoint(input)
+    this.beginClickCandidate(input, point)
     const terminalSessionId = this.terminalSessionId(input)
 
     try {
-      const triggerEvents = this.evaluate(input)
+      const triggerEvents = this.evaluate(input, point)
       this.context.actionRouter.dispatch(
         input.originEvent,
         triggerEvents,
@@ -68,7 +70,10 @@ export class EventRuntime<EventName extends string> {
     }
   }
 
-  private evaluate(input: EventInput): EvaluatedActions<EventName> {
+  private evaluate(
+    input: EventInput,
+    point?: PointType
+  ): EvaluatedActions<EventName> {
     const triggerEvents: EvaluatedActions<EventName> = {}
     const namesAtStart = this.registry.names()
 
@@ -82,7 +87,8 @@ export class EventRuntime<EventName extends string> {
       const actionEvent = this.createActionEvent(
         eventName,
         registered.definition,
-        input
+        input,
+        point
       )
       if (!this.conditionPasses(registered.definition, actionEvent)) return
 
@@ -147,7 +153,8 @@ export class EventRuntime<EventName extends string> {
   private createActionEvent(
     eventName: EventName,
     event: StayEventProps<EventName>,
-    input: EventInput
+    input: EventInput,
+    point?: PointType
   ): NormalizedActionEvent<EventName> {
     const actionEvent: NormalizedActionEvent<EventName> = {
       state: this.context.getState(),
@@ -160,11 +167,10 @@ export class EventRuntime<EventName extends string> {
       actionEvent.key = input.originEvent.key
     }
 
-    const sample = input.pointerSample ?? this.sampleFromMouseEvent(input.originEvent)
-    if (sample) {
-      actionEvent.x = sample.clientX - this.context.canvas.x
-      actionEvent.y = sample.clientY - this.context.canvas.y
-      actionEvent.point = { x: actionEvent.x, y: actionEvent.y }
+    if (point) {
+      actionEvent.x = point.x
+      actionEvent.y = point.y
+      actionEvent.point = { ...point }
     }
 
     const session = input.pointerSession
@@ -186,6 +192,13 @@ export class EventRuntime<EventName extends string> {
     }
 
     return actionEvent
+  }
+
+  private canvasPoint(input: EventInput): PointType | undefined {
+    const sample = input.pointerSample ?? this.sampleFromMouseEvent(input.originEvent)
+    return sample
+      ? this.context.canvas.clientToCanvasPoint(sample.clientX, sample.clientY)
+      : undefined
   }
 
   private sampleFromMouseEvent(originEvent: Event) {
@@ -251,19 +264,15 @@ export class EventRuntime<EventName extends string> {
     return { kind: "persistent" }
   }
 
-  private beginClickCandidate(input: EventInput) {
+  private beginClickCandidate(input: EventInput, point?: PointType) {
     const transition = input.sessionTransition
-    const sample = input.pointerSample
     const session = input.pointerSession
-    if (transition?.phase !== "start" || !sample || !session) return
+    if (transition?.phase !== "start" || !point || !session) return
 
     beginClickPairing(this.context.store, {
       sessionId: session.id,
       initiatingButton: session.initiatingButton,
-      point: {
-        x: sample.clientX - this.context.canvas.x,
-        y: sample.clientY - this.context.canvas.y,
-      },
+      point: { ...point },
       startedAt: Date.now(),
     })
   }

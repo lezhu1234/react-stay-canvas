@@ -1,5 +1,5 @@
 import type { ContextLayerSetFunction, DrawCanvasContext } from "./types/canvas"
-import type { Rect } from "./types/geometry"
+import type { PointType, Rect } from "./types/geometry"
 
 function dprScale(
   canvas: HTMLCanvasElement,
@@ -65,6 +65,16 @@ export class Canvas {
   }
   get y(): number {
     return this.layers[0].getBoundingClientRect().y
+  }
+
+  clientToCanvasPoint(clientX: number, clientY: number): PointType {
+    const rect = this.layers[0].getBoundingClientRect()
+    const scaleX = rect.width > 0 ? this.width / rect.width : 1
+    const scaleY = rect.height > 0 ? this.height / rect.height : 1
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    }
   }
 
   public clear(context: DrawCanvasContext) {

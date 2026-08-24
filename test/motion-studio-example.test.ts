@@ -20,6 +20,7 @@ import {
   upsertMotionFrame,
 } from "../example/src/examples/integrated/motion/model"
 import {
+  captureMotionFrame,
   layerBody,
   layerLabel,
   layerMedia,
@@ -178,6 +179,26 @@ describe("integrated motion studio example", () => {
     const interpolated = layerBody(accent)
     expect(interpolated).toBeInstanceOf(MotionCapsule)
     expect(interpolated.x).toBeGreaterThan(capsule.x)
+  })
+
+  it("exports a requested animation frame without changing the live projection", async () => {
+    const { stage } = createStage({ width: 840, height: 430, layers: 3 })
+    const project = seedMotionProject(text)
+    renderMotionProject(stage.tools, project, 0, "hero-card")
+    const liveHero = layerBody(motionLayers(stage.tools)[0])
+    const capture = vi.spyOn(stage.tools, "regionToTargetCanvas")
+
+    const canvas = await captureMotionFrame(stage.tools, 1450)
+
+    expect(capture).toHaveBeenCalledWith(expect.objectContaining({
+      children: motionLayers(stage.tools),
+      progress: 1450,
+    }))
+    expect(canvas).toMatchObject({ width: 840, height: 430 })
+    expect(canvas.getContext("2d")?.getImageData(350, 150, 1, 1).data[3]).toBeGreaterThan(0)
+    expect(canvas.getContext("2d")?.getImageData(100, 200, 1, 1).data[3]).toBe(0)
+    expect(layerBody(motionLayers(stage.tools)[0])).toBe(liveHero)
+    expect(liveHero.x).toBe(72)
   })
 
   it("recompiles edited slices without replacing animated Child identities", () => {

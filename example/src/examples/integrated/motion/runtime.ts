@@ -326,6 +326,15 @@ export function motionSceneArea(tools: StayTools) {
   return sceneArea(tools, MOTION_SCENE_WIDTH, MOTION_SCENE_HEIGHT)
 }
 
+export function captureMotionFrame(tools: StayTools, timeMs: number) {
+  return tools.regionToTargetCanvas({
+    area: motionSceneArea(tools),
+    targetSize: { width: MOTION_SCENE_WIDTH, height: MOTION_SCENE_HEIGHT },
+    children: motionLayers(tools),
+    progress: timeMs,
+  })
+}
+
 export function motionLayerId(child: MotionChild) {
   return layerIdOf(child)
 }

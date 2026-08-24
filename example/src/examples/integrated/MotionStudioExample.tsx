@@ -23,6 +23,7 @@ import {
   type MotionProject,
 } from "./motion/model"
 import {
+  captureMotionFrame,
   motionGeometry,
   progressMotionProject,
   renderMotionProject,
@@ -237,6 +238,22 @@ export default function MotionStudioExample() {
     say("Project exported", "已导出项目")
   }
 
+  const exportFrame = async () => {
+    const tools = toolsRef.current
+    if (!tools) return
+    const frameTime = timeRef.current
+    try {
+      const canvas = await captureMotionFrame(tools, frameTime)
+      Object.assign(document.createElement("a"), {
+        href: canvas.toDataURL("image/png"),
+        download: `motion-frame-${Math.round(frameTime)}ms.png`,
+      }).click()
+      say("Current frame exported", "已导出当前帧")
+    } catch {
+      say("Frame export failed", "当前帧导出失败")
+    }
+  }
+
   const importProject = async (file?: File) => {
     if (!file) return
     try {
@@ -364,6 +381,7 @@ export default function MotionStudioExample() {
           <button disabled={history.future.length === 0} onClick={redo} type="button">↷ {text("Redo", "重做")}</button>
           <button onClick={exportProject} type="button">{text("Export JSON", "导出 JSON")}</button>
           <button onClick={() => fileRef.current?.click()} type="button">{text("Import JSON", "导入 JSON")}</button>
+          <button onClick={() => { void exportFrame() }} type="button">{text("Export PNG", "导出 PNG")}</button>
         </div>
         <input accept="application/json,.json" hidden onChange={(event) => { void importProject(event.target.files?.[0]); event.target.value = "" }} ref={fileRef} type="file" />
         <div className="motion-event-log" aria-live="polite">{entries.length === 0 ? <p>{text("Ready to animate.", "可以开始制作动效。")}</p> : entries.map((entry, index) => <p key={`${entry}-${index}`}>{entry}</p>)}</div>

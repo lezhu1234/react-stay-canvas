@@ -86,14 +86,40 @@ function createLabel(tools: StayTools, layer: MotionLayer, frame: MotionFrame, p
   })
 }
 
-function createAnimatedLayer(tools: StayTools, layer: MotionLayer) {
-  const child = tools.createChild({ id: childId(layer.id), className: "motion-layer" }) as MotionChild
+function compileAnimatedLayer(tools: StayTools, layer: MotionLayer) {
+  const bodyFrames: Rectangle[] = []
+  const labelFrames: StayText[] = []
   layer.frames.forEach((frame, index) => {
     const previous = layer.frames[index - 1]
-    child.appendKeyFrame(bodyKey, createBody(tools, layer, frame, previous), false)
-    child.appendKeyFrame(labelKey, createLabel(tools, layer, frame, previous), false)
+    bodyFrames.push(createBody(tools, layer, frame, previous))
+    labelFrames.push(createLabel(tools, layer, frame, previous))
   })
+  return { bodyFrames, labelFrames }
+}
+
+function createAnimatedLayer(tools: StayTools, layer: MotionLayer) {
+  const child = tools.createChild({ id: childId(layer.id), className: "motion-layer" }) as MotionChild
+  const { bodyFrames, labelFrames } = compileAnimatedLayer(tools, layer)
+  child.appendKeyFrames(new Map<string, MotionShape | MotionShape[]>([
+    [bodyKey, bodyFrames],
+    [labelKey, labelFrames],
+  ]), false)
   return child
+}
+
+function syncAnimatedLayer(tools: StayTools, layer: MotionLayer) {
+  const child = motionLayerById(tools, layer.id)
+  if (!child) return createAnimatedLayer(tools, layer)
+
+  const { bodyFrames, labelFrames } = compileAnimatedLayer(tools, layer)
+  child.replaceSlice(bodyKey, bodyFrames, false)
+  child.replaceSlice(labelKey, labelFrames, false)
+  return child
+}
+
+function matchesProjectLayerOrder(children: MotionChild[], project: MotionProject) {
+  return children.length === project.layers.length
+    && children.every((child, index) => child.id === childId(project.layers[index].id))
 }
 
 function handleCenters(body: Rectangle): Record<ResizeHandle, { x: number; y: number }> {
@@ -172,8 +198,13 @@ export function renderMotionProject(
   selectedLayerId?: string,
   bounded = false,
 ) {
-  motionLayers(tools).forEach(({ id }) => tools.removeChild(id))
-  project.layers.forEach((layer) => createAnimatedLayer(tools, layer))
+  const currentLayers = motionLayers(tools)
+  if (matchesProjectLayerOrder(currentLayers, project)) {
+    project.layers.forEach((layer) => syncAnimatedLayer(tools, layer))
+  } else {
+    currentLayers.forEach(({ id }) => tools.removeChild(id))
+    project.layers.forEach((layer) => createAnimatedLayer(tools, layer))
+  }
   progressMotionProject(tools, project, timeMs, selectedLayerId, bounded)
 }
 

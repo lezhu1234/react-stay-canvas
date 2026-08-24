@@ -200,6 +200,15 @@ tools.progress({ timeMs: 0 })
 
 第一次 `appendKeyFrame()` 默认会在 slice 开头插入一个透明的零帧，因此上例会先从透明状态进入第一个可见矩形。请保留这个默认行为：第一帧持续时间非零且关闭零帧时，当前运行时不能安全定位到 `timeMs: 0`。详见[当前限制](./known-limitations.md#动画与历史)。
 
+时间线编辑器可以在不替换 Child 的情况下重新编译一个具名 slice：
+
+```ts
+card.replaceSlice("body", nextBodyFrames, false)
+tools.progress({ timeMs: playheadMs })
+```
+
+`replaceSlice()` 会先校验并编译完整的非空 slice，再一次性替换。编译失败时，旧 slice、`totalDurationMs` 和当前投影 Shape 都保持不变。它沿用第一次 append 的 `prependZeroShape` 约定，并且不会自动 seek；需要显示新时间线时再调用 `progress()`。
+
 `durationMs` 和 `delayMs` 属于“到达当前关键帧”的 transition：先保持前一帧 `delayMs`，再用 `durationMs` 插值到当前帧。`totalDurationMs` 是所有 slice 中最长的总时长。
 
 ## 推进、拖动和播放

@@ -101,6 +101,35 @@ describe("integrated motion studio example", () => {
     expect(layerBody(layers[0]).x).toBe(304)
   })
 
+  it("recompiles edited slices without replacing animated Child identities", () => {
+    const { stage } = createStage({ width: 840, height: 430, layers: 3 })
+    const project = seedMotionProject(text)
+    renderMotionProject(stage.tools, project, 1450, "hero-card")
+    const originalLayers = motionLayers(stage.tools)
+    const edited = updateMotionFrame(project, "hero-card", "card-1", { x: 400 })
+
+    renderMotionProject(stage.tools, edited, 1450, "hero-card")
+
+    const recompiledLayers = motionLayers(stage.tools)
+    expect(recompiledLayers).toHaveLength(originalLayers.length)
+    expect(recompiledLayers.every((child, index) => child === originalLayers[index])).toBe(true)
+    expect(layerBody(recompiledLayers[0]).x).toBe(400)
+    expect(layerLabel(recompiledLayers[0])?.getCenterPoint().x).toBeCloseTo(516)
+  })
+
+  it("rebuilds the runtime order when an imported project reorders layers", () => {
+    const { stage } = createStage({ width: 840, height: 430, layers: 3 })
+    const project = seedMotionProject(text)
+    renderMotionProject(stage.tools, project, 0)
+    const reordered = { ...project, layers: [...project.layers].reverse() }
+
+    renderMotionProject(stage.tools, reordered, 0)
+
+    expect(motionLayers(stage.tools).map(motionLayerId)).toEqual(
+      reordered.layers.map(({ id }) => id),
+    )
+  })
+
   it("hits the frontmost painted layer when editable bodies overlap", () => {
     const { stage } = createStage({ width: 840, height: 430, layers: 3 })
     const project = updateMotionFrame(seedMotionProject(text), "accent-bar", "accent-0", {

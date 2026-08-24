@@ -45,6 +45,7 @@ Children are Canvas-bound runtime entities and do not expose a copy operation. U
 | `totalDurationMs` | Duration of the longest slice |
 | `appendKeyFrame(name, shape, prependZeroShape?)` | Append one keyframe to a slice |
 | `appendKeyFrames(frameMap, prependZeroShape?)` | Append frames to several slices |
+| `replaceSlice(name, frames, prependZeroShape?)` | Atomically replace one non-empty slice; the current projection changes on the next seek |
 | `appendDefaultFrame(shape, prependZeroShape?)` | Append to the `default` slice |
 | `getSlice(name)` | Return a slice or an empty array |
 | `hasSlice(name)` | Test whether a slice exists |

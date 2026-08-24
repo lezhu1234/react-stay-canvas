@@ -314,17 +314,64 @@ export class StayAnimatedChild<
     }
     return shape
   }
-  appendKeyFrame(name: string, shape: T, prependZeroShape: boolean = true) {
-    shape.parent = this
-    const shapeFrames: T[] = this.shapeFramesMap.get(name) ?? []
-    if (shapeFrames.length === 0 && prependZeroShape) {
-      const zs = shape._zeroShape(this.shapeFramesMap) as T
-      zs.parent = this
-      shapeFrames.push(this.checkShape(zs))
+
+  private compileSlice(name: string, frames: T[], prependZeroShape: boolean): T[] {
+    if (frames.length === 0) {
+      throw new Error("slice must contain at least one keyframe")
     }
-    shapeFrames.push(this.checkShape(shape))
-    this.shapeFramesMap.set(name, shapeFrames)
+
+    frames.forEach((frame) => this.checkShape(frame))
+    const previousParents = frames.map(({ parent }) => parent)
+    frames.forEach((frame) => {
+      frame.parent = this
+    })
+    try {
+      const compiledFrames = [...frames]
+      if (prependZeroShape) {
+        const otherSlices = new Map(this.shapeFramesMap)
+        otherSlices.delete(name)
+        const zeroShape = this.checkShape(frames[0]._zeroShape(otherSlices) as T)
+        zeroShape.parent = this
+        compiledFrames.unshift(zeroShape)
+      }
+      return compiledFrames
+    } catch (error) {
+      frames.forEach((frame, index) => {
+        frame.parent = previousParents[index]
+      })
+      throw error
+    }
+  }
+
+  private refreshTotalDurationMs() {
+    this.totalDurationMs = 0
+    this.shapeFramesMap.forEach((_, name) => {
+      this.totalDurationMs = Math.max(this.totalDurationMs, this.getSliceTotalDurationMs(name))
+    })
+  }
+
+  appendKeyFrame(name: string, shape: T, prependZeroShape: boolean = true) {
+    const shapeFrames = this.shapeFramesMap.get(name)
+    if (!shapeFrames) {
+      this.shapeFramesMap.set(name, this.compileSlice(name, [shape], prependZeroShape))
+    } else {
+      this.checkShape(shape)
+      shape.parent = this
+      shapeFrames.push(shape)
+    }
     this.totalDurationMs = Math.max(this.totalDurationMs, this.getSliceTotalDurationMs(name))
+  }
+
+  replaceSlice(name: string, frames: T[], prependZeroShape: boolean = true) {
+    const compiledFrames = this.compileSlice(name, frames, prependZeroShape)
+    const currentShape = this.shapeMap.get(name)
+
+    if (currentShape) {
+      this.updatedLayers.add(currentShape.layer)
+    }
+    this.shapeFramesMap.set(name, compiledFrames)
+    this.frameMapInfo.delete(name)
+    this.refreshTotalDurationMs()
   }
 
   getSliceTotalDurationMs(name: string) {

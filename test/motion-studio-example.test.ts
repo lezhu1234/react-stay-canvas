@@ -25,11 +25,12 @@ import {
   renderMotionProject,
 } from "../example/src/examples/integrated/motion/runtime"
 import { createStage, md, mm, mu } from "./helpers/stage"
+import { createTextMeasureContext } from "./helpers/textMetrics"
 
 vi.stubGlobal("OffscreenCanvas", class {
   constructor(public width: number, public height: number) {}
   getContext() {
-    return { measureText: () => ({ width: 56, fontBoundingBoxAscent: 10, fontBoundingBoxDescent: 2 }) }
+    return createTextMeasureContext(56)
   }
 })
 
@@ -82,6 +83,12 @@ describe("integrated motion studio example", () => {
     ])
     expect(layers.every((child) => layerBody(child) instanceof Rectangle)).toBe(true)
     expect(layers.every((child) => layerLabel(child) instanceof StayText)).toBe(true)
+    layers.forEach((child) => {
+      const labelCenter = layerLabel(child)?.getCenterPoint()
+      const bodyCenter = layerBody(child).getCenterPoint()
+      expect(labelCenter?.x).toBeCloseTo(bodyCenter.x)
+      expect(labelCenter?.y).toBeCloseTo(bodyCenter.y)
+    })
     expect(stage.tools.getChildBySelector(".motion-selection")?.shapeMap).toHaveLength(9)
 
     progressMotionProject(stage.tools, project, project.workArea.startMs, "hero-card", true)

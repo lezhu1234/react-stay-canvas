@@ -42,12 +42,12 @@ export default function TimelineExample() {
     placeSceneChild(tools, tools.appendChild({
       className: "timeline-milestones",
       shape: [
-        new StayText({ x: 90, y: 218, text: "K1 · 400ms", font: { size: 10, fontWeight: 700 }, fillConfig: { color: colors.gray } }),
-        new StayText({ x: 260, y: 218, text: "K2 · 1120ms", font: { size: 10, fontWeight: 700 }, fillConfig: { color: colors.blue } }),
-        new StayText({ x: 390, y: 218, text: "K3 · 1600ms", font: { size: 10, fontWeight: 700 }, fillConfig: { color: colors.orange } }),
+        new StayText({ x: 90, y: 218, text: "K1 · 400ms", textAlign: "center", textBaseline: "top", font: { size: 10, fontWeight: 700 }, fillConfig: { color: colors.gray } }),
+        new StayText({ x: 260, y: 218, text: "K2 · 1120ms", textAlign: "center", textBaseline: "top", font: { size: 10, fontWeight: 700 }, fillConfig: { color: colors.blue } }),
+        new StayText({ x: 390, y: 218, text: "K3 · 1600ms", textAlign: "center", textBaseline: "top", font: { size: 10, fontWeight: 700 }, fillConfig: { color: colors.orange } }),
       ],
     }))
-    placeSceneChild(tools, tools.appendChild({ className: "timeline-label", shape: new StayText({ x: 220, y: 244, text: text("explicit seek with tools.progress", "拖动时间线会调用 tools.progress"), font: { size: 14 }, fillConfig: { color: colors.ink } }) }))
+    placeSceneChild(tools, tools.appendChild({ className: "timeline-label", shape: new StayText({ x: 220, y: 244, text: text("explicit seek with tools.progress", "拖动时间线会调用 tools.progress"), textAlign: "center", textBaseline: "top", font: { size: 14 }, fillConfig: { color: colors.ink } }) }))
     tools.progress({ timeMs: 0 })
   }
 

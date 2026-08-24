@@ -21,11 +21,12 @@ import {
 } from "../example/src/examples/integrated/diagram/interactions"
 import { seedDiagram } from "../example/src/examples/integrated/diagram/scene"
 import { createStage, md, mm, mu } from "./helpers/stage"
+import { createTextMeasureContext } from "./helpers/textMetrics"
 
 vi.stubGlobal("OffscreenCanvas", class {
   constructor(public width: number, public height: number) {}
   getContext() {
-    return { measureText: () => ({ width: 56, fontBoundingBoxAscent: 10, fontBoundingBoxDescent: 2 }) }
+    return createTextMeasureContext(56)
   }
 })
 
@@ -113,6 +114,7 @@ describe("integrated diagram example", () => {
       "handle:from", "handle:to", "label",
     ])
     expect(nodes.map((node) => body(node).state)).toEqual(["start", "process", "decision", "end", "process"])
+    nodes.forEach((node) => expect(label(node).getCenterPoint()).toEqual(body(node).getCenterPoint()))
 
     await click(top, [300, 250])
     key(top, "keydown", "Control")

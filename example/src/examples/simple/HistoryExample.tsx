@@ -41,6 +41,8 @@ export default function HistoryExample() {
           x: 75 + (index % 4) * 90,
           y: 71 + Math.floor(index / 4) * 84,
           text: String(index + 1),
+          textAlign: "center",
+          textBaseline: "top",
           font: { size: 13, fontWeight: 700 },
           fillConfig: { color: colors.ink },
         }),

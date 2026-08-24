@@ -90,8 +90,10 @@ tools.appendChild({
     }),
     new StayText({
       x: 102,
-      y: 49,
+      y: 58,
       text: "Save",
+      textAlign: "center",
+      textBaseline: "middle",
       fillConfig: { color: { r: 255, g: 255, b: 255, a: 1 } },
     }),
   ],

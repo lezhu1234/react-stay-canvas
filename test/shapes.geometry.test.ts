@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { Rectangle, Circle, Line, Path, Point, StayText } from "react-stay-canvas"
+import { createTextMeasureContext } from "./helpers/textMetrics"
 
 // Dimension 1 (Shapes): pure geometry — no canvas needed.
 
@@ -97,15 +98,7 @@ describe("Shape snapshots", () => {
           public height: number
         ) {}
 
-        getContext() {
-          return {
-            measureText: () => ({
-              width: 24,
-              fontBoundingBoxAscent: 10,
-              fontBoundingBoxDescent: 2,
-            }),
-          }
-        }
+        getContext() { return createTextMeasureContext(24) }
       }
     )
     const text = new StayText({
@@ -124,6 +117,110 @@ describe("Shape snapshots", () => {
     expect(snapshot.autoTransitionDiffText).toBe(false)
     expect(text.font.size).toBe(12)
     expect(text.border![0].color).toBe("red")
+    vi.unstubAllGlobals()
+  })
+})
+
+describe("StayText anchors", () => {
+  const installTextMetrics = () => {
+    vi.stubGlobal(
+      "OffscreenCanvas",
+      class {
+        constructor(
+          public width: number,
+          public height: number
+        ) {}
+
+        getContext() { return createTextMeasureContext(24) }
+      }
+    )
+  }
+
+  it("uses x and y as the native anchor for the default alignment", () => {
+    installTextMetrics()
+    const text = new StayText({ x: 100, y: 50, text: "default" })
+    const context = { fillText: vi.fn() }
+
+    text.fill({ context } as any)
+
+    expect(text.getBound()).toEqual({ x: 100, y: 40, width: 24, height: 12 })
+    expect(context.fillText).toHaveBeenCalledWith("default", 100, 50)
+    vi.unstubAllGlobals()
+  })
+
+  it("uses x and y as the native anchor for explicit center and middle alignment", () => {
+    installTextMetrics()
+    const text = new StayText({
+      x: 100,
+      y: 50,
+      text: "centered",
+      textAlign: "center",
+      textBaseline: "middle",
+    })
+    const context = { fillText: vi.fn() }
+
+    text.fill({ context } as any)
+
+    expect(text.getBound()).toEqual({ x: 88, y: 44, width: 24, height: 12 })
+    expect(text.getCenterPoint()).toEqual({ x: 100, y: 50 })
+    expect(context.fillText).toHaveBeenCalledWith("centered", 100, 50)
+
+    const rightBottom = new StayText({
+      x: 100,
+      y: 50,
+      text: "right-bottom",
+      textAlign: "right",
+      textBaseline: "bottom",
+    })
+    expect(rightBottom.getBound()).toEqual({ x: 76, y: 38, width: 24, height: 12 })
+
+    text.zoomCenter = { x: 100, y: 50 }
+    text.zoom(2)
+    expect(text.getCenterPoint()).toEqual({ x: 100, y: 50 })
+    vi.unstubAllGlobals()
+  })
+
+  it.each([
+    ["top", 50],
+    ["hanging", 48],
+    ["middle", 44],
+    ["alphabetic", 40],
+    ["ideographic", 39],
+    ["bottom", 38],
+  ] as const)("derives the %s bound from metrics measured at that baseline", (textBaseline, top) => {
+    installTextMetrics()
+    const text = new StayText({ x: 100, y: 50, text: "baseline", textBaseline })
+
+    expect(text.getBound()).toEqual({ x: 100, y: top, width: 24, height: 12 })
+    vi.unstubAllGlobals()
+  })
+
+  it("keeps offsets, movement, and animation relative to the resolved anchor", () => {
+    installTextMetrics()
+    const before = new StayText({
+      x: 40,
+      y: 30,
+      text: "moving",
+      textAlign: "center",
+      textBaseline: "middle",
+      offsetXRatio: 0.25,
+      offsetYRatio: 0.5,
+    })
+    const after = new StayText({
+      x: 80,
+      y: 70,
+      text: "moving",
+      textAlign: "center",
+      textBaseline: "middle",
+      offsetXRatio: 0.25,
+      offsetYRatio: 0.5,
+    })
+
+    expect(before.getBound()).toEqual({ x: 34, y: 30, width: 24, height: 12 })
+    before.move(10, 20)
+    expect(before.getBound()).toEqual({ x: 44, y: 50, width: 24, height: 12 })
+    const middle = after.intermediateState(before, after, 0.5, "linear")
+    expect(middle.getCenterPoint()).toEqual({ x: 71, y: 66 })
     vi.unstubAllGlobals()
   })
 })

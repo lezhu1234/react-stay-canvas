@@ -75,7 +75,15 @@ export default function EventsExample() {
           fillConfig: { color: colors.blueSoft },
           strokeConfig: { color: colors.blue, lineWidth: 3 },
         }),
-        new StayText({ x: 220, y: 116, text: text("drag me", "拖动我"), font: { size: 20, fontWeight: 650 }, fillConfig: { color: colors.ink } }),
+        new StayText({
+          x: 220,
+          y: 116,
+          text: text("drag me", "拖动我"),
+          textAlign: "center",
+          textBaseline: "top",
+          font: { size: 20, fontWeight: 650 },
+          fillConfig: { color: colors.ink },
+        }),
       ],
     }))
     setCanvasInstances((value) => value + 1)

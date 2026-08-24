@@ -110,6 +110,8 @@ interface CanvasGlobalProps {
 
 `StayImage` 在省略 `swidth` 或 `sheight` 时使用图片 natural size；显式源裁剪尺寸会在构造、更新和复制时保留。时间线插值目前不会保留自定义裁剪尺寸；见[当前限制](../known-limitations.md#渲染与几何)。
 
+`StayText` 的 `x`、`y` 始终是由 `textAlign` 和 `textBaseline` 定义的 Canvas 文字锚点。默认 `start + alphabetic` 使用左侧字母基线锚点；常用的 `center + middle` 会以 `(x, y)` 作为文字视觉中心。
+
 `CircleAttr` 还保留 `stroke` 和 `fill` 字段，但当前构造函数不会使用它们；统一使用 `strokeConfig` 和 `fillConfig`。`StayText` 的 `decoration` 当前也没有进入构造后的绘制状态，不应作为稳定效果使用。
 
 ## Font 与 transition

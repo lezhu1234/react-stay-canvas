@@ -56,6 +56,8 @@ export default function StateExample() {
               x: e.x,
               y: e.y - 7,
               text: String(index),
+              textAlign: "center",
+              textBaseline: "top",
               font: { size: 12, fontWeight: 700 },
               fillConfig: { color: colors.ink },
             }),

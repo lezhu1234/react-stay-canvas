@@ -200,6 +200,15 @@ tools.progress({ timeMs: 0 })
 
 The first `appendKeyFrame()` call prepends a transparent zero frame by default. The example therefore fades from transparent into its first visible rectangle. Keep that default: the current runtime cannot safely seek to `timeMs: 0` when the first frame has a non-zero duration and the zero frame is disabled. See [Current limitations](./known-limitations.md#animation-and-history).
 
+Timeline editors can recompile one named slice without replacing its Child:
+
+```ts
+card.replaceSlice("body", nextBodyFrames, false)
+tools.progress({ timeMs: playheadMs })
+```
+
+`replaceSlice()` validates and compiles the complete non-empty slice before swapping it in. A compilation error leaves the previous slice, `totalDurationMs`, and current projected Shapes unchanged. It follows the same `prependZeroShape` convention as the first append and does not seek automatically; call `progress()` when the new timeline should be projected.
+
 `durationMs` and `delayMs` describe the transition arriving at the current keyframe: hold the previous frame for `delayMs`, then interpolate for `durationMs`. `totalDurationMs` is the longest total duration among all slices.
 
 ## Seeking, scrubbing, and playback

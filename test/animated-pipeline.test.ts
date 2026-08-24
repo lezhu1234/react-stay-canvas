@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest"
-import { Rectangle } from "react-stay-canvas"
+import { Rectangle, type RectangleAttr } from "react-stay-canvas"
 import { createStage } from "./helpers/stage"
 
 // Characterization tests for the ANIMATED-mode pipeline, written BEFORE the
@@ -15,6 +15,33 @@ import { createStage } from "./helpers/stage"
 
 const rgba = (r: number, g: number, b: number, a = 1) => ({ r, g, b, a })
 const stroke = { color: rgba(1, 2, 3), lineWidth: 2 }
+
+class OwnerDerivedZeroRectangle extends Rectangle {
+  ownerAtZeroConstruction?: string
+  failZeroConstruction: boolean
+
+  constructor(props: RectangleAttr & {
+    ownerAtZeroConstruction?: string
+    failZeroConstruction?: boolean
+  }) {
+    super(props)
+    this.ownerAtZeroConstruction = props.ownerAtZeroConstruction
+    this.failZeroConstruction = props.failZeroConstruction ?? false
+  }
+
+  override zeroShape(): OwnerDerivedZeroRectangle {
+    if (!this.parent) throw new Error("zeroShape requires the owning Child")
+    if (this.failZeroConstruction) throw new Error("zero-frame compilation failed")
+    return new OwnerDerivedZeroRectangle({
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+      ownerAtZeroConstruction: String(this.parent.id),
+      ...this.getZeroConfig(),
+    })
+  }
+}
 
 // One visible keyframe (default transition 300ms). appendKeyFrame prepends a
 // transparent zero-frame at t=0, so the slice is [zero(dur0), rect(dur300)].
@@ -159,6 +186,100 @@ describe("animated: intermediate-shape cache (getTimelineShapeByBound)", () => {
 
     expect((child.shapeMap.get("a") as Rectangle).x).toBeCloseTo(75)
     expect((child.shapeMap.get("b") as Rectangle).x).toBeCloseTo(175)
+  })
+})
+
+describe("animated: replaceSlice", () => {
+  const frame = (x: number, durationMs: number) => new Rectangle({
+    x,
+    y: 20,
+    width: 40,
+    height: 30,
+    strokeConfig: stroke,
+    transition: { durationMs, delayMs: 0, type: "linear" },
+  })
+
+  it("replaces one compiled slice without replacing the Child and can shorten total duration", () => {
+    const { stage } = createStage({})
+    const child = stage.tools.createChild({ id: "motion-layer", className: "motion-layer" })
+    child.appendKeyFrame("body", frame(10, 0), false)
+    child.appendKeyFrame("body", frame(70, 600), false)
+    child.appendKeyFrame("label", frame(20, 0), false)
+    child.appendKeyFrame("label", frame(50, 300), false)
+    stage.tools.progress({ timeMs: 600 })
+
+    const previousSlice = child.getSlice("body")
+    const previousProjection = child.shapeMap
+    const replacement = [frame(100, 0), frame(200, 100)]
+
+    child.replaceSlice("body", replacement, false)
+
+    expect(stage.tools.getChildById(child.id)).toBe(child)
+    expect(child.getSlice("body")).toEqual(replacement)
+    expect(child.getSlice("body")).not.toBe(previousSlice)
+    expect(previousSlice.map(({ x }) => x)).toEqual([10, 70])
+    expect(child.shapeMap).toBe(previousProjection)
+    expect(child.totalDurationMs).toBe(300)
+    expect(replacement.every(({ parent }) => parent === child)).toBe(true)
+
+    stage.tools.progress({ timeMs: 100 })
+    expect((child.shapeMap.get("body") as Rectangle).x).toBe(200)
+  })
+
+  it("uses the same optional zero-frame compilation as the first append", () => {
+    const { stage } = createStage({})
+    const child = stage.tools.createChild({ className: "motion-layer" })
+    child.appendKeyFrame("body", frame(10, 0), false)
+    const visible = frame(80, 300)
+
+    child.replaceSlice("body", [visible])
+
+    const slice = child.getSlice("body")
+    expect(slice).toHaveLength(2)
+    expect(slice[0].transition).toMatchObject({ durationMs: 0, delayMs: 0 })
+    expect(slice[0].shouldStroke()).toBe(false)
+    expect(slice[1]).toBe(visible)
+  })
+
+  it("binds custom frames to their Child before deriving the zero frame", () => {
+    const { stage } = createStage({})
+    const child = stage.tools.createChild({ id: "owner-child", className: "motion-layer" })
+    const visible = new OwnerDerivedZeroRectangle({ x: 10, y: 20, width: 40, height: 30 })
+
+    child.appendKeyFrame("body", visible)
+
+    expect((child.getSlice("body")[0] as OwnerDerivedZeroRectangle).ownerAtZeroConstruction)
+      .toBe("owner-child")
+  })
+
+  it("leaves the old timeline and live projection untouched when compilation fails", () => {
+    const { stage } = createStage({})
+    const child = stage.tools.createChild({ className: "motion-layer" })
+    child.appendKeyFrame("body", frame(10, 0), false)
+    child.appendKeyFrame("body", frame(70, 300), false)
+    stage.tools.progress({ timeMs: 150 })
+    const previousSlice = child.getSlice("body")
+    const previousProjection = child.shapeMap
+    const previousDuration = child.totalDurationMs
+    const valid = frame(100, 0)
+    const invalid = frame(200, Number.NaN)
+    const zeroFailure = new OwnerDerivedZeroRectangle({
+      x: 100,
+      y: 20,
+      width: 40,
+      height: 30,
+      failZeroConstruction: true,
+    })
+
+    expect(() => child.replaceSlice("body", [], false)).toThrow(/at least one/)
+    expect(() => child.replaceSlice("body", [valid, invalid], false)).toThrow(/NaN/)
+    expect(() => child.replaceSlice("body", [zeroFailure])).toThrow(/zero-frame compilation/)
+
+    expect(child.getSlice("body")).toBe(previousSlice)
+    expect(child.shapeMap).toBe(previousProjection)
+    expect(child.totalDurationMs).toBe(previousDuration)
+    expect(valid.parent).toBeUndefined()
+    expect(zeroFailure.parent).toBeUndefined()
   })
 })
 

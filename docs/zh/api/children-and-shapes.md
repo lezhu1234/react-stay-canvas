@@ -45,6 +45,7 @@ Child 是绑定 Canvas 的运行时实体，不提供复制操作。需要捕获
 | `totalDurationMs` | 最长 slice 的总时长 |
 | `appendKeyFrame(name, shape, prependZeroShape?)` | 向 slice 追加关键帧 |
 | `appendKeyFrames(frameMap, prependZeroShape?)` | 批量追加多个 slice |
+| `replaceSlice(name, frames, prependZeroShape?)` | 原子替换一个非空 slice；当前投影会在下一次 seek 时改变 |
 | `appendDefaultFrame(shape, prependZeroShape?)` | 向 `default` slice 追加 |
 | `getSlice(name)` | 返回 slice；不存在时返回空数组 |
 | `hasSlice(name)` | 判断 slice 是否存在 |

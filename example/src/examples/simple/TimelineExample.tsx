@@ -1,14 +1,10 @@
 import { useRef, useState } from "react"
-import { Line, Rectangle, StayCanvas, StayShapeTransitionConfig, StayText, StayTools } from "react-stay-canvas"
+import { Line, Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
 import { CanvasCard, colors, DemoLayout, placeSceneChild, ResetButton, sceneLine, scenePoint, StatusGrid, TimelineControls, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 
 const duration = 1600
-type AnimatedLineProps = ConstructorParameters<typeof Line>[0] & {
-  transition: StayShapeTransitionConfig
-}
-const animatedLine = (props: AnimatedLineProps) => new Line(props)
 
 export default function TimelineExample() {
   const { text } = useI18n()
@@ -35,9 +31,9 @@ export default function TimelineExample() {
     }))
 
     const trace = tools.createChild({ className: "animated-trace" })
-    trace.appendKeyFrame("line", animatedLine({ ...sceneLine(tools, 28, 210, 90, 210), strokeConfig: { color: colors.gray, lineWidth: 3 }, transition: { durationMs: 400 } }))
-    trace.appendKeyFrame("line", animatedLine({ ...sceneLine(tools, 28, 210, 260, 210), strokeConfig: { color: colors.blue, lineWidth: 3 }, transition: { durationMs: 600, delayMs: 120 } }))
-    trace.appendKeyFrame("line", animatedLine({ ...sceneLine(tools, 28, 210, 410, 210), strokeConfig: { color: colors.orange, lineWidth: 3 }, transition: { durationMs: 480 } }))
+    trace.appendKeyFrame("line", new Line({ ...sceneLine(tools, 28, 210, 90, 210), strokeConfig: { color: colors.gray, lineWidth: 3 }, transition: { durationMs: 400 } }))
+    trace.appendKeyFrame("line", new Line({ ...sceneLine(tools, 28, 210, 260, 210), strokeConfig: { color: colors.blue, lineWidth: 3 }, transition: { durationMs: 600, delayMs: 120 } }))
+    trace.appendKeyFrame("line", new Line({ ...sceneLine(tools, 28, 210, 410, 210), strokeConfig: { color: colors.orange, lineWidth: 3 }, transition: { durationMs: 480 } }))
 
     placeSceneChild(tools, tools.appendChild({
       className: "timeline-milestones",

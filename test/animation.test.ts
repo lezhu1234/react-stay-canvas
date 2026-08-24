@@ -15,6 +15,22 @@ describe("animation interpolation (intermediateState)", () => {
     expect(at(1).x2).toBeCloseTo(10)
   })
 
+  it("Line accepts and preserves its animated transition contract", () => {
+    const line = new Line({
+      x1: 0,
+      y1: 0,
+      x2: 10,
+      y2: 20,
+      transition: { durationMs: 480, delayMs: 120, type: "easeOutCubic" },
+    })
+
+    expect(line.transition).toEqual({
+      durationMs: 480,
+      delayMs: 120,
+      type: "easeOutCubic",
+    })
+  })
+
   it("Rectangle box interpolates x/y/width/height", () => {
     const a = new Rectangle({ x: 0, y: 0, width: 0, height: 0 })
     const b = new Rectangle({ x: 10, y: 20, width: 100, height: 200 })

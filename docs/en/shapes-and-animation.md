@@ -157,6 +157,8 @@ Cross-origin images follow the browser's Canvas tainting rules. If the scene wil
 
 Pass `sx`, `sy`, `swidth`, and `sheight` to crop the source image. Explicit crop dimensions are preserved during construction, update, and copy; omitted dimensions use the image's natural size. Custom crop dimensions are not currently preserved in interpolated timeline frames.
 
+Animated `StayImage` slices use `opacity` as their visibility state. An image produced by `zeroShape()` stays out of the rendered frame at opacity `0`, then becomes visible as opacity is interpolated; no dummy `fillConfig` is required.
+
 ## Explicit timeline model
 
 An animated Child contains named slices. Each slice is a sequence of keyframes for one AnimatedShape type, and different slices advance in parallel:

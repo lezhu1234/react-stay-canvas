@@ -131,6 +131,14 @@ export class StayAnimatedChild<
       }
 
       if (stepEndTime === timeMs) {
+        const nextTransition = slice[index + 1]?.transition
+        const nextStepDuration = nextTransition
+          ? (nextTransition.durationMs ?? 0) + (nextTransition.delayMs ?? 0)
+          : undefined
+        if (nextStepDuration === 0) {
+          stepStartTime = stepEndTime
+          continue
+        }
         return {
           beforeIndex: index,
           afterIndex: index,

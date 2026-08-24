@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { StayCanvas, type StayTools } from "react-stay-canvas"
 
 import { CanvasCard } from "../../components/DemoKit"
+import motionImageUrl from "../../assets/annotation-traffic.jpg"
 import { useI18n } from "../../i18n"
 import { createMotionListeners, type MotionEngine } from "./motion/interactions"
 import {
@@ -40,6 +41,7 @@ const formatTime = (timeMs: number) => `${(timeMs / 1000).toFixed(2)}s`
 export default function MotionStudioExample() {
   const { text } = useI18n()
   const toolsRef = useRef<StayTools>()
+  const mediaImageRef = useRef<HTMLImageElement>()
   const fileRef = useRef<HTMLInputElement>(null)
   const [history, setHistory] = useState<ProjectHistory>(() => ({
     past: [],
@@ -142,19 +144,42 @@ export default function MotionStudioExample() {
   engine.previewGeometry = (layerId, geometry) => {
     if (!toolsRef.current) return
     const preview = upsertMotionFrame(projectRef.current, layerId, timeRef.current, geometry)
-    renderMotionProject(toolsRef.current, preview, timeRef.current, layerId, boundedRef.current)
+    renderMotionProject(toolsRef.current, preview, timeRef.current, layerId, boundedRef.current, mediaImageRef.current)
   }
   engine.commitGeometry = commitGeometry
   engine.restore = () => {
-    if (toolsRef.current) renderMotionProject(toolsRef.current, projectRef.current, timeRef.current, selectedLayerIdRef.current, boundedRef.current)
+    if (toolsRef.current) renderMotionProject(toolsRef.current, projectRef.current, timeRef.current, selectedLayerIdRef.current, boundedRef.current, mediaImageRef.current)
   }
   engine.say = say
   const listeners = useMemo(() => createMotionListeners(engine), [engine])
 
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
-    renderMotionProject(tools, projectRef.current, timeRef.current, selectedLayerId, boundedRef.current)
+    renderMotionProject(tools, projectRef.current, timeRef.current, selectedLayerId, boundedRef.current, mediaImageRef.current)
   }
+
+  useEffect(() => {
+    let active = true
+    const image = new Image()
+    image.onload = () => {
+      if (!active) return
+      mediaImageRef.current = image
+      if (toolsRef.current) {
+        renderMotionProject(
+          toolsRef.current,
+          projectRef.current,
+          timeRef.current,
+          selectedLayerIdRef.current,
+          boundedRef.current,
+          image,
+        )
+      }
+    }
+    image.src = motionImageUrl
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     const layerId = selectedLayer(project, selectedLayerIdRef.current)?.id ?? project.layers[0].id
@@ -174,7 +199,7 @@ export default function MotionStudioExample() {
       timeRef.current = effectiveTime
       setTimeMs(effectiveTime)
     }
-    if (toolsRef.current) renderMotionProject(toolsRef.current, project, effectiveTime, layerId, boundedRef.current)
+    if (toolsRef.current) renderMotionProject(toolsRef.current, project, effectiveTime, layerId, boundedRef.current, mediaImageRef.current)
   }, [project])
 
   useEffect(() => {
@@ -308,7 +333,7 @@ export default function MotionStudioExample() {
       </aside>
 
       <main className="motion-stage-area">
-        <CanvasCard title={text("Motion composition", "动效合成")} description={text("Select an object, drag to move, or use eight handles to resize at the playhead.", "选择对象后拖动移动，或使用八个手柄在播放头位置调整尺寸。")} wide>
+        <CanvasCard title={text("Motion composition", "动效合成")} description={text("Edit built-in, media, and custom Shape slices; each track interpolates independently and exits together.", "编辑内置、媒体与自定义 Shape slice；各轨道独立插值，并在结尾同步退出。")} wide>
           <StayCanvas className="demo-canvas demo-canvas-grid motion-canvas" height={MOTION_SCENE_HEIGHT} layers={3} listenerList={listeners} mounted={mounted} passive={false} width={MOTION_SCENE_WIDTH} />
         </CanvasCard>
         <div className="motion-stage-toolbar">

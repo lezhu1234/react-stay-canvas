@@ -1,5 +1,6 @@
 import {
   Rectangle,
+  StayImage,
   StayText,
   type StayAnimatedChild,
   type StayInstantChild,
@@ -15,8 +16,10 @@ import {
   type MotionLayer,
   type MotionProject,
 } from "./model"
+import { MotionCapsule } from "./capsule"
 
-type MotionShape = Rectangle | StayText
+type MotionBody = Rectangle | MotionCapsule
+type MotionShape = MotionBody | StayImage | StayText
 type MotionChild = StayAnimatedChild<MotionShape>
 type SelectionChild = StayInstantChild<Rectangle>
 export type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w"
@@ -27,16 +30,22 @@ const transparent = rgba(0, 0, 0, 0)
 
 const bodyKey = "body"
 const labelKey = "label"
+const mediaKey = "media"
 const outlineKey = "outline"
+const EXIT_DURATION_MS = 320
+const MEDIA_REVEAL_DELAY_MS = 180
+const MEDIA_REVEAL_DURATION_MS = 360
 const handleKey = (handle: ResizeHandle) => `handle:${handle}`
-const childId = (layerId: string) => `motion-layer-${layerId}`
+const childPrefix = "motion-layer-"
+const childId = (layerId: string) => `${childPrefix}${layerId}`
 
 export const motionLayers = (tools: StayTools) =>
   tools.getChildrenBySelector<MotionShape>(".motion-layer") as MotionChild[]
 
-export const layerBody = (child: MotionChild) => child.shapeMap.get(bodyKey) as Rectangle
+export const layerBody = (child: MotionChild) => child.shapeMap.get(bodyKey) as MotionBody
 export const layerLabel = (child: MotionChild) => child.shapeMap.get(labelKey) as StayText | undefined
-const layerIdOf = (child: MotionChild) => layerBody(child).shapeStore.get("motion-layer-id") as string
+export const layerMedia = (child: MotionChild) => child.shapeMap.get(mediaKey) as StayImage | undefined
+const layerIdOf = (child: MotionChild) => child.id.slice(childPrefix.length)
 
 function palette(layer: MotionLayer) {
   if (layer.color === "green") return { fill: colors.greenSoft, stroke: colors.green }
@@ -44,17 +53,17 @@ function palette(layer: MotionLayer) {
   return { fill: colors.blueSoft, stroke: colors.blue }
 }
 
-function frameTransition(frame: MotionFrame, previous?: MotionFrame) {
+function frameTransition(frame: MotionFrame, previous?: MotionFrame, durationScale = 1) {
   if (!previous) return { durationMs: 0, delayMs: 0, type: frame.easing }
   const interval = frame.timeMs - previous.timeMs
-  const durationMs = Math.min(Math.max(0, frame.durationMs), interval)
+  const durationMs = Math.min(Math.max(0, frame.durationMs * durationScale), interval)
   return { durationMs, delayMs: interval - durationMs, type: frame.easing }
 }
 
 function createBody(tools: StayTools, layer: MotionLayer, frame: MotionFrame, previous?: MotionFrame) {
   const point = scenePoint(tools, frame.x, frame.y)
   const style = palette(layer)
-  return new Rectangle({
+  const props = {
     ...point,
     width: frame.width,
     height: frame.height,
@@ -64,7 +73,8 @@ function createBody(tools: StayTools, layer: MotionLayer, frame: MotionFrame, pr
     strokeConfig: { color: style.stroke, lineWidth: layer.kind === "accent" ? 1 : 2 },
     shapeStore: new Map([["motion-layer-id", layer.id]]),
     transition: frameTransition(frame, previous),
-  })
+  }
+  return layer.kind === "accent" ? new MotionCapsule(props) : new Rectangle(props)
 }
 
 function createLabel(tools: StayTools, layer: MotionLayer, frame: MotionFrame, previous?: MotionFrame) {
@@ -82,47 +92,108 @@ function createLabel(tools: StayTools, layer: MotionLayer, frame: MotionFrame, p
     layer: 2,
     zIndex: 3,
     fillConfig: { color: layer.kind === "accent" ? style.stroke : colors.ink },
-    transition: frameTransition(frame, previous),
+    transition: frameTransition(frame, previous, 0.65),
   })
 }
 
-function compileAnimatedLayer(tools: StayTools, layer: MotionLayer) {
-  const bodyFrames: Rectangle[] = []
+function compileMediaFrames(tools: StayTools, layer: MotionLayer, image?: HTMLImageElement) {
+  if (!image || layer.kind !== "card") return []
+
+  const sourceWidth = image.naturalWidth || image.width
+  const sourceHeight = image.naturalHeight || image.height
+  const nextFrameTime = layer.frames[1]?.timeMs ?? MEDIA_REVEAL_DELAY_MS + MEDIA_REVEAL_DURATION_MS
+  const revealTotal = Math.min(MEDIA_REVEAL_DELAY_MS + MEDIA_REVEAL_DURATION_MS, nextFrameTime)
+  const revealDelay = Math.min(MEDIA_REVEAL_DELAY_MS, revealTotal)
+  let elapsedMs = revealTotal
+  return layer.frames.map((frame, index) => {
+    const point = scenePoint(tools, frame.x + 10, frame.y + 10)
+    const transition = index === 0
+      ? {
+          durationMs: revealTotal - revealDelay,
+          delayMs: revealDelay,
+          type: frame.easing,
+        }
+      : (() => {
+          const interval = Math.max(0, frame.timeMs - elapsedMs)
+          elapsedMs = frame.timeMs
+          const durationMs = Math.min(frame.durationMs * 0.8, interval)
+          return { durationMs, delayMs: interval - durationMs, type: frame.easing }
+        })()
+    return new StayImage({
+      image,
+      ...point,
+      swidth: sourceWidth,
+      sheight: sourceHeight,
+      width: Math.max(1, frame.width - 20),
+      height: Math.max(1, frame.height - 20),
+      opacity: 0.32,
+      layer: 1,
+      zIndex: 3,
+      transition,
+    })
+  })
+}
+
+function compileAnimatedLayer(tools: StayTools, layer: MotionLayer, image?: HTMLImageElement) {
+  const bodyFrames: MotionBody[] = []
   const labelFrames: StayText[] = []
   layer.frames.forEach((frame, index) => {
     const previous = layer.frames[index - 1]
     bodyFrames.push(createBody(tools, layer, frame, previous))
     labelFrames.push(createLabel(tools, layer, frame, previous))
   })
-  return { bodyFrames, labelFrames }
+  return { bodyFrames, labelFrames, mediaFrames: compileMediaFrames(tools, layer, image) }
 }
 
-function createAnimatedLayer(tools: StayTools, layer: MotionLayer) {
+function finishTimeline(child: MotionChild, durationMs: number) {
+  const remainingMs = Math.max(0, durationMs - child.totalDurationMs)
+  const exitDurationMs = Math.min(EXIT_DURATION_MS, remainingMs)
+  child.disappear({
+    durationMs: exitDurationMs,
+    delayMs: remainingMs - exitDurationMs,
+  }, "afterAll")
+}
+
+function createAnimatedLayer(tools: StayTools, layer: MotionLayer, project: MotionProject, image?: HTMLImageElement) {
   const child = tools.createChild({ id: childId(layer.id), className: "motion-layer" }) as MotionChild
-  const { bodyFrames, labelFrames } = compileAnimatedLayer(tools, layer)
+  const { bodyFrames, labelFrames, mediaFrames } = compileAnimatedLayer(tools, layer, image)
   child.appendKeyFrames(new Map<string, MotionShape | MotionShape[]>([
     [bodyKey, bodyFrames],
     [labelKey, labelFrames],
   ]), false)
+  if (mediaFrames.length > 0) {
+    child.appendKeyFrames(new Map<string, MotionShape | MotionShape[]>([[mediaKey, mediaFrames]]), true)
+  }
+  finishTimeline(child, project.durationMs)
   return child
 }
 
-function syncAnimatedLayer(tools: StayTools, layer: MotionLayer) {
+function syncAnimatedLayer(tools: StayTools, layer: MotionLayer, project: MotionProject, image?: HTMLImageElement) {
   const child = motionLayerById(tools, layer.id)
-  if (!child) return createAnimatedLayer(tools, layer)
+  if (!child) return createAnimatedLayer(tools, layer, project, image)
 
-  const { bodyFrames, labelFrames } = compileAnimatedLayer(tools, layer)
+  const { bodyFrames, labelFrames, mediaFrames } = compileAnimatedLayer(tools, layer, image)
   child.replaceSlice(bodyKey, bodyFrames, false)
   child.replaceSlice(labelKey, labelFrames, false)
+  if (mediaFrames.length > 0) {
+    if (child.hasSlice(mediaKey)) child.replaceSlice(mediaKey, mediaFrames, true)
+    else child.appendKeyFrames(new Map<string, MotionShape | MotionShape[]>([[mediaKey, mediaFrames]]), true)
+  }
+  finishTimeline(child, project.durationMs)
   return child
 }
 
-function matchesProjectLayerOrder(children: MotionChild[], project: MotionProject) {
+function matchesCompiledLayers(children: MotionChild[], project: MotionProject, image?: HTMLImageElement) {
   return children.length === project.layers.length
-    && children.every((child, index) => child.id === childId(project.layers[index].id))
+    && children.every((child, index) => {
+      const layer = project.layers[index]
+      const expectsMedia = Boolean(image && layer.kind === "card")
+      const hasStaleMedia = child.hasSlice(mediaKey) && !expectsMedia
+      return child.id === childId(layer.id) && !hasStaleMedia
+    })
 }
 
-function handleCenters(body: Rectangle): Record<ResizeHandle, { x: number; y: number }> {
+function handleCenters(body: MotionBody): Record<ResizeHandle, { x: number; y: number }> {
   const centerX = body.x + body.width / 2
   const centerY = body.y + body.height / 2
   return {
@@ -197,13 +268,14 @@ export function renderMotionProject(
   timeMs: number,
   selectedLayerId?: string,
   bounded = false,
+  image?: HTMLImageElement,
 ) {
   const currentLayers = motionLayers(tools)
-  if (matchesProjectLayerOrder(currentLayers, project)) {
-    project.layers.forEach((layer) => syncAnimatedLayer(tools, layer))
+  if (matchesCompiledLayers(currentLayers, project, image)) {
+    project.layers.forEach((layer) => syncAnimatedLayer(tools, layer, project, image))
   } else {
     currentLayers.forEach(({ id }) => tools.removeChild(id))
-    project.layers.forEach((layer) => createAnimatedLayer(tools, layer))
+    project.layers.forEach((layer) => createAnimatedLayer(tools, layer, project, image))
   }
   progressMotionProject(tools, project, timeMs, selectedLayerId, bounded)
 }
@@ -226,7 +298,7 @@ export function hitMotionLayer(tools: StayTools, point: { x: number; y: number }
   let hit: MotionChild | undefined
   motionLayers(tools).forEach((child) => {
     const body = layerBody(child)
-    if (body.contains(point) && (!hit || body.zIndex >= layerBody(hit).zIndex)) hit = child
+    if (child.containsPointer(point) && (!hit || body.zIndex >= layerBody(hit).zIndex)) hit = child
   })
   return hit
 }
@@ -244,7 +316,8 @@ export function motionLayerById(tools: StayTools, layerId: string) {
 export function motionGeometry(tools: StayTools, layerId: string): MotionGeometry | undefined {
   const child = motionLayerById(tools, layerId)
   if (!child) return
-  const body = layerBody(child)
+  const body = child.shapeMap.get(bodyKey) as MotionBody | undefined
+  if (!body) return
   const area = sceneArea(tools, MOTION_SCENE_WIDTH, MOTION_SCENE_HEIGHT)
   return { x: body.x - area.x, y: body.y - area.y, width: body.width, height: body.height }
 }

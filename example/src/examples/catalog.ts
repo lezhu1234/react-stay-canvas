@@ -159,6 +159,7 @@ export const catalog: ExampleDefinition[] = [
     path: "/integrations/motion-studio",
     sourcePaths: [
       "./examples/integrated/MotionStudioExample.tsx",
+      "./examples/integrated/motion/capsule.ts",
       "./examples/integrated/motion/model.ts",
       "./examples/integrated/motion/runtime.ts",
       "./examples/integrated/motion/interactions.ts",
@@ -167,8 +168,8 @@ export const catalog: ExampleDefinition[] = [
     order: 13,
     title: l("Motion composition studio", "动效编排工作室"),
     shortTitle: l("Motion studio", "动效工作室"),
-    summary: l("A complete keyframe editor with layer selection, direct Canvas transforms, easing, work-area playback, document history, and JSON exchange.", "一个完整的关键帧编辑器，支持图层选择、Canvas 直接变换、缓动、工作区间播放、文档历史与 JSON 交换。"),
-    features: ["keyframe tracks", "eight-handle resize", "work area", "history + JSON"],
+    summary: l("A complete keyframe editor combining built-in, image, and custom animated Shapes with independent slices, aligned exits, direct transforms, history, and JSON exchange.", "一个完整的关键帧编辑器，组合内置、图片与自定义动画 Shape，支持独立 slice、同步退出、直接变换、历史与 JSON 交换。"),
+    features: ["custom AnimatedShape", "animated media", "async slices", "generic hit", "history + JSON"],
     component: MotionStudioExample,
   },
 ]

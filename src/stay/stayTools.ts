@@ -32,6 +32,50 @@ import { normalizeManualActions } from "./events/input/manualActionAdapter"
 import Stay from "./stay"
 import { StepProps } from "./types"
 
+function collectChildShapes(
+  child: StayInstantChild,
+  layerNumber: number
+): InstantShape[] {
+  return Array.from({ length: layerNumber }, (_, layer) => child.getShapes(layer)).flat()
+}
+
+function withChildrenAtTime<R>(
+  children: StayInstantChild[],
+  progress: number | undefined,
+  callback: () => R
+): R {
+  if (progress === undefined) return callback()
+
+  const restoreProjections: Array<() => void> = []
+  try {
+    children.forEach((child) => {
+      restoreProjections.push(child.beginCurrentTimeProjection({ time: progress }))
+    })
+    return callback()
+  } finally {
+    restoreProjections.reverse().forEach((restore) => restore())
+  }
+}
+
+function prepareRegionContext(
+  context: CanvasRenderingContext2D,
+  area: Area,
+  targetSize: { width: number; height: number }
+) {
+  const scale = Math.min(targetSize.width / area.width, targetSize.height / area.height)
+  const width = area.width * scale
+  const height = area.height * scale
+  const x = (targetSize.width - width) / 2
+  const y = (targetSize.height - height) / 2
+
+  context.beginPath()
+  context.rect(x, y, width, height)
+  context.clip()
+  context.translate(x, y)
+  context.scale(scale, scale)
+  context.translate(-area.x, -area.y)
+}
+
 // One factory, one unified tool surface. Every stage gets all tools.
 export function stayTools(this: Stay<any>): StayTools {
   const animatedTools = {
@@ -413,7 +457,7 @@ export function stayTools(this: Stay<any>): StayTools {
         })
       })
     },
-    regionToTargetCanvas: ({
+    regionToTargetCanvas: async ({
       area,
       targetSize,
       children,
@@ -432,37 +476,29 @@ export function stayTools(this: Stay<any>): StayTools {
         throw new Error("Unable to get 2D context")
       }
 
-      let shapes: InstantShape[] = []
       const layerNumber = this.root.layers.length
+      return withChildrenAtTime(children, progress, () => {
+        const shapes = children
+          .flatMap((child) => collectChildShapes(child, layerNumber))
+          .sort((first, second) => first.layer - second.layer || first.zIndex - second.zIndex)
 
-      const childrenReady = Promise.all(
-        children.map(async (c) => {
-          if (progress !== undefined) {
-            // no-op on static children (polymorphic), advances timeline children
-            c.setCurrentTime({ time: progress })
-          }
-          for (let layerIndex = 0; layerIndex < layerNumber; layerIndex++) {
-            shapes.push(...c.getShapes(layerIndex))
-          }
-        })
-      )
-
-      return new Promise((resolve) => {
-        childrenReady.then(() => {
-          shapes.sort((s1, s2) => s1.zIndex - s2.zIndex)
-          shapes.sort((s1, s2) => s1.layer - s2.layer)
+        tempCtx.save()
+        try {
+          prepareRegionContext(tempCtx, area, targetSize)
           shapes.forEach((shape) => {
             shape.draw({
               context: tempCtx,
               now: Date.now(),
-              width: tempCanvas.width,
-              height: tempCanvas.height,
+              width: this.width,
+              height: this.height,
               forchDraw: true,
             })
           })
+        } finally {
+          tempCtx.restore()
+        }
 
-          resolve(tempCanvas)
-        })
+        return tempCanvas
       })
     },
     triggerAction: <T extends string>(

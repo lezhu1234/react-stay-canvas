@@ -181,9 +181,9 @@ const snapshotCanvas = await tools.regionToTargetCanvas({
 const png = snapshotCanvas.toDataURL("image/png")
 ```
 
-`regionToTargetCanvas()` returns an `HTMLCanvasElement` that is not mounted in the DOM. It force-draws the supplied Children in layer and `zIndex` order. When `progress` is supplied, animated Children seek to that millisecond time, including `progress: 0`, while static Children remain unchanged.
+`regionToTargetCanvas()` returns an `HTMLCanvasElement` that is not mounted in the DOM. It clips to `area`, then scales that region uniformly and centers it inside `targetSize`; any space left by a different aspect ratio stays transparent. Shapes still draw in layer and `zIndex` order, and the call does not move or zoom the source Children.
 
-The current implementation does not automatically translate `area` or scale it into `targetSize`; it is closer to drawing current scene coordinates onto another Canvas. For true crop or scale behavior, first export/import into the target coordinate system or apply an explicit application-level transform.
+When `progress` is supplied, animated Children temporarily project the requested millisecond time, including `progress: 0`, while static Children remain unchanged. Their previous live projections are restored after drawing, so capturing a frame does not move the playback position.
 
 ## Other tools
 

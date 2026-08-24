@@ -181,9 +181,9 @@ const snapshotCanvas = await tools.regionToTargetCanvas({
 const png = snapshotCanvas.toDataURL("image/png")
 ```
 
-`regionToTargetCanvas()` 返回一个未挂载到 DOM 的 `HTMLCanvasElement`。它按 Shape 的 layer 和 `zIndex` 顺序强制绘制传入的 Children。传入 `progress` 时，动画 Child 会先推进到对应毫秒时间，包括 `progress: 0`；静态 Child 保持不变。
+`regionToTargetCanvas()` 返回一个未挂载到 DOM 的 `HTMLCanvasElement`。它会裁剪到 `area`，再把该区域等比缩放并居中放入 `targetSize`；宽高比不同时，剩余区域保持透明。绘制顺序仍按 Shape 的 layer 和 `zIndex` 决定，调用过程不会移动或缩放源 Child。
 
-当前实现不会自动把 `area` 平移或缩放到 `targetSize`，因此它更接近“按当前场景坐标绘制到另一个 Canvas”。需要真正裁剪或缩放时，应先导出/导入到目标坐标系，或在业务层明确处理变换。
+传入 `progress` 时，动画 Child 会临时投影到对应毫秒时间，包括 `progress: 0`；静态 Child 保持不变。输出完成后会恢复动画 Child 原有的当前投影，因此截帧不会改变现场播放位置。
 
 ## 其他工具
 

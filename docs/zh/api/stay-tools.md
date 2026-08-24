@@ -84,7 +84,7 @@ interface DrawReturn {
 | --- | --- |
 | `exportChildren({ children, area? })` | 把当前 Shape 捕获为可复用的 `SceneFragment` |
 | `importChildren(scene, targetArea?)` | 等比例实例化片段，并生成新的运行时 id |
-| `regionToTargetCanvas({ area, targetSize?, children, progress? })` | 把 Shape 绘制到新的 HTMLCanvasElement |
+| `regionToTargetCanvas({ area, targetSize?, children, progress? })` | 把区域等比居中绘制到新的 HTMLCanvasElement；可无副作用截取动画帧 |
 
 `CaptureSceneProps` 是导出参数；`SceneFragment` 包含 `area`，以及带 `sourceId`、`className`、`shapes` 的 Child 片段。`sourceId` 只作为关联元数据，不会复用为导入 Child 的 id。
 

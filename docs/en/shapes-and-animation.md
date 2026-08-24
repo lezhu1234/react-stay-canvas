@@ -15,14 +15,14 @@ A Shape owns geometry, drawing, hit testing, and its own visual state. A Child g
 | `Rectangle` | `x`, `y`, `width`, `height` | Yes | Yes | `x` and `y` are the top-left corner |
 | `Circle` | `x`, `y`, `radius` | Yes | No | Uses radial hit testing with plain coordinates |
 | `Line` | `x1`, `y1`, `x2`, `y2` | No | Yes | Use `nearPoint` for a custom line hit area |
-| `StayText` | `x`, `y`, `text`, `font` | No | Yes | Upper-center box anchor for default `start + alphabetic`; Canvas text anchor for other alignment combinations |
+| `StayText` | `x`, `y`, `text`, `font` | No | Yes | `(x, y)` is always the Canvas text anchor defined by `textAlign` and `textBaseline` |
 | `StayImage` | `image`, `x`, `y`, `width`, `height`, `opacity` | Yes | Yes | Uses rectangular bounds; create it after the image loads |
 | `Point` | `x`, `y` | No | No | Geometry helper only; appending it throws during render because `getBound()` is not implemented |
 | `Path` | `points`, `radius` | Unavailable | No | Cannot currently render as an appended Shape because `getBound()` is not implemented |
 
 “Default hit testing” means that `Child.containsPointer()` can rely on the Shape's `contains()` implementation. A Child is hit when any Shape inside it is hit. A practical pattern is to group non-hittable text or lines with a visible or low-opacity `Rectangle`, giving the whole Child a stable interaction region.
 
-`StayText` preserves the upper-center anchor for existing callers that leave alignment at `start + alphabetic`. To center text on a visual point, pass that point as `x` and `y` together with `textAlign: "center"` and `textBaseline: "middle"`; drawing, bounds, movement, zoom, and keyframe interpolation then use the same center. `offsetXRatio` and `offsetYRatio` apply an additional width- and height-relative shift to the resolved anchor.
+`StayText` follows Canvas coordinate semantics: the default `start + alphabetic` uses `(x, y)` as the start-side alphabetic-baseline anchor. To center text on a visual point, pass that point as `x` and `y` together with `textAlign: "center"` and `textBaseline: "middle"`. Drawing, bounds, movement, zoom, and keyframe interpolation use the same anchor. `offsetXRatio` and `offsetYRatio` apply an additional width- and height-relative shift to it.
 
 ## Styling and paint order
 

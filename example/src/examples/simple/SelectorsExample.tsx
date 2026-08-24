@@ -91,6 +91,8 @@ export default function SelectorsExample() {
             x: box.x + 53,
             y: box.y + 47,
             text: `#${box.id} · .${box.className}`,
+            textAlign: "center",
+            textBaseline: "top",
             font: { size: 11, fontWeight: 650 },
             zIndex: 2,
             fillConfig: { color: colors.ink },

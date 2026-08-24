@@ -24,20 +24,10 @@ import { AnimatedShape } from "./animatedShape"
 import { BlackColor, InstantShape, ZeroColor } from "./instantShape"
 import { Rectangle } from "./rectangle"
 
-function usesLegacyAnchor(textAlign: CanvasTextAlign, textBaseline: CanvasTextBaseline) {
-  return textAlign === "start" && textBaseline === "alphabetic"
-}
-
 function alignedLeft(anchorX: number, width: number, textAlign: CanvasTextAlign) {
   if (textAlign === "center") return anchorX - width / 2
   if (textAlign === "right" || textAlign === "end") return anchorX - width
   return anchorX
-}
-
-function alignedTop(anchorY: number, height: number, textBaseline: CanvasTextBaseline) {
-  if (textBaseline === "middle") return anchorY - height / 2
-  if (textBaseline === "top" || textBaseline === "hanging") return anchorY
-  return anchorY - height
 }
 
 export class StayText extends AnimatedShape {
@@ -59,6 +49,7 @@ export class StayText extends AnimatedShape {
   offsetYRatio: number
   textObj: TextMetrics | undefined
   autoTransitionDiffText: boolean
+  private ascent: number
   private drawPoint: Coordinate
 
   constructor(props: TextAttr) {
@@ -90,10 +81,12 @@ export class StayText extends AnimatedShape {
     this.leftTop = { x: 0, y: 0 }
     this.rightBottom = { x: 0, y: 0 }
     this.rightTop = { x: 0, y: 0 }
+    this.ascent = 0
     this.drawPoint = { x: 0, y: 0 }
-    const size = getSize(text, this.font)
+    const size = getSize(text, this.font, this.textBaseline)
     this.width = size.width
     this.height = size.height
+    this.ascent = size.ascent
     this.autoTransitionDiffText = autoTransitionDiffText ?? true
 
     this.init()
@@ -236,14 +229,13 @@ export class StayText extends AnimatedShape {
   }
 
   init(ctx?: DrawCanvasContext | undefined) {
-    const legacyAnchor = usesLegacyAnchor(this.textAlign, this.textBaseline)
     const offsetX = this.width * this.offsetXRatio
     const offsetY = this.height * this.offsetYRatio
-    this.drawPoint.x = this.x + offsetX - (legacyAnchor ? this.width / 2 : 0)
-    this.drawPoint.y = this.y + offsetY + (legacyAnchor ? this.height : 0)
+    this.drawPoint.x = this.x + offsetX
+    this.drawPoint.y = this.y + offsetY
 
-    const left = legacyAnchor ? this.drawPoint.x : alignedLeft(this.drawPoint.x, this.width, this.textAlign)
-    const top = legacyAnchor ? this.drawPoint.y - this.height : alignedTop(this.drawPoint.y, this.height, this.textBaseline)
+    const left = alignedLeft(this.drawPoint.x, this.width, this.textAlign)
+    const top = this.drawPoint.y - this.ascent
 
     this.leftTop.x = left
     this.leftTop.y = top
@@ -277,9 +269,10 @@ export class StayText extends AnimatedShape {
     this.textAlign = textAlign ?? this.textAlign
     this.offsetXRatio = offsetXRatio ?? this.offsetXRatio
     this.offsetYRatio = offsetYRatio ?? this.offsetYRatio
-    const size = getSize(this.text, this.font)
+    const size = getSize(this.text, this.font, this.textBaseline)
     this.width = size.width
     this.height = size.height
+    this.ascent = size.ascent
     this.applyUpdate(props)
     this.init()
     return this

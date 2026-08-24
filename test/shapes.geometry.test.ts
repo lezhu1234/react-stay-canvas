@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { Rectangle, Circle, Line, Path, Point, StayText } from "react-stay-canvas"
+import { createTextMeasureContext } from "./helpers/textMetrics"
 
 // Dimension 1 (Shapes): pure geometry — no canvas needed.
 
@@ -97,15 +98,7 @@ describe("Shape snapshots", () => {
           public height: number
         ) {}
 
-        getContext() {
-          return {
-            measureText: () => ({
-              width: 24,
-              fontBoundingBoxAscent: 10,
-              fontBoundingBoxDescent: 2,
-            }),
-          }
-        }
+        getContext() { return createTextMeasureContext(24) }
       }
     )
     const text = new StayText({
@@ -138,28 +131,20 @@ describe("StayText anchors", () => {
           public height: number
         ) {}
 
-        getContext() {
-          return {
-            measureText: () => ({
-              width: 24,
-              fontBoundingBoxAscent: 10,
-              fontBoundingBoxDescent: 2,
-            }),
-          }
-        }
+        getContext() { return createTextMeasureContext(24) }
       }
     )
   }
 
-  it("preserves the legacy upper-center anchor for the default alignment", () => {
+  it("uses x and y as the native anchor for the default alignment", () => {
     installTextMetrics()
-    const text = new StayText({ x: 100, y: 50, text: "legacy" })
+    const text = new StayText({ x: 100, y: 50, text: "default" })
     const context = { fillText: vi.fn() }
 
     text.fill({ context } as any)
 
-    expect(text.getBound()).toEqual({ x: 88, y: 50, width: 24, height: 12 })
-    expect(context.fillText).toHaveBeenCalledWith("legacy", 88, 62)
+    expect(text.getBound()).toEqual({ x: 100, y: 40, width: 24, height: 12 })
+    expect(context.fillText).toHaveBeenCalledWith("default", 100, 50)
     vi.unstubAllGlobals()
   })
 
@@ -192,6 +177,21 @@ describe("StayText anchors", () => {
     text.zoomCenter = { x: 100, y: 50 }
     text.zoom(2)
     expect(text.getCenterPoint()).toEqual({ x: 100, y: 50 })
+    vi.unstubAllGlobals()
+  })
+
+  it.each([
+    ["top", 50],
+    ["hanging", 48],
+    ["middle", 44],
+    ["alphabetic", 40],
+    ["ideographic", 39],
+    ["bottom", 38],
+  ] as const)("derives the %s bound from metrics measured at that baseline", (textBaseline, top) => {
+    installTextMetrics()
+    const text = new StayText({ x: 100, y: 50, text: "baseline", textBaseline })
+
+    expect(text.getBound()).toEqual({ x: 100, y: top, width: 24, height: 12 })
     vi.unstubAllGlobals()
   })
 

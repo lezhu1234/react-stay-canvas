@@ -4,9 +4,9 @@
 
 状态：已修复
 
-`StayText({ x, y })` 的默认 `start + alphabetic` 组合继续把 `(x, y)` 解释为文字包围盒的上方中心，以保持既有调用兼容。使用其他 `textAlign` 或 `textBaseline` 组合时，`(x, y)` 现在表示原生 Canvas 文字锚点；例如 `center + middle` 会让文字包围盒中心精确落在 `(x, y)`。
+`StayText({ x, y })` 的 `(x, y)` 现在始终表示由 `textAlign` 和 `textBaseline` 定义的原生 Canvas 文字锚点。例如默认 `start + alphabetic` 使用左侧字母基线锚点，`center + middle` 会让文字包围盒中心精确落在 `(x, y)`。
 
-绘制锚点已与包围盒四角分离，`getBound()`、移动、缩放和动画插值使用同一套对齐结果；`offsetXRatio`、`offsetYRatio` 在解析锚点后按文字宽高继续施加偏移。自动化测试覆盖默认兼容路径、显式居中、右下对齐、偏移、移动、缩放、动画，以及 Motion 和 Diagram 的居中标签。
+绘制锚点已与包围盒四角分离，`getBound()`、移动、缩放和动画插值使用同一套对齐结果；`offsetXRatio`、`offsetYRatio` 在解析锚点后按文字宽高继续施加偏移。自动化测试覆盖默认锚点、显式居中、右下对齐、偏移、移动、缩放、动画，以及 Motion 和 Diagram 的居中标签。
 
 ## 指针在 Canvas 外释放后，输入状态可能无法结束
 

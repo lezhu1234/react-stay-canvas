@@ -158,7 +158,7 @@ export default function TransformExample() {
         }))
       }
     }
-    placeSceneChild(tools, tools.appendChild({ className: "label", shape: new StayText({ x: 220, y: 250, text: text("wheel to zoom  |  hold Space and drag to pan", "滚轮缩放  |  按住空格键拖动平移"), font: { size: 14 }, fillConfig: { color: colors.ink } }) }))
+    placeSceneChild(tools, tools.appendChild({ className: "label", shape: new StayText({ x: 220, y: 250, text: text("wheel to zoom  |  hold Space and drag to pan", "滚轮缩放  |  按住空格键拖动平移"), textAlign: "center", textBaseline: "top", font: { size: 14 }, fillConfig: { color: colors.ink } }) }))
     originMarkerRef.current = new Circle({
       x: 220,
       y: 145,
@@ -171,6 +171,8 @@ export default function TransformExample() {
       x: 262,
       y: 138,
       text: text("zoom origin", "缩放原点"),
+      textAlign: "center",
+      textBaseline: "top",
       font: { size: 11, fontWeight: 700 },
       zIndex: 3,
       fillConfig: { color: colors.orange },

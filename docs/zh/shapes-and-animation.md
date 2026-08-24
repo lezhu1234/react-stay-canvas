@@ -15,14 +15,14 @@ Shape 负责几何、绘制、命中和自身状态；Child 负责把一个或�
 | `Rectangle` | `x`、`y`、`width`、`height` | 是 | 是 | `x`、`y` 表示左上角 |
 | `Circle` | `x`、`y`、`radius` | 是 | 否 | 使用普通坐标进行圆形半径命中 |
 | `Line` | `x1`、`y1`、`x2`、`y2` | 否 | 是 | 可用 `nearPoint` 做自定义线段命中 |
-| `StayText` | `x`、`y`、`text`、`font` | 否 | 是 | 默认 `start + alphabetic` 时为包围盒上方中心；其他对齐组合时为 Canvas 文字锚点 |
+| `StayText` | `x`、`y`、`text`、`font` | 否 | 是 | `(x, y)` 始终是由 `textAlign` 和 `textBaseline` 定义的 Canvas 文字锚点 |
 | `StayImage` | `image`、`x`、`y`、`width`、`height`、`opacity` | 是 | 是 | 继承矩形边界；应在图片加载后创建 |
 | `Point` | `x`、`y` | 否 | 否 | 仅可作为几何工具；追加后会因 `getBound()` 未实现而在渲染时抛错 |
 | `Path` | `points`、`radius` | 不可用 | 否 | `getBound()` 未实现，当前不能作为追加到场景的 Shape 渲染 |
 
 这里的“默认命中”指 `Child.containsPointer()` 是否能直接依赖该 Shape 的 `contains()`。一个 Child 只要有任意一个 Shape 命中，就会命中整个 Child。因此常见做法是把不可命中的文字或线条，与一个透明度很低或可见的 `Rectangle` 放在同一个 Child 中，由矩形提供稳定命中区域。
 
-`StayText` 为未设置对齐参数的既有调用保留上方中心锚点。需要把文字放在某个视觉中心时，传入相同中心坐标并设置 `textAlign: "center"`、`textBaseline: "middle"`；文字绘制、包围盒、移动、缩放和关键帧插值都会使用这个中心。`offsetXRatio` 和 `offsetYRatio` 会在所选锚点基础上按文字宽高继续偏移。
+`StayText` 的坐标语义与 Canvas 一致：默认 `start + alphabetic` 把 `(x, y)` 作为左侧字母基线锚点；需要把文字放在某个视觉中心时，传入相同中心坐标并设置 `textAlign: "center"`、`textBaseline: "middle"`。文字绘制、包围盒、移动、缩放和关键帧插值使用同一个锚点。`offsetXRatio` 和 `offsetYRatio` 会在该锚点基础上按文字宽高继续偏移。
 
 ## 样式与绘制顺序
 

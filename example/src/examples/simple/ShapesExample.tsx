@@ -42,6 +42,8 @@ export default function ShapesExample() {
       x: 84,
       y: 118,
       text: "Rectangle",
+      textAlign: "center",
+      textBaseline: "top",
       font: { size: 12, fontWeight: 700 },
       fillConfig: { color: colors.ink },
     })
@@ -70,7 +72,15 @@ export default function ShapesExample() {
           fillConfig: { color: colors.greenSoft },
           strokeConfig: { color: colors.green, lineWidth: 3 },
         }),
-        new StayText({ x: 220, y: 118, text: "Circle", font: { size: 12, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
+        new StayText({
+          x: 220,
+          y: 118,
+          text: "Circle",
+          textAlign: "center",
+          textBaseline: "top",
+          font: { size: 12, fontWeight: 700 },
+          fillConfig: { color: colors.ink },
+        }),
       ],
     }))
     placeSceneChild(tools, tools.appendChild({
@@ -83,7 +93,15 @@ export default function ShapesExample() {
           y2: 108,
           strokeConfig: { color: colors.orange, lineWidth: 4, dash: [10, 7], lineCap: "round" },
         }),
-        new StayText({ x: 347, y: 118, text: "Line", font: { size: 12, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
+        new StayText({
+          x: 347,
+          y: 118,
+          text: "Line",
+          textAlign: "center",
+          textBaseline: "top",
+          font: { size: 12, fontWeight: 700 },
+          fillConfig: { color: colors.ink },
+        }),
       ],
     }))
     placeSceneChild(tools, tools.appendChild({
@@ -92,6 +110,8 @@ export default function ShapesExample() {
         x: 220,
         y: 154,
         text: "StayText",
+        textAlign: "center",
+        textBaseline: "top",
         font: { size: 18, fontWeight: 650 },
         fillConfig: { color: colors.ink },
       }),

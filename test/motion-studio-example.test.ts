@@ -25,11 +25,12 @@ import {
   renderMotionProject,
 } from "../example/src/examples/integrated/motion/runtime"
 import { createStage, md, mm, mu } from "./helpers/stage"
+import { createTextMeasureContext } from "./helpers/textMetrics"
 
 vi.stubGlobal("OffscreenCanvas", class {
   constructor(public width: number, public height: number) {}
   getContext() {
-    return { measureText: () => ({ width: 56, fontBoundingBoxAscent: 10, fontBoundingBoxDescent: 2 }) }
+    return createTextMeasureContext(56)
   }
 })
 

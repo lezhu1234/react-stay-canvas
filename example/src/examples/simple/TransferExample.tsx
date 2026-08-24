@@ -26,7 +26,7 @@ export default function TransferExample() {
       className: "asset",
       shape: [
         new Rectangle({ x: 46, y: 46, width: 110, height: 88, fillConfig: { color: colors.blueSoft }, strokeConfig: { color: colors.blue, lineWidth: 2 } }),
-        new StayText({ x: 101, y: 81, text: text("A · movable", "A · 可移动"), font: { size: 12, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
+        new StayText({ x: 101, y: 81, text: text("A · movable", "A · 可移动"), textAlign: "center", textBaseline: "top", font: { size: 12, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
       ],
     }))
     placeSceneChild(tools, tools.appendChild({
@@ -34,10 +34,10 @@ export default function TransferExample() {
       className: "asset",
       shape: [
         new Circle({ x: 246, y: 92, radius: 44, fillConfig: { color: colors.orangeSoft }, strokeConfig: { color: colors.orange, lineWidth: 2 } }),
-        new StayText({ x: 246, y: 84, text: "B", font: { size: 14, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
+        new StayText({ x: 246, y: 84, text: "B", textAlign: "center", textBaseline: "top", font: { size: 14, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
       ],
     }))
-    placeSceneChild(tools, tools.appendChild({ id: "asset-caption", className: "asset", shape: new StayText({ x: 180, y: 172, text: text("portable scene", "可移植场景"), font: { size: 17, fontWeight: 650 }, fillConfig: { color: colors.ink } }) }))
+    placeSceneChild(tools, tools.appendChild({ id: "asset-caption", className: "asset", shape: new StayText({ x: 180, y: 172, text: text("portable scene", "可移植场景"), textAlign: "center", textBaseline: "top", font: { size: 17, fontWeight: 650 }, fillConfig: { color: colors.ink } }) }))
   }
 
   const transfer = () => {

@@ -110,6 +110,8 @@ Every constructor also accepts common `ShapeProps`. `Rectangle`, `StayText`, and
 
 `StayImage` uses the image's natural size when `swidth` or `sheight` is omitted. Explicit source-crop dimensions are preserved during construction, update, and copy. Timeline interpolation does not currently preserve custom crop dimensions; see [Current limitations](../known-limitations.md#rendering-and-geometry).
 
+`StayText` preserves its existing upper-center box coordinate for the default `start + alphabetic` combination. With any other `textAlign` or `textBaseline` combination, `x` and `y` are the Canvas text anchor; the common `center + middle` pair therefore uses `(x, y)` as the visual center.
+
 `CircleAttr` also retains `stroke` and `fill` fields, but the current constructor does not use them; use `strokeConfig` and `fillConfig` consistently. `StayText` likewise does not carry `decoration` into its current drawing state, so do not rely on it as a stable visual effect.
 
 ## Font and transition

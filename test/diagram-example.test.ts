@@ -113,6 +113,7 @@ describe("integrated diagram example", () => {
       "handle:from", "handle:to", "label",
     ])
     expect(nodes.map((node) => body(node).state)).toEqual(["start", "process", "decision", "end", "process"])
+    nodes.forEach((node) => expect(label(node).getCenterPoint()).toEqual(body(node).getCenterPoint()))
 
     await click(top, [300, 250])
     key(top, "keydown", "Control")

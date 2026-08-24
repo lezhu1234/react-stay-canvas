@@ -128,6 +128,103 @@ describe("Shape snapshots", () => {
   })
 })
 
+describe("StayText anchors", () => {
+  const installTextMetrics = () => {
+    vi.stubGlobal(
+      "OffscreenCanvas",
+      class {
+        constructor(
+          public width: number,
+          public height: number
+        ) {}
+
+        getContext() {
+          return {
+            measureText: () => ({
+              width: 24,
+              fontBoundingBoxAscent: 10,
+              fontBoundingBoxDescent: 2,
+            }),
+          }
+        }
+      }
+    )
+  }
+
+  it("preserves the legacy upper-center anchor for the default alignment", () => {
+    installTextMetrics()
+    const text = new StayText({ x: 100, y: 50, text: "legacy" })
+    const context = { fillText: vi.fn() }
+
+    text.fill({ context } as any)
+
+    expect(text.getBound()).toEqual({ x: 88, y: 50, width: 24, height: 12 })
+    expect(context.fillText).toHaveBeenCalledWith("legacy", 88, 62)
+    vi.unstubAllGlobals()
+  })
+
+  it("uses x and y as the native anchor for explicit center and middle alignment", () => {
+    installTextMetrics()
+    const text = new StayText({
+      x: 100,
+      y: 50,
+      text: "centered",
+      textAlign: "center",
+      textBaseline: "middle",
+    })
+    const context = { fillText: vi.fn() }
+
+    text.fill({ context } as any)
+
+    expect(text.getBound()).toEqual({ x: 88, y: 44, width: 24, height: 12 })
+    expect(text.getCenterPoint()).toEqual({ x: 100, y: 50 })
+    expect(context.fillText).toHaveBeenCalledWith("centered", 100, 50)
+
+    const rightBottom = new StayText({
+      x: 100,
+      y: 50,
+      text: "right-bottom",
+      textAlign: "right",
+      textBaseline: "bottom",
+    })
+    expect(rightBottom.getBound()).toEqual({ x: 76, y: 38, width: 24, height: 12 })
+
+    text.zoomCenter = { x: 100, y: 50 }
+    text.zoom(2)
+    expect(text.getCenterPoint()).toEqual({ x: 100, y: 50 })
+    vi.unstubAllGlobals()
+  })
+
+  it("keeps offsets, movement, and animation relative to the resolved anchor", () => {
+    installTextMetrics()
+    const before = new StayText({
+      x: 40,
+      y: 30,
+      text: "moving",
+      textAlign: "center",
+      textBaseline: "middle",
+      offsetXRatio: 0.25,
+      offsetYRatio: 0.5,
+    })
+    const after = new StayText({
+      x: 80,
+      y: 70,
+      text: "moving",
+      textAlign: "center",
+      textBaseline: "middle",
+      offsetXRatio: 0.25,
+      offsetYRatio: 0.5,
+    })
+
+    expect(before.getBound()).toEqual({ x: 34, y: 30, width: 24, height: 12 })
+    before.move(10, 20)
+    expect(before.getBound()).toEqual({ x: 44, y: 50, width: 24, height: 12 })
+    const middle = after.intermediateState(before, after, 0.5, "linear")
+    expect(middle.getCenterPoint()).toEqual({ x: 71, y: 66 })
+    vi.unstubAllGlobals()
+  })
+})
+
 describe("Circle geometry", () => {
   it("contains points within the radius", () => {
     const circle = new Circle({ x: 0, y: 0, radius: 10 })

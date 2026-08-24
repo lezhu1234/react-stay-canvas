@@ -2,11 +2,11 @@
 
 ## `StayText` 的坐标锚点语义不直观
 
-状态：待处理
+状态：已修复
 
-`StayText({ x, y })` 的 `(x, y)` 当前表示文字包围盒的上方中心，而 Circle 等 Shape 通常把坐标理解为视觉中心。这会迫使调用方写出与字号相关的纵向补偿。
+`StayText({ x, y })` 的默认 `start + alphabetic` 组合继续把 `(x, y)` 解释为文字包围盒的上方中心，以保持既有调用兼容。使用其他 `textAlign` 或 `textBaseline` 组合时，`(x, y)` 现在表示原生 Canvas 文字锚点；例如 `center + middle` 会让文字包围盒中心精确落在 `(x, y)`。
 
-后续修改必须先明确默认锚点以及 `textAlign`、`textBaseline`、`offsetXRatio`、`offsetYRatio` 的组合语义，并覆盖文字边界、命中区域、移动、缩放及示例回归。默认坐标语义属于兼容性决定，不能在无迁移方案时顺手修改。
+绘制锚点已与包围盒四角分离，`getBound()`、移动、缩放和动画插值使用同一套对齐结果；`offsetXRatio`、`offsetYRatio` 在解析锚点后按文字宽高继续施加偏移。自动化测试覆盖默认兼容路径、显式居中、右下对齐、偏移、移动、缩放、动画，以及 Motion 和 Diagram 的居中标签。
 
 ## 指针在 Canvas 外释放后，输入状态可能无法结束
 

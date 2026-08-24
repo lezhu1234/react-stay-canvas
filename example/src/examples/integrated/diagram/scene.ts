@@ -2,6 +2,8 @@ import {
   Circle,
   type Coordinate,
   Line,
+  Path,
+  Point,
   Rectangle,
   type ShapeDrawProps,
   StayText,
@@ -39,9 +41,9 @@ import {
 } from "./model"
 
 const transparent = rgba(0, 0, 0, 0)
-export const EDGE_SEGMENT_KEYS = ["segment:0", "segment:1", "segment:2"] as const
+export const EDGE_PATH_KEY = "path"
+const EDGE_HIT_PATH_KEY = "hit-area"
 const EDGE_ARROW_KEYS = ["arrow:0", "arrow:1"] as const
-const EDGE_LINE_KEYS = [...EDGE_SEGMENT_KEYS, ...EDGE_ARROW_KEYS] as const
 const NODE_BODY_KEY = "body"
 const NODE_LABEL_KEY = "label"
 const NODE_OUTLINE_KEY = "outline"
@@ -60,6 +62,8 @@ const outlineOf = (child: NodeChild) => child.shapeMap.get(NODE_OUTLINE_KEY) as 
 export const nodeKind = (child: NodeChild): NodeKind => bodyOf(child).shapeStore.get(NODE_KIND_KEY) as NodeKind
 export const edgeLabelOf = (child: EdgeChild) => child.shapeMap.get(EDGE_LABEL_KEY) as StayText
 export const edgeHandleOf = (child: EdgeChild, end: "from" | "to") => child.shapeMap.get(edgeHandleKey(end)) as Circle
+export const edgePathOf = (child: EdgeChild) => child.shapeMap.get(EDGE_PATH_KEY) as Path
+const edgeHitPathOf = (child: EdgeChild) => child.shapeMap.get(EDGE_HIT_PATH_KEY) as Path | undefined
 
 const validPort = (value: unknown): value is Port =>
   typeof value === "string" && PORT_ORDER.includes(value as Port)
@@ -298,7 +302,7 @@ export function createNode(
 }
 
 export function edgeMeta(child: EdgeChild): EdgeMeta | undefined {
-  const main = child.shapeMap.get(EDGE_SEGMENT_KEYS[0]) as Line
+  const main = edgePathOf(child)
   const from = main.shapeStore.get(EDGE_FROM_KEY)
   const fromPort = main.shapeStore.get(EDGE_FROM_PORT_KEY)
   const to = main.shapeStore.get(EDGE_TO_KEY)
@@ -307,7 +311,7 @@ export function edgeMeta(child: EdgeChild): EdgeMeta | undefined {
   return { id: child.id, from, fromPort, to, toPort, label: edgeLabelOf(child)?.text ?? "" }
 }
 
-export function storeEdgeMeta(shape: Line, meta: Pick<EdgeMeta, "from" | "fromPort" | "to" | "toPort">) {
+export function storeEdgeMeta(shape: Path, meta: Pick<EdgeMeta, "from" | "fromPort" | "to" | "toPort">) {
   shape.shapeStore.set(EDGE_FROM_KEY, meta.from)
   shape.shapeStore.set(EDGE_FROM_PORT_KEY, meta.fromPort)
   shape.shapeStore.set(EDGE_TO_KEY, meta.to)
@@ -331,13 +335,9 @@ function routePoints(start: Coordinate, end: Coordinate, fromPort: Port, toPort?
 
 export function updateEdgeShapes(child: EdgeChild, start: Coordinate, end: Coordinate, fromPort: Port, toPort?: Port) {
   const points = routePoints(start, end, fromPort, toPort)
-  const segments = EDGE_SEGMENT_KEYS.map((key) => child.shapeMap.get(key) as Line)
-  segments.forEach((line, index) => line.update({
-    x1: points[index].x,
-    y1: points[index].y,
-    x2: points[index + 1].x,
-    y2: points[index + 1].y,
-  }))
+  const pathPoints = points.map((point) => new Point(point))
+  edgePathOf(child).update({ points: pathPoints })
+  edgeHitPathOf(child)?.update({ points: pathPoints.map((point) => point.copy()) })
   const wingA = child.shapeMap.get(EDGE_ARROW_KEYS[0]) as Line
   const wingB = child.shapeMap.get(EDGE_ARROW_KEYS[1]) as Line
   const finalStart = points[2]
@@ -374,7 +374,13 @@ function createEdgeShapes(start: Coordinate, end: Coordinate, preview = false) {
     lineCap: "round" as CanvasLineCap,
     dash: preview ? [7, 5] : [],
   }
-  const lines = EDGE_LINE_KEYS.map((key): [string, EdgeShape] => [key, new Line({
+  const path = new Path({
+    points: [new Point(start), new Point(end)],
+    layer: preview ? 2 : 0,
+    zIndex: preview ? 9 : 1,
+    strokeConfig,
+  })
+  const arrows = EDGE_ARROW_KEYS.map((key): [string, EdgeShape] => [key, new Line({
     x1: start.x,
     y1: start.y,
     x2: end.x,
@@ -383,9 +389,16 @@ function createEdgeShapes(start: Coordinate, end: Coordinate, preview = false) {
     zIndex: preview ? 9 : 1,
     strokeConfig,
   })])
-  if (preview) return new Map<string, EdgeShape>(lines)
+  const visibleShapes: [string, EdgeShape][] = [[EDGE_PATH_KEY, path], ...arrows]
+  if (preview) return new Map<string, EdgeShape>(visibleShapes)
   return new Map<string, EdgeShape>([
-    ...lines,
+    ...visibleShapes,
+    [EDGE_HIT_PATH_KEY, new Path({
+      points: [new Point(start), new Point(end)],
+      layer: 0,
+      zIndex: 0,
+      strokeConfig: { color: transparent, lineWidth: 14 },
+    })],
     ...(["from", "to"] as const).map((endpoint, index): [string, EdgeShape] => [edgeHandleKey(endpoint), new Circle({
       ...[start, end][index],
       radius: EDGE_HANDLE_RADIUS,
@@ -427,7 +440,7 @@ export function createEdge(
   const start = portOf(from, props.fromPort).getCenterPoint()
   const end = portOf(to, props.toPort).getCenterPoint()
   const shapes = createEdgeShapes(start, end)
-  storeEdgeMeta(shapes.get(EDGE_SEGMENT_KEYS[0]) as Line, props)
+  storeEdgeMeta(shapes.get(EDGE_PATH_KEY) as Path, props)
   ;(shapes.get(EDGE_LABEL_KEY) as StayText).update({ text: props.label ?? "" })
   const child = tools.appendChild<EdgeShape>({
     id,
@@ -484,7 +497,10 @@ export function paintControls(tools: StayTools, engine: Pick<DiagramEngine, "sel
   })
   edges(tools).forEach((edge) => {
     const active = engine.selectedEdge === edge.id
-    EDGE_LINE_KEYS.forEach((key) => {
+    edgePathOf(edge).update({
+      strokeConfig: { color: active ? colors.blue : colors.gray, lineWidth: active ? 3 : 2.5 },
+    })
+    EDGE_ARROW_KEYS.forEach((key) => {
       ;(edge.shapeMap.get(key) as Line).update({
         strokeConfig: { color: active ? colors.blue : colors.gray, lineWidth: active ? 3 : 2.5 },
       })
@@ -533,15 +549,6 @@ export function hitNode(tools: StayTools, point: Coordinate) {
   return nodes(tools).filter((child) => nodeContains(child, point)).sort((a, b) => bodyOf(a).area - bodyOf(b).area)[0]
 }
 
-function segmentDistance(line: Line, point: Coordinate) {
-  const dx = line.x2 - line.x1
-  const dy = line.y2 - line.y1
-  const lengthSquared = dx * dx + dy * dy
-  if (lengthSquared === 0) return Math.hypot(point.x - line.x1, point.y - line.y1)
-  const ratio = Math.max(0, Math.min(1, ((point.x - line.x1) * dx + (point.y - line.y1) * dy) / lengthSquared))
-  return Math.hypot(point.x - (line.x1 + ratio * dx), point.y - (line.y1 + ratio * dy))
-}
-
 export function hitEdge(tools: StayTools, point: Coordinate) {
   return [...edges(tools)].reverse().find((edge) => {
     const label = edgeLabelOf(edge)
@@ -549,8 +556,7 @@ export function hitEdge(tools: StayTools, point: Coordinate) {
     const labelHit = Boolean(label.text) &&
       point.x >= labelBound.x - 5 && point.x <= labelBound.x + labelBound.width + 5 &&
       point.y >= labelBound.y - 5 && point.y <= labelBound.y + labelBound.height + 5
-    return labelHit || EDGE_SEGMENT_KEYS
-      .some((key) => segmentDistance(edge.shapeMap.get(key) as Line, point) <= 7)
+    return labelHit || Boolean(edgeHitPathOf(edge)?.contains(point))
   })
 }
 

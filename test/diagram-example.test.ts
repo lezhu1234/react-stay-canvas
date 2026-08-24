@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest"
-import { Circle, Line, Rectangle, StayText } from "react-stay-canvas"
+import { Circle, Line, Path, Rectangle, StayText } from "react-stay-canvas"
 
 import {
   type DiagramDocument,
@@ -33,9 +33,13 @@ vi.stubGlobal("OffscreenCanvas", class {
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 const body = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("body") as Rectangle
 const label = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("label") as StayText
-const mainLine = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("segment:0") as Line
+const mainPath = (child: { shapeMap: Map<string, unknown> }) => child.shapeMap.get("path") as Path
 const edgeGeometry = (child: { shapeMap: Map<string, unknown> }) => ({
-  lines: ["segment:0", "segment:1", "segment:2", "arrow:0", "arrow:1"].map((key) => {
+  paths: ["path", "hit-area"].map((key) => {
+    const path = child.shapeMap.get(key) as Path
+    return path.points.map(({ x, y }) => ({ x, y }))
+  }),
+  arrows: ["arrow:0", "arrow:1"].map((key) => {
     const line = child.shapeMap.get(key) as Line
     return { x1: line.x1, y1: line.y1, x2: line.x2, y2: line.y2 }
   }),
@@ -103,16 +107,19 @@ describe("integrated diagram example", () => {
     expect(nodes).toHaveLength(5)
     expect(edges).toHaveLength(5)
     expect(nodes[0].shapeMap).toHaveLength(15)
-    expect(edges[0].shapeMap).toHaveLength(8)
+    expect(edges[0].shapeMap).toHaveLength(7)
     expect([...nodes[0].shapeMap.keys()]).toEqual([
       "body", "label", "port:n", "port:e", "port:s", "port:w",
       "handle:nw", "handle:n", "handle:ne", "handle:e",
       "handle:se", "handle:s", "handle:sw", "handle:w", "outline",
     ])
     expect([...edges[0].shapeMap.keys()]).toEqual([
-      "segment:0", "segment:1", "segment:2", "arrow:0", "arrow:1",
+      "path", "arrow:0", "arrow:1", "hit-area",
       "handle:from", "handle:to", "label",
     ])
+    expect(edges[0].shapeMap.get("path")).toBeInstanceOf(Path)
+    expect(edges[0].shapeMap.get("hit-area")).toBeInstanceOf(Path)
+    expect((edges[0].shapeMap.get("hit-area") as Path).strokeConfig.lineWidth).toBe(14)
     expect(nodes.map((node) => body(node).state)).toEqual(["start", "process", "decision", "end", "process"])
     nodes.forEach((node) => expect(label(node).getCenterPoint()).toEqual(body(node).getCenterPoint()))
 
@@ -123,11 +130,11 @@ describe("integrated diagram example", () => {
     expect(state.selected).toEqual(new Set(["node-2", "node-3"]))
 
     const connectingEdge = stage.tools.getChildById("edge-2")!
-    const beforeEnd = mainLine(connectingEdge).endPoint.x
+    const beforeEnd = mainPath(connectingEdge).points.at(-1)!.x
     await drag(top, [300, 250], [330, 280])
     expect(body(stage.tools.getChildById("node-2")!).getBound()).toEqual({ x: 278, y: 254, width: 146, height: 92 })
     expect(body(stage.tools.getChildById("node-3")!).getBound()).toEqual({ x: 500, y: 254, width: 146, height: 92 })
-    expect(mainLine(connectingEdge).endPoint.x).toBe(beforeEnd + 40)
+    expect(mainPath(connectingEdge).points.at(-1)!.x).toBe(beforeEnd + 40)
 
     navigateDiagramHistory(stage.tools, state, "undo")
     expect(body(stage.tools.getChildById("node-2")!).x).toBe(238)
@@ -135,7 +142,7 @@ describe("integrated diagram example", () => {
     navigateDiagramHistory(stage.tools, state, "redo")
     expect(body(stage.tools.getChildById("node-2")!).x).toBe(278)
     expect(body(stage.tools.getChildById("node-3")!).x).toBe(500)
-    expect(mainLine(stage.tools.getChildById("edge-2")!).endPoint.x).toBe(beforeEnd + 40)
+    expect(mainPath(stage.tools.getChildById("edge-2")!).points.at(-1)!.x).toBe(beforeEnd + 40)
   })
 
   it("resizes with eight handles, connects from ports, and box-selects", async () => {
@@ -149,12 +156,19 @@ describe("integrated diagram example", () => {
     expect(body(stage.tools.getChildById("node-1")!).getBound()).toEqual({ x: 54, y: 226, width: 146, height: 94 })
     expect(stage.tools.getChildById("node-1")?.shapeMap).toHaveLength(15)
 
-    await drag(top, [213, 273], [220, 120])
+    top.dispatchEvent(md(213, 273)); await tick()
+    top.dispatchEvent(mm(220, 120)); await tick()
+    const preview = stage.tools.getChildBySelector(".connection-preview")!
+    expect([...preview.shapeMap.keys()]).toEqual(["path", "arrow:0", "arrow:1"])
+    expect(preview.shapeMap.get("path")).toBeInstanceOf(Path)
+    expect((preview.shapeMap.get("path") as Path).strokeConfig.dash).toEqual([7, 5])
+    expect(mainPath(preview).points.at(-1)?.getCenterPoint()).toEqual({ x: 220, y: 120 })
+    top.dispatchEvent(mu(220, 120)); await tick()
     expect(stage.tools.getChildrenBySelector(".edge")).toHaveLength(5)
     expect(state.say).toHaveBeenCalledWith("Connection cancelled", "已取消连接")
     await drag(top, [213, 273], [520, 250])
     expect(stage.tools.getChildrenBySelector(".edge")).toHaveLength(6)
-    expect(stage.tools.getChildrenBySelector(".edge").at(-1)?.shapeMap).toHaveLength(8)
+    expect(stage.tools.getChildrenBySelector(".edge").at(-1)?.shapeMap).toHaveLength(7)
 
     await drag(top, [210, 170], [650, 330])
     expect(state.selected).toEqual(new Set(["node-2", "node-3"]))
@@ -196,12 +210,16 @@ describe("integrated diagram example", () => {
     expect(state.edit).toHaveBeenCalledWith("edge-3")
 
     const mixedDirectionEdge = stage.tools.getChildById("edge-5")!
-    const routedLines = ["segment:0", "segment:1", "segment:2"]
-      .map((key) => mixedDirectionEdge.shapeMap.get(key) as Line)
-    expect(routedLines.every((line) => line.x1 === line.x2 || line.y1 === line.y2)).toBe(true)
-    expect(routedLines[2].x1).toBe(routedLines[2].x2)
+    const routedPoints = mainPath(mixedDirectionEdge).points
+    expect(routedPoints.slice(1).every((point, index) =>
+      point.x === routedPoints[index].x || point.y === routedPoints[index].y,
+    )).toBe(true)
+    expect(routedPoints[2].x).toBe(routedPoints[3].x)
 
-    await click(top, [205, 260])
+    const firstEdge = stage.tools.getChildById("edge-1")!
+    expect(mainPath(firstEdge).contains({ x: 205, y: 266 })).toBe(false)
+    expect((firstEdge.shapeMap.get("hit-area") as Path).contains({ x: 205, y: 266 })).toBe(true)
+    await click(top, [205, 266])
     expect(state.selectedEdge).toBe("edge-1")
     expect((stage.tools.getChildById("edge-1")!.shapeMap.get("handle:from") as Circle).strokeConfig.color.a).toBe(1)
     await drag(top, [225, 260], [520, 250])

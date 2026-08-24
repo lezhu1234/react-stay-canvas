@@ -18,11 +18,11 @@ A Shape owns geometry, drawing, hit testing, and its own visual state. A Child g
 | `StayText` | `x`, `y`, `text`, `font` | No | Yes | `(x, y)` is always the Canvas text anchor defined by `textAlign` and `textBaseline` |
 | `StayImage` | `image`, `x`, `y`, `width`, `height`, `opacity` | Yes | Yes | Uses rectangular bounds; create it after the image loads |
 | `Point` | `x`, `y` | No | No | Geometry helper only; appending it throws during render because `getBound()` is not implemented |
-| `Path` | `points`, `radius` | Yes | No | Renders a round polyline whose bound and hit width are defined by `radius` |
+| `Path` | `points`, `strokeConfig.lineWidth` | Yes | No | Uses a native stroked `Path2D`; defaults to round caps and joins |
 
 “Default hit testing” means that `Child.containsPointer()` can rely on the Shape's `contains()` implementation. A Child is hit when any Shape inside it is hit. A practical pattern is to group non-hittable text or lines with a visible or low-opacity `Rectangle`, giving the whole Child a stable interaction region.
 
-`Path` treats each adjacent point pair as the center line of a round segment with radius `radius`. Its bound expands the point extrema by that radius, and hit testing compares the pointer with the nearest segment after a bounds check. Empty, single-point, repeated-point, and multi-segment paths are valid static geometry.
+`Path` builds one native `Path2D` centerline from its points and paints it with `context.stroke()`. `strokeConfig.lineWidth` is the only width source; `fillConfig` is not accepted. Its bound expands the point extrema by half the line width, and hit testing compares the pointer with the nearest segment after a bounds check. Empty, single-point, repeated-point, and multi-segment paths are valid static geometry. Zoom scales both the points and line width.
 
 `StayText` follows Canvas coordinate semantics: the default `start + alphabetic` uses `(x, y)` as the start-side alphabetic-baseline anchor. To center text on a visual point, pass that point as `x` and `y` together with `textAlign: "center"` and `textBaseline: "middle"`. Drawing, bounds, movement, zoom, and keyframe interpolation use the same anchor. `offsetXRatio` and `offsetYRatio` apply an additional width- and height-relative shift to it.
 

@@ -77,15 +77,15 @@ describe("Shape snapshots", () => {
   it("copies Path points independently", () => {
     const path = new Path({
       points: [new Point({ x: 1, y: 2 }), new Point({ x: 3, y: 4 })],
-      radius: 5,
       layer: 1,
+      strokeConfig: { lineWidth: 10 },
     })
 
     const snapshot = path.copy()
     snapshot.points[0].update({ x: 99, y: 2 })
 
     expect(snapshot.layer).toBe(1)
-    expect(snapshot.radius).toBe(5)
+    expect(snapshot.strokeConfig.lineWidth).toBe(10)
     expect(path.points[0].x).toBe(1)
   })
 

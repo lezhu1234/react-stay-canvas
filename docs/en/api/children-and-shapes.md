@@ -104,9 +104,11 @@ interface CanvasGlobalProps {
 | `StayText` | `x`, `y`, `text` | `font`, `decoration`, `border`, `offsetXRatio`, `offsetYRatio`, `textBaseline`, `textAlign`, `autoTransitionDiffText` |
 | `StayImage` | `image`, `x`, `y`, `width`, `height`, `opacity` | `sx`, `sy`, `swidth`, `sheight`, `imageLoaded` |
 | `Point` | `x`, `y` | — |
-| `Path` | `points`, `radius` | — |
+| `Path` | `points` | — |
 
 Every constructor also accepts common `ShapeProps`. `Rectangle`, `StayText`, and `StayImage` additionally accept `transition`. `Line` is implemented as an animated Shape, but its current exported `LineProps` does not accept `transition`.
+
+`Path` is a native stroked centerline rather than a fillable area. Its width comes only from `strokeConfig.lineWidth`; `fillConfig` is not part of `PathAttr`. It defaults to round caps and joins while preserving explicitly supplied Canvas stroke settings.
 
 `StayImage` uses the image's natural size when `swidth` or `sheight` is omitted. Explicit source-crop dimensions are preserved during construction, update, and copy. Timeline interpolation does not currently preserve custom crop dimensions; see [Current limitations](../known-limitations.md#rendering-and-geometry).
 

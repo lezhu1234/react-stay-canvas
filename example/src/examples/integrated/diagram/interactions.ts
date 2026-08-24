@@ -1,7 +1,6 @@
 import {
   type Coordinate,
   type EventProps,
-  Line,
   type ListenerProps,
   MOUSE_EVENTS,
   PredefinedEventList,
@@ -29,8 +28,8 @@ import {
   createEdge,
   createMarquee,
   edgeHandleOf,
-  EDGE_SEGMENT_KEYS,
   edgeMeta,
+  edgePathOf,
   graphBound,
   hitEdge,
   hitNode,
@@ -314,7 +313,7 @@ function finishReconnect(
     ? { ...session.meta, from: target.id, fromPort: nearestPort(target, point) }
     : { ...session.meta, to: target.id, toPort: nearestPort(target, point) }
   if (next.from === next.to || relationExists(tools, next, edge.id)) return false
-  storeEdgeMeta(edge.shapeMap.get(EDGE_SEGMENT_KEYS[0]) as Line, next)
+  storeEdgeMeta(edgePathOf(edge), next)
   syncEdges(tools)
   engine.selectedEdge = edge.id
   return true

@@ -152,7 +152,7 @@ export const catalog: ExampleDefinition[] = [
     title: l("Classic workflow editor", "经典流程图编辑器"),
     shortTitle: l("Diagram", "图表"),
     summary: l("A classic flowchart workspace with a shape palette, true flowchart nodes, inline labels, orthogonal reconnectable edges, pan and zoom.", "一个经典的流程图工作区，提供图形库、标准流程图节点、原位文字编辑、可重连正交连线以及画布缩放和平移。"),
-    features: ["shape palette", "orthogonal edges", "inline edit", "pan + zoom", "history + JSON"],
+    features: ["Path + Line edges", "shape palette", "inline edit", "pan + zoom", "history + JSON"],
     component: DiagramExample,
   },
   {

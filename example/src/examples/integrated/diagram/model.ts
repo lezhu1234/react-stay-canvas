@@ -1,5 +1,5 @@
 import type { Cursor, StayTools } from "react-stay-canvas"
-import type { Circle, Line, Rectangle, StayText } from "react-stay-canvas"
+import type { Circle, Line, Path, Rectangle, StayText } from "react-stay-canvas"
 
 export const SCENE_WIDTH = 900
 export const SCENE_HEIGHT = 560
@@ -21,7 +21,7 @@ export type NodeKind = "start" | "process" | "decision" | "end"
 export type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w"
 export type Port = "n" | "e" | "s" | "w"
 export type NodeShape = Rectangle | StayText | Circle
-export type EdgeShape = Line | Circle | StayText
+export type EdgeShape = Path | Line | Circle | StayText
 export type NodeChild = ReturnType<StayTools["appendChild"]>
 export type EdgeChild = ReturnType<StayTools["appendChild"]>
 export type NodeSnapshots = Map<string, Map<string, NodeShape>>

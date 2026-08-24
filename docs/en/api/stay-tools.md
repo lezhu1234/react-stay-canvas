@@ -84,7 +84,7 @@ interface DrawReturn {
 | --- | --- |
 | `exportChildren({ children, area? })` | Capture current Shapes as a reusable `SceneFragment` |
 | `importChildren(scene, targetArea?)` | Materialize a fragment at equal aspect ratio with new runtime ids |
-| `regionToTargetCanvas({ area, targetSize?, children, progress? })` | Draw Shapes onto a new HTMLCanvasElement |
+| `regionToTargetCanvas({ area, targetSize?, children, progress? })` | Aspect-fit a region onto a new HTMLCanvasElement; optionally capture an animation frame without changing playback |
 
 `CaptureSceneProps` is the export input. `SceneFragment` contains an `area` and Child fragments with `sourceId`, `className`, and `shapes`. `sourceId` is correlation metadata; it is not reused as the imported Child id.
 

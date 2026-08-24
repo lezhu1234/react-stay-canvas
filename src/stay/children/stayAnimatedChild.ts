@@ -286,6 +286,28 @@ export class StayAnimatedChild<
     this.shapeMap = currentShapeMap
   }
 
+  /** @internal Projects a timeline and returns the matching restoration step. */
+  override beginCurrentTimeProjection(props: SetShapeChildCurrentTime): () => void {
+    const previousShapeMap = this.shapeMap
+    const previousFrameMapInfo = this.frameMapInfo
+    const previousUpdatedLayers = this.updatedLayers
+    const restore = () => {
+      this.shapeMap = previousShapeMap
+      this.frameMapInfo = previousFrameMapInfo
+      this.updatedLayers = previousUpdatedLayers
+    }
+
+    this.frameMapInfo = new Map(previousFrameMapInfo)
+    this.updatedLayers = new Set(previousUpdatedLayers)
+    try {
+      this.setCurrentTime(props)
+    } catch (error) {
+      restore()
+      throw error
+    }
+    return restore
+  }
+
   checkShape(shape: T) {
     if (isNaN(shape.transition.delayMs) || isNaN(shape.transition.durationMs)) {
       throw new Error("transition delayMs or durationMs is NaN")

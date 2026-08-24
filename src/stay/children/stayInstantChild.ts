@@ -172,6 +172,12 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   // Polymorphic so callers can tick every child uniformly.
   setCurrentTime(_props: SetShapeChildCurrentTime): void {}
 
+  /** @internal Projects this Child and returns the matching restoration step. */
+  beginCurrentTimeProjection(props: SetShapeChildCurrentTime): () => void {
+    this.setCurrentTime(props)
+    return () => {}
+  }
+
   getShapes(layer: number): T[] {
     const shapes: T[] = []
     this.shapeMap.forEach((shape) => {

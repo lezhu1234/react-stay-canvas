@@ -6,6 +6,29 @@ import { createStage } from "./helpers/stage"
 const rect = (x: number, y: number, w = 20, h = 20) =>
   new Rectangle({ x, y, width: w, height: h })
 
+const filledRect = (x: number, y: number, w = 20, h = 20) =>
+  new Rectangle({
+    x,
+    y,
+    width: w,
+    height: h,
+    fillConfig: { color: { r: 220, g: 40, b: 30, a: 1 } },
+  })
+
+const animatedRect = (x: number, durationMs: number, fill?: () => void) =>
+  new Rectangle({
+    x,
+    y: 10,
+    width: 20,
+    height: 20,
+    fillConfig: { color: { r: 220, g: 40, b: 30, a: 1 } },
+    stateDrawFuncMap: fill ? { default: { fill } } : undefined,
+    transition: { durationMs, delayMs: 0 },
+  })
+
+const pixelAlpha = (canvas: HTMLCanvasElement, x: number, y: number) =>
+  canvas.getContext("2d")!.getImageData(x, y, 1, 1).data[3]
+
 // Dimension 9 (Tools & Ref): removeChild, changeCursor, export/import, trigger.
 
 describe("removeChild", () => {
@@ -124,6 +147,86 @@ describe("regionToTargetCanvas", () => {
 
     expect(setCurrentTime).toHaveBeenCalledOnce()
     expect(setCurrentTime).toHaveBeenCalledWith({ time: 0 })
+  })
+
+  it("maps the source area into the target size with a centered aspect fit", async () => {
+    const { stage } = createStage()
+    const child = stage.tools.appendChild({
+      className: "r",
+      shape: filledRect(30, 40, 20, 10),
+    })
+
+    const canvas = await stage.tools.regionToTargetCanvas({
+      area: { x: 20, y: 30, width: 100, height: 50 },
+      targetSize: { width: 200, height: 200 },
+      children: [child],
+    })
+
+    expect(canvas.width).toBe(200)
+    expect(canvas.height).toBe(200)
+    expect(pixelAlpha(canvas, 25, 75)).toBe(255)
+    expect(pixelAlpha(canvas, 5, 5)).toBe(0)
+    expect(pixelAlpha(canvas, 25, 105)).toBe(0)
+  })
+
+  it("clips shapes to the requested source area without changing their geometry", async () => {
+    const { stage } = createStage()
+    const shape = filledRect(0, 20, 40, 20)
+    const child = stage.tools.appendChild({ className: "r", shape })
+
+    const canvas = await stage.tools.regionToTargetCanvas({
+      area: { x: 20, y: 0, width: 100, height: 100 },
+      targetSize: { width: 200, height: 200 },
+      children: [child],
+    })
+
+    expect(pixelAlpha(canvas, 10, 50)).toBe(255)
+    expect(pixelAlpha(canvas, 45, 50)).toBe(0)
+    expect(shape).toMatchObject({ x: 0, y: 20, width: 40, height: 20 })
+    expect(child.shape).toBe(shape)
+  })
+
+  it("captures an animated time without changing the live projection", async () => {
+    const { stage } = createStage({ width: 120, height: 60 })
+    const child = stage.tools.createChild({ className: "animated" })
+    child.appendKeyFrame("body", animatedRect(10, 0), false)
+    child.appendKeyFrame("body", animatedRect(70, 100), false)
+    stage.tools.progress({ timeMs: 0 })
+    const liveShape = child.shape
+
+    const canvas = await stage.tools.regionToTargetCanvas({
+      area: { x: 0, y: 0, width: 120, height: 60 },
+      children: [child],
+      progress: 100,
+    })
+
+    expect(pixelAlpha(canvas, 75, 15)).toBe(255)
+    expect(pixelAlpha(canvas, 15, 15)).toBe(0)
+    expect(child.shape).toBe(liveShape)
+    expect(child.shape.x).toBe(10)
+
+    stage.tools.progress({ timeMs: 0 })
+    expect(child.shape.x).toBe(10)
+  })
+
+  it("restores the live animation projection when capture drawing fails", async () => {
+    const { stage } = createStage({ width: 120, height: 60 })
+    const child = stage.tools.createChild({ className: "animated" })
+    child.appendKeyFrame("body", animatedRect(10, 0), false)
+    child.appendKeyFrame("body", animatedRect(70, 100, () => {
+      throw new Error("capture draw failed")
+    }), false)
+    stage.tools.progress({ timeMs: 0 })
+    const liveShape = child.shape
+
+    await expect(stage.tools.regionToTargetCanvas({
+      area: { x: 0, y: 0, width: 120, height: 60 },
+      children: [child],
+      progress: 100,
+    })).rejects.toThrow("capture draw failed")
+
+    expect(child.shape).toBe(liveShape)
+    expect(child.shape.x).toBe(10)
   })
 })
 

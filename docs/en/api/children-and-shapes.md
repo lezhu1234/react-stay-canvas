@@ -107,7 +107,7 @@ interface CanvasGlobalProps {
 | `Point` | `x`, `y` | — |
 | `Path` | `points` | — |
 
-Every constructor also accepts common `ShapeProps`. `Rectangle`, `StayText`, and `StayImage` additionally accept `transition`. `Line` is implemented as an animated Shape, but its current exported `LineProps` does not accept `transition`.
+Every constructor also accepts common `ShapeProps`. The animated built-ins `Rectangle`, `Line`, `StayText`, and `StayImage` additionally accept `transition`.
 
 `Path` is a native stroked centerline rather than a fillable area. Its width comes only from `strokeConfig.lineWidth`; `fillConfig` is not part of `PathAttr`. It defaults to round caps and joins while preserving explicitly supplied Canvas stroke settings.
 

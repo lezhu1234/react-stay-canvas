@@ -107,7 +107,7 @@ interface CanvasGlobalProps {
 | `Point` | `x`, `y` | — |
 | `Path` | `points` | — |
 
-全部构造参数还可包含通用 `ShapeProps`；`Rectangle`、`StayText` 和 `StayImage` 还可包含 `transition`。`Line` 的实现属于动画 Shape，但当前导出的 `LineProps` 不接受 `transition`。
+全部构造参数还可包含通用 `ShapeProps`；动画 Shape `Rectangle`、`Line`、`StayText` 和 `StayImage` 还可包含 `transition`。
 
 `Path` 是基于原生 Canvas 的中心线描边，不是可填充面积。宽度只由 `strokeConfig.lineWidth` 决定；`fillConfig` 不属于 `PathAttr`。默认端帽和连接样式为圆形，显式传入的 Canvas 描边配置会被保留。
 

@@ -168,8 +168,8 @@ export const catalog: ExampleDefinition[] = [
     order: 13,
     title: l("Motion composition studio", "动效编排工作室"),
     shortTitle: l("Motion studio", "动效工作室"),
-    summary: l("A complete keyframe editor combining built-in, image, and custom animated Shapes with independent slices, aligned exits, direct transforms, history, and JSON exchange.", "一个完整的关键帧编辑器，组合内置、图片与自定义动画 Shape，支持独立 slice、同步退出、直接变换、历史与 JSON 交换。"),
-    features: ["custom AnimatedShape", "animated media", "async slices", "generic hit", "history + JSON"],
+    summary: l("A complete keyframe editor combining built-in, image, and custom animated Shapes with independent slices, aligned exits, direct transforms, current-frame PNG export, history, and JSON exchange.", "一个完整的关键帧编辑器，组合内置、图片与自定义动画 Shape，支持独立 slice、同步退出、直接变换、当前帧 PNG 导出、历史与 JSON 交换。"),
+    features: ["custom AnimatedShape", "animated media", "async slices", "generic hit", "frame export", "history + JSON"],
     component: MotionStudioExample,
   },
 ]

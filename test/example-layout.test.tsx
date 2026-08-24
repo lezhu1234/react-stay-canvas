@@ -60,6 +60,7 @@ afterEach(() => {
   act(() => root?.unmount())
   root = undefined
   document.body.innerHTML = ""
+  vi.restoreAllMocks()
   if (originalClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight)
   if (originalClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", originalClientWidth)
 })
@@ -137,7 +138,8 @@ describe("Example Canvas workspace", () => {
     expect(workspace?.querySelector(":scope > .diagram-canvas-area .diagram-canvas")).not.toBeNull()
   })
 
-  it("keeps Motion layers, Canvas, inspector, and timeline in one fixed workspace", () => {
+  it("keeps Motion layers, Canvas, inspector, and timeline in one fixed workspace", async () => {
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
     const container = document.createElement("div")
     document.body.appendChild(container)
     root = createRoot(container)
@@ -152,6 +154,17 @@ describe("Example Canvas workspace", () => {
     expect(workspace?.querySelector(":scope > .motion-inspector")).not.toBeNull()
     expect(workspace?.querySelector(":scope > .motion-timeline")).not.toBeNull()
     expect(workspace?.querySelectorAll(".motion-keyframe")).toHaveLength(9)
+    const exportFrame = [...workspace?.querySelectorAll<HTMLButtonElement>(".motion-document-actions button") ?? []]
+      .find((button) => button.textContent === "Export PNG")
+    expect(exportFrame).toBeDefined()
+    await act(async () => {
+      exportFrame?.click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(anchorClick).toHaveBeenCalledOnce()
+    const link = anchorClick.mock.contexts[0] as HTMLAnchorElement
+    expect(link.download).toBe("motion-frame-0ms.png")
+    expect(link.href).toMatch(/^data:image\/png/)
   })
 
   it("uses the full stable stage and keeps initial and later scene children aligned", async () => {

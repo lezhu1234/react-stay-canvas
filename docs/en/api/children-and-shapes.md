@@ -172,7 +172,6 @@ See [Custom Shapes](../advanced/custom-shapes.md) for implementation guidance.
 
 - `Line.contains()` and `StayText.contains()` currently always return false;
 - `Point.getBound()` is not implemented, so an appended Point throws during normal rendering;
-- `Path.getBound()` is not implemented, so an appended Path throws during rendering;
 - `Circle` does not extend `AnimatedShape` and cannot be used directly as a timeline keyframe;
 - `Root` is exported from the package entry point but is an internal runtime boundary Shape and should not normally be constructed by application code.
 

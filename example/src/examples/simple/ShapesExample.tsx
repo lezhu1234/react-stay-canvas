@@ -2,6 +2,8 @@ import { useRef, useState } from "react"
 import {
   Circle,
   Line,
+  Path,
+  Point,
   Rectangle,
   StayCanvas,
   StayImage,
@@ -116,6 +118,31 @@ export default function ShapesExample() {
         fillConfig: { color: colors.ink },
       }),
     }))
+    placeSceneChild(tools, tools.appendChild({
+      className: "shape",
+      shape: [
+        new Path({
+          points: [
+            new Point({ x: 290, y: 160 }),
+            new Point({ x: 320, y: 176 }),
+            new Point({ x: 350, y: 154 }),
+            new Point({ x: 385, y: 172 }),
+            new Point({ x: 412, y: 156 }),
+          ],
+          radius: 4,
+          fillConfig: { color: colors.orange },
+        }),
+        new StayText({
+          x: 351,
+          y: 180,
+          text: "Path",
+          textAlign: "center",
+          textBaseline: "top",
+          font: { size: 10, fontWeight: 700 },
+          fillConfig: { color: colors.ink },
+        }),
+      ],
+    }))
 
     const image = new Image()
     image.onload = () => {
@@ -159,7 +186,7 @@ export default function ShapesExample() {
 
   return (
     <DemoLayout>
-      <CanvasCard title={text("Built-in shape palette", "内置图形与样式")} description={text("Five drawing primitives share one incremental renderer.", "同一个 Canvas 中绘制五种内容，并按需增量重绘。")} wide>
+      <CanvasCard title={text("Built-in shape palette", "内置图形与样式")} description={text("Six drawing primitives share one incremental renderer.", "同一个 Canvas 中绘制六种内容，并按需增量重绘。")} wide>
         <StayCanvas className="demo-canvas" height={330} layers={2} mounted={mounted} width={440} />
       </CanvasCard>
       <Toolbar>

@@ -44,12 +44,13 @@ React 渲染现在使用规范化后的 context setter 数量创建 Canvas，并
 
 - `Line.contains()` 和 `StayText.contains()` 固定返回 false，不能单独提供默认命中区域；
 - `Point.getBound()` 尚未实现；
-- `Path.getBound()` 尚未实现；
 - `Circle` 是 `InstantShape`，不支持关键帧插值。
 
 `Circle.contains()` 接受普通坐标的默认命中缺口已经修复，公开工具和 Listener 的命中路径不再需要构造 `Point` 实例。
 
-这些类型都从包入口导出。尤其是正常绘制会先通过 `getBound()` 判断 viewport，因此追加 `Point` 或 `Path` 会在真正 paint 前直接抛错；影响不只限于可选的查询、命中、历史快照或 `exportChildren()`。当前用户文档已按真实能力逐项标注。后续实现必须分别定义边界、命中容差、复制独立性和动画兼容性，不能只为消除异常返回一个没有几何依据的占位结果。
+`Path` 的场景协议已经补全：边界是全部路径点的轴对齐范围向四周扩张 `radius`；命中先通过该边界快速排除，再比较目标点到每条线段的最短距离平方。空路径、单点、重复点、折线、移动、缩放、复制、viewport culling 和公开场景命中均有自动化覆盖。
+
+其余类型都从包入口导出。尤其是正常绘制会先通过 `getBound()` 判断 viewport，因此追加 `Point` 会在真正 paint 前直接抛错；影响不只限于可选的查询、命中、历史快照或 `exportChildren()`。当前用户文档已按真实能力逐项标注。后续实现必须分别定义边界、命中容差、复制独立性和动画兼容性，不能只为消除异常返回一个没有几何依据的占位结果。
 
 Shape 通过 `update({ layer })` 换层时的脏层缺口已经修复：`applyUpdate()` 会把变更前的 layer 交给 Child，Child 规范化新 layer 后同时标记新旧两层。自动化测试覆盖旧层清除、新层绘制和负 layer 规范化。
 

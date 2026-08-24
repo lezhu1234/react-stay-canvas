@@ -161,7 +161,7 @@ describe("real drawing (node-canvas ctx spy)", () => {
       className: "path",
       shape: new Path({
         points: [new Point({ x: 10, y: 10 }), new Point({ x: 40, y: 10 })],
-        radius: 4,
+        strokeConfig: { lineWidth: 8 },
       }),
     })
 

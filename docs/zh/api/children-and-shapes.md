@@ -104,9 +104,11 @@ interface CanvasGlobalProps {
 | `StayText` | `x`, `y`, `text` | `font`, `decoration`, `border`, `offsetXRatio`, `offsetYRatio`, `textBaseline`, `textAlign`, `autoTransitionDiffText` |
 | `StayImage` | `image`, `x`, `y`, `width`, `height`, `opacity` | `sx`, `sy`, `swidth`, `sheight`, `imageLoaded` |
 | `Point` | `x`, `y` | — |
-| `Path` | `points`, `radius` | — |
+| `Path` | `points` | — |
 
 全部构造参数还可包含通用 `ShapeProps`；`Rectangle`、`StayText` 和 `StayImage` 还可包含 `transition`。`Line` 的实现属于动画 Shape，但当前导出的 `LineProps` 不接受 `transition`。
+
+`Path` 是基于原生 Canvas 的中心线描边，不是可填充面积。宽度只由 `strokeConfig.lineWidth` 决定；`fillConfig` 不属于 `PathAttr`。默认端帽和连接样式为圆形，显式传入的 Canvas 描边配置会被保留。
 
 `StayImage` 在省略 `swidth` 或 `sheight` 时使用图片 natural size；显式源裁剪尺寸会在构造、更新和复制时保留。时间线插值目前不会保留自定义裁剪尺寸；见[当前限制](../known-limitations.md#渲染与几何)。
 

@@ -129,8 +129,7 @@ export default function ShapesExample() {
             new Point({ x: 385, y: 172 }),
             new Point({ x: 412, y: 156 }),
           ],
-          radius: 4,
-          fillConfig: { color: colors.orange },
+          strokeConfig: { color: colors.orange, lineWidth: 8 },
         }),
         new StayText({
           x: 351,

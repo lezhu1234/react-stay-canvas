@@ -157,6 +157,8 @@ image.src = "/photo.png"
 
 传入 `sx`、`sy`、`swidth` 和 `sheight` 可以裁剪源图片。显式裁剪尺寸会在构造、更新和复制时保留；省略时使用图片 natural size。自定义裁剪尺寸目前不会保留到时间线插值帧中。
 
+动画 `StayImage` slice 使用 `opacity` 表示可见状态。`zeroShape()` 生成的图片会在透明度为 `0` 时退出当前渲染帧，随后随透明度插值重新显示，不需要额外设置无意义的 `fillConfig`。
+
 ## 显式时间线模型
 
 动画 Child 由多个命名 slice 组成。每个 slice 是同一种 AnimatedShape 的关键帧序列，不同 slice 可以并行推进：

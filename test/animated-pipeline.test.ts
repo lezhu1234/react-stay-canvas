@@ -78,6 +78,17 @@ describe("animated: getTimelineIndexBound (the timeline cursor)", () => {
     expect(b).toMatchObject({ beforeIndex: 1, afterIndex: 1, ratio: 0 })
   })
 
+  it("exact end advances across a trailing instantaneous frame", () => {
+    const { stage } = createStage({})
+    const child = animatedRect(stage)
+    child.disappear({ durationMs: 0, delayMs: 0 }, "afterAll")
+
+    const b = child.getTimelineIndexBound(child.getSlice("default"), 300)
+    expect(b).toMatchObject({ beforeIndex: 2, afterIndex: 2, ratio: 0 })
+    child.setCurrentTime({ time: 300 })
+    expect(child.shapeMap.has("default")).toBe(false)
+  })
+
   it("past the end clamps to the last frame (ratio 0 at t=450)", () => {
     const { stage } = createStage({})
     const child = animatedRect(stage)

@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
+import { loadImage } from "canvas"
+import { resolve } from "node:path"
 import { describe, expect, it, vi } from "vitest"
-import { Rectangle, StayText } from "react-stay-canvas"
+import { Rectangle, StayImage, StayText } from "react-stay-canvas"
+
+import { MotionCapsule } from "../example/src/examples/integrated/motion/capsule"
 
 import {
   createMotionListeners,
@@ -18,7 +22,9 @@ import {
 import {
   layerBody,
   layerLabel,
+  layerMedia,
   hitMotionLayer,
+  motionGeometry,
   motionLayers,
   motionLayerId,
   progressMotionProject,
@@ -68,7 +74,7 @@ function createMotionStage() {
 }
 
 describe("integrated motion studio example", () => {
-  it("compiles every document layer into independent body and label slices", () => {
+  it("compiles built-in and custom Shapes into independently timed slices", () => {
     const { stage } = createStage({ width: 840, height: 430, layers: 3 })
     const project = seedMotionProject(text)
 
@@ -81,14 +87,17 @@ describe("integrated motion studio example", () => {
       ["body", "label"],
       ["body", "label"],
     ])
-    expect(layers.every((child) => layerBody(child) instanceof Rectangle)).toBe(true)
+    expect(layerBody(layers[0])).toBeInstanceOf(Rectangle)
+    expect(layerBody(layers[1])).toBeInstanceOf(Rectangle)
+    expect(layerBody(layers[2])).toBeInstanceOf(MotionCapsule)
     expect(layers.every((child) => layerLabel(child) instanceof StayText)).toBe(true)
-    layers.forEach((child) => {
-      const labelCenter = layerLabel(child)?.getCenterPoint()
-      const bodyCenter = layerBody(child).getCenterPoint()
-      expect(labelCenter?.x).toBeCloseTo(bodyCenter.x)
-      expect(labelCenter?.y).toBeCloseTo(bodyCenter.y)
-    })
+    expect(layers[0].getSlice("label")[1].transition.durationMs)
+      .toBeLessThan(layers[0].getSlice("body")[1].transition.durationMs)
+    expect(layers[0].getSlice("label")[1].transition.delayMs)
+      .toBeGreaterThan(layers[0].getSlice("body")[1].transition.delayMs)
+    expect(layers.every((child) => child.totalDurationMs === project.durationMs)).toBe(true)
+    expect(layerLabel(layers[0])?.getCenterPoint().x)
+      .not.toBeCloseTo(layerBody(layers[0]).getCenterPoint().x)
     expect(stage.tools.getChildBySelector(".motion-selection")?.shapeMap).toHaveLength(9)
 
     progressMotionProject(stage.tools, project, project.workArea.startMs, "hero-card", true)
@@ -99,6 +108,76 @@ describe("integrated motion studio example", () => {
     expect(layerBody(layers[0]).x).toBeGreaterThan(72)
     progressMotionProject(stage.tools, project, 1450, "hero-card", true)
     expect(layerBody(layers[0]).x).toBe(304)
+  })
+
+  it("animates a loaded image slice from zero and removes every slice at the project exit", async () => {
+    const { stage } = createStage({ width: 840, height: 430, layers: 3 })
+    const project = seedMotionProject(text)
+    const image = await loadImage(
+      resolve(process.cwd(), "../example/src/assets/annotation-traffic.jpg"),
+    ) as unknown as HTMLImageElement
+
+    renderMotionProject(stage.tools, project, 270, "hero-card")
+    const layersBeforeImageLoad = motionLayers(stage.tools)
+    renderMotionProject(stage.tools, project, 270, "hero-card", false, image)
+
+    const layersAfterImageLoad = motionLayers(stage.tools)
+    expect(layersAfterImageLoad.every((child, index) => child === layersBeforeImageLoad[index])).toBe(true)
+    const hero = layersAfterImageLoad[0]
+    expect([...hero.shapeFramesMap.keys()]).toEqual(["body", "label", "media"])
+    expect(layerMedia(hero)).toBeInstanceOf(StayImage)
+    expect(layerMedia(hero)?.opacity).toBeGreaterThan(0)
+    expect(layerMedia(hero)?.opacity).toBeLessThan(0.32)
+    expect(hero.totalDurationMs).toBe(project.durationMs)
+
+    progressMotionProject(stage.tools, project, project.durationMs, "hero-card")
+    expect(motionLayers(stage.tools).every((child) => child.shapeMap.size === 0)).toBe(true)
+    expect(motionGeometry(stage.tools, "hero-card")).toBeUndefined()
+
+    const endpointProject = moveMotionFrame(project, "hero-card", "card-2", project.durationMs)
+    renderMotionProject(stage.tools, endpointProject, endpointProject.durationMs, "hero-card", false, image)
+    expect(motionLayers(stage.tools).every((child) => child.totalDurationMs === endpointProject.durationMs)).toBe(true)
+    expect(motionLayers(stage.tools).every((child) => child.shapeMap.size === 0)).toBe(true)
+  })
+
+  it("drops a stale media slice when an imported layer changes kind", async () => {
+    const { stage } = createStage({ width: 840, height: 430, layers: 3 })
+    const project = seedMotionProject(text)
+    const image = await loadImage(
+      resolve(process.cwd(), "../example/src/assets/annotation-traffic.jpg"),
+    ) as unknown as HTMLImageElement
+    renderMotionProject(stage.tools, project, 270, "hero-card", false, image)
+    const originalHero = motionLayers(stage.tools)[0]
+    expect(originalHero.hasSlice("media")).toBe(true)
+
+    const imported = {
+      ...project,
+      layers: project.layers.map((layer) => layer.id === "hero-card"
+        ? { ...layer, kind: "title" as const }
+        : layer),
+    }
+    renderMotionProject(stage.tools, imported, 270, "hero-card", false, image)
+
+    const importedHero = motionLayers(stage.tools)[0]
+    expect(importedHero).not.toBe(originalHero)
+    expect(importedHero.hasSlice("media")).toBe(false)
+  })
+
+  it("uses the custom Shape contract for interpolation and exact generic hit testing", () => {
+    const { stage } = createStage({ width: 840, height: 430, layers: 3 })
+    const project = seedMotionProject(text)
+    renderMotionProject(stage.tools, project, 0)
+
+    const accent = motionLayers(stage.tools)[2]
+    const capsule = layerBody(accent)
+    expect(capsule).toBeInstanceOf(MotionCapsule)
+    expect(motionLayerId(hitMotionLayer(stage.tools, capsule.getCenterPoint())!)).toBe("accent-bar")
+    expect(hitMotionLayer(stage.tools, { x: capsule.x + 1, y: capsule.y + 1 })).toBeUndefined()
+
+    progressMotionProject(stage.tools, project, 900)
+    const interpolated = layerBody(accent)
+    expect(interpolated).toBeInstanceOf(MotionCapsule)
+    expect(interpolated.x).toBeGreaterThan(capsule.x)
   })
 
   it("recompiles edited slices without replacing animated Child identities", () => {
@@ -138,7 +217,7 @@ describe("integrated motion studio example", () => {
     renderMotionProject(stage.tools, project, 0)
 
     const target = stage.tools.getChildrenBySelector(".motion-layer")
-      .filter((child) => (child.shapeMap.get("body") as Rectangle).contains({ x: 100, y: 190 }))
+      .filter((child) => child.containsPointer({ x: 100, y: 190 }))
     expect(target).toHaveLength(2)
     const hit = hitMotionLayer(stage.tools, { x: 100, y: 190 })!
     expect(motionLayerId(hit)).toBe("hero-card")

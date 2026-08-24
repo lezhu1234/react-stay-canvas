@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from "vitest"
-import { Line, Rectangle } from "react-stay-canvas"
+import { Line, Rectangle, StayImage } from "react-stay-canvas"
+import { createStage } from "./helpers/stage"
 
 // Dimension 7 (Animation): the interpolation core — intermediateState(before,
 // after, ratio, easing) is what progress() drives each frame.
@@ -48,5 +50,26 @@ describe("animation interpolation (intermediateState)", () => {
     const ease = b.intermediateState(a, b, 0.5, "easeInQuad") as any
     expect(lin.width).toBeCloseTo(5)
     expect(ease.width).toBeLessThan(lin.width) // ease-in starts slow
+  })
+
+  it("projects animated StayImage frames by opacity without requiring a dummy fill", () => {
+    const { stage } = createStage({})
+    const child = stage.tools.createChild({ className: "animated-image" })
+    const image = { naturalWidth: 40, naturalHeight: 30 } as HTMLImageElement
+    child.appendKeyFrame("image", new StayImage({
+      image,
+      x: 0,
+      y: 0,
+      width: 40,
+      height: 30,
+      opacity: 1,
+      transition: { durationMs: 100 },
+    }))
+
+    child.setCurrentTime({ time: 0 })
+    expect(child.shapeMap.has("image")).toBe(false)
+    child.setCurrentTime({ time: 50 })
+    expect(child.shapeMap.get("image")).toBeInstanceOf(StayImage)
+    expect((child.shapeMap.get("image") as StayImage).opacity).toBeCloseTo(0.5)
   })
 })

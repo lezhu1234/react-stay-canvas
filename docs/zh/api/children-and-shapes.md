@@ -172,7 +172,6 @@ abstract getBound(): Rect
 
 - `Line.contains()` 和 `StayText.contains()` 当前固定返回 false；
 - `Point.getBound()` 尚未实现，因此追加到场景后会在正常渲染时抛错；
-- `Path.getBound()` 尚未实现，因此追加 Path 会在渲染时抛错；
 - `Circle` 不继承 `AnimatedShape`，不能直接作为时间线关键帧；
 - `Root` 虽然从包入口导出，但属于运行时内部边界 Shape，不建议应用代码直接创建。
 

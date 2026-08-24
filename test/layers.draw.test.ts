@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest"
-import { Rectangle } from "react-stay-canvas"
+import { Path, Point, Rectangle } from "react-stay-canvas"
 import { createStage } from "./helpers/stage"
 
 // Dimension 6 (Layers + real draw): assert the shape actually paints on the
@@ -153,6 +153,25 @@ describe("real drawing (node-canvas ctx spy)", () => {
     })
     stage.draw({})
     expect(strokeRect).toHaveBeenCalledWith(0, 0, 4, 4)
+  })
+
+  it("appends, culls, and hits Path through the public scene API", () => {
+    const { stage } = createStage({ layers: 1 })
+    stage.tools.appendChild({
+      className: "path",
+      shape: new Path({
+        points: [new Point({ x: 10, y: 10 }), new Point({ x: 40, y: 10 })],
+        radius: 4,
+      }),
+    })
+
+    expect(() => stage.draw({})).not.toThrow()
+    expect(stage.tools.getContainPointChildren({
+      selector: ".path",
+      point: { x: 25, y: 12 },
+      returnFirst: true,
+      withRoot: false,
+    })).toHaveLength(1)
   })
 
   // Refactor: refresh() used to be a silent no-op (it passed the now-deleted

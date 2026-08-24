@@ -7,7 +7,7 @@ The following user-visible behavior is not reliable in the current implementatio
 ## Rendering and geometry
 
 - `Line` and `StayText` do not provide default hit areas. Group them with a hittable Shape or provide an explicit selector/hit strategy.
-- `Point.getBound()` and `Path.getBound()` are not implemented. Normal rendering performs bounds-based viewport culling, so appending either Shape throws before it paints. `Point` remains usable as a standalone geometry helper.
+- `Point.getBound()` is not implemented. Normal rendering performs bounds-based viewport culling, so appending a Point throws before it paints; it remains usable as a standalone geometry helper.
 - `StayImage` preserves explicit source-crop dimensions during construction, update, and copy, but custom `swidth` and `sheight` are not transition fields and are not preserved in interpolated timeline frames.
 - `CircleAttr.stroke`, `CircleAttr.fill`, and `StayText.decoration` are accepted by types but do not produce the corresponding stable drawing behavior. Use `strokeConfig` and `fillConfig` for Circle styling.
 

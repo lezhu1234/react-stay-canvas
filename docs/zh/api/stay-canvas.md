@@ -16,8 +16,8 @@ import {
 
 | 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `width` | `number` | `500` | CSS 尺寸和场景宽度，必须大于 0 |
-| `height` | `number` | `500` | CSS 尺寸和场景高度，必须大于 0 |
+| `width` | `number` | `500` | CSS 尺寸和 View 逻辑宽度，必须大于 0 |
+| `height` | `number` | `500` | CSS 尺寸和 View 逻辑高度，必须大于 0 |
 | `layers` | `number \| ContextLayerSetFunction[]` | `2` | Canvas 层数，或每层对应一个自定义 2D context setter |
 | `className` | `string` | `""` | 外层 `<div>` 的 className |
 | `eventList` | `EventProps[]` | `[]` | 初始化时注册的 Event 定义 |
@@ -26,6 +26,7 @@ import {
 | `passive` | `boolean` | `true` | wheel DOM listener 的 passive 选项 |
 | `recreateOnResize` | `boolean` | `false` | width/height 改变时是否重建运行时 |
 | `focusOnInit` | `boolean` | `true` | 初始化后是否聚焦顶层 Canvas |
+| `viewport` | `{ minScale?, maxScale? }` | `{ minScale: 0.1, maxScale: 10 }` | 非破坏性视口缩放范围；创建运行时后固定 |
 
 ### layers
 
@@ -88,12 +89,14 @@ width: <width>px;
 height: <height>px;
 ```
 
-每个 Canvas 绝对定位到 `(0, 0)`。`width` 和 `height` 控制逻辑场景与位图分辨率；父容器如果更宽，不会自动拉伸 Canvas。响应式布局有两种语义不同的方式：
+每个 Canvas 绝对定位到 `(0, 0)`。`width` 和 `height` 控制 View 逻辑尺寸与位图分辨率；父容器如果更宽，不会自动拉伸 Canvas。响应式布局有两种语义不同的方式：
 
 - 传入明确的数值尺寸来改变逻辑绘制尺寸，并在需要重建场景时开启 `recreateOnResize`。
 - 保持逻辑场景不变，对渲染后的 Canvas 或其外层应用正数、沿坐标轴的 CSS 缩放。原生指针输入会在事件路由前，从渲染边界换算为 Canvas 局部逻辑坐标。
 
-第二种方式会保留场景内容和历史，但只改变显示。一次 Pointer Session 期间应保持显示缩放稳定；单次交互过程中改变布局不属于该合同。显示缩放不会提高位图分辨率；旋转、倾斜和镜像也不在该坐标行为的支持范围内。
+第二种方式会保留 Content 和历史，但只改变显示。一次 Pointer Session 期间应保持显示缩放稳定；单次交互过程中改变布局不属于该合同。显示缩放不会提高位图分辨率；旋转、倾斜和镜像也不在该坐标行为的支持范围内。
+
+`viewport` 不是 React 受控状态。运行时的平移、缩放和恢复由 [`tools.viewport`](./stay-tools.md#非破坏性视口) 完成；它只改变 Content 到 View 的投影，不修改 Child 或 Shape。
 
 ## 相关参考
 

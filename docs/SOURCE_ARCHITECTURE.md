@@ -59,6 +59,24 @@ into its module graph.
 
 The package-root utility names remain stable even when their internal owner changes.
 
+## Coordinate ownership
+
+`stay/coordinates/CoordinateSystem` is the sole owner of runtime viewport state and of
+Client ⇄ View ⇄ Content conversion. Client uses browser viewport pixels. View is the logical
+Canvas surface after CSS-size normalization. Content is the coordinate space owned by Children
+and Shapes. The current immutable `CoordinateFrame` carries one revision and is shared by every
+layer in a render pass.
+
+`Canvas` owns surface metrics and backing-store transforms, `Renderer` consumes one frame for
+projection and culling, and `EventRuntime` maps each pointer sample set once before conditions or
+routing. Root input is hit-tested in View; ordinary Children are hit-tested in Content. Public
+pointer `point` remains Content while `movement` is a View-space delta. No renderer, Shape, or
+integration example may keep a second authoritative viewport or perform its own inverse mapping.
+
+The public `tools.viewport` object is intentionally a thin facade over this owner. Legacy
+`move`/`zoom`/`reset` tools remain destructive geometry operations and must not be used as a
+viewport implementation.
+
 ## Documentation boundary
 
 `README.md` is a concise bilingual landing page. Topic-based documentation lives under `docs/zh/`

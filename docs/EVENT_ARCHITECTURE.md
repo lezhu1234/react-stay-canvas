@@ -102,10 +102,13 @@ src/stay/events/
 - Router 根据权威 action key 和 target decision 创建全新的 routed `ActionEvent`；definition seed 上附加的 `name` 或 `target` 不能越过该边界。
 - 手动 action 在 dispatch 开始时统一快照 state、pressedKeys 和 point；原生 Event 仅作为独立的 `originEvent` 传递。
 - `conditionCallback`、`successCallback` 和 listener callback 的同步异常继续向调用方抛出；已经完成的动态增删不回滚。
-- Pointer Session 的 terminal 清理位于 runtime 的 `finally` 中，事件定义或 listener 抛错不能跳过动态事件、点击配对和 gesture owner 清理。
-- Registry、click pairing 和 gesture owner 使用同一个 session id；terminal `finally` 只清理该 id。新的原生 Pointer Session 必须等当前 terminal 边界完成后才能开始。
+- Pointer Session 的 terminal 清理位于 runtime 的 `finally` 中，事件定义或 listener 抛错不能跳过动态事件、拖拽激活状态和 gesture owner 清理。
+- Registry、拖拽激活状态和 gesture owner 使用同一个 session id；terminal `finally` 只清理该 id。新的原生 Pointer Session 必须等当前 terminal 边界完成后才能开始。
 - 取消只派发当前会话动态注册的标准 `dragend`/`moveend`，不得产生 `click`、普通 `mouseup` 或清除无关动态事件。
 - 正常点击没有达到 drag/move 条件时，不派发 `dragend`/`moveend`，但仍清理本次会话注册的动态事件。
+- 每次原生指针输入只生成一份 `PointerCoordinates`：Client 是浏览器窗口坐标，View 是 CSS 显示归一化后的 Canvas 平面，Content 是逆向应用 viewport 后的 Child/Shape 坐标。
+- 点击和拖拽激活阈值使用 View 位移；公开 `point` 使用 Content，公开 `movement` 使用 View。Root 以 View 命中，普通 Child 以 Content 命中。
+- 同一轮条件判断、目标解析与 Listener 派发共享一份 `CoordinateFrame`；事件路由不得重新读取 viewport 或自行换算坐标。
 
 ## Input and lifecycle invariants
 

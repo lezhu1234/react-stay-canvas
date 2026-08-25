@@ -16,7 +16,6 @@ import type {
 } from "../types/shapes"
 import { isRGB, isRGBA } from "../utils/color"
 import { applyEasing } from "../utils/easing"
-import { hasIntersection } from "../utils/geometry"
 import W3Color, { RGB, RGBA, rgbaToString } from "../vendor/w3color"
 
 export const ZeroColor: RGBA = { a: 0, r: 0, g: 0, b: 0 }
@@ -166,19 +165,11 @@ export abstract class InstantShape {
     }
   }
 
-  isOutOfViewport() {
-    return this.parent && !hasIntersection(this.getBound(), this.parent.canvas.bound)
-  }
-
   draw(props: ShapeDrawProps): boolean {
     const forchDraw = props.forchDraw ?? false
     if (!this.parent && !forchDraw) {
       return true
     }
-    if (this.isOutOfViewport() && !forchDraw) {
-      return true
-    }
-
     const { context, now, width, height } = props
     // this.draw({ context, canvas, now })
     if (this.updateNextFrame) {

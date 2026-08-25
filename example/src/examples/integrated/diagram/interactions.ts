@@ -498,33 +498,22 @@ export function createDiagramListeners(engine: DiagramEngine): ListenerProps[] {
       name: "diagram-pan",
       selector: ".stay-canvas",
       event: ["startmove", "move", "moveend"],
-      callback: ({ e, composeStore, originEvent, tools }) => ({
+      callback: ({ e, composeStore, tools }) => ({
         startmove: () => {
-          const pointer = originEvent as MouseEvent
-          const viewport = engine.viewport ?? { scale: 1, x: 0, y: 0 }
           tools.changeCursor("grabbing")
-          return {
-            startX: pointer.clientX,
-            startY: pointer.clientY,
-            originX: viewport.x,
-            originY: viewport.y,
-          }
+          return { originViewport: tools.viewport.get() }
         },
         move: () => {
-          const pointer = originEvent as MouseEvent
-          const viewport = engine.viewport ?? { scale: 1, x: 0, y: 0 }
-          engine.setViewport({
-            ...viewport,
-            x: composeStore.originX + pointer.clientX - composeStore.startX,
-            y: composeStore.originY + pointer.clientY - composeStore.startY,
-          })
+          const viewport = tools.viewport.panBy(e.movement ?? { x: 0, y: 0 })
+          engine.viewportChanged(viewport)
           return composeStore
         },
         moveend: () => {
-          const viewport = engine.viewport ?? { scale: 1, x: 0, y: 0 }
-          if (e.cancelled) engine.setViewport({ ...viewport, x: composeStore.originX, y: composeStore.originY })
+          if (e.cancelled && composeStore.originViewport) {
+            engine.viewportChanged(tools.viewport.restore(composeStore.originViewport))
+          }
           tools.changeCursor(isSpacePressed(e.pressedKeys) ? "grab" : "default")
-          return { startX: undefined }
+          return { originViewport: undefined }
         },
       }),
     },
@@ -532,16 +521,11 @@ export function createDiagramListeners(engine: DiagramEngine): ListenerProps[] {
       name: "diagram-zoom",
       selector: ".stay-canvas",
       event: ["zoomin", "zoomout"],
-      callback: ({ e, originEvent }) => {
+      callback: ({ e, originEvent, tools }) => {
         if (!hasPointerPosition(e) || e.deltaY === undefined) return
         originEvent.preventDefault()
-        const current = engine.viewport ?? { scale: 1, x: 0, y: 0 }
-        const nextScale = Math.max(0.6, Math.min(1.8, current.scale * (1 - e.deltaY * 0.001)))
-        engine.setViewport({
-          scale: nextScale,
-          x: current.x + e.point.x * (current.scale - nextScale),
-          y: current.y + e.point.y * (current.scale - nextScale),
-        })
+        const factor = Math.max(0.1, 1 - e.deltaY * 0.001)
+        engine.viewportChanged(tools.viewport.zoomBy(factor, e.point))
       },
     },
     {

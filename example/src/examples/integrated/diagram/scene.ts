@@ -694,7 +694,36 @@ export function createConnectionPreview(tools: StayTools, start: Coordinate) {
   }) as EdgeChild
 }
 
+function createDiagramGrid(tools: StayTools) {
+  const bound = graphBound(tools)
+  const lines = new Map<string, Line>()
+  for (let x = bound.x; x <= bound.x + bound.width; x += GRID_SIZE) {
+    lines.set(`vertical:${x}`, new Line({
+      x1: x,
+      y1: bound.y,
+      x2: x,
+      y2: bound.y + bound.height,
+      layer: 0,
+      zIndex: -100,
+      strokeConfig: { color: rgba(78, 89, 104, 0.09), lineWidth: 1 },
+    }))
+  }
+  for (let y = bound.y; y <= bound.y + bound.height; y += GRID_SIZE) {
+    lines.set(`horizontal:${y}`, new Line({
+      x1: bound.x,
+      y1: y,
+      x2: bound.x + bound.width,
+      y2: y,
+      layer: 0,
+      zIndex: -100,
+      strokeConfig: { color: rgba(78, 89, 104, 0.09), lineWidth: 1 },
+    }))
+  }
+  tools.appendChild<Line>({ id: "diagram-grid", className: "diagram-grid", shape: lines })
+}
+
 export function seedDiagram(tools: StayTools, engine: DiagramEngine, text: (en: string, zh: string) => string) {
+  createDiagramGrid(tools)
   const at = (x: number, y: number) => scenePoint(tools, x, y)
   const start = createNode(tools, engine, { kind: "start", label: text("Brief", "需求"), ...at(54, 226), width: 124, height: 68 })
   const design = createNode(tools, engine, { kind: "process", label: text("Design", "设计"), ...at(238, 214), width: 146, height: 92 })

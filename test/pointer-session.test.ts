@@ -516,6 +516,22 @@ describe("pointer session lifecycle", () => {
     expect(reasons).toEqual(["lostpointercapture", "visibilitychange"])
   })
 
+  it("keeps the last movement sample when lostpointercapture has no useful position", () => {
+    const { stage, top } = createStage()
+    const points: Array<{ x: number; y: number } | undefined> = []
+    stage.addEventListener({
+      name: "lost-capture-position",
+      event: "dragend",
+      callback: ({ e }) => points.push(e.point),
+    })
+
+    top.dispatchEvent(pointer("pointerdown", 10, 10, { button: 0, buttons: 1 }))
+    top.dispatchEvent(pointer("pointermove", 70, 45, { buttons: 1 }))
+    top.dispatchEvent(pointer("lostpointercapture", 0, 0, { buttons: 1 }))
+
+    expect(points).toEqual([{ x: 70, y: 45 }])
+  })
+
   it("treats capture loss after button release as a non-cancelled terminal", () => {
     const { stage, top } = createStage()
     const terminal: Array<{
@@ -684,6 +700,30 @@ describe("pointer session lifecycle", () => {
       pointerId: 2,
     }))
     expect([...pressedState.snapshot()]).toEqual(["mouse0"])
+  })
+
+  it("keeps the current move as the terminal sample when move dispatch throws", () => {
+    const target = document.createElement("canvas")
+    const pressedState = new PressedInputState()
+    let terminalSample: { clientX: number; clientY: number } | undefined
+    const session = new PointerSession(target, pressedState, (input) => {
+      if (input.sessionTransition?.phase === "continue") throw new Error("move failed")
+      if (input.sessionTransition?.phase === "cancel") terminalSample = input.pointerSample
+    })
+
+    session.mouseDown(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    }))
+    expect(() => session.mouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 42,
+      clientY: 27,
+    }))).toThrow("move failed")
+    session.cancel(new Event("blur"), "blur")
+
+    expect(terminalSample).toEqual({ clientX: 42, clientY: 27 })
   })
 
   it("uses the real cancellation event and the last pointer sample", () => {

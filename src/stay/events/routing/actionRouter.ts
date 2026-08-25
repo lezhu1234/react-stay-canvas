@@ -184,7 +184,9 @@ export class ActionRouter<EventName extends string> {
         triggered.event,
         triggered.role,
         triggered.sessionId,
-        originEvent
+        originEvent,
+        triggered.coordinates,
+        triggered.coordinateFrame
       )
       if (target.kind === "skip") return
 

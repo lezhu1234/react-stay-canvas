@@ -1,5 +1,6 @@
 import { createStay } from "../../src/stay/stay"
 import * as PredefinedEventList from "../../src/predefinedEvents"
+import type { ViewportOptions } from "../../src/types/tools"
 
 // Build a real Stay backed by jsdom canvas elements (node-canvas provides
 // the 2D context). Requires `// @vitest-environment jsdom` in the test file.
@@ -10,8 +11,9 @@ export function createStage(opts: {
   // Override the RAF stub — e.g. a counter to assert the render loop engaged.
   // Defaults to a no-op so tests draw on demand, not continuously.
   raf?: (cb: FrameRequestCallback) => number
+  viewport?: ViewportOptions
 } = {}) {
-  const { width = 500, height = 500, layers = 2, raf = () => 0 } = opts
+  const { width = 500, height = 500, layers = 2, raf = () => 0, viewport } = opts
 
   // Neutralise (or instrument) the RAF render loop so tests draw on demand.
   ;(globalThis as any).requestAnimationFrame = raf
@@ -27,7 +29,7 @@ export function createStage(opts: {
     () => (canvas: HTMLCanvasElement) => canvas.getContext("2d")
   )
 
-  const stage = createStay(canvasEls, contextSetters as any, width, height, false)
+  const stage = createStay(canvasEls, contextSetters as any, width, height, false, viewport)
   Object.values(PredefinedEventList).forEach((e) => stage.registerEvent(e as any))
   // Events bind to the top layer (last canvas).
   const top = canvasEls[canvasEls.length - 1]

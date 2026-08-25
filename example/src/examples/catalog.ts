@@ -12,6 +12,7 @@ import StateExample from "./simple/StateExample"
 import TimelineExample from "./simple/TimelineExample"
 import TransferExample from "./simple/TransferExample"
 import TransformExample from "./simple/TransformExample"
+import CoordinatesExample from "./simple/CoordinatesExample"
 import { type ExampleDefinition } from "./types"
 
 const l = (en: string, zh: string): LocalizedText => ({ en, zh })
@@ -99,17 +100,28 @@ export const catalog: ExampleDefinition[] = [
     sourcePaths: ["./examples/simple/TransformExample.tsx"],
     group: "Simple",
     order: 8,
-    title: l("Pan and zoom transforms", "平移与缩放变换"),
-    shortTitle: l("Transform", "变换"),
-    summary: l("Move and scale the scene, then verify that a pointer session ends correctly after release outside the Canvas.", "平移和缩放场景，并验证指针在 Canvas 外释放后会话仍能正确结束。"),
+    title: l("Destructive geometry transforms", "破坏性几何变换"),
+    shortTitle: l("Geometry", "几何变换"),
+    summary: l("Bake movement and scale into Child geometry, then verify that a pointer session ends correctly after release outside the Canvas.", "把移动与缩放写入 Child 几何，并验证指针在 Canvas 外释放后会话仍能正确结束。"),
     features: ["moveStart", "move", "zoom", "pointer capture", "reset"],
     component: TransformExample,
+  },
+  {
+    path: "/simple/coordinates",
+    sourcePaths: ["./examples/simple/CoordinatesExample.tsx"],
+    group: "Simple",
+    order: 9,
+    title: l("Coordinate spaces and viewport", "坐标空间与视口"),
+    shortTitle: l("Coordinates", "坐标"),
+    summary: l("Trace one pointer through Client, View, and Content while the library pans and zooms without changing Child geometry.", "观察同一指针如何依次进入 Client、View 与 Content，并验证库在不改变 Child 几何的前提下平移和缩放。"),
+    features: ["Client → View → Content", "e.point", "e.movement", "tools.viewport"],
+    component: CoordinatesExample,
   },
   {
     path: "/simple/timeline",
     sourcePaths: ["./examples/simple/TimelineExample.tsx"],
     group: "Simple",
-    order: 9,
+    order: 10,
     title: l("Keyframe timeline", "关键帧时间线"),
     shortTitle: l("Timeline", "时间线"),
     summary: l("Seek and play multiple animated Children with delay and easing on one explicit clock.", "用一条时间线控制多个动画 Child，并检查关键帧、延迟和缓动效果。"),
@@ -120,7 +132,7 @@ export const catalog: ExampleDefinition[] = [
     path: "/simple/transfer",
     sourcePaths: ["./examples/simple/TransferExample.tsx"],
     group: "Simple",
-    order: 10,
+    order: 11,
     title: l("Import, export, and capture", "导入、导出与截图"),
     shortTitle: l("Transfer", "传输"),
     summary: l("Copy a scene between stages and render Children into a standalone target Canvas.", "把场景从一个 Canvas 复制到另一个 Canvas，并将指定区域导出为图片。"),
@@ -131,7 +143,7 @@ export const catalog: ExampleDefinition[] = [
     path: "/integrations/annotator",
     sourcePaths: ["./examples/integrated/AnnotatorExample.tsx"],
     group: "Integrated",
-    order: 11,
+    order: 12,
     title: l("Image annotation workspace", "图像标注工作区"),
     shortTitle: l("Annotator", "标注"),
     summary: l("A COCO box annotator with smallest-area hit testing, multi-select, move, eight-way resize, history, and JSON transfer.", "一个完整的 COCO 框标注工具，支持最小面积命中、多选、移动、八向缩放、历史和 JSON 导入导出。"),
@@ -148,7 +160,7 @@ export const catalog: ExampleDefinition[] = [
       "./examples/integrated/diagram/interactions.ts",
     ],
     group: "Integrated",
-    order: 12,
+    order: 13,
     title: l("Classic workflow editor", "经典流程图编辑器"),
     shortTitle: l("Diagram", "图表"),
     summary: l("A classic flowchart workspace with a shape palette, true flowchart nodes, inline labels, orthogonal reconnectable edges, pan and zoom.", "一个经典的流程图工作区，提供图形库、标准流程图节点、原位文字编辑、可重连正交连线以及画布缩放和平移。"),
@@ -165,7 +177,7 @@ export const catalog: ExampleDefinition[] = [
       "./examples/integrated/motion/interactions.ts",
     ],
     group: "Integrated",
-    order: 13,
+    order: 14,
     title: l("Motion composition studio", "动效编排工作室"),
     shortTitle: l("Motion studio", "动效工作室"),
     summary: l("A complete keyframe editor combining built-in, image, and custom animated Shapes with independent slices, aligned exits, direct transforms, current-frame PNG export, history, and JSON exchange.", "一个完整的关键帧编辑器，组合内置、图片与自定义动画 Shape，支持独立 slice、同步退出、直接变换、当前帧 PNG 导出、历史与 JSON 交换。"),

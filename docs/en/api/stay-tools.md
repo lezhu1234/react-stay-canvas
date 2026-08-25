@@ -39,6 +39,23 @@
 
 ## Scene transforms
 
+### Non-destructive viewport
+
+`tools.viewport` changes how Content is displayed in the View without mutating Child/Shape geometry or writing history:
+
+| Method | Meaning |
+| --- | --- |
+| `get()` | Return a `{ x, y, scale }` snapshot |
+| `panBy({ x, y })` | Accumulate a display offset in View units |
+| `zoomBy(factor, anchor?)` | Zoom by a positive factor; `anchor` is the Content point whose display position stays fixed, defaulting to the View center |
+| `reset()` | Restore `{ x: 0, y: 0, scale: 1 }`, subject to min/max limits |
+| `restore(state)` | Restore a previous snapshot and clamp its scale to configured limits |
+| `toClientPoint(point)` | Project a Content point into browser Client coordinates for DOM overlays |
+
+The projection is `View = Content × scale + (x, y)`. Every method synchronously returns the new read-only snapshot; the Renderer uses one coordinate snapshot to repaint all dirty layers on the next frame.
+
+### Destructive scene transforms
+
 | Method | Meaning |
 | --- | --- |
 | `moveStart()` | Snapshot the whole-scene movement origin |
@@ -46,7 +63,7 @@
 | `zoom(deltaY, center, filter?)` | Zoom around a Canvas-local point |
 | `reset()` | Apply the current root-based inverse transform; not reliable after a scene move |
 
-`move()`, `zoom()`, and `reset()` return a Promise resolved on the next runtime tick; it does not mean the browser compositor has completed a frame. `reset()` is not a reliable restore-to-initial-state operation after scene movement; see [Current limitations](../known-limitations.md#scene-operations).
+These legacy methods directly mutate Child/Shape coordinates. They are batch geometry operations, not viewport controls. `move()`, `zoom()`, and `reset()` return a Promise resolved on the next runtime tick; it does not mean the browser compositor has completed a frame. `reset()` is not a reliable restore-to-initial-state operation after scene movement; see [Current limitations](../known-limitations.md#scene-operations).
 
 ## History
 

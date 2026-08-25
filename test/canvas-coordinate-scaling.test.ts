@@ -75,7 +75,7 @@ describe("CSS-scaled Canvas coordinates", () => {
     expect(observed).toHaveBeenCalledWith({ x: 500, y: 100 })
   })
 
-  it("uses logical distances for click pairing and retained drag targets", () => {
+  it("uses View distances for click pairing and retained drag targets", () => {
     const { stage, layers, top } = createStage({ width: 1000, height: 500 })
     displayLayers(layers, { left: 40, top: 20, width: 2000, height: 1000 })
     const child = stage.tools.appendChild({
@@ -112,5 +112,110 @@ describe("CSS-scaled Canvas coordinates", () => {
       point: { x: 915, y: 100 },
       target: child,
     })
+  })
+
+  it("routes through the viewport while keeping public points in Content space", () => {
+    const { stage, layers, top } = createStage({ width: 500, height: 300 })
+    displayLayers(layers, { left: 20, top: 30, width: 1000, height: 600 })
+    const child = stage.tools.appendChild({
+      className: "viewport-target",
+      shape: new Rectangle({ x: 100, y: 80, width: 40, height: 30 }),
+    })
+    const observed = vi.fn()
+    stage.addEventListener({
+      name: "viewport-target-listener",
+      event: "mousedown",
+      selector: ".viewport-target",
+      callback: ({ e }) => observed(e),
+    })
+    stage.tools.viewport.restore({ x: 50, y: -20, scale: 2 })
+
+    // Content (110, 90) -> View (270, 160) -> Client (560, 350).
+    top.dispatchEvent(md(560, 350))
+
+    expect(observed).toHaveBeenCalledOnce()
+    expect(observed.mock.calls[0][0]).toMatchObject({
+      point: { x: 110, y: 90 },
+      movement: { x: 0, y: 0 },
+      target: child,
+    })
+    expect(stage.tools.viewport.toClientPoint({ x: 110, y: 90 }))
+      .toEqual({ x: 560, y: 350 })
+  })
+
+  it("keeps root listeners in View even when Content is outside the scene origin", () => {
+    const { stage, layers, top } = createStage({ width: 500, height: 300 })
+    displayLayers(layers, { left: 0, top: 0, width: 500, height: 300 })
+    const observed = vi.fn()
+    stage.addEventListener({
+      name: "viewport-root-listener",
+      event: "mousedown",
+      selector: ".stay-canvas",
+      callback: ({ e }) => observed(e.point),
+    })
+    stage.tools.viewport.restore({ x: 200, y: 100, scale: 1 })
+
+    top.dispatchEvent(md(50, 50))
+
+    expect(observed).toHaveBeenCalledWith({ x: -150, y: -50 })
+  })
+
+  it("keeps drag activation and movement in View units at non-identity zoom", () => {
+    const { stage, layers, top } = createStage({ width: 500, height: 300 })
+    displayLayers(layers, { left: 0, top: 0, width: 500, height: 300 })
+    stage.tools.appendChild({
+      className: "zoomed-gesture-target",
+      shape: new Rectangle({ x: 100, y: 80, width: 40, height: 30 }),
+    })
+    stage.tools.viewport.restore({ x: 20, y: 10, scale: 2 })
+    const drags = vi.fn()
+    stage.addEventListener({
+      name: "zoomed-gesture-listener",
+      event: "drag",
+      selector: ".zoomed-gesture-target",
+      callback: ({ e }) => drags(e),
+    })
+
+    top.dispatchEvent(md(240, 190))
+    top.dispatchEvent(mm(251, 190))
+
+    expect(drags).toHaveBeenCalledOnce()
+    expect(drags.mock.calls[0][0]).toMatchObject({
+      movement: { x: 11, y: 0 },
+      point: { x: 115.5, y: 90 },
+    })
+  })
+
+  it("shares one coordinate frame even when an earlier listener changes viewport", () => {
+    const { stage, top } = createStage({ width: 500, height: 300 })
+    const child = stage.tools.appendChild({
+      className: "stable-frame-target",
+      shape: new Rectangle({ x: 100, y: 80, width: 40, height: 30 }),
+    })
+    const observed = vi.fn()
+    stage.addEventListener({
+      name: "viewport-mutator",
+      event: "mousedown",
+      selector: ".stay-canvas",
+      callback: ({ tools }) => { tools.viewport.panBy({ x: 300, y: 0 }) },
+    })
+    stage.addEventListener({
+      name: "stable-frame-target-listener",
+      event: "mousedown",
+      selector: ".stable-frame-target",
+      callback: ({ e }) => observed(e),
+    })
+
+    top.dispatchEvent(md(110, 90))
+
+    expect(observed).toHaveBeenCalledOnce()
+    expect(observed.mock.calls[0][0]).toMatchObject({
+      point: { x: 110, y: 90 },
+      target: child,
+    })
+    expect(Object.keys(observed.mock.calls[0][0])).not.toEqual(
+      expect.arrayContaining(["client", "view", "content", "coordinates", "coordinateFrame"]),
+    )
+    expect(stage.tools.viewport.get().x).toBe(300)
   })
 })

@@ -47,6 +47,7 @@ const StayCanvas = forwardRef(
       passive = true,
       recreateOnResize = false,
       focusOnInit = true,
+      viewport,
     }: StayCanvasProps<EventName>,
     ref: Ref<StayCanvasRefType>
   ) => {
@@ -106,7 +107,8 @@ const StayCanvas = forwardRef(
         contextLayerSetFunctionList,
         width,
         height,
-        passive
+        passive,
+        viewport
       )
       stay.current = nextStay
 

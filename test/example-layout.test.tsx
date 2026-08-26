@@ -225,10 +225,13 @@ describe("Example Canvas workspace", () => {
     expect(stackLayers).toHaveLength(3)
     expect(liveLayers).toHaveLength(2)
     expect(workspace?.querySelector(".coordinate-live-card .canvas-card-heading")?.textContent)
-      .toContain("Live View surface")
+      .toContain("Canvas DOM in Client")
     expect(workspace?.querySelector(".coordinate-live-card .canvas-viewport-label")?.textContent)
-      .toBe("VIEW · rendered surface")
-    expect(workspace?.textContent).toContain("scroll to zoom around it")
+      .toBe("CLIENT DOM · CSS 80%")
+    expect(workspace?.textContent).toContain("displayed at CSS scale 80%")
+    const displayTransform = workspace?.querySelector<HTMLElement>(".coordinate-live-card .canvas-display-transform")
+    expect(displayTransform?.dataset.displayScale).toBe("0.8")
+    expect(displayTransform?.style.transform).toBe("scale(0.8)")
 
     const width = stackLayers?.[0].width ?? 0
     const height = stackLayers?.[0].height ?? 0
@@ -263,6 +266,10 @@ describe("Example Canvas workspace", () => {
       .toContain("Demo Content bounds 0, 0 / 480×360")
     expect(container.querySelector(".coordinate-proof-stable small")?.textContent)
       .toContain("Root itself has no geometry")
+    expect(proofRows
+      .find((item) => item.querySelector("dt")?.textContent === "CSS View to Client")
+      ?.querySelector("code")?.textContent)
+      .toContain("CSS scale")
 
     const contentPlaneBeforeZoom = stackLayers?.[2].toDataURL()
     const zoomIn = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
@@ -318,6 +325,23 @@ describe("Example Canvas workspace", () => {
       const liveLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")
       const top = liveLayers[liveLayers.length - 1]
       expect(top).toBeDefined()
+      const surface = {
+        left: 20,
+        top: 30,
+        width: top.width * 0.8,
+        height: top.height * 0.8,
+      }
+      const clientRect = {
+        ...surface,
+        bottom: surface.top + surface.height,
+        right: surface.left + surface.width,
+        x: surface.left,
+        y: surface.top,
+        toJSON: () => ({}),
+      } as DOMRect
+      liveLayers.forEach((layer) => {
+        vi.spyOn(layer, "getBoundingClientRect").mockReturnValue(clientRect)
+      })
 
       act(() => {
         top.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }))
@@ -328,8 +352,15 @@ describe("Example Canvas workspace", () => {
       const viewBeforeCancellation = container.querySelector(".coordinate-flow-view strong")?.textContent
       const viewportBeforeCancellation = [...container.querySelectorAll(".coordinate-zoom-proof dl > div")]
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
-      expect(viewBeforeCancellation).toBe("150, 130")
-      expect(viewportBeforeCancellation?.querySelector("dd")?.textContent).toBe("50, 30 / 100%")
+      expect(container.querySelector(".coordinate-flow-client strong")?.textContent).toBe("150, 130")
+      expect(viewBeforeCancellation).toBe("163, 125")
+      expect(viewportBeforeCancellation?.querySelector("dd")?.textContent).toBe("63, 38 / 100%")
+      expect(container.querySelector(".coordinate-flow-operation span")?.textContent)
+        .toContain("inverse CSS scale")
+      expect(container.querySelector(".coordinate-flow-operation code")?.textContent)
+        .toContain("× (1.25, 1.25)")
+      expect(container.querySelector(".coordinate-proof-client-map code")?.textContent)
+        .toContain("CSS scale 0.80 × 0.80")
 
       act(() => {
         top.dispatchEvent(pointer("lostpointercapture", 0, 0, { buttons: 1 }))
@@ -349,14 +380,14 @@ describe("Example Canvas workspace", () => {
       const viewportAfterRelease = [...container.querySelectorAll(".coordinate-zoom-proof dl > div")]
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
       const eventPoint = container.querySelector(".coordinate-event-sample code")
-      expect(container.querySelector(".coordinate-flow-view strong")?.textContent).toBe("240, 230")
-      expect(viewportAfterRelease?.querySelector("dd")?.textContent).toBe("40, 30 / 100%")
-      expect(eventPoint?.textContent).toBe("200, 200")
+      expect(container.querySelector(".coordinate-flow-view strong")?.textContent).toBe("275, 250")
+      expect(viewportAfterRelease?.querySelector("dd")?.textContent).toBe("50, 38 / 100%")
+      expect(eventPoint?.textContent).toBe("225, 213")
 
       const reset = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
         .find((button) => button.textContent === "Reset view")
       act(() => reset?.click())
-      expect(eventPoint?.textContent).toBe("200, 200")
+      expect(eventPoint?.textContent).toBe("225, 213")
 
       act(() => {
         top.dispatchEvent(new WheelEvent("wheel", {
@@ -367,7 +398,7 @@ describe("Example Canvas workspace", () => {
           deltaY: -100,
         }))
       })
-      expect(eventPoint?.textContent).toBe("80, 90")
+      expect(eventPoint?.textContent).toBe("75, 75")
     } finally {
       restorePointerEvents()
     }
@@ -436,6 +467,7 @@ describe("Example Canvas workspace", () => {
       )
     })
 
+    expect(container.querySelector(".canvas-display-transform")).toBeNull()
     expect(initialChild?.canvas.width).toBe(920)
     expect(initialChild?.canvas.height).toBe(480)
     expect((initialChild?.shape as Rectangle).x).toBe(250)

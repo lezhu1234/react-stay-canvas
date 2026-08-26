@@ -125,6 +125,7 @@ export function CanvasCard({
   wide = false,
   className,
   viewportLabel,
+  canvasDisplayScale = 1,
 }: {
   title: string
   description?: string
@@ -132,10 +133,15 @@ export function CanvasCard({
   wide?: boolean
   className?: string
   viewportLabel?: string
+  canvasDisplayScale?: number
 }) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const viewportSize = useInitialViewportSize(viewportRef)
-  const canvas = isValidElement<StayCanvasProps>(children) && viewportSize
+  const displayScale = Number.isFinite(canvasDisplayScale) && canvasDisplayScale > 0
+    ? canvasDisplayScale
+    : 1
+  const canvasFrame: { element: ReactNode; height?: number; width?: number } | null =
+    isValidElement<StayCanvasProps>(children) && viewportSize
     ? (() => {
         const sceneWidth = children.props.width ?? 500
         const sceneHeight = children.props.height ?? 500
@@ -146,15 +152,34 @@ export function CanvasCard({
           offsetY: Math.max(0, (height - sceneHeight) / 2),
         }
 
-        return cloneElement(children, {
+        return {
+          element: cloneElement(children, {
+            height,
+            mounted: (tools) => mountPlacedScene(tools, placement, children.props.mounted),
+            width,
+          }),
           height,
-          mounted: (tools) => mountPlacedScene(tools, placement, children.props.mounted),
           width,
-        })
+        }
       })()
     : isValidElement<StayCanvasProps>(children)
       ? null
-      : children
+      : { element: children }
+  const canvas = canvasFrame && displayScale !== 1 && canvasFrame.width && canvasFrame.height
+    ? (
+        <div
+          className="canvas-display-transform"
+          data-display-scale={displayScale}
+          style={{
+            height: canvasFrame.height,
+            transform: `scale(${displayScale})`,
+            width: canvasFrame.width,
+          }}
+        >
+          {canvasFrame.element}
+        </div>
+      )
+    : canvasFrame?.element
 
   return (
     <section className={["canvas-card", wide ? "wide" : "", className ?? ""].filter(Boolean).join(" ")}>
@@ -163,7 +188,18 @@ export function CanvasCard({
         {description && <p>{description}</p>}
       </div>
       <div className="canvas-viewport" ref={viewportRef}>
-        {viewportLabel && <span className="canvas-viewport-label">{viewportLabel}</span>}
+        {viewportLabel && (
+          <span
+            className="canvas-viewport-label"
+            style={displayScale === 1 ? undefined : {
+              left: `calc(${displayScale * 100}% - 10px)`,
+              right: "auto",
+              transform: "translateX(-100%)",
+            }}
+          >
+            {viewportLabel}
+          </span>
+        )}
         {canvas}
       </div>
     </section>

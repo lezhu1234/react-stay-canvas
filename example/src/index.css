@@ -650,6 +650,13 @@ input:focus-visible {
   pointer-events: none;
 }
 
+.canvas-display-transform {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
 .demo-canvas {
   display: block;
   background: #f6f7f2;
@@ -665,8 +672,8 @@ input:focus-visible {
   background: #f6f7f2;
 }
 
-.coordinate-live-card .canvas-viewport {
-  box-shadow: inset 0 0 0 2px rgba(54, 105, 221, 0.22);
+.coordinate-live-card .canvas-display-transform {
+  box-shadow: 0 0 0 2px rgba(54, 105, 221, 0.28);
 }
 
 .coordinate-workspace {

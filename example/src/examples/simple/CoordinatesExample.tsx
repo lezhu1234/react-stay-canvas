@@ -31,6 +31,7 @@ import {
 } from "./coordinateLabModel"
 
 const isSpacePressed = (keys: Set<string>) => keys.has(" ") || keys.has("Spacebar")
+const CSS_DISPLAY_SCALE = 0.8
 
 const spaceMoveEnd: EventProps<string> = {
   name: "moveend",
@@ -304,13 +305,14 @@ export default function CoordinatesExample() {
       <div className="coordinate-workspace">
         <CoordinateStack probe={probe} viewport={viewport} />
         <CanvasCard
+          canvasDisplayScale={CSS_DISPLAY_SCALE}
           className="coordinate-live-card"
-          title={text("Live View surface", "实时 View 显示面")}
+          title={text("Canvas DOM in Client", "Client 中的 Canvas DOM")}
           description={text(
-            "Move the pointer, scroll to zoom around it, use the buttons to zoom around the View center, or hold Space and drag to pan.",
-            "移动指针；滚轮以指针为锚点缩放；按钮以 View 中心缩放；按住空格键拖动画布。",
+            "The full View is displayed at CSS scale 80%. Move the pointer, scroll to zoom around it, or hold Space and drag to pan.",
+            "完整 View 通过 CSS scale(0.8) 显示。移动指针，滚轮以指针为锚点缩放，或按住空格键拖动画布。",
           )}
-          viewportLabel={text("VIEW · rendered surface", "VIEW · 实时显示面")}
+          viewportLabel={text("CLIENT DOM · CSS 80%", "CLIENT DOM · CSS 80%")}
           wide
         >
           <StayCanvas
@@ -348,6 +350,13 @@ export default function CoordinatesExample() {
             <dd>{Math.round(viewport.x)}, {Math.round(viewport.y)} / {Math.round(viewport.scale * 100)}%</dd>
             <small>{text("The value changed by zoom", "缩放实际修改的值")}</small>
           </div>
+          <div className="coordinate-proof-client-map">
+            <dt>{text("CSS View to Client", "CSS View 到 Client")}</dt>
+            <dd>
+              {Math.round(probe.viewSize.width)}×{Math.round(probe.viewSize.height)} → {Math.round(probe.surface.width)}×{Math.round(probe.surface.height)}
+            </dd>
+            <code>{text("CSS scale", "CSS 缩放")} {(1 / probe.surface.scaleX).toFixed(2)} × {(1 / probe.surface.scaleY).toFixed(2)}</code>
+          </div>
           <div className="coordinate-proof-changing">
             <dt>{text("View projection", "View 中的投影")}</dt>
             <dd>{formatRect(shapeProjection.view)}</dd>
@@ -373,7 +382,10 @@ export default function CoordinatesExample() {
           <span>Client</span><strong>{formatPoint(probe.client)}</strong><small>{text("Browser-window position", "浏览器窗口位置")}</small>
         </div>
         <div className="coordinate-flow-operation">
-          <span>{text("Subtract the Canvas DOM origin, then apply display scale", "减去 Canvas DOM 原点，再乘显示比例")}</span>
+          <span>{text(
+            "Subtract the Canvas DOM origin, then apply the inverse CSS scale",
+            "减去 Canvas DOM 原点，再乘 CSS 缩放的倒数（逻辑尺寸 ÷ DOM 尺寸）",
+          )}</span>
           <code>[({formatPoint(probe.client)}) - ({Math.round(probe.surface.left)}, {Math.round(probe.surface.top)})] × {scaleFactors(probe.surface)}</code>
         </div>
         <div className="coordinate-flow-value coordinate-flow-view">

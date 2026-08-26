@@ -802,6 +802,7 @@ input:focus-visible {
 
 .coordinate-workspace .canvas-viewport {
   overflow: hidden;
+  scrollbar-gutter: auto;
 }
 
 .coordinate-stack-canvas {

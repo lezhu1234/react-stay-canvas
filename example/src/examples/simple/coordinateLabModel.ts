@@ -7,6 +7,20 @@ export const LAB_SHAPE: Readonly<Rect> = {
   height: 120,
 }
 
+export const LAB_CONTENT_BOUNDS: Readonly<Rect> = {
+  x: 0,
+  y: 0,
+  width: 600,
+  height: 450,
+}
+
+const RECT_CORNERS = [
+  { x: 0, y: 0 },
+  { x: 1, y: 0 },
+  { x: 1, y: 1 },
+  { x: 0, y: 1 },
+] as const
+
 export type CoordinateProbe = {
   client: Coordinate
   view: Coordinate
@@ -61,6 +75,19 @@ export function containsRect(outer: Readonly<Rect>, inner: Readonly<Rect>) {
     inner.y >= outer.y &&
     inner.x + inner.width <= outer.x + outer.width &&
     inner.y + inner.height <= outer.y + outer.height
+}
+
+export function correspondingRectCorners(from: Readonly<Rect>, to: Readonly<Rect>) {
+  return RECT_CORNERS.map((corner) => ({
+    from: {
+      x: from.x + from.width * corner.x,
+      y: from.y + from.height * corner.y,
+    },
+    to: {
+      x: to.x + to.width * corner.x,
+      y: to.y + to.height * corner.y,
+    },
+  }))
 }
 
 export function projectShape(

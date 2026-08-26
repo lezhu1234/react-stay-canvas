@@ -22,6 +22,11 @@ import { ExamplePage } from "../example/src/components/ExamplePage"
 import DiagramExample from "../example/src/examples/integrated/DiagramExample"
 import MotionStudioExample from "../example/src/examples/integrated/MotionStudioExample"
 import CoordinatesExample from "../example/src/examples/simple/CoordinatesExample"
+import {
+  correspondingRectCorners,
+  LAB_CONTENT_BOUNDS,
+  LAB_SHAPE,
+} from "../example/src/examples/simple/coordinateLabModel"
 import { type ExampleDefinition } from "../example/src/examples/types"
 import { I18nProvider } from "../example/src/i18n"
 import { installPointerEvents, pointer } from "./helpers/pointer"
@@ -68,6 +73,25 @@ afterEach(() => {
 })
 
 describe("Example Canvas workspace", () => {
+  it("defines a bounded Content scene and connects all corresponding plane corners", () => {
+    expect(LAB_SHAPE.x).toBeGreaterThanOrEqual(LAB_CONTENT_BOUNDS.x)
+    expect(LAB_SHAPE.y).toBeGreaterThanOrEqual(LAB_CONTENT_BOUNDS.y)
+    expect(LAB_SHAPE.x + LAB_SHAPE.width)
+      .toBeLessThanOrEqual(LAB_CONTENT_BOUNDS.x + LAB_CONTENT_BOUNDS.width)
+    expect(LAB_SHAPE.y + LAB_SHAPE.height)
+      .toBeLessThanOrEqual(LAB_CONTENT_BOUNDS.y + LAB_CONTENT_BOUNDS.height)
+
+    expect(correspondingRectCorners(
+      { x: 10, y: 20, width: 100, height: 60 },
+      { x: 30, y: 40, width: 200, height: 120 },
+    )).toEqual([
+      { from: { x: 10, y: 20 }, to: { x: 30, y: 40 } },
+      { from: { x: 110, y: 20 }, to: { x: 230, y: 40 } },
+      { from: { x: 110, y: 80 }, to: { x: 230, y: 160 } },
+      { from: { x: 10, y: 80 }, to: { x: 30, y: 160 } },
+    ])
+  })
+
   it("uses the compact workspace shell for every example definition", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
@@ -189,7 +213,9 @@ describe("Example Canvas workspace", () => {
     const visibleWindow = proofValue("Visible Content window")
     expect(contentGeometry).toBe("145, 155 / 190×120")
     expect(container.querySelector(".coordinate-proof-stable small")?.textContent)
-      .toContain("also stay fixed")
+      .toContain("Demo Content bounds 0, 0 / 600×450")
+    expect(container.querySelector(".coordinate-proof-stable small")?.textContent)
+      .toContain("Root itself has no geometry")
 
     const contentPlaneBeforeZoom = stackLayers?.[2].toDataURL()
     const zoomIn = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]

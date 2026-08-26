@@ -13,7 +13,7 @@ import {
   type ViewportState,
 } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, rgba, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition } from "../actionEventGuards"
 import { CoordinateStack } from "./CoordinateStack"
@@ -23,6 +23,7 @@ import {
   contentReferenceRange,
   formatPoint,
   formatRect,
+  LAB_CONTENT_BOUNDS,
   LAB_SHAPE,
   projectShape,
   type CoordinateProbe,
@@ -233,6 +234,26 @@ export default function CoordinatesExample() {
     const shapeCenterX = LAB_SHAPE.x + LAB_SHAPE.width / 2
     const shapeCenterY = LAB_SHAPE.y + LAB_SHAPE.height / 2
     tools.appendChild({
+      className: "coordinate-content-bounds",
+      shape: [
+        new Rectangle({
+          ...LAB_CONTENT_BOUNDS,
+          zIndex: -5,
+          fillConfig: { color: rgba(44, 137, 91, 0.035) },
+          strokeConfig: { color: rgba(44, 137, 91, 0.72), lineWidth: 2 },
+        }),
+        new StayText({
+          x: LAB_CONTENT_BOUNDS.x + 12,
+          y: LAB_CONTENT_BOUNDS.y + 12,
+          text: text("Demo Content bounds", "Demo Content 边界"),
+          textBaseline: "top",
+          zIndex: -4,
+          font: { size: 12, fontWeight: 700 },
+          fillConfig: { color: colors.green },
+        }),
+      ],
+    })
+    tools.appendChild({
       className: "coordinate-object",
       shape: [
         new Rectangle({ ...LAB_SHAPE, fillConfig: { color: colors.blueSoft }, strokeConfig: { color: colors.blue, lineWidth: 2 } }),
@@ -313,8 +334,8 @@ export default function CoordinatesExample() {
             <dt>{text("Content Shape geometry", "Content Shape 几何")}</dt>
             <dd>{formatRect(LAB_SHAPE)}</dd>
             <small>{text(
-              `Fixed source data. View ${Math.round(probe.viewSize.width)}×${Math.round(probe.viewSize.height)} and DOM ${Math.round(probe.surface.width)}×${Math.round(probe.surface.height)} also stay fixed.`,
-              `固定的源数据。View ${Math.round(probe.viewSize.width)}×${Math.round(probe.viewSize.height)} 与 DOM ${Math.round(probe.surface.width)}×${Math.round(probe.surface.height)} 也保持不变。`,
+              `Fixed source data inside explicit Demo Content bounds ${formatRect(LAB_CONTENT_BOUNDS)}. Root itself has no geometry. View ${Math.round(probe.viewSize.width)}×${Math.round(probe.viewSize.height)} and DOM ${Math.round(probe.surface.width)}×${Math.round(probe.surface.height)} also stay fixed.`,
+              `固定的源数据，位于显式定义的 Demo Content 边界 ${formatRect(LAB_CONTENT_BOUNDS)} 内。Root 本身没有几何边界。View ${Math.round(probe.viewSize.width)}×${Math.round(probe.viewSize.height)} 与 DOM ${Math.round(probe.surface.width)}×${Math.round(probe.surface.height)} 也保持不变。`,
             )}</small>
           </div>
           <div>

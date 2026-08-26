@@ -18,8 +18,10 @@ import { useI18n } from "../../i18n"
 import {
   containsRect,
   contentReferenceRange,
+  correspondingRectCorners,
   formatPoint,
   formatRect,
+  LAB_CONTENT_BOUNDS,
   projectShape,
   type CoordinateProbe,
   visibleContentRange,
@@ -53,12 +55,10 @@ type PlaneRuntime = PlaneDefinition & {
   extentValue: StayText
   shape: Rectangle
   shapeValue: StayText
-  xAxis: Line
-  yAxis: Line
-  xAxisValue: StayText
-  yAxisValue: StayText
   gridX: Line[]
   gridY: Line[]
+  contentBounds?: Rectangle
+  contentBoundsValue?: StayText
   visibleWindow?: Rectangle
   visibleWindowValue?: StayText
 }
@@ -211,36 +211,16 @@ function updateContentReference(
     })
   })
 
-  const origin = pointOnPlane(plane, { x: 0, y: 0 }, range)
-  const originX = origin.x
-  const originY = origin.y
-  const xVisible = originY >= 0 && originY <= plane.height
-  const yVisible = originX >= 0 && originX <= plane.width
-  plane.xAxis.update({
-    x1: 0,
-    y1: originY,
-    x2: plane.width,
-    y2: originY,
-    strokeConfig: { color: rgba(44, 137, 91, xVisible ? 0.9 : 0), lineWidth: 2 },
+  const contentBounds = clippedRect(rectOnPlane(plane, LAB_CONTENT_BOUNDS, range), plane)
+  plane.contentBounds?.update({
+    ...(contentBounds ?? { x: 0, y: 0, width: 0, height: 0 }),
+    fillConfig: { color: rgba(44, 137, 91, contentBounds ? 0.08 : 0) },
+    strokeConfig: { color: rgba(44, 137, 91, contentBounds ? 0.95 : 0), lineWidth: 2 },
   })
-  plane.yAxis.update({
-    x1: originX,
-    y1: 0,
-    x2: originX,
-    y2: plane.height,
-    strokeConfig: { color: rgba(44, 137, 91, yVisible ? 0.9 : 0), lineWidth: 2 },
-  })
-  plane.xAxisValue.update({
-    x: plane.width - 10,
-    y: Math.max(72, originY - 4),
-    text: textForAxis("x"),
-    fillConfig: { color: rgba(44, 137, 91, xVisible ? 0.9 : 0) },
-  })
-  plane.yAxisValue.update({
-    x: Math.min(plane.width - 74, originX + 6),
-    y: plane.height - 30,
-    text: textForAxis("y"),
-    fillConfig: { color: rgba(44, 137, 91, yVisible ? 0.9 : 0) },
+  plane.contentBoundsValue?.update({
+    x: Math.max(12, contentBounds?.x ?? 12) + 6,
+    y: Math.max(76, contentBounds?.y ?? 76) + 5,
+    text: `Demo Content bounds ${formatRect(LAB_CONTENT_BOUNDS)}`,
   })
 
   const visibleRange = visibleContentRange(probe, viewport)
@@ -255,8 +235,6 @@ function updateContentReference(
     text: `${containsVisibleWindow ? "viewport" : "viewport extends outside reference"} ${formatRect(visibleRange)}`,
   })
 }
-
-const textForAxis = (axis: "x" | "y") => axis === "x" ? "x-axis  y=0" : "y-axis  x=0"
 
 export function CoordinateStack({
   probe,
@@ -406,45 +384,26 @@ export function CoordinateStack({
         font: { size: 9, fontWeight: 700 },
         fillConfig: { color: colors.blue },
       })
-      const xAxis = new Line({
-        x1: 0,
-        y1: 0,
-        x2: plane.width,
-        y2: 0,
+      const contentBounds = name === "content" ? new Rectangle({
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
         layer: plane.layer,
         zIndex: 3,
-        strokeConfig: { color: plane.stroke, lineWidth: 2 },
-      })
-      const yAxis = new Line({
-        x1: 0,
-        y1: 0,
-        x2: 0,
-        y2: plane.height,
-        layer: plane.layer,
-        zIndex: 3,
-        strokeConfig: { color: plane.stroke, lineWidth: 2 },
-      })
-      const xAxisValue = new StayText({
-        x: plane.width - 10,
-        y: 72,
-        text: "x-axis  y=0",
-        textAlign: "right",
-        textBaseline: "bottom",
-        layer: plane.layer,
-        zIndex: 6,
-        font: { size: 8, fontWeight: 700 },
-        fillConfig: { color: name === "content" ? colors.green : rgba(44, 137, 91, 0) },
-      })
-      const yAxisValue = new StayText({
+        fillConfig: { color: rgba(44, 137, 91, 0.08) },
+        strokeConfig: { color: colors.green, lineWidth: 2 },
+      }) : undefined
+      const contentBoundsValue = name === "content" ? new StayText({
         x: 12,
-        y: plane.height - 30,
-        text: "y-axis  x=0",
-        textBaseline: "bottom",
+        y: 76,
+        text: "Demo Content bounds",
         layer: plane.layer,
         zIndex: 6,
+        textBaseline: "top",
         font: { size: 8, fontWeight: 700 },
-        fillConfig: { color: name === "content" ? colors.green : rgba(44, 137, 91, 0) },
-      })
+        fillConfig: { color: colors.green },
+      }) : undefined
       const visibleWindow = name === "content" ? new Rectangle({
         x: 0,
         y: 0,
@@ -502,13 +461,11 @@ export function CoordinateStack({
           }),
           originValue,
           extentValue,
-          xAxis,
-          yAxis,
+          ...(contentBounds ? [contentBounds] : []),
           ...(visibleWindow ? [visibleWindow] : []),
           shape,
           shapeValue,
-          xAxisValue,
-          yAxisValue,
+          ...(contentBoundsValue ? [contentBoundsValue] : []),
           ...(visibleWindowValue ? [visibleWindowValue] : []),
           dot,
           value,
@@ -523,12 +480,10 @@ export function CoordinateStack({
         extentValue,
         shape,
         shapeValue,
-        xAxis,
-        yAxis,
-        xAxisValue,
-        yAxisValue,
         gridX,
         gridY,
+        contentBounds,
+        contentBoundsValue,
         visibleWindow,
         visibleWindowValue,
       }
@@ -548,9 +503,12 @@ export function CoordinateStack({
       [planes.client, planes.view],
       [planes.view, planes.content],
     ] as Array<[PlaneRuntime, PlaneRuntime]>).flatMap(([from, to]) =>
-      [0, from.width].map((x) => {
-        const start = from.child.toContentPoint({ x, y: from.height })
-        const end = to.child.toContentPoint({ x, y: 0 })
+      correspondingRectCorners(
+        { x: 0, y: 0, width: from.width, height: from.height },
+        { x: 0, y: 0, width: to.width, height: to.height },
+      ).map((corners) => {
+        const start = from.child.toContentPoint(corners.from)
+        const end = to.child.toContentPoint(corners.to)
         return new Line({
           x1: start.x,
           y1: start.y,

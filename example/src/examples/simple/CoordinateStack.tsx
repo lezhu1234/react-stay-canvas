@@ -5,7 +5,9 @@ import {
   Rectangle,
   StayCanvas,
   StayText,
+  type ChildTransform,
   type Coordinate,
+  type StayInstantChild,
   type StayTools,
   type ViewportState,
 } from "react-stay-canvas"
@@ -32,16 +34,16 @@ export type CoordinateProbe = {
 }
 
 type PlaneDefinition = {
-  x: number
-  y: number
   width: number
   height: number
   layer: number
+  transform: ChildTransform
   fill: ReturnType<typeof rgba>
   stroke: ReturnType<typeof rgba>
 }
 
 type PlaneRuntime = PlaneDefinition & {
+  child: StayInstantChild
   dot: Circle
   value: StayText
   xAxis: Line
@@ -60,29 +62,26 @@ function createDefinitions(width: number, height: number): Record<PlaneName, Pla
   const planeHeight = height * 0.5
   return {
     client: {
-      x: width * 0.06,
-      y: height * 0.05,
       width: planeWidth,
       height: planeHeight,
       layer: 0,
+      transform: { x: width * 0.12, y: height * 0.08, skewX: -12, scaleY: 0.78 },
       fill: rgba(124, 132, 145, 0.13),
       stroke: rgba(124, 132, 145, 0.72),
     },
     view: {
-      x: width * 0.17,
-      y: height * 0.2,
       width: planeWidth,
       height: planeHeight,
       layer: 1,
+      transform: { x: width * 0.19, y: height * 0.23, skewX: -12, scaleY: 0.78 },
       fill: rgba(54, 105, 221, 0.14),
       stroke: rgba(54, 105, 221, 0.82),
     },
     content: {
-      x: width * 0.28,
-      y: height * 0.35,
       width: planeWidth,
       height: planeHeight,
       layer: 2,
+      transform: { x: width * 0.26, y: height * 0.38, skewX: -12, scaleY: 0.78 },
       fill: rgba(44, 137, 91, 0.16),
       stroke: rgba(44, 137, 91, 0.88),
     },
@@ -90,8 +89,8 @@ function createDefinitions(width: number, height: number): Record<PlaneName, Pla
 }
 
 const pointOnPlane = (plane: PlaneDefinition, probe: CoordinateProbe) => ({
-  x: plane.x + probe.view.x / Math.max(1, probe.viewSize.width) * plane.width,
-  y: plane.y + probe.view.y / Math.max(1, probe.viewSize.height) * plane.height,
+  x: probe.view.x / Math.max(1, probe.viewSize.width) * plane.width,
+  y: probe.view.y / Math.max(1, probe.viewSize.height) * plane.height,
 })
 
 const contentAtView = (view: Coordinate, viewport: Readonly<ViewportState>) => ({
@@ -107,30 +106,28 @@ function gridPosition(index: number, count: number, start: number, size: number)
 
 function createGrid(
   plane: PlaneDefinition,
-  tools: StayTools,
   columns: number,
   rows: number,
 ) {
   const gridColor = rgba(78, 89, 104, 0.12)
   const gridX = Array.from({ length: columns }, (_, index) => new Line({
-    x1: gridPosition(index + 1, columns, plane.x, plane.width),
-    y1: plane.y,
-    x2: gridPosition(index + 1, columns, plane.x, plane.width),
-    y2: plane.y + plane.height,
+    x1: gridPosition(index + 1, columns, 0, plane.width),
+    y1: 0,
+    x2: gridPosition(index + 1, columns, 0, plane.width),
+    y2: plane.height,
     layer: plane.layer,
     zIndex: 2,
     strokeConfig: { color: gridColor, lineWidth: 1 },
   }))
   const gridY = Array.from({ length: rows }, (_, index) => new Line({
-    x1: plane.x,
-    y1: gridPosition(index + 1, rows, plane.y, plane.height),
-    x2: plane.x + plane.width,
-    y2: gridPosition(index + 1, rows, plane.y, plane.height),
+    x1: 0,
+    y1: gridPosition(index + 1, rows, 0, plane.height),
+    x2: plane.width,
+    y2: gridPosition(index + 1, rows, 0, plane.height),
     layer: plane.layer,
     zIndex: 2,
     strokeConfig: { color: gridColor, lineWidth: 1 },
   }))
-  tools.appendChild({ className: "coordinate-stack-grid", shape: [...gridX, ...gridY] })
   return { gridX, gridY }
 }
 
@@ -143,44 +140,44 @@ function updateContentGrid(plane: PlaneRuntime, viewport: Readonly<ViewportState
   const offsetY = ((viewport.y * scaleY) % spacingY + spacingY) % spacingY
 
   plane.gridX.forEach((line, index) => {
-    const x = plane.x + offsetX + index * spacingX
-    const visible = x <= plane.x + plane.width
+    const x = offsetX + index * spacingX
+    const visible = x <= plane.width
     line.update({
       x1: x,
-      y1: plane.y,
+      y1: 0,
       x2: x,
-      y2: plane.y + plane.height,
+      y2: plane.height,
       strokeConfig: { color: rgba(44, 137, 91, visible ? 0.2 : 0), lineWidth: 1 },
     })
   })
   plane.gridY.forEach((line, index) => {
-    const y = plane.y + offsetY + index * spacingY
-    const visible = y <= plane.y + plane.height
+    const y = offsetY + index * spacingY
+    const visible = y <= plane.height
     line.update({
-      x1: plane.x,
+      x1: 0,
       y1: y,
-      x2: plane.x + plane.width,
+      x2: plane.width,
       y2: y,
       strokeConfig: { color: rgba(44, 137, 91, visible ? 0.2 : 0), lineWidth: 1 },
     })
   })
 
-  const originX = plane.x + viewport.x * scaleX
-  const originY = plane.y + viewport.y * scaleY
-  const xVisible = originY >= plane.y && originY <= plane.y + plane.height
-  const yVisible = originX >= plane.x && originX <= plane.x + plane.width
+  const originX = viewport.x * scaleX
+  const originY = viewport.y * scaleY
+  const xVisible = originY >= 0 && originY <= plane.height
+  const yVisible = originX >= 0 && originX <= plane.width
   plane.xAxis.update({
-    x1: plane.x,
+    x1: 0,
     y1: originY,
-    x2: plane.x + plane.width,
+    x2: plane.width,
     y2: originY,
     strokeConfig: { color: rgba(44, 137, 91, xVisible ? 0.9 : 0), lineWidth: 2 },
   })
   plane.yAxis.update({
     x1: originX,
-    y1: plane.y,
+    y1: 0,
     x2: originX,
-    y2: plane.y + plane.height,
+    y2: plane.height,
     strokeConfig: { color: rgba(44, 137, 91, yVisible ? 0.9 : 0), lineWidth: 2 },
   })
 }
@@ -205,10 +202,14 @@ export function CoordinateStack({
     }
     const points = (Object.keys(runtime.planes) as PlaneName[]).reduce((result, name) => {
       const plane = runtime.planes[name]
-      const point = pointOnPlane(plane, sample)
-      plane.dot.update(point)
-      plane.value.update({ x: point.x + 12, y: point.y - 10, text: format(values[name].x, values[name].y) })
-      result[name] = point
+      const localPoint = pointOnPlane(plane, sample)
+      plane.dot.update(localPoint)
+      plane.value.update({
+        x: localPoint.x + 12,
+        y: localPoint.y - 10,
+        text: format(values[name].x, values[name].y),
+      })
+      result[name] = plane.child.toContentPoint(localPoint)
       return result
     }, {} as Record<PlaneName, { x: number; y: number }>)
 
@@ -234,13 +235,12 @@ export function CoordinateStack({
       const plane = definitions[name]
       const { gridX, gridY } = createGrid(
         plane,
-        tools,
         name === "content" ? CONTENT_GRID_COLUMNS : PLANE_GRID_COLUMNS,
         name === "content" ? CONTENT_GRID_ROWS : PLANE_GRID_ROWS,
       )
       const dot = new Circle({
-        x: plane.x,
-        y: plane.y,
+        x: 0,
+        y: 0,
         radius: 6,
         layer: plane.layer,
         zIndex: 10,
@@ -248,8 +248,8 @@ export function CoordinateStack({
         strokeConfig: { color: colors.paper, lineWidth: 2 },
       })
       const value = new StayText({
-        x: plane.x + 12,
-        y: plane.y - 10,
+        x: 12,
+        y: -10,
         text: "0, 0",
         layer: plane.layer,
         zIndex: 11,
@@ -258,38 +258,41 @@ export function CoordinateStack({
         fillConfig: { color: colors.orange },
       })
       const xAxis = new Line({
-        x1: plane.x,
-        y1: plane.y,
-        x2: plane.x + plane.width,
-        y2: plane.y,
+        x1: 0,
+        y1: 0,
+        x2: plane.width,
+        y2: 0,
         layer: plane.layer,
         zIndex: 3,
         strokeConfig: { color: plane.stroke, lineWidth: 2 },
       })
       const yAxis = new Line({
-        x1: plane.x,
-        y1: plane.y,
-        x2: plane.x,
-        y2: plane.y + plane.height,
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: plane.height,
         layer: plane.layer,
         zIndex: 3,
         strokeConfig: { color: plane.stroke, lineWidth: 2 },
       })
-      tools.appendChild({
+      const child = tools.appendChild({
         className: `coordinate-plane-${name}`,
+        transform: plane.transform,
         shape: [
           new Rectangle({
-            x: plane.x,
-            y: plane.y,
+            x: 0,
+            y: 0,
             width: plane.width,
             height: plane.height,
             layer: plane.layer,
             fillConfig: { color: plane.fill },
             strokeConfig: { color: plane.stroke, lineWidth: 2 },
           }),
+          ...gridX,
+          ...gridY,
           new StayText({
-            x: plane.x + 12,
-            y: plane.y + 14,
+            x: 12,
+            y: 14,
             text: labels[name][0],
             layer: plane.layer,
             zIndex: 5,
@@ -298,8 +301,8 @@ export function CoordinateStack({
             fillConfig: { color: plane.stroke },
           }),
           new StayText({
-            x: plane.x + 12,
-            y: plane.y + 34,
+            x: 12,
+            y: 34,
             text: labels[name][1],
             layer: plane.layer,
             zIndex: 5,
@@ -313,7 +316,7 @@ export function CoordinateStack({
           value,
         ],
       })
-      planes[name] = { ...plane, dot, value, xAxis, yAxis, gridX, gridY }
+      planes[name] = { ...plane, child, dot, value, xAxis, yAxis, gridX, gridY }
     })
 
     const rayStyle = { color: rgba(224, 113, 62, 0.82), lineWidth: 2, dash: [6, 5] }
@@ -321,24 +324,31 @@ export function CoordinateStack({
       new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: 2, zIndex: 9, strokeConfig: rayStyle }),
       new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: 2, zIndex: 9, strokeConfig: rayStyle }),
     ]
-    const cornerLinks = [
-      [planes.client.x, planes.client.y, planes.content.x, planes.content.y],
-      [planes.client.x + planes.client.width, planes.client.y, planes.content.x + planes.content.width, planes.content.y],
-      [planes.client.x, planes.client.y + planes.client.height, planes.content.x, planes.content.y + planes.content.height],
-      [planes.client.x + planes.client.width, planes.client.y + planes.client.height, planes.content.x + planes.content.width, planes.content.y + planes.content.height],
-    ].map(([x1, y1, x2, y2]) => new Line({
-      x1,
-      y1,
-      x2,
-      y2,
+    const localCorners = (plane: PlaneRuntime) => [
+      { x: 0, y: 0 },
+      { x: plane.width, y: 0 },
+      { x: 0, y: plane.height },
+      { x: plane.width, y: plane.height },
+    ]
+    const clientCorners = localCorners(planes.client)
+      .map((point) => planes.client.child.toContentPoint(point))
+    const contentCorners = localCorners(planes.content)
+      .map((point) => planes.content.child.toContentPoint(point))
+    const cornerLinks = clientCorners.map((start, index) => new Line({
+      x1: start.x,
+      y1: start.y,
+      x2: contentCorners[index].x,
+      y2: contentCorners[index].y,
       layer: 2,
       zIndex: -1,
       strokeConfig: { color: rgba(78, 89, 104, 0.22), lineWidth: 1, dash: [4, 5] },
     }))
+    const clientTopRight = planes.client.child.toContentPoint({ x: planes.client.width, y: 0 })
+    const viewTopRight = planes.view.child.toContentPoint({ x: planes.view.width, y: 0 })
     const transformLabels = [
       new StayText({
-        x: planes.client.x + planes.client.width + 12,
-        y: planes.client.y + 62,
+        x: clientTopRight.x + 12,
+        y: clientTopRight.y + 62,
         text: text("layout scale", "布局缩放"),
         layer: 1,
         zIndex: 12,
@@ -347,8 +357,8 @@ export function CoordinateStack({
         fillConfig: { color: colors.blue },
       }),
       new StayText({
-        x: planes.view.x + planes.view.width + 12,
-        y: planes.view.y + 62,
+        x: viewTopRight.x + 12,
+        y: viewTopRight.y + 62,
         text: text("viewport inverse", "视口逆变换"),
         layer: 2,
         zIndex: 12,

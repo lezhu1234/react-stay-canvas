@@ -29,14 +29,38 @@ import {
 } from "./historySnapshot"
 import { captureScene, materializeSceneChild } from "./sceneTransfer"
 import { normalizeManualActions } from "./events/input/manualActionAdapter"
+import {
+  areaPlacementMatrix,
+  invertMatrix2D,
+  multiplyMatrix2D,
+} from "./transforms/affine2D"
 import Stay from "./stay"
 import { StepProps } from "./types"
+
+interface ChildShape {
+  child: StayInstantChild
+  shape: InstantShape
+}
 
 function collectChildShapes(
   child: StayInstantChild,
   layerNumber: number
-): InstantShape[] {
-  return Array.from({ length: layerNumber }, (_, layer) => child.getShapes(layer)).flat()
+): ChildShape[] {
+  return Array.from({ length: layerNumber }, (_, layer) =>
+    child.getShapes(layer).map((shape) => ({ child, shape }))).flat()
+}
+
+function placeImportedGeometry(
+  child: StayInstantChild,
+  offset: PointType,
+  scale: number,
+  center: PointType
+) {
+  child.shapeMap.forEach((shape) => {
+    shape.moveInit()
+    shape.move(...shape.applyMove(offset.x, offset.y))
+    shape.zoom(shape._zoom((scale - 1) * -1000, center))
+  })
 }
 
 function withChildrenAtTime<R>(
@@ -88,10 +112,11 @@ export function stayTools(this: Stay<any>): StayTools {
         afterDrawCallback,
       })
     },
-    createChild: ({ id, className }: CreateChildProps) => {
+    createChild: ({ id, className, transform }: CreateChildProps) => {
       const child = new StayAnimatedChild({
         id,
         className,
+        transform,
         canvas: this.root,
       })
       this.pushToChildren(child)
@@ -164,6 +189,7 @@ export function stayTools(this: Stay<any>): StayTools {
             id: stepChild.id,
             shape: materializeHistoryShapes(stepChild.shape),
             className: stepChild.className,
+            transform: { matrix: stepChild.transform },
           })
         } else if (step.action === "remove") {
           this.tools.removeChild(stepChild.id)
@@ -171,7 +197,10 @@ export function stayTools(this: Stay<any>): StayTools {
           assert(stepChild.beforeShape)
           const child = this.findChildById(stepChild.id)!
 
-          child.update({ shape: materializeHistoryShapes(stepChild.shape) })
+          child.update({
+            shape: materializeHistoryShapes(stepChild.shape),
+            transform: stepChild.transform,
+          })
         }
       })
 
@@ -205,15 +234,17 @@ export function stayTools(this: Stay<any>): StayTools {
             id: stepChild.id,
             shape: materializeHistoryShapes(stepChild.shape),
             className: stepChild.className,
+            transform: { matrix: stepChild.transform },
           })
         } else if (step.action === "update") {
-          if (!stepChild.beforeShape) {
-            throw new Error("update history step requires beforeShape")
+          if (!stepChild.beforeShape || !stepChild.beforeTransform) {
+            throw new Error("update history step requires before state")
           }
 
           this.getChildById(stepChild.id)!.update({
             className: stepChild.beforeName || stepChild.className,
             shape: materializeHistoryShapes(stepChild.beforeShape),
+            transform: stepChild.beforeTransform,
           })
           // this.tools.updateChild({
           //   child: this.getChildById(stepChild.id)!,
@@ -252,11 +283,17 @@ export function stayTools(this: Stay<any>): StayTools {
       this.forceUpdateAllLayers()
       this.draw({ now: Date.now() })
     },
-    appendChild: <T extends InstantShape>({ id, className, shape }: AppendChildProps<T>) => {
+    appendChild: <T extends InstantShape>({
+      id,
+      className,
+      shape,
+      transform,
+    }: AppendChildProps<T>) => {
       const child = new StayInstantChild<T>({
         id,
         className,
         shape,
+        transform,
         canvas: this.root,
         onShapeChange: (childId) => this.markHistoryChildChanged(childId),
       })
@@ -464,16 +501,28 @@ export function stayTools(this: Stay<any>): StayTools {
 
       const [offsetX, offsetY] = [targetArea.x - area.x, targetArea.y - area.y]
       const scale = targetArea.width / area.width
+      const placement = areaPlacementMatrix(area, targetArea)
+      const inversePlacement = invertMatrix2D(placement)
 
       children.forEach((fragment) => {
         const importedChild = materializeSceneChild(fragment, this.root)
-        importedChild.moveInit()
-        importedChild.move(offsetX, offsetY)
-        importedChild.zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
+        placeImportedGeometry(
+          importedChild,
+          { x: offsetX, y: offsetY },
+          scale,
+          { x: targetArea.x, y: targetArea.y }
+        )
+        importedChild.setTransform({
+          matrix: multiplyMatrix2D(
+            multiplyMatrix2D(placement, fragment.transform),
+            inversePlacement
+          ),
+        })
         this.tools.appendChild({
           id: importedChild.id,
           shape: importedChild.shapeMap,
           className: importedChild.className,
+          transform: { matrix: importedChild.transform },
         })
       })
     },
@@ -500,19 +549,27 @@ export function stayTools(this: Stay<any>): StayTools {
       return withChildrenAtTime(children, progress, () => {
         const shapes = children
           .flatMap((child) => collectChildShapes(child, layerNumber))
-          .sort((first, second) => first.layer - second.layer || first.zIndex - second.zIndex)
+          .sort((first, second) =>
+            first.shape.layer - second.shape.layer || first.shape.zIndex - second.shape.zIndex)
 
         tempCtx.save()
         try {
           prepareRegionContext(tempCtx, area, targetSize)
-          shapes.forEach((shape) => {
-            shape.draw({
-              context: tempCtx,
-              now: Date.now(),
-              width: this.width,
-              height: this.height,
-              forchDraw: true,
-            })
+          shapes.forEach(({ child, shape }) => {
+            const { a, b, c, d, e, f } = child.getTransformMatrix()
+            tempCtx.save()
+            try {
+              tempCtx.transform(a, b, c, d, e, f)
+              shape.draw({
+                context: tempCtx,
+                now: Date.now(),
+                width: this.width,
+                height: this.height,
+                forchDraw: true,
+              })
+            } finally {
+              tempCtx.restore()
+            }
           })
         } finally {
           tempCtx.restore()

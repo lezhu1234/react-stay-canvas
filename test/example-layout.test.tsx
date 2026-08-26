@@ -161,9 +161,9 @@ describe("Example Canvas workspace", () => {
     const width = stackLayers?.[0].width ?? 0
     const height = stackLayers?.[0].height ?? 0
     const planeSamples = [
-      { x: width * 0.06 + 5, y: height * 0.05 + 5 },
-      { x: width * 0.17 + 5, y: height * 0.2 + 5 },
-      { x: width * 0.28 + 5, y: height * 0.35 + 5 },
+      { x: width * 0.12 + 8, y: height * 0.08 + 8 },
+      { x: width * 0.19 + 8, y: height * 0.23 + 8 },
+      { x: width * 0.26 + 8, y: height * 0.38 + 8 },
     ]
     stackLayers?.forEach((canvas, index) => {
       const { x, y } = planeSamples[index]

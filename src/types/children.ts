@@ -8,6 +8,7 @@ import type { StayShapeTransitionConfig } from "./animation"
 import type { valueof } from "./common"
 import type { Area, PointType, Size } from "./geometry"
 import type { DrawActionsValuesType } from "./shapes"
+import type { ChildTransform, Matrix2D } from "./transform"
 
 export type StayChildren = Record<string, StayInstantChild>
 
@@ -15,11 +16,13 @@ export interface AppendChildProps<T> {
   id?: string
   shape: T | T[] | Map<string, T>
   className: string
+  transform?: ChildTransform
 }
 
 export interface CreateChildProps {
   id?: string
   className: string
+  transform?: ChildTransform
 }
 
 export type updateChildProps<T extends StayInstantChild = StayInstantChild> = {
@@ -56,6 +59,7 @@ export interface SceneChildFragment<T extends InstantShape = InstantShape> {
   sourceId: string
   className: string
   shapes: Map<string, T>
+  transform: Matrix2D
 }
 
 export interface SceneFragment {
@@ -71,12 +75,14 @@ export interface StayInstantChildUpdateProps<T extends InstantShape> {
   id?: string
   className?: string
   shape?: T | T[] | Map<string, T>
+  transform?: Matrix2D
 }
 
 export interface StayInstantChildProps<T extends InstantShape> {
   id?: string
   className: string
   shape: T | T[] | Map<string, T>
+  transform?: ChildTransform
   canvas: Canvas
   onShapeChange?: (childId: string) => void
 }
@@ -84,6 +90,7 @@ export interface StayInstantChildProps<T extends InstantShape> {
 export interface StayAnimatedChildProps<T extends AnimatedShape> {
   id?: string
   className: string
+  transform?: ChildTransform
   canvas: Canvas
 }
 

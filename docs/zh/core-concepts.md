@@ -72,6 +72,7 @@ Child 为一个或多个 Shape 提供共同的：
 - 命中测试结果
 - 整体边界框
 - 移动和缩放入口
+- 从局部空间到 Content 的非破坏性变换
 - 历史记录身份
 
 一个按钮可以由背景矩形和文字两个 Shape 组成，但它们应属于同一个 Child。这样点击文字或背景时，命中的都是同一个对象，移动时两部分也会一起移动。
@@ -101,6 +102,8 @@ tools.appendChild({
 ```
 
 `child.shape` 返回这个 Child 的第一个 Shape，适合最常见的单 Shape Child。多 Shape Child 应使用 `child.shapeMap` 明确访问或遍历全部 Shape。
+
+Child transform 可以把其中全部 Shape 作为一个局部对象整体平移、旋转、缩放或倾斜，而不改写 Shape 几何。绘制、边界、点命中、区域查询、历史、场景传输和区域截图共享同一变换。公开指针 `e.point` 仍是 Content 坐标；只有需要局部几何时才调用 `child.toLocalPoint(e.point)`。
 
 ## 图层与 `zIndex`
 

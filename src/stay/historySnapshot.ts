@@ -2,11 +2,14 @@ import { InstantShape } from "../shapes/instantShape"
 import { StayInstantChild } from "./children/stayInstantChild"
 import { StepProps } from "./types"
 import { snapshotShapeMap } from "./shapeMapSnapshot"
+import type { Matrix2D } from "../types/transform"
+import { copyMatrix2D, matrix2DEquals } from "./transforms/affine2D"
 
 export interface HistoryChildSnapshot {
   id: string
   className: string
   shape: Map<string, InstantShape>
+  transform: Matrix2D
 }
 
 export function captureHistoryChild(child: StayInstantChild): HistoryChildSnapshot {
@@ -14,6 +17,7 @@ export function captureHistoryChild(child: StayInstantChild): HistoryChildSnapsh
     id: child.id,
     className: child.className,
     shape: snapshotShapeMap(child.shapeMap),
+    transform: copyMatrix2D(child.transform),
   }
 }
 
@@ -39,6 +43,7 @@ function snapshotStepChild(child: HistoryChildSnapshot) {
     id: child.id,
     className: child.className,
     shape: child.shape,
+    transform: copyMatrix2D(child.transform),
   }
 }
 
@@ -120,7 +125,11 @@ export function diffHistoryChild(
   if (before.id !== after.id) {
     throw new Error("history id and current id must be the same")
   }
-  if (before.className === after.className && shapeMapsEqual(before.shape, after.shape)) {
+  if (
+    before.className === after.className &&
+    shapeMapsEqual(before.shape, after.shape) &&
+    matrix2DEquals(before.transform, after.transform)
+  ) {
     return undefined
   }
 
@@ -130,6 +139,7 @@ export function diffHistoryChild(
       ...snapshotStepChild(after),
       beforeName: before.className,
       beforeShape: before.shape,
+      beforeTransform: copyMatrix2D(before.transform),
     },
   }
 }

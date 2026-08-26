@@ -4,8 +4,18 @@ import type {
   StayInstantChildUpdateProps,
 } from "../../types/children"
 import type { Area, Coordinate, PointType, Rect } from "../../types/geometry"
+import type { ChildTransform, Matrix2D } from "../../types/transform"
 import { uuid4 } from "../../utils/identifiers"
 import { parseLayer } from "../../utils/stage"
+import {
+  copyMatrix2D,
+  invertMatrix2D,
+  mapPoint,
+  mapRect,
+  mapVector,
+  matrix2DEquals,
+  resolveChildTransform,
+} from "../transforms/affine2D"
 import { SetShapeChildCurrentTime } from "../types"
 
 import { Canvas } from "../../canvas"
@@ -16,7 +26,9 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
 
   shapeMap: Map<string, T>
   canvas: Canvas
-  private readonly onShapeChange?: (childId: string) => void
+  readonly #onChange?: (childId: string) => void
+  #transform: Matrix2D
+  #inverseTransform: Matrix2D
   protected updatedLayers = new Set<number>()
 
   //   history
@@ -24,13 +36,16 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     id,
     className,
     shape,
+    transform,
     canvas,
     onShapeChange,
   }: StayInstantChildProps<T>) {
     this.id = id ?? uuid4()
     this.className = className
     this.canvas = canvas
-    this.onShapeChange = onShapeChange
+    this.#onChange = onShapeChange
+    this.#transform = resolveChildTransform(transform)
+    this.#inverseTransform = invertMatrix2D(this.#transform)
     this.shapeMap = this.assignShapes(shape)
   }
 
@@ -46,13 +61,43 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     return this.shape
   }
 
+  get transform(): Readonly<Matrix2D> {
+    return copyMatrix2D(this.#transform)
+  }
+
+  /** @internal Returns the immutable runtime matrix without allocating a public snapshot. */
+  getTransformMatrix(): Readonly<Matrix2D> {
+    return this.#transform
+  }
+
+  setTransform(transform: ChildTransform) {
+    this.replaceTransform(resolveChildTransform(transform), true)
+    return this
+  }
+
+  toContentPoint(point: PointType): PointType {
+    return mapPoint(this.#transform, point)
+  }
+
+  toLocalPoint(point: PointType): PointType {
+    return mapPoint(this.#inverseTransform, point)
+  }
+
+  private toLocalVector(vector: PointType): PointType {
+    return mapVector(this.#inverseTransform, vector)
+  }
+
+  getShapeBound(shape: T): Rect {
+    return mapRect(this.#transform, shape.getBound())
+  }
+
   getBound(): Rect {
     let left = Infinity,
       top = Infinity,
       right = -Infinity,
       bottom = -Infinity
     this.shapeMap.forEach((shape) => {
-      const { x, y, width, height } = shape.getBound()
+      const { x, y, width, height } = this.getShapeBound(shape)
       left = Math.min(left, x)
       top = Math.min(top, y)
       right = Math.max(right, x + width)
@@ -67,14 +112,16 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   }
 
   move(offsetX: number, offsetY: number) {
+    const localOffset = this.toLocalVector({ x: offsetX, y: offsetY })
     this.shapeMap.forEach((shape) => {
-      shape.move(...shape.applyMove(offsetX, offsetY))
+      shape.move(...shape.applyMove(localOffset.x, localOffset.y))
     })
   }
 
   zoom(deltaY: number, center: PointType) {
+    const localCenter = this.toLocalPoint(center)
     this.shapeMap.forEach((shape) => {
-      shape.zoom(shape._zoom(deltaY, center))
+      shape.zoom(shape._zoom(deltaY, localCenter))
     })
   }
 
@@ -116,8 +163,9 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   }
 
   containsPointer(point: Coordinate): boolean {
+    const localPoint = this.toLocalPoint(point)
     for (const shape of this.shapeMap.values()) {
-      if (shape.contains(point)) return true
+      if (shape.contains(localPoint)) return true
     }
     return false
   }
@@ -128,7 +176,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
 
   inArea(area: Area) {
     for (const shape of this.shapeMap.values()) {
-      const center = shape.getCenterPoint()
+      const center = this.toContentPoint(shape.getCenterPoint())
 
       if (
         center.x >= area.x &&
@@ -152,7 +200,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     shape.layer = parseLayer(this.canvas.layers, shape.layer)
     this.updatedLayers.add(previousLayer)
     this.updatedLayers.add(shape.layer)
-    this.onShapeChange?.(this.id)
+    this.#onChange?.(this.id)
   }
 
   layerDraw(layer: number) {
@@ -194,10 +242,21 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
    * go through the normal per-shape dirty-tracking. Consumers should mutate the
    * shape instead — `child.shape.update({ ... })` — which repaints correctly.
    */
-  update({ id, className, shape }: StayInstantChildUpdateProps<T>) {
+  update({ id, className, shape, transform }: StayInstantChildUpdateProps<T>) {
     this.id = id ?? this.id
     this.className = className ?? this.className
     this.shapeMap = shape ? this.assignShapes(shape) : this.shapeMap
+    if (transform) {
+      this.replaceTransform(resolveChildTransform({ matrix: transform }), false)
+    }
     // `shape` is now a getter derived from shapeMap — nothing else to assign.
+  }
+
+  private replaceTransform(transform: Matrix2D, notify: boolean) {
+    if (matrix2DEquals(this.#transform, transform)) return
+    this.#transform = transform
+    this.#inverseTransform = invertMatrix2D(transform)
+    this.getLayers().forEach((layer) => this.updatedLayers.add(layer))
+    if (notify) this.#onChange?.(this.id)
   }
 }

@@ -19,6 +19,7 @@ src/types/
 ├── geometry.ts
 ├── manualActions.ts
 ├── shapes.ts
+├── transform.ts
 ├── tools.ts
 └── index.ts
 ```
@@ -76,6 +77,18 @@ integration example may keep a second authoritative viewport or perform its own 
 The public `tools.viewport` object is intentionally a thin facade over this owner. Legacy
 `move`/`zoom`/`reset` tools remain destructive geometry operations and must not be used as a
 viewport implementation.
+
+## Child transform ownership
+
+`StayInstantChild` owns one invertible local-to-Content affine matrix. Shapes retain local geometry;
+the Renderer composes the Child matrix after the shared Content-to-View frame inside a per-Shape
+save/restore boundary. Culling maps Shape bounds into Content, while point hits map Content input
+through the inverse Child matrix before calling Shape `contains()`.
+
+`stay/transforms/affine2D.ts` is the single owner of matrix validation, composition, inversion, and
+point/vector/bounds mapping. History snapshots and scene fragments store the resolved matrix rather
+than duplicating semantic transform fields. Layer remains a paint-pass choice and never owns a
+coordinate transform.
 
 ## Documentation boundary
 

@@ -9,6 +9,11 @@ interface DrawLayer {
   forceUpdate: boolean
 }
 
+interface RenderShape {
+  child: StayInstantChild
+  shape: InstantShape
+}
+
 // Owns the render loop, per-layer dirty tracking, the layer draw pass, and the
 // nextTick queue. Extracted from Stay so "rendering" is one focused concern.
 // Reads the children to paint via an injected provider (the non-root children).
@@ -83,12 +88,12 @@ export class Renderer {
         updatedLayers.push(layerIndex)
 
         this.root.withLayerFrame(layerIndex, frame.contentToView, (context) => {
-          let layerDrawShapes: InstantShape[] = []
+          let layerDrawShapes: RenderShape[] = []
 
           for (let i = 0; i < children.length; i++) {
             const child = children[i]
             const shapes = child.getShapes(layerIndex)
-            layerDrawShapes.push(...shapes)
+            layerDrawShapes.push(...shapes.map((shape) => ({ child, shape })))
             child.layerDraw(layerIndex)
             if (shapes.length > 0) {
               updatedChilds.push({ child, shapes })
@@ -96,16 +101,24 @@ export class Renderer {
           }
 
           layerDrawShapes = layerDrawShapes
-            .filter((shape) => hasIntersection(shape.getBound(), frame.visibleContentArea))
-            .sort((s1, s2) => s1.zIndex - s2.zIndex)
+            .filter(({ child, shape }) =>
+              hasIntersection(child.getShapeBound(shape), frame.visibleContentArea))
+            .sort((first, second) => first.shape.zIndex - second.shape.zIndex)
 
-          layerDrawShapes.forEach((shape) => {
-            shape.draw({
-              context,
-              now,
-              width: this.root.width,
-              height: this.root.height,
-            })
+          layerDrawShapes.forEach(({ child, shape }) => {
+            const { a, b, c, d, e, f } = child.getTransformMatrix()
+            context.save()
+            try {
+              context.transform(a, b, c, d, e, f)
+              shape.draw({
+                context,
+                now,
+                width: this.root.width,
+                height: this.root.height,
+              })
+            } finally {
+              context.restore()
+            }
           })
         })
       }

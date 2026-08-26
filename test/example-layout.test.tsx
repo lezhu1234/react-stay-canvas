@@ -21,6 +21,7 @@ import {
 import { ExamplePage } from "../example/src/components/ExamplePage"
 import DiagramExample from "../example/src/examples/integrated/DiagramExample"
 import MotionStudioExample from "../example/src/examples/integrated/MotionStudioExample"
+import CoordinatesExample from "../example/src/examples/simple/CoordinatesExample"
 import { type ExampleDefinition } from "../example/src/examples/types"
 import { I18nProvider } from "../example/src/i18n"
 
@@ -136,6 +137,45 @@ describe("Example Canvas workspace", () => {
     const workspace = container.querySelector(".diagram-stage-shell.diagram-workspace")
     expect(workspace?.querySelector(":scope > .diagram-palette")).not.toBeNull()
     expect(workspace?.querySelector(":scope > .diagram-canvas-area .diagram-canvas")).not.toBeNull()
+  })
+
+  it("renders each coordinate space as a Rectangle on its own Canvas layer", () => {
+    const frames: FrameRequestCallback[] = []
+    window.requestAnimationFrame = (callback) => frames.push(callback)
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(<I18nProvider><CoordinatesExample /></I18nProvider>)
+    })
+    act(() => frames.splice(0).forEach((frame) => frame(0)))
+
+    const workspace = container.querySelector(".coordinate-workspace")
+    const stackLayers = workspace?.querySelectorAll<HTMLCanvasElement>(".coordinate-stack-canvas canvas")
+    const liveLayers = workspace?.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")
+    expect(workspace?.querySelectorAll(":scope > .canvas-card")).toHaveLength(2)
+    expect(stackLayers).toHaveLength(3)
+    expect(liveLayers).toHaveLength(2)
+
+    const width = stackLayers?.[0].width ?? 0
+    const height = stackLayers?.[0].height ?? 0
+    const planeSamples = [
+      { x: width * 0.06 + 5, y: height * 0.05 + 5 },
+      { x: width * 0.17 + 5, y: height * 0.2 + 5 },
+      { x: width * 0.28 + 5, y: height * 0.35 + 5 },
+    ]
+    stackLayers?.forEach((canvas, index) => {
+      const { x, y } = planeSamples[index]
+      expect(canvas.getContext("2d")?.getImageData(x, y, 1, 1).data[3]).toBeGreaterThan(0)
+    })
+
+    const contentBeforeZoom = stackLayers?.[2].toDataURL()
+    const zoomIn = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
+      .find((button) => button.textContent === "Zoom in")
+    act(() => zoomIn?.click())
+    act(() => frames.splice(0).forEach((frame) => frame(16)))
+    expect(stackLayers?.[2].toDataURL()).not.toBe(contentBeforeZoom)
   })
 
   it("keeps Motion layers, Canvas, inspector, and timeline in one fixed workspace", async () => {

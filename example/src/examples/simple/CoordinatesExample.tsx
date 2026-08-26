@@ -16,6 +16,7 @@ import {
 import { Button, CanvasCard, colors, DemoLayout, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition } from "../actionEventGuards"
+import { CoordinateStack, type CoordinateProbe } from "./CoordinateStack"
 
 const isSpacePressed = (keys: Set<string>) => keys.has(" ") || keys.has("Spacebar")
 
@@ -50,24 +51,18 @@ const spaceStartMove: EventProps<string> = {
   },
 }
 
-type Probe = {
-  client: Coordinate
-  view: Coordinate
-  content: Coordinate
-  sampleViewport: Readonly<ViewportState>
-}
-
 const rounded = ({ x, y }: Coordinate) => `${Math.round(x)}, ${Math.round(y)}`
 
 export default function CoordinatesExample() {
   const { text } = useI18n()
   const toolsRef = useRef<StayTools>()
   const markerRef = useRef<{ dot: Circle; horizontal: Line; vertical: Line; label: StayText }>()
-  const [probe, setProbe] = useState<Probe>({
+  const [probe, setProbe] = useState<CoordinateProbe>({
     client: { x: 0, y: 0 },
     view: { x: 0, y: 0 },
     content: { x: 0, y: 0 },
     sampleViewport: { x: 0, y: 0, scale: 1 },
+    viewSize: { width: 320, height: 440 },
   })
   const [viewport, setViewport] = useState<Readonly<ViewportState>>({ x: 0, y: 0, scale: 1 })
 
@@ -81,13 +76,22 @@ export default function CoordinatesExample() {
   }
 
   const listeners = useMemo<ListenerProps[]>(() => {
-    const observe = ({ e, originEvent, canvas, tools }: Parameters<ListenerProps["callback"]>[0]) => {
+    const observe = (
+      { e, originEvent, canvas, tools }: Parameters<ListenerProps["callback"]>[0],
+      updateMarker = true,
+    ) => {
       if (!hasPointerPosition(e) || !(originEvent instanceof MouseEvent)) return
       const client = { x: originEvent.clientX, y: originEvent.clientY }
       const view = canvas.clientToCanvasPoint(client.x, client.y)
-      moveMarker(e.point)
+      if (updateMarker) moveMarker(e.point)
       const sampleViewport = tools.viewport.get()
-      setProbe({ client, view, content: e.point, sampleViewport })
+      setProbe({
+        client,
+        view,
+        content: e.point,
+        sampleViewport,
+        viewSize: { width: canvas.width, height: canvas.height },
+      })
       setViewport(sampleViewport)
     }
 
@@ -102,22 +106,24 @@ export default function CoordinatesExample() {
         name: "coordinate-pan",
         selector: ".stay-canvas",
         event: ["startmove", "move", "moveend"],
-        callback: ({ e, composeStore, tools }) => ({
+        callback: (props) => ({
           startmove: () => {
-            tools.changeCursor("grabbing")
-            return { originViewport: tools.viewport.get() }
+            props.tools.changeCursor("grabbing")
+            return { originViewport: props.tools.viewport.get() }
           },
           move: () => {
-            const viewport = tools.viewport.panBy(e.movement ?? { x: 0, y: 0 })
+            observe(props, false)
+            const viewport = props.tools.viewport.panBy(props.e.movement ?? { x: 0, y: 0 })
             setViewport(viewport)
-            return composeStore
+            return props.composeStore
           },
           moveend: () => {
-            const viewport = e.cancelled && composeStore.originViewport
-              ? tools.viewport.restore(composeStore.originViewport)
-              : tools.viewport.get()
+            if (!props.e.cancelled) observe(props, false)
+            const viewport = props.e.cancelled && props.composeStore.originViewport
+              ? props.tools.viewport.restore(props.composeStore.originViewport)
+              : props.tools.viewport.get()
             setViewport(viewport)
-            tools.changeCursor(isSpacePressed(e.pressedKeys) ? "grab" : "default")
+            props.tools.changeCursor(isSpacePressed(props.e.pressedKeys) ? "grab" : "default")
             return { originViewport: undefined }
           },
         }),
@@ -138,6 +144,7 @@ export default function CoordinatesExample() {
             view: canvas.clientToCanvasPoint(client.x, client.y),
             content: e.point,
             sampleViewport,
+            viewSize: { width: canvas.width, height: canvas.height },
           })
           setViewport(viewport)
         },
@@ -163,13 +170,17 @@ export default function CoordinatesExample() {
     for (let y = -600; y <= 1200; y += 50) {
       grid.set(`y:${y}`, new Line({ x1: -600, y1: y, x2: 1400, y2: y, zIndex: -10, strokeConfig: { color: { r: 78, g: 89, b: 104, a: 0.1 }, lineWidth: y === 0 ? 2 : 1 } }))
     }
-    tools.appendChild({ className: "coordinate-grid", shape: grid })
+    const gridChild = tools.appendChild({ className: "coordinate-grid", shape: grid })
+    setProbe((current) => ({
+      ...current,
+      viewSize: { width: gridChild.canvas.width, height: gridChild.canvas.height },
+    }))
     tools.appendChild({
       className: "coordinate-object",
       shape: [
-        new Rectangle({ x: 310, y: 175, width: 210, height: 130, fillConfig: { color: colors.blueSoft }, strokeConfig: { color: colors.blue, lineWidth: 2 } }),
-        new StayText({ x: 415, y: 230, text: text("Content object", "Content 中的对象"), textAlign: "center", textBaseline: "middle", font: { size: 18, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
-        new StayText({ x: 415, y: 263, text: "x=310  y=175", textAlign: "center", textBaseline: "middle", font: { size: 12 }, fillConfig: { color: colors.gray } }),
+        new Rectangle({ x: 145, y: 155, width: 190, height: 120, fillConfig: { color: colors.blueSoft }, strokeConfig: { color: colors.blue, lineWidth: 2 } }),
+        new StayText({ x: 240, y: 207, text: text("Content object", "Content 中的对象"), textAlign: "center", textBaseline: "middle", font: { size: 18, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
+        new StayText({ x: 240, y: 239, text: "x=145  y=155", textAlign: "center", textBaseline: "middle", font: { size: 12 }, fillConfig: { color: colors.gray } }),
       ],
     })
     const dot = new Circle({ x: 0, y: 0, radius: 6, zIndex: 20, fillConfig: { color: colors.orange } })
@@ -189,23 +200,26 @@ export default function CoordinatesExample() {
 
   return (
     <DemoLayout>
-      <CanvasCard
-        title={text("One pointer, three coordinate spaces", "一个指针，三套坐标")}
-        description={text("Move the pointer, scroll to zoom, or hold Space and drag to pan.", "移动指针、滚轮缩放，或按住空格键拖动画布。")}
-        wide
-      >
-        <StayCanvas
-          className="demo-canvas coordinate-canvas"
-          eventList={[spaceStartMove]}
-          height={480}
-          layers={2}
-          listenerList={listeners}
-          mounted={mounted}
-          passive={false}
-          viewport={{ minScale: 0.4, maxScale: 3 }}
-          width={760}
-        />
-      </CanvasCard>
+      <div className="coordinate-workspace">
+        <CoordinateStack probe={probe} viewport={viewport} />
+        <CanvasCard
+          title={text("Live viewport", "实时可操作视口")}
+          description={text("Move the pointer, scroll to zoom, or hold Space and drag to pan.", "移动指针、滚轮缩放，或按住空格键拖动画布。")}
+          wide
+        >
+          <StayCanvas
+            className="demo-canvas coordinate-canvas"
+            eventList={[spaceStartMove]}
+            height={440}
+            layers={2}
+            listenerList={listeners}
+            mounted={mounted}
+            passive={false}
+            viewport={{ minScale: 0.4, maxScale: 3 }}
+            width={320}
+          />
+        </CanvasCard>
+      </div>
       <div className="coordinate-flow" aria-label={text("Coordinate conversion flow", "坐标转换流程")}>
         <div><span>1 · Client</span><strong>{rounded(probe.client)}</strong><small>{text("Browser viewport pixels", "浏览器窗口像素")}</small></div>
         <i aria-hidden="true">→</i>

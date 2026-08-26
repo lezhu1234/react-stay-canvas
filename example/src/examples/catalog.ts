@@ -108,7 +108,10 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/simple/coordinates",
-    sourcePaths: ["./examples/simple/CoordinatesExample.tsx"],
+    sourcePaths: [
+      "./examples/simple/CoordinatesExample.tsx",
+      "./examples/simple/CoordinateStack.tsx",
+    ],
     group: "Simple",
     order: 9,
     title: l("Coordinate spaces and viewport", "坐标空间与视口"),

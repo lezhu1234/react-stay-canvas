@@ -16,13 +16,14 @@ import {
 import { CanvasCard, colors, rgba, sceneCanvasArea } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import {
+  clippedRectEdges,
   containsRect,
   contentReferenceRange,
   correspondingRectCorners,
   formatPoint,
   formatRect,
   LAB_CONTENT_BOUNDS,
-  projectShape,
+  projectContentRect,
   type CoordinateProbe,
   visibleContentRange,
 } from "./coordinateLabModel"
@@ -57,7 +58,8 @@ type PlaneRuntime = PlaneDefinition & {
   shapeValue: StayText
   gridX: Line[]
   gridY: Line[]
-  contentBounds?: Rectangle
+  contentBounds: Rectangle
+  contentBoundsEdges: [Line, Line, Line, Line]
   visibleWindow?: Rectangle
   visibleWindowValue?: StayText
 }
@@ -210,12 +212,6 @@ function updateContentReference(
     })
   })
 
-  const contentBounds = clippedRect(rectOnPlane(plane, LAB_CONTENT_BOUNDS, range), plane)
-  plane.contentBounds?.update({
-    ...(contentBounds ?? { x: 0, y: 0, width: 0, height: 0 }),
-    fillConfig: { color: rgba(44, 137, 91, contentBounds ? 0.08 : 0) },
-    strokeConfig: { color: rgba(44, 137, 91, contentBounds ? 0.95 : 0), lineWidth: 2 },
-  })
   const visibleRange = visibleContentRange(probe, viewport)
   const containsVisibleWindow = containsRect(range, visibleRange)
   const visibleWindow = clippedRect(rectOnPlane(plane, visibleRange, range), plane)
@@ -242,7 +238,8 @@ export function CoordinateStack({
   const update = (sample: CoordinateProbe, currentViewport: Readonly<ViewportState>) => {
     const runtime = runtimeRef.current
     if (!runtime) return
-    const shapeProjection = projectShape(sample, currentViewport)
+    const shapeProjection = projectContentRect(sample, currentViewport)
+    const boundsProjection = projectContentRect(sample, currentViewport, LAB_CONTENT_BOUNDS)
     const points = {} as Record<PlaneName, Coordinate>
     const shapeCenters = {} as Record<PlaneName, Coordinate>
 
@@ -253,6 +250,8 @@ export function CoordinateStack({
       const localPoint = pointOnPlane(plane, value, range)
       const localShape = rectOnPlane(plane, shapeProjection[name], range)
       const visibleShape = clippedRect(localShape, plane)
+      const projectedContentBounds = rectOnPlane(plane, boundsProjection[name], range)
+      const localContentBounds = clippedRect(projectedContentBounds, plane)
       plane.dot.update(localPoint)
       plane.value.update({
         x: Math.min(plane.width - 112, Math.max(12, localPoint.x + 12)),
@@ -263,6 +262,20 @@ export function CoordinateStack({
         ...(visibleShape ?? { x: 0, y: 0, width: 0, height: 0 }),
         fillConfig: { color: rgba(54, 105, 221, visibleShape ? 0.2 : 0) },
         strokeConfig: { color: rgba(54, 105, 221, visibleShape ? 0.95 : 0), lineWidth: 2 },
+      })
+      plane.contentBounds.update({
+        ...(localContentBounds ?? { x: 0, y: 0, width: 0, height: 0 }),
+        fillConfig: { color: rgba(44, 137, 91, localContentBounds ? 0.06 : 0) },
+        strokeConfig: { color: rgba(44, 137, 91, 0), lineWidth: 0 },
+      })
+      clippedRectEdges(
+        projectedContentBounds,
+        { x: 0, y: 0, width: plane.width, height: plane.height },
+      ).forEach((edge, index) => {
+        plane.contentBoundsEdges[index].update({
+          ...(edge ?? { x1: 0, y1: 0, x2: 0, y2: 0 }),
+          strokeConfig: { color: rgba(44, 137, 91, edge ? 0.88 : 0), lineWidth: 2 },
+        })
       })
       plane.shapeValue.update({
         x: Math.min(plane.width - 170, Math.max(12, localShape.x)),
@@ -377,7 +390,7 @@ export function CoordinateStack({
         font: { size: 9, fontWeight: 700 },
         fillConfig: { color: colors.blue },
       })
-      const contentBounds = name === "content" ? new Rectangle({
+      const contentBounds = new Rectangle({
         x: 0,
         y: 0,
         width: 0,
@@ -385,8 +398,17 @@ export function CoordinateStack({
         layer: plane.layer,
         zIndex: 3,
         fillConfig: { color: rgba(44, 137, 91, 0.08) },
+        strokeConfig: { color: rgba(44, 137, 91, 0), lineWidth: 0 },
+      })
+      const contentBoundsEdges = Array.from({ length: 4 }, () => new Line({
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 0,
+        layer: plane.layer,
+        zIndex: 4,
         strokeConfig: { color: colors.green, lineWidth: 2 },
-      }) : undefined
+      })) as [Line, Line, Line, Line]
       const visibleWindow = name === "content" ? new Rectangle({
         x: 0,
         y: 0,
@@ -444,7 +466,8 @@ export function CoordinateStack({
           }),
           originValue,
           extentValue,
-          ...(contentBounds ? [contentBounds] : []),
+          contentBounds,
+          ...contentBoundsEdges,
           ...(visibleWindow ? [visibleWindow] : []),
           shape,
           shapeValue,
@@ -465,6 +488,7 @@ export function CoordinateStack({
         gridX,
         gridY,
         contentBounds,
+        contentBoundsEdges,
         visibleWindow,
         visibleWindowValue,
       }

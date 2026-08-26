@@ -10,8 +10,15 @@ export const LAB_SHAPE: Readonly<Rect> = {
 export const LAB_CONTENT_BOUNDS: Readonly<Rect> = {
   x: 0,
   y: 0,
-  width: 600,
-  height: 450,
+  width: 480,
+  height: 360,
+}
+
+export type LineSegment = {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
 }
 
 const RECT_CORNERS = [
@@ -36,7 +43,7 @@ export type CoordinateProbe = {
   }
 }
 
-export type ShapeProjection = {
+export type RectProjection = {
   client: Rect
   view: Rect
   content: Rect
@@ -90,11 +97,32 @@ export function correspondingRectCorners(from: Readonly<Rect>, to: Readonly<Rect
   }))
 }
 
-export function projectShape(
+export function clippedRectEdges(rect: Readonly<Rect>, clip: Readonly<Rect>) {
+  const left = Math.max(rect.x, clip.x)
+  const top = Math.max(rect.y, clip.y)
+  const right = Math.min(rect.x + rect.width, clip.x + clip.width)
+  const bottom = Math.min(rect.y + rect.height, clip.y + clip.height)
+  if (right <= left || bottom <= top) return [undefined, undefined, undefined, undefined]
+
+  const horizontal = (y: number): LineSegment => ({ x1: left, y1: y, x2: right, y2: y })
+  const vertical = (x: number): LineSegment => ({ x1: x, y1: top, x2: x, y2: bottom })
+  return [
+    rect.y >= clip.y && rect.y <= clip.y + clip.height ? horizontal(rect.y) : undefined,
+    rect.x + rect.width >= clip.x && rect.x + rect.width <= clip.x + clip.width
+      ? vertical(rect.x + rect.width)
+      : undefined,
+    rect.y + rect.height >= clip.y && rect.y + rect.height <= clip.y + clip.height
+      ? horizontal(rect.y + rect.height)
+      : undefined,
+    rect.x >= clip.x && rect.x <= clip.x + clip.width ? vertical(rect.x) : undefined,
+  ]
+}
+
+export function projectContentRect(
   probe: CoordinateProbe,
   viewport: Readonly<ViewportState>,
   content: Readonly<Rect> = LAB_SHAPE,
-): ShapeProjection {
+): RectProjection {
   const view = {
     x: content.x * viewport.scale + viewport.x,
     y: content.y * viewport.scale + viewport.y,

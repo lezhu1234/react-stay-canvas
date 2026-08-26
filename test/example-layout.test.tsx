@@ -23,9 +23,11 @@ import DiagramExample from "../example/src/examples/integrated/DiagramExample"
 import MotionStudioExample from "../example/src/examples/integrated/MotionStudioExample"
 import CoordinatesExample from "../example/src/examples/simple/CoordinatesExample"
 import {
+  clippedRectEdges,
   correspondingRectCorners,
   LAB_CONTENT_BOUNDS,
   LAB_SHAPE,
+  projectContentRect,
 } from "../example/src/examples/simple/coordinateLabModel"
 import { type ExampleDefinition } from "../example/src/examples/types"
 import { I18nProvider } from "../example/src/i18n"
@@ -89,6 +91,37 @@ describe("Example Canvas workspace", () => {
       { from: { x: 110, y: 20 }, to: { x: 230, y: 40 } },
       { from: { x: 110, y: 80 }, to: { x: 230, y: 160 } },
       { from: { x: 10, y: 80 }, to: { x: 30, y: 160 } },
+    ])
+
+    expect(projectContentRect({
+      client: { x: 0, y: 0 },
+      view: { x: 0, y: 0 },
+      content: { x: 0, y: 0 },
+      viewSize: { width: 320, height: 240 },
+      surface: { left: 100, top: 50, width: 640, height: 480, scaleX: 0.5, scaleY: 0.5 },
+    }, { x: 40, y: 20, scale: 2 }, LAB_CONTENT_BOUNDS)).toEqual({
+      content: { x: 0, y: 0, width: 480, height: 360 },
+      view: { x: 40, y: 20, width: 960, height: 720 },
+      client: { x: 180, y: 90, width: 1920, height: 1440 },
+    })
+
+    expect(clippedRectEdges(
+      { x: -20, y: -10, width: 120, height: 80 },
+      { x: 0, y: 0, width: 80, height: 60 },
+    )).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ])
+    expect(clippedRectEdges(
+      { x: 10, y: 10, width: 100, height: 80 },
+      { x: 0, y: 0, width: 80, height: 60 },
+    )).toEqual([
+      { x1: 10, y1: 10, x2: 80, y2: 10 },
+      undefined,
+      undefined,
+      { x1: 10, y1: 10, x2: 10, y2: 60 },
     ])
   })
 
@@ -213,7 +246,7 @@ describe("Example Canvas workspace", () => {
     const visibleWindow = proofValue("Visible Content window")
     expect(contentGeometry).toBe("145, 155 / 190×120")
     expect(container.querySelector(".coordinate-proof-stable small")?.textContent)
-      .toContain("Demo Content bounds 0, 0 / 600×450")
+      .toContain("Demo Content bounds 0, 0 / 480×360")
     expect(container.querySelector(".coordinate-proof-stable small")?.textContent)
       .toContain("Root itself has no geometry")
 

@@ -25,7 +25,7 @@ import {
   formatRect,
   LAB_CONTENT_BOUNDS,
   LAB_SHAPE,
-  projectShape,
+  projectContentRect,
   type CoordinateProbe,
   visibleContentRange,
 } from "./coordinateLabModel"
@@ -293,7 +293,7 @@ export default function CoordinatesExample() {
     syncProbeWithViewport(viewport)
   }
 
-  const shapeProjection = projectShape(probe, viewport)
+  const shapeProjection = projectContentRect(probe, viewport)
   const visibleContent = visibleContentRange(probe, viewport)
   const visibleWindowIsContained = containsRect(contentReferenceRange(probe), visibleContent)
   const viewWidthFormula = `${LAB_SHAPE.width} × ${viewport.scale.toFixed(2)} = ${Math.round(shapeProjection.view.width)}`

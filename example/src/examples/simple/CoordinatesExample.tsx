@@ -264,7 +264,7 @@ export default function CoordinatesExample() {
     const dot = new Circle({ x: 0, y: 0, radius: 6, zIndex: 20, fillConfig: { color: colors.orange } })
     const horizontal = new Line({ x1: -18, y1: 0, x2: 18, y2: 0, zIndex: 19, strokeConfig: { color: colors.orange, lineWidth: 2 } })
     const vertical = new Line({ x1: 0, y1: -18, x2: 0, y2: 18, zIndex: 19, strokeConfig: { color: colors.orange, lineWidth: 2 } })
-    const label = new StayText({ x: 14, y: -22, text: "Content", textBaseline: "bottom", font: { size: 11, fontWeight: 700 }, zIndex: 20, fillConfig: { color: colors.orange } })
+    const label = new StayText({ x: 14, y: -22, text: "e.point (Content)", textBaseline: "bottom", font: { size: 11, fontWeight: 700 }, zIndex: 20, fillConfig: { color: colors.orange } })
     markerRef.current = { dot, horizontal, vertical, label }
     tools.appendChild({ className: "coordinate-marker", shape: [dot, horizontal, vertical, label] })
     const surface = surfaceFrame(gridChild.canvas.getSurfaceMetrics())
@@ -304,8 +304,13 @@ export default function CoordinatesExample() {
       <div className="coordinate-workspace">
         <CoordinateStack probe={probe} viewport={viewport} />
         <CanvasCard
-          title={text("Live viewport", "实时可操作视口")}
-          description={text("Move the pointer, scroll to zoom, or hold Space and drag to pan.", "移动指针、滚轮缩放，或按住空格键拖动画布。")}
+          className="coordinate-live-card"
+          title={text("Live View surface", "实时 View 显示面")}
+          description={text(
+            "Move the pointer, scroll to zoom around it, use the buttons to zoom around the View center, or hold Space and drag to pan.",
+            "移动指针；滚轮以指针为锚点缩放；按钮以 View 中心缩放；按住空格键拖动画布。",
+          )}
+          viewportLabel={text("VIEW · rendered surface", "VIEW · 实时显示面")}
           wide
         >
           <StayCanvas
@@ -322,8 +327,8 @@ export default function CoordinatesExample() {
         </CanvasCard>
       </div>
       <Toolbar>
-        <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}>{text("Zoom in", "放大")}</Button>
-        <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}>{text("Zoom out", "缩小")}</Button>
+        <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}>{text("Center zoom in", "中心放大")}</Button>
+        <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}>{text("Center zoom out", "中心缩小")}</Button>
         <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}>{text("Pan +40,+20", "平移 +40,+20")}</Button>
         <Button onClick={() => changeViewport((tools) => tools.viewport.reset())}>{text("Reset view", "重置视图")}</Button>
       </Toolbar>

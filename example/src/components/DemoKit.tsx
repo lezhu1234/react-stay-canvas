@@ -123,11 +123,15 @@ export function CanvasCard({
   description,
   children,
   wide = false,
+  className,
+  viewportLabel,
 }: {
   title: string
   description?: string
   children: ReactNode
   wide?: boolean
+  className?: string
+  viewportLabel?: string
 }) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const viewportSize = useInitialViewportSize(viewportRef)
@@ -153,12 +157,15 @@ export function CanvasCard({
       : children
 
   return (
-    <section className={wide ? "canvas-card wide" : "canvas-card"}>
+    <section className={["canvas-card", wide ? "wide" : "", className ?? ""].filter(Boolean).join(" ")}>
       <div className="canvas-card-heading">
         <h2>{title}</h2>
         {description && <p>{description}</p>}
       </div>
-      <div className="canvas-viewport" ref={viewportRef}>{canvas}</div>
+      <div className="canvas-viewport" ref={viewportRef}>
+        {viewportLabel && <span className="canvas-viewport-label">{viewportLabel}</span>}
+        {canvas}
+      </div>
     </section>
   )
 }

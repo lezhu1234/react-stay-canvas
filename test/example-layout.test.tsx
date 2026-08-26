@@ -215,6 +215,11 @@ describe("Example Canvas workspace", () => {
     expect(workspace?.querySelectorAll(":scope > .canvas-card")).toHaveLength(2)
     expect(stackLayers).toHaveLength(3)
     expect(liveLayers).toHaveLength(2)
+    expect(workspace?.querySelector(".coordinate-live-card .canvas-card-heading")?.textContent)
+      .toContain("Live View surface")
+    expect(workspace?.querySelector(".coordinate-live-card .canvas-viewport-label")?.textContent)
+      .toBe("VIEW · rendered surface")
+    expect(workspace?.textContent).toContain("scroll to zoom around it")
 
     const width = stackLayers?.[0].width ?? 0
     const height = stackLayers?.[0].height ?? 0
@@ -252,7 +257,7 @@ describe("Example Canvas workspace", () => {
 
     const contentPlaneBeforeZoom = stackLayers?.[2].toDataURL()
     const zoomIn = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
-      .find((button) => button.textContent === "Zoom in")
+      .find((button) => button.textContent === "Center zoom in")
     act(() => zoomIn?.click())
     act(() => frames.splice(0).forEach((frame) => frame(16)))
     expect(proofValue("Content Shape geometry")).toBe(contentGeometry)
@@ -267,7 +272,7 @@ describe("Example Canvas workspace", () => {
     act(() => reset?.click())
 
     const zoomOut = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
-      .find((button) => button.textContent === "Zoom out")
+      .find((button) => button.textContent === "Center zoom out")
     act(() => {
       for (let click = 0; click < 6; click += 1) zoomOut?.click()
     })

@@ -58,7 +58,6 @@ type PlaneRuntime = PlaneDefinition & {
   gridX: Line[]
   gridY: Line[]
   contentBounds?: Rectangle
-  contentBoundsValue?: StayText
   visibleWindow?: Rectangle
   visibleWindowValue?: StayText
 }
@@ -217,12 +216,6 @@ function updateContentReference(
     fillConfig: { color: rgba(44, 137, 91, contentBounds ? 0.08 : 0) },
     strokeConfig: { color: rgba(44, 137, 91, contentBounds ? 0.95 : 0), lineWidth: 2 },
   })
-  plane.contentBoundsValue?.update({
-    x: Math.max(12, contentBounds?.x ?? 12) + 6,
-    y: Math.max(76, contentBounds?.y ?? 76) + 5,
-    text: `Demo Content bounds ${formatRect(LAB_CONTENT_BOUNDS)}`,
-  })
-
   const visibleRange = visibleContentRange(probe, viewport)
   const containsVisibleWindow = containsRect(range, visibleRange)
   const visibleWindow = clippedRect(rectOnPlane(plane, visibleRange, range), plane)
@@ -313,7 +306,7 @@ export function CoordinateStack({
     const labels = {
       client: ["CLIENT", text("Canvas DOM box", "Canvas DOM 区域")],
       view: ["VIEW", text("Logical Canvas surface", "Canvas 逻辑显示面")],
-      content: ["CONTENT", text("Fixed reference, not Root bounds", "固定参考系，不是 Root 边界")],
+      content: ["CONTENT", text("Outer: fixed reference; solid rect: Demo bounds", "外框：固定参考系；实线框：Demo 边界")],
     }
     const planes = {} as Record<PlaneName, PlaneRuntime>
 
@@ -394,16 +387,6 @@ export function CoordinateStack({
         fillConfig: { color: rgba(44, 137, 91, 0.08) },
         strokeConfig: { color: colors.green, lineWidth: 2 },
       }) : undefined
-      const contentBoundsValue = name === "content" ? new StayText({
-        x: 12,
-        y: 76,
-        text: "Demo Content bounds",
-        layer: plane.layer,
-        zIndex: 6,
-        textBaseline: "top",
-        font: { size: 8, fontWeight: 700 },
-        fillConfig: { color: colors.green },
-      }) : undefined
       const visibleWindow = name === "content" ? new Rectangle({
         x: 0,
         y: 0,
@@ -465,7 +448,6 @@ export function CoordinateStack({
           ...(visibleWindow ? [visibleWindow] : []),
           shape,
           shapeValue,
-          ...(contentBoundsValue ? [contentBoundsValue] : []),
           ...(visibleWindowValue ? [visibleWindowValue] : []),
           dot,
           value,
@@ -483,7 +465,6 @@ export function CoordinateStack({
         gridX,
         gridY,
         contentBounds,
-        contentBoundsValue,
         visibleWindow,
         visibleWindowValue,
       }

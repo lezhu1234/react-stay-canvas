@@ -16,7 +16,7 @@ import {
 import { Button, CanvasCard, colors, DemoLayout, rgba, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition } from "../actionEventGuards"
-import { CoordinateStack } from "./CoordinateStack"
+import { CoordinateStack, type CoordinateMappingFocus } from "./CoordinateStack"
 import {
   containsRect,
   clientReferenceRange,
@@ -125,6 +125,7 @@ export default function CoordinatesExample() {
   const [probe, setProbe] = useState<CoordinateProbe>(INITIAL_PROBE)
   const [eventPoint, setEventPoint] = useState<Coordinate>({ x: 0, y: 0 })
   const [viewport, setViewport] = useState<Readonly<ViewportState>>({ x: 0, y: 0, scale: 1 })
+  const [mappingFocus, setMappingFocus] = useState<CoordinateMappingFocus>("view-client")
 
   const moveMarker = (point: Coordinate) => {
     const marker = markerRef.current
@@ -202,6 +203,7 @@ export default function CoordinatesExample() {
             return { originViewport: props.tools.viewport.get() }
           },
           move: () => {
+            setMappingFocus("content-view")
             const viewport = props.tools.viewport.panBy(props.e.movement ?? { x: 0, y: 0 })
             observe(props, true, viewport)
             return props.composeStore
@@ -229,6 +231,7 @@ export default function CoordinatesExample() {
         callback: ({ e, originEvent, tools, canvas }) => {
           if (!hasPointerPosition(e) || e.deltaY === undefined || !(originEvent instanceof MouseEvent)) return
           originEvent.preventDefault()
+          setMappingFocus("content-view")
           const viewport = tools.viewport.zoomBy(Math.max(0.1, 1 - e.deltaY * 0.001), e.point)
           const client = { x: originEvent.clientX, y: originEvent.clientY }
           const view = canvas.clientToCanvasPoint(client.x, client.y)
@@ -337,11 +340,13 @@ export default function CoordinatesExample() {
   const changeViewport = (action: (tools: StayTools) => Readonly<ViewportState>) => {
     const tools = toolsRef.current
     if (!tools) return
+    setMappingFocus("content-view")
     const viewport = action(tools)
     syncProbeWithViewport(viewport)
   }
 
   const updateCssDisplay = (patch: Partial<CssDisplayTransform>) => {
+    setMappingFocus("view-client")
     setCssDisplay((current) => ({ ...current, ...patch }))
   }
 
@@ -354,7 +359,7 @@ export default function CoordinatesExample() {
   return (
     <DemoLayout>
       <div className="coordinate-workspace">
-        <CoordinateStack clientRange={clientRange} probe={probe} viewport={viewport} />
+        <CoordinateStack clientRange={clientRange} mappingFocus={mappingFocus} probe={probe} viewport={viewport} />
         <CanvasCard
           canvasDisplayTransform={cssDisplay}
           className="coordinate-live-card"
@@ -437,7 +442,10 @@ export default function CoordinatesExample() {
               />
             </label>
           </div>
-          <Button onClick={() => setCssDisplay({ ...DEFAULT_CSS_DISPLAY })}>{text("Reset CSS display", "重置 CSS 显示")}</Button>
+          <Button onClick={() => {
+            setMappingFocus("view-client")
+            setCssDisplay({ ...DEFAULT_CSS_DISPLAY })
+          }}>{text("Reset CSS display", "重置 CSS 显示")}</Button>
         </section>
         <section className="coordinate-operation-group">
           <div className="coordinate-operation-heading">

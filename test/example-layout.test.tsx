@@ -244,9 +244,11 @@ describe("Example Canvas workspace", () => {
     act(() => frames.splice(0).forEach((frame) => frame(0)))
 
     const workspace = container.querySelector(".coordinate-workspace")
+    const stackCard = workspace?.querySelector(".coordinate-stack-card")
     const stackLayers = workspace?.querySelectorAll<HTMLCanvasElement>(".coordinate-stack-canvas canvas")
     const liveLayers = workspace?.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")
     expect(workspace?.querySelectorAll(":scope > .canvas-card")).toHaveLength(2)
+    expect(stackCard?.classList.contains("coordinate-focus-view-client")).toBe(true)
     expect(stackLayers).toHaveLength(3)
     expect(liveLayers).toHaveLength(2)
     expect(workspace?.querySelector(".coordinate-live-card .canvas-card-heading")?.textContent)
@@ -337,6 +339,7 @@ describe("Example Canvas workspace", () => {
       setInputValue(offsetXInput, "32")
       setInputValue(offsetYInput, "24")
     })
+    expect(stackCard?.classList.contains("coordinate-focus-view-client")).toBe(true)
     expect(displayTransform?.style.transform).toBe("translate(32px, 24px) scale(0.65, 0.9)")
     expect(workspace?.querySelector(".coordinate-live-card .canvas-viewport-label")?.textContent)
       .toBe("CLIENT DOM · 65% × 90%")
@@ -359,11 +362,13 @@ describe("Example Canvas workspace", () => {
     const identityPan = [...container.querySelectorAll<HTMLButtonElement>(".coordinate-operations button")]
       .find((button) => button.textContent === "Pan +40,+20")
     act(() => identityPan?.click())
+    expect(stackCard?.classList.contains("coordinate-focus-content-view")).toBe(true)
     expect(proofValue("Viewport")).toBe("40, 20 / 100%")
     act(() => {
       setInputValue(scaleXInput, "100")
       setInputValue(scaleYInput, "100")
     })
+    expect(stackCard?.classList.contains("coordinate-focus-view-client")).toBe(true)
     expect(displayTransform?.style.transform).toBe("translate(0px, 0px) scale(1, 1)")
     expect(container.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")[1])
       .toBe(canvasBeforeIdentity)
@@ -380,6 +385,7 @@ describe("Example Canvas workspace", () => {
     const zoomIn = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
       .find((button) => button.textContent === "Center zoom in")
     act(() => zoomIn?.click())
+    expect(stackCard?.classList.contains("coordinate-focus-content-view")).toBe(true)
     act(() => frames.splice(0).forEach((frame) => frame(16)))
     expect(proofValue("Content Shape geometry")).toBe(contentGeometry)
     expect(proofValue("View projection")).not.toBe(viewProjection)

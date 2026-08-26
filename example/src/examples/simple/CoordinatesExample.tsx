@@ -13,10 +13,21 @@ import {
   type ViewportState,
 } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition } from "../actionEventGuards"
-import { CoordinateStack, type CoordinateProbe } from "./CoordinateStack"
+import { CoordinateStack } from "./CoordinateStack"
+import {
+  containsRect,
+  contentAtView,
+  contentReferenceRange,
+  formatPoint,
+  formatRect,
+  LAB_SHAPE,
+  projectShape,
+  type CoordinateProbe,
+  visibleContentRange,
+} from "./coordinateLabModel"
 
 const isSpacePressed = (keys: Set<string>) => keys.has(" ") || keys.has("Spacebar")
 
@@ -51,15 +62,6 @@ const spaceStartMove: EventProps<string> = {
   },
 }
 
-const rounded = ({ x, y }: Coordinate) => `${Math.round(x)}, ${Math.round(y)}`
-
-function contentAtView(view: Coordinate, viewport: Readonly<ViewportState>) {
-  return {
-    x: (view.x - viewport.x) / viewport.scale,
-    y: (view.y - viewport.y) / viewport.scale,
-  }
-}
-
 function surfaceFrame({
   logicalWidth,
   logicalHeight,
@@ -80,9 +82,6 @@ function surfaceFrame({
     scaleY: logicalHeight / height,
   }
 }
-
-const scalePair = ({ scaleX, scaleY }: CoordinateProbe["surface"]) =>
-  `${scaleX.toFixed(2)}×, ${scaleY.toFixed(2)}×`
 
 const scaleFactors = ({ scaleX, scaleY }: CoordinateProbe["surface"]) =>
   `(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)})`
@@ -231,12 +230,14 @@ export default function CoordinatesExample() {
       ...current,
       viewSize: { width: gridChild.canvas.width, height: gridChild.canvas.height },
     }))
+    const shapeCenterX = LAB_SHAPE.x + LAB_SHAPE.width / 2
+    const shapeCenterY = LAB_SHAPE.y + LAB_SHAPE.height / 2
     tools.appendChild({
       className: "coordinate-object",
       shape: [
-        new Rectangle({ x: 145, y: 155, width: 190, height: 120, fillConfig: { color: colors.blueSoft }, strokeConfig: { color: colors.blue, lineWidth: 2 } }),
-        new StayText({ x: 240, y: 207, text: text("Content object", "Content 中的对象"), textAlign: "center", textBaseline: "middle", font: { size: 18, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
-        new StayText({ x: 240, y: 239, text: "x=145  y=155", textAlign: "center", textBaseline: "middle", font: { size: 12 }, fillConfig: { color: colors.gray } }),
+        new Rectangle({ ...LAB_SHAPE, fillConfig: { color: colors.blueSoft }, strokeConfig: { color: colors.blue, lineWidth: 2 } }),
+        new StayText({ x: shapeCenterX, y: shapeCenterY - 8, text: text("Same Shape", "同一个 Shape"), textAlign: "center", textBaseline: "middle", font: { size: 18, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
+        new StayText({ x: shapeCenterX, y: shapeCenterY + 24, text: `Content ${formatRect(LAB_SHAPE)}`, textAlign: "center", textBaseline: "middle", font: { size: 12 }, fillConfig: { color: colors.gray } }),
       ],
     })
     const dot = new Circle({ x: 0, y: 0, radius: 6, zIndex: 20, fillConfig: { color: colors.orange } })
@@ -271,6 +272,12 @@ export default function CoordinatesExample() {
     syncProbeWithViewport(viewport)
   }
 
+  const shapeProjection = projectShape(probe, viewport)
+  const visibleContent = visibleContentRange(probe, viewport)
+  const visibleWindowIsContained = containsRect(contentReferenceRange(probe), visibleContent)
+  const viewWidthFormula = `${LAB_SHAPE.width} × ${viewport.scale.toFixed(2)} = ${Math.round(shapeProjection.view.width)}`
+  const clientWidthFormula = `${Math.round(shapeProjection.view.width)} ÷ ${probe.surface.scaleX.toFixed(2)} = ${Math.round(shapeProjection.client.width)}`
+
   return (
     <DemoLayout>
       <div className="coordinate-workspace">
@@ -293,39 +300,68 @@ export default function CoordinatesExample() {
           />
         </CanvasCard>
       </div>
-      <div className="coordinate-flow" aria-label={text("Coordinate conversion flow", "坐标转换流程")}>
-        <p>{text("The same pointer, expressed three ways", "同一个指针，三种坐标表达")}</p>
-        <div className="coordinate-flow-value coordinate-flow-client">
-          <span>Client</span><strong>{rounded(probe.client)}</strong><small>{text("Browser-window position", "浏览器窗口位置")}</small>
-        </div>
-        <div className="coordinate-flow-operation">
-          <span>{text("Subtract the Canvas DOM origin, then apply display scale", "减去 Canvas DOM 原点，再乘显示比例")}</span>
-          <code>[({rounded(probe.client)}) - ({Math.round(probe.surface.left)}, {Math.round(probe.surface.top)})] × {scaleFactors(probe.surface)}</code>
-        </div>
-        <div className="coordinate-flow-value coordinate-flow-view">
-          <span>View</span><strong>{rounded(probe.view)}</strong><small>{text("Logical Canvas surface", "Canvas 逻辑显示面")}</small>
-        </div>
-        <div className="coordinate-flow-operation">
-          <span>{text("Undo viewport offset and scale", "撤销 viewport 平移与缩放")}</span>
-          <code>[({rounded(probe.view)}) - ({Math.round(viewport.x)}, {Math.round(viewport.y)})] ÷ {viewport.scale.toFixed(2)}</code>
-        </div>
-        <div className="coordinate-flow-value coordinate-flow-result">
-          <span>Content</span><strong>{rounded(probe.content)}</strong><small>{text("Result in the current viewport", "当前 viewport 下的转换结果")}</small>
-        </div>
-      </div>
-      <StatusGrid items={[
-        [text("Canvas DOM origin", "Canvas DOM 原点"), `${Math.round(probe.surface.left)}, ${Math.round(probe.surface.top)}`],
-        [text("Display scale", "显示比例"), scalePair(probe.surface)],
-        ["Viewport", `${Math.round(viewport.x)}, ${Math.round(viewport.y)} / ${Math.round(viewport.scale * 100)}%`],
-        [text("Last event e.point", "最近事件 e.point"), rounded(eventPoint)],
-        [text("Child geometry", "Child 几何"), text("Never changed", "始终不变")],
-      ]} />
       <Toolbar>
         <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}>{text("Zoom in", "放大")}</Button>
         <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}>{text("Zoom out", "缩小")}</Button>
         <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}>{text("Pan +40,+20", "平移 +40,+20")}</Button>
         <Button onClick={() => changeViewport((tools) => tools.viewport.reset())}>{text("Reset view", "重置视图")}</Button>
       </Toolbar>
+      <div className="coordinate-zoom-proof" aria-label={text("Zoom cause and effect", "缩放因果证据")}>
+        <p>{text("Zoom changes the projection, not the Shape", "缩放改变投影，不改变 Shape")}</p>
+        <dl>
+          <div className="coordinate-proof-stable">
+            <dt>{text("Content Shape geometry", "Content Shape 几何")}</dt>
+            <dd>{formatRect(LAB_SHAPE)}</dd>
+            <small>{text(
+              `Fixed source data. View ${Math.round(probe.viewSize.width)}×${Math.round(probe.viewSize.height)} and DOM ${Math.round(probe.surface.width)}×${Math.round(probe.surface.height)} also stay fixed.`,
+              `固定的源数据。View ${Math.round(probe.viewSize.width)}×${Math.round(probe.viewSize.height)} 与 DOM ${Math.round(probe.surface.width)}×${Math.round(probe.surface.height)} 也保持不变。`,
+            )}</small>
+          </div>
+          <div>
+            <dt>Viewport</dt>
+            <dd>{Math.round(viewport.x)}, {Math.round(viewport.y)} / {Math.round(viewport.scale * 100)}%</dd>
+            <small>{text("The value changed by zoom", "缩放实际修改的值")}</small>
+          </div>
+          <div className="coordinate-proof-changing">
+            <dt>{text("View projection", "View 中的投影")}</dt>
+            <dd>{formatRect(shapeProjection.view)}</dd>
+            <code>{viewWidthFormula}</code>
+          </div>
+          <div className="coordinate-proof-changing">
+            <dt>{text("Client footprint", "Client 中的显示区域")}</dt>
+            <dd>{formatRect(shapeProjection.client)}</dd>
+            <code>{clientWidthFormula}</code>
+          </div>
+          <div>
+            <dt>{text("Visible Content window", "可见 Content 窗口")}</dt>
+            <dd>{formatRect(visibleContent)}</dd>
+            <small>{visibleWindowIsContained
+              ? text("Fully shown in the fixed reference. It changes inversely while View stays fixed.", "完整显示在固定参考系中。View 不变时，它会反向变化。")
+              : text("Extends beyond the fixed reference. Only the intersection is filled; no false boundary is drawn.", "超出固定参考系。只填充交集，不绘制伪造边界。")}</small>
+          </div>
+        </dl>
+      </div>
+      <div className="coordinate-flow" aria-label={text("Coordinate conversion flow", "坐标转换流程")}>
+        <p>{text("The same pointer, expressed three ways", "同一个指针，三种坐标表达")}</p>
+        <div className="coordinate-flow-value coordinate-flow-client">
+          <span>Client</span><strong>{formatPoint(probe.client)}</strong><small>{text("Browser-window position", "浏览器窗口位置")}</small>
+        </div>
+        <div className="coordinate-flow-operation">
+          <span>{text("Subtract the Canvas DOM origin, then apply display scale", "减去 Canvas DOM 原点，再乘显示比例")}</span>
+          <code>[({formatPoint(probe.client)}) - ({Math.round(probe.surface.left)}, {Math.round(probe.surface.top)})] × {scaleFactors(probe.surface)}</code>
+        </div>
+        <div className="coordinate-flow-value coordinate-flow-view">
+          <span>View</span><strong>{formatPoint(probe.view)}</strong><small>{text("Logical Canvas surface", "Canvas 逻辑显示面")}</small>
+        </div>
+        <div className="coordinate-flow-operation">
+          <span>{text("Undo viewport offset and scale", "撤销 viewport 平移与缩放")}</span>
+          <code>[({formatPoint(probe.view)}) - ({Math.round(viewport.x)}, {Math.round(viewport.y)})] ÷ {viewport.scale.toFixed(2)}</code>
+        </div>
+        <div className="coordinate-flow-value coordinate-flow-result">
+          <span>Content</span><strong>{formatPoint(probe.content)}</strong><small>{text("Result in the current viewport", "当前 viewport 下的转换结果")}</small>
+        </div>
+        <p className="coordinate-event-sample">{text("Last event e.point", "最近事件 e.point")}: <code>{formatPoint(eventPoint)}</code></p>
+      </div>
     </DemoLayout>
   )
 }

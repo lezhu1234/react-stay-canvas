@@ -111,13 +111,14 @@ export const catalog: ExampleDefinition[] = [
     sourcePaths: [
       "./examples/simple/CoordinatesExample.tsx",
       "./examples/simple/CoordinateStack.tsx",
+      "./examples/simple/coordinateLabModel.ts",
     ],
     group: "Simple",
     order: 9,
     title: l("Coordinate spaces and viewport", "坐标空间与视口"),
     shortTitle: l("Coordinates", "坐标"),
-    summary: l("Follow the actual values and formulas that map one pointer from Canvas DOM Client coordinates to View and Content.", "用实际数值和公式观察同一指针如何从 Canvas DOM 的 Client 坐标换算到 View，再换算到 Content。"),
-    features: ["Client → View → Content", "Child transform", "e.point", "tools.viewport"],
+    summary: l("See one fixed Content Shape projected into View and Client while viewport zoom changes only its visible footprint.", "观察固定不变的 Content Shape 如何投影到 View 与 Client，并验证 viewport 缩放只改变显示结果。"),
+    features: ["Content → View → Client", "Shape projection", "Child transform", "e.point", "tools.viewport"],
     component: CoordinatesExample,
   },
   {

@@ -140,7 +140,7 @@ describe("Example Canvas workspace", () => {
     expect(workspace?.querySelector(":scope > .diagram-canvas-area .diagram-canvas")).not.toBeNull()
   })
 
-  it("renders each coordinate range as a transformed Rectangle and explains both conversions", () => {
+  it("keeps Shape geometry fixed while zoom changes its View and Client projections", () => {
     const frames: FrameRequestCallback[] = []
     window.requestAnimationFrame = (callback) => frames.push(callback)
     const container = document.createElement("div")
@@ -179,6 +179,47 @@ describe("Example Canvas workspace", () => {
     expect(flow?.textContent).not.toContain("The coordinate exposed as e.point")
     expect(flow?.textContent).not.toContain("1 · Client")
 
+    const proofRows = [...container.querySelectorAll(".coordinate-zoom-proof dl > div")]
+    const proofValue = (label: string) => proofRows
+      .find((item) => item.querySelector("dt")?.textContent === label)
+      ?.querySelector("dd")?.textContent
+    const contentGeometry = proofValue("Content Shape geometry")
+    const viewProjection = proofValue("View projection")
+    const clientFootprint = proofValue("Client footprint")
+    const visibleWindow = proofValue("Visible Content window")
+    expect(contentGeometry).toBe("145, 155 / 190×120")
+    expect(container.querySelector(".coordinate-proof-stable small")?.textContent)
+      .toContain("also stay fixed")
+
+    const contentPlaneBeforeZoom = stackLayers?.[2].toDataURL()
+    const zoomIn = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
+      .find((button) => button.textContent === "Zoom in")
+    act(() => zoomIn?.click())
+    act(() => frames.splice(0).forEach((frame) => frame(16)))
+    expect(proofValue("Content Shape geometry")).toBe(contentGeometry)
+    expect(proofValue("View projection")).not.toBe(viewProjection)
+    expect(proofValue("View projection")).toContain("228×144")
+    expect(proofValue("Client footprint")).not.toBe(clientFootprint)
+    expect(proofValue("Visible Content window")).not.toBe(visibleWindow)
+    expect(stackLayers?.[2].toDataURL()).not.toBe(contentPlaneBeforeZoom)
+
+    const reset = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
+      .find((button) => button.textContent === "Reset view")
+    act(() => reset?.click())
+
+    const zoomOut = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
+      .find((button) => button.textContent === "Zoom out")
+    act(() => {
+      for (let click = 0; click < 6; click += 1) zoomOut?.click()
+    })
+    expect(proofValue("Viewport")).toContain("40%")
+    expect(proofRows
+      .find((item) => item.querySelector("dt")?.textContent === "Visible Content window")
+      ?.querySelector("small")?.textContent)
+      .toContain("Fully shown in the fixed reference")
+    expect(proofValue("Content Shape geometry")).toBe(contentGeometry)
+    act(() => reset?.click())
+
     const contentBeforePan = flow?.querySelector(".coordinate-flow-result strong")?.textContent
     const pan = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
       .find((button) => button.textContent === "Pan +40,+20")
@@ -188,13 +229,6 @@ describe("Example Canvas workspace", () => {
       .not.toBe(contentBeforePan)
     expect(flow?.querySelectorAll(".coordinate-flow-operation code")[1]?.textContent)
       .toContain("(40, 20)")
-
-    const contentBeforeZoom = stackLayers?.[2].toDataURL()
-    const zoomIn = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
-      .find((button) => button.textContent === "Zoom in")
-    act(() => zoomIn?.click())
-    act(() => frames.splice(0).forEach((frame) => frame(32)))
-    expect(stackLayers?.[2].toDataURL()).not.toBe(contentBeforeZoom)
   })
 
   it("keeps valid coordinate evidence across capture loss and wheel input", () => {
@@ -219,7 +253,7 @@ describe("Example Canvas workspace", () => {
       })
 
       const viewBeforeCancellation = container.querySelector(".coordinate-flow-view strong")?.textContent
-      const viewportBeforeCancellation = [...container.querySelectorAll(".status-grid div")]
+      const viewportBeforeCancellation = [...container.querySelectorAll(".coordinate-zoom-proof dl > div")]
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
       expect(viewBeforeCancellation).toBe("150, 130")
       expect(viewportBeforeCancellation?.querySelector("dd")?.textContent).toBe("50, 30 / 100%")
@@ -228,7 +262,7 @@ describe("Example Canvas workspace", () => {
         top.dispatchEvent(pointer("lostpointercapture", 0, 0, { buttons: 1 }))
       })
 
-      const viewportAfterCancellation = [...container.querySelectorAll(".status-grid div")]
+      const viewportAfterCancellation = [...container.querySelectorAll(".coordinate-zoom-proof dl > div")]
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
       expect(container.querySelector(".coordinate-flow-view strong")?.textContent).toBe(viewBeforeCancellation)
       expect(viewportAfterCancellation?.querySelector("dd")?.textContent).toBe("0, 0 / 100%")
@@ -239,18 +273,17 @@ describe("Example Canvas workspace", () => {
         top.dispatchEvent(pointer("lostpointercapture", 0, 0, { buttons: 0 }))
       })
 
-      const viewportAfterRelease = [...container.querySelectorAll(".status-grid div")]
+      const viewportAfterRelease = [...container.querySelectorAll(".coordinate-zoom-proof dl > div")]
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
-      const eventPoint = [...container.querySelectorAll(".status-grid div")]
-        .find((item) => item.querySelector("dt")?.textContent === "Last event e.point")
+      const eventPoint = container.querySelector(".coordinate-event-sample code")
       expect(container.querySelector(".coordinate-flow-view strong")?.textContent).toBe("240, 230")
       expect(viewportAfterRelease?.querySelector("dd")?.textContent).toBe("40, 30 / 100%")
-      expect(eventPoint?.querySelector("dd")?.textContent).toBe("200, 200")
+      expect(eventPoint?.textContent).toBe("200, 200")
 
       const reset = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
         .find((button) => button.textContent === "Reset view")
       act(() => reset?.click())
-      expect(eventPoint?.querySelector("dd")?.textContent).toBe("200, 200")
+      expect(eventPoint?.textContent).toBe("200, 200")
 
       act(() => {
         top.dispatchEvent(new WheelEvent("wheel", {
@@ -261,7 +294,7 @@ describe("Example Canvas workspace", () => {
           deltaY: -100,
         }))
       })
-      expect(eventPoint?.querySelector("dd")?.textContent).toBe("80, 90")
+      expect(eventPoint?.textContent).toBe("80, 90")
     } finally {
       restorePointerEvents()
     }

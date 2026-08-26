@@ -7,6 +7,7 @@ import {
   StayText,
   type ChildTransform,
   type Coordinate,
+  type Rect,
   type StayInstantChild,
   type StayTools,
   type ViewportState,
@@ -14,31 +15,24 @@ import {
 
 import { CanvasCard, colors, rgba, sceneCanvasArea } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
+import {
+  containsRect,
+  contentReferenceRange,
+  formatPoint,
+  formatRect,
+  projectShape,
+  type CoordinateProbe,
+  visibleContentRange,
+} from "./coordinateLabModel"
 
 const STACK_WIDTH = 320
 const STACK_HEIGHT = 300
 const PLANE_GRID_COLUMNS = 12
 const PLANE_GRID_ROWS = 4
-const CONTENT_GRID_COLUMNS = 36
-const CONTENT_GRID_ROWS = 18
+const CONTENT_GRID_LINES = 36
 const CONTENT_GRID_SIZE = 50
 
 type PlaneName = "client" | "view" | "content"
-
-export type CoordinateProbe = {
-  client: Coordinate
-  view: Coordinate
-  content: Coordinate
-  viewSize: { width: number; height: number }
-  surface: {
-    left: number
-    top: number
-    width: number
-    height: number
-    scaleX: number
-    scaleY: number
-  }
-}
 
 type PlaneRange = { x: number; y: number; width: number; height: number }
 
@@ -57,15 +51,22 @@ type PlaneRuntime = PlaneDefinition & {
   value: StayText
   originValue: StayText
   extentValue: StayText
+  shape: Rectangle
+  shapeValue: StayText
   xAxis: Line
   yAxis: Line
+  xAxisValue: StayText
+  yAxisValue: StayText
   gridX: Line[]
   gridY: Line[]
+  visibleWindow?: Rectangle
+  visibleWindowValue?: StayText
 }
 
 type StackRuntime = {
   planes: Record<PlaneName, PlaneRuntime>
   rays: [Line, Line]
+  shapeRays: [Line, Line]
 }
 
 function createDefinitions(width: number, height: number): Record<PlaneName, PlaneDefinition> {
@@ -99,21 +100,10 @@ function createDefinitions(width: number, height: number): Record<PlaneName, Pla
   }
 }
 
-const format = (x: number, y: number) => `${Math.round(x)}, ${Math.round(y)}`
-
-function visibleContentRange(probe: CoordinateProbe, viewport: Readonly<ViewportState>): PlaneRange {
-  return {
-    x: -viewport.x / viewport.scale,
-    y: -viewport.y / viewport.scale,
-    width: probe.viewSize.width / viewport.scale,
-    height: probe.viewSize.height / viewport.scale,
-  }
-}
-
 function planeRange(
   name: PlaneName,
   probe: CoordinateProbe,
-  viewport: Readonly<ViewportState>,
+  _viewport: Readonly<ViewportState>,
 ): PlaneRange {
   if (name === "client") {
     return {
@@ -126,7 +116,7 @@ function planeRange(
   if (name === "view") {
     return { x: 0, y: 0, width: probe.viewSize.width, height: probe.viewSize.height }
   }
-  return visibleContentRange(probe, viewport)
+  return contentReferenceRange(probe)
 }
 
 function valueForPlane(name: PlaneName, probe: CoordinateProbe) {
@@ -138,6 +128,23 @@ function pointOnPlane(plane: PlaneDefinition, value: Coordinate, range: PlaneRan
     x: (value.x - range.x) / Math.max(1, range.width) * plane.width,
     y: (value.y - range.y) / Math.max(1, range.height) * plane.height,
   }
+}
+
+function rectOnPlane(plane: PlaneDefinition, value: Rect, range: PlaneRange): Rect {
+  return {
+    ...pointOnPlane(plane, value, range),
+    width: value.width / Math.max(1, range.width) * plane.width,
+    height: value.height / Math.max(1, range.height) * plane.height,
+  }
+}
+
+function clippedRect(rect: Rect, plane: PlaneDefinition): Rect | undefined {
+  const x = Math.max(0, rect.x)
+  const y = Math.max(0, rect.y)
+  const right = Math.min(plane.width, rect.x + rect.width)
+  const bottom = Math.min(plane.height, rect.y + rect.height)
+  if (right <= x || bottom <= y) return undefined
+  return { x, y, width: right - x, height: bottom - y }
 }
 
 function gridPosition(index: number, count: number, start: number, size: number) {
@@ -171,17 +178,18 @@ function createGrid(
   return { gridX, gridY }
 }
 
-function updateContentGrid(plane: PlaneRuntime, viewport: Readonly<ViewportState>, probe: CoordinateProbe) {
-  const scaleX = plane.width / Math.max(1, probe.viewSize.width)
-  const scaleY = plane.height / Math.max(1, probe.viewSize.height)
-  const spacingX = CONTENT_GRID_SIZE * viewport.scale * scaleX
-  const spacingY = CONTENT_GRID_SIZE * viewport.scale * scaleY
-  const offsetX = ((viewport.x * scaleX) % spacingX + spacingX) % spacingX
-  const offsetY = ((viewport.y * scaleY) % spacingY + spacingY) % spacingY
-
+function updateContentReference(
+  plane: PlaneRuntime,
+  probe: CoordinateProbe,
+  viewport: Readonly<ViewportState>,
+) {
+  const range = contentReferenceRange(probe)
+  const firstX = Math.ceil(range.x / CONTENT_GRID_SIZE) * CONTENT_GRID_SIZE
+  const firstY = Math.ceil(range.y / CONTENT_GRID_SIZE) * CONTENT_GRID_SIZE
   plane.gridX.forEach((line, index) => {
-    const x = offsetX + index * spacingX
-    const visible = x <= plane.width
+    const coordinate = firstX + index * CONTENT_GRID_SIZE
+    const x = (coordinate - range.x) / range.width * plane.width
+    const visible = coordinate <= range.x + range.width
     line.update({
       x1: x,
       y1: 0,
@@ -191,8 +199,9 @@ function updateContentGrid(plane: PlaneRuntime, viewport: Readonly<ViewportState
     })
   })
   plane.gridY.forEach((line, index) => {
-    const y = offsetY + index * spacingY
-    const visible = y <= plane.height
+    const coordinate = firstY + index * CONTENT_GRID_SIZE
+    const y = (coordinate - range.y) / range.height * plane.height
+    const visible = coordinate <= range.y + range.height
     line.update({
       x1: 0,
       y1: y,
@@ -202,8 +211,9 @@ function updateContentGrid(plane: PlaneRuntime, viewport: Readonly<ViewportState
     })
   })
 
-  const originX = viewport.x * scaleX
-  const originY = viewport.y * scaleY
+  const origin = pointOnPlane(plane, { x: 0, y: 0 }, range)
+  const originX = origin.x
+  const originY = origin.y
   const xVisible = originY >= 0 && originY <= plane.height
   const yVisible = originX >= 0 && originX <= plane.width
   plane.xAxis.update({
@@ -220,7 +230,33 @@ function updateContentGrid(plane: PlaneRuntime, viewport: Readonly<ViewportState
     y2: plane.height,
     strokeConfig: { color: rgba(44, 137, 91, yVisible ? 0.9 : 0), lineWidth: 2 },
   })
+  plane.xAxisValue.update({
+    x: plane.width - 10,
+    y: Math.max(72, originY - 4),
+    text: textForAxis("x"),
+    fillConfig: { color: rgba(44, 137, 91, xVisible ? 0.9 : 0) },
+  })
+  plane.yAxisValue.update({
+    x: Math.min(plane.width - 74, originX + 6),
+    y: plane.height - 30,
+    text: textForAxis("y"),
+    fillConfig: { color: rgba(44, 137, 91, yVisible ? 0.9 : 0) },
+  })
+
+  const visibleRange = visibleContentRange(probe, viewport)
+  const containsVisibleWindow = containsRect(range, visibleRange)
+  const visibleWindow = clippedRect(rectOnPlane(plane, visibleRange, range), plane)
+  plane.visibleWindow?.update({
+    ...(visibleWindow ?? { x: 0, y: 0, width: 0, height: 0 }),
+    fillConfig: { color: rgba(44, 137, 91, visibleWindow ? 0.05 : 0) },
+    strokeConfig: { color: rgba(44, 137, 91, containsVisibleWindow ? 0.9 : 0), lineWidth: 2, dash: [5, 4] },
+  })
+  plane.visibleWindowValue?.update({
+    text: `${containsVisibleWindow ? "viewport" : "viewport extends outside reference"} ${formatRect(visibleRange)}`,
+  })
 }
+
+const textForAxis = (axis: "x" | "y") => axis === "x" ? "x-axis  y=0" : "y-axis  x=0"
 
 export function CoordinateStack({
   probe,
@@ -235,36 +271,59 @@ export function CoordinateStack({
   const update = (sample: CoordinateProbe, currentViewport: Readonly<ViewportState>) => {
     const runtime = runtimeRef.current
     if (!runtime) return
-    const points = (Object.keys(runtime.planes) as PlaneName[]).reduce((result, name) => {
+    const shapeProjection = projectShape(sample, currentViewport)
+    const points = {} as Record<PlaneName, Coordinate>
+    const shapeCenters = {} as Record<PlaneName, Coordinate>
+
+    for (const name of Object.keys(runtime.planes) as PlaneName[]) {
       const plane = runtime.planes[name]
       const range = planeRange(name, sample, currentViewport)
       const value = valueForPlane(name, sample)
       const localPoint = pointOnPlane(plane, value, range)
+      const localShape = rectOnPlane(plane, shapeProjection[name], range)
+      const visibleShape = clippedRect(localShape, plane)
       plane.dot.update(localPoint)
       plane.value.update({
         x: Math.min(plane.width - 112, Math.max(12, localPoint.x + 12)),
         y: Math.max(58, localPoint.y - 9),
-        text: text(`pointer ${format(value.x, value.y)}`, `指针 ${format(value.x, value.y)}`),
+        text: text(`pointer ${formatPoint(value)}`, `指针 ${formatPoint(value)}`),
+      })
+      plane.shape.update({
+        ...(visibleShape ?? { x: 0, y: 0, width: 0, height: 0 }),
+        fillConfig: { color: rgba(54, 105, 221, visibleShape ? 0.2 : 0) },
+        strokeConfig: { color: rgba(54, 105, 221, visibleShape ? 0.95 : 0), lineWidth: 2 },
+      })
+      plane.shapeValue.update({
+        x: Math.min(plane.width - 170, Math.max(12, localShape.x)),
+        y: Math.min(plane.height - 34, Math.max(76, localShape.y - 5)),
+        text: name === "content"
+          ? text(`Shape geometry ${formatRect(shapeProjection.content)} fixed`, `Shape 几何 ${formatRect(shapeProjection.content)} 不变`)
+          : text(`Shape projection ${formatRect(shapeProjection[name])}`, `Shape 投影 ${formatRect(shapeProjection[name])}`),
       })
       plane.originValue.update({
         text: text(
-          `range start ${format(range.x, range.y)}`,
-          `范围起点 ${format(range.x, range.y)}`,
+          `${name === "content" ? "reference" : "range"} start ${formatPoint(range)}`,
+          `${name === "content" ? "参考范围" : "范围"}起点 ${formatPoint(range)}`,
         ),
       })
       plane.extentValue.update({
         text: text(
-          `range end ${format(range.x + range.width, range.y + range.height)}`,
-          `范围终点 ${format(range.x + range.width, range.y + range.height)}`,
+          `${name === "content" ? "reference" : "range"} end ${formatPoint({ x: range.x + range.width, y: range.y + range.height })}`,
+          `${name === "content" ? "参考范围" : "范围"}终点 ${formatPoint({ x: range.x + range.width, y: range.y + range.height })}`,
         ),
       })
-      result[name] = plane.child.toContentPoint(localPoint)
-      return result
-    }, {} as Record<PlaneName, { x: number; y: number }>)
+      points[name] = plane.child.toContentPoint(localPoint)
+      shapeCenters[name] = plane.child.toContentPoint({
+        x: localShape.x + localShape.width / 2,
+        y: localShape.y + localShape.height / 2,
+      })
+    }
 
     runtime.rays[0].update({ x1: points.client.x, y1: points.client.y, x2: points.view.x, y2: points.view.y })
     runtime.rays[1].update({ x1: points.view.x, y1: points.view.y, x2: points.content.x, y2: points.content.y })
-    updateContentGrid(runtime.planes.content, currentViewport, sample)
+    runtime.shapeRays[0].update({ x1: shapeCenters.client.x, y1: shapeCenters.client.y, x2: shapeCenters.view.x, y2: shapeCenters.view.y })
+    runtime.shapeRays[1].update({ x1: shapeCenters.view.x, y1: shapeCenters.view.y, x2: shapeCenters.content.x, y2: shapeCenters.content.y })
+    updateContentReference(runtime.planes.content, sample, currentViewport)
   }
 
   useEffect(() => update(probe, viewport), [probe, viewport])
@@ -276,7 +335,7 @@ export function CoordinateStack({
     const labels = {
       client: ["CLIENT", text("Canvas DOM box", "Canvas DOM 区域")],
       view: ["VIEW", text("Logical Canvas surface", "Canvas 逻辑显示面")],
-      content: ["CONTENT", text("Visible scene window", "当前可见场景")],
+      content: ["CONTENT", text("Fixed reference, not Root bounds", "固定参考系，不是 Root 边界")],
     }
     const planes = {} as Record<PlaneName, PlaneRuntime>
 
@@ -284,8 +343,8 @@ export function CoordinateStack({
       const plane = definitions[name]
       const { gridX, gridY } = createGrid(
         plane,
-        name === "content" ? CONTENT_GRID_COLUMNS : PLANE_GRID_COLUMNS,
-        name === "content" ? CONTENT_GRID_ROWS : PLANE_GRID_ROWS,
+        name === "content" ? CONTENT_GRID_LINES : PLANE_GRID_COLUMNS,
+        name === "content" ? CONTENT_GRID_LINES : PLANE_GRID_ROWS,
       )
       const dot = new Circle({
         x: 0,
@@ -327,6 +386,26 @@ export function CoordinateStack({
         font: { size: 9 },
         fillConfig: { color: colors.gray },
       })
+      const shape = new Rectangle({
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        layer: plane.layer,
+        zIndex: 7,
+        fillConfig: { color: colors.blueSoft },
+        strokeConfig: { color: colors.blue, lineWidth: 2 },
+      })
+      const shapeValue = new StayText({
+        x: 12,
+        y: 76,
+        text: "Shape",
+        layer: plane.layer,
+        zIndex: 8,
+        textBaseline: "bottom",
+        font: { size: 9, fontWeight: 700 },
+        fillConfig: { color: colors.blue },
+      })
       const xAxis = new Line({
         x1: 0,
         y1: 0,
@@ -345,6 +424,47 @@ export function CoordinateStack({
         zIndex: 3,
         strokeConfig: { color: plane.stroke, lineWidth: 2 },
       })
+      const xAxisValue = new StayText({
+        x: plane.width - 10,
+        y: 72,
+        text: "x-axis  y=0",
+        textAlign: "right",
+        textBaseline: "bottom",
+        layer: plane.layer,
+        zIndex: 6,
+        font: { size: 8, fontWeight: 700 },
+        fillConfig: { color: name === "content" ? colors.green : rgba(44, 137, 91, 0) },
+      })
+      const yAxisValue = new StayText({
+        x: 12,
+        y: plane.height - 30,
+        text: "y-axis  x=0",
+        textBaseline: "bottom",
+        layer: plane.layer,
+        zIndex: 6,
+        font: { size: 8, fontWeight: 700 },
+        fillConfig: { color: name === "content" ? colors.green : rgba(44, 137, 91, 0) },
+      })
+      const visibleWindow = name === "content" ? new Rectangle({
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        layer: plane.layer,
+        zIndex: 4,
+        fillConfig: { color: rgba(44, 137, 91, 0.05) },
+        strokeConfig: { color: colors.green, lineWidth: 2, dash: [5, 4] },
+      }) : undefined
+      const visibleWindowValue = name === "content" ? new StayText({
+        x: 12,
+        y: plane.height - 16,
+        text: "viewport",
+        layer: plane.layer,
+        zIndex: 6,
+        textBaseline: "bottom",
+        font: { size: 8, fontWeight: 700 },
+        fillConfig: { color: colors.green },
+      }) : undefined
       const child = tools.appendChild({
         className: `coordinate-plane-${name}`,
         transform: plane.transform,
@@ -384,6 +504,12 @@ export function CoordinateStack({
           extentValue,
           xAxis,
           yAxis,
+          ...(visibleWindow ? [visibleWindow] : []),
+          shape,
+          shapeValue,
+          xAxisValue,
+          yAxisValue,
+          ...(visibleWindowValue ? [visibleWindowValue] : []),
           dot,
           value,
         ],
@@ -395,10 +521,16 @@ export function CoordinateStack({
         value,
         originValue,
         extentValue,
+        shape,
+        shapeValue,
         xAxis,
         yAxis,
+        xAxisValue,
+        yAxisValue,
         gridX,
         gridY,
+        visibleWindow,
+        visibleWindowValue,
       }
     })
 
@@ -406,6 +538,11 @@ export function CoordinateStack({
     const rays: [Line, Line] = [
       new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: 2, zIndex: 9, strokeConfig: rayStyle }),
       new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: 2, zIndex: 9, strokeConfig: rayStyle }),
+    ]
+    const shapeRayStyle = { color: rgba(54, 105, 221, 0.58), lineWidth: 2, dash: [3, 5] }
+    const shapeRays: [Line, Line] = [
+      new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: 2, zIndex: 5, strokeConfig: shapeRayStyle }),
+      new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: 2, zIndex: 5, strokeConfig: shapeRayStyle }),
     ]
     const cornerLinks = ([
       [planes.client, planes.view],
@@ -428,7 +565,7 @@ export function CoordinateStack({
       new StayText({
         x: canvasArea.width * 0.68,
         y: canvasArea.height * 0.285,
-        text: "Client → View",
+        text: "View → Client",
         layer: 1,
         zIndex: 12,
         textBaseline: "middle",
@@ -438,7 +575,7 @@ export function CoordinateStack({
       new StayText({
         x: canvasArea.width * 0.68,
         y: canvasArea.height * 0.315,
-        text: text("subtract DOM origin, apply display scale", "减 DOM 原点，再乘显示比例"),
+        text: text("place the Canvas DOM and apply display scale", "叠加 Canvas DOM 位置与显示比例"),
         layer: 1,
         zIndex: 12,
         textBaseline: "middle",
@@ -448,7 +585,7 @@ export function CoordinateStack({
       new StayText({
         x: canvasArea.width * 0.76,
         y: canvasArea.height * 0.62,
-        text: "View → Content",
+        text: "Content → View",
         layer: 2,
         zIndex: 12,
         textBaseline: "middle",
@@ -458,7 +595,7 @@ export function CoordinateStack({
       new StayText({
         x: canvasArea.width * 0.76,
         y: canvasArea.height * 0.65,
-        text: text("undo viewport offset and scale", "撤销 viewport 平移与缩放"),
+        text: text("apply viewport offset and scale", "应用 viewport 平移与缩放"),
         layer: 2,
         zIndex: 12,
         textBaseline: "middle",
@@ -466,15 +603,15 @@ export function CoordinateStack({
         fillConfig: { color: colors.gray },
       }),
     ]
-    tools.appendChild({ className: "coordinate-projection-ray", shape: [...cornerLinks, ...rays, ...transformLabels] })
-    runtimeRef.current = { planes, rays }
+    tools.appendChild({ className: "coordinate-projection-ray", shape: [...cornerLinks, ...shapeRays, ...rays, ...transformLabels] })
+    runtimeRef.current = { planes, rays, shapeRays }
     update(probe, viewport)
   }
 
   return (
     <CanvasCard
-      title={text("One point in three coordinate spaces", "同一个点的三种坐标")}
-      description={text("Each plane shows its own visible range. The orange point is the same pointer.", "每张平面标出自己的可见范围，橙色点始终代表同一个指针。")}
+      title={text("One Shape through three coordinate spaces", "同一个 Shape 的三种坐标投影")}
+      description={text("Content geometry stays fixed. Zoom changes only the View and Client projections.", "Content 几何始终不变，缩放只改变 View 与 Client 中的投影。")}
       wide
     >
       <StayCanvas

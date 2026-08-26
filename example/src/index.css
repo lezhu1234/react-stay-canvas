@@ -670,17 +670,78 @@ input:focus-visible {
   background: #f6f7f2;
 }
 
-.coordinate-flow {
+.coordinate-zoom-proof {
   display: grid;
-  gap: 5px;
+  gap: 6px;
 }
 
+.coordinate-zoom-proof > p,
 .coordinate-flow > p {
   margin: 0 0 2px;
   color: var(--ink);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.35;
+}
+
+.coordinate-zoom-proof dl {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+
+.coordinate-zoom-proof dl > div {
+  display: grid;
+  min-width: 0;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line);
+  gap: 2px;
+}
+
+.coordinate-zoom-proof dl > div:last-child {
+  border-bottom: 0;
+}
+
+.coordinate-zoom-proof dt,
+.coordinate-zoom-proof small,
+.coordinate-zoom-proof code {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+.coordinate-zoom-proof dt {
+  font-weight: 650;
+}
+
+.coordinate-zoom-proof dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coordinate-zoom-proof .coordinate-proof-stable {
+  border-left: 3px solid rgba(44, 137, 91, 0.72);
+  background: rgba(44, 137, 91, 0.07);
+}
+
+.coordinate-zoom-proof .coordinate-proof-changing {
+  border-left: 3px solid color-mix(in srgb, var(--accent) 72%, transparent);
+}
+
+.coordinate-zoom-proof .coordinate-proof-changing dd {
+  color: var(--accent-strong);
+}
+
+.coordinate-flow {
+  display: grid;
+  gap: 5px;
 }
 
 .coordinate-flow-value {
@@ -735,6 +796,18 @@ input:focus-visible {
   font-size: 8px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.coordinate-flow .coordinate-event-sample {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.coordinate-event-sample code {
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .toolbar {

@@ -24,6 +24,7 @@ import MotionStudioExample from "../example/src/examples/integrated/MotionStudio
 import CoordinatesExample from "../example/src/examples/simple/CoordinatesExample"
 import {
   clippedRectEdges,
+  clientReferenceRange,
   correspondingRectCorners,
   LAB_CONTENT_BOUNDS,
   LAB_SHAPE,
@@ -104,6 +105,14 @@ describe("Example Canvas workspace", () => {
       view: { x: 40, y: 20, width: 960, height: 720 },
       client: { x: 180, y: 90, width: 1920, height: 1440 },
     })
+
+    expect(clientReferenceRange({
+      client: { x: 0, y: 0 },
+      view: { x: 0, y: 0 },
+      content: { x: 0, y: 0 },
+      viewSize: { width: 320, height: 240 },
+      surface: { left: 100, top: 50, width: 640, height: 480, scaleX: 0.5, scaleY: 0.5 },
+    })).toEqual({ x: -60, y: -430, width: 960, height: 1008 })
 
     expect(clippedRectEdges(
       { x: -20, y: -10, width: 120, height: 80 },

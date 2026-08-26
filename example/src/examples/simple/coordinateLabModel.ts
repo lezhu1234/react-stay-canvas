@@ -77,6 +77,18 @@ export function contentReferenceRange(probe: CoordinateProbe): Rect {
   }
 }
 
+export function clientReferenceRange(probe: CoordinateProbe): Rect {
+  const horizontalPadding = probe.surface.width * 0.25
+  const topPadding = probe.surface.height
+  const bottomPadding = probe.surface.height * 0.1
+  return {
+    x: probe.surface.left - horizontalPadding,
+    y: probe.surface.top - topPadding,
+    width: probe.surface.width + horizontalPadding * 2,
+    height: probe.surface.height + topPadding + bottomPadding,
+  }
+}
+
 export function containsRect(outer: Readonly<Rect>, inner: Readonly<Rect>) {
   return inner.x >= outer.x &&
     inner.y >= outer.y &&

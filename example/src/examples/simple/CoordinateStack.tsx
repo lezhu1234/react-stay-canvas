@@ -16,6 +16,7 @@ import {
 import { CanvasCard, colors, rgba, sceneCanvasArea } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import {
+  clientReferenceRange,
   clippedRectEdges,
   containsRect,
   contentReferenceRange,
@@ -61,6 +62,8 @@ type PlaneRuntime = PlaneDefinition & {
   gridY: Line[]
   contentBounds: Rectangle
   contentBoundsEdges: [Line, Line, Line, Line]
+  canvasDom?: Rectangle
+  canvasDomValue?: StayText
   visibleWindow?: Rectangle
   visibleWindowValue?: StayText
 }
@@ -68,6 +71,7 @@ type PlaneRuntime = PlaneDefinition & {
 type StackRuntime = {
   planes: Record<PlaneName, PlaneRuntime>
   rays: [Line, Line]
+  clientViewLinks: [Line, Line, Line, Line]
   viewContentLinks: [Line, Line, Line, Line]
 }
 
@@ -108,12 +112,7 @@ function planeRange(
   _viewport: Readonly<ViewportState>,
 ): PlaneRange {
   if (name === "client") {
-    return {
-      x: probe.surface.left,
-      y: probe.surface.top,
-      width: probe.surface.width,
-      height: probe.surface.height,
-    }
+    return clientReferenceRange(probe)
   }
   if (name === "view") {
     return { x: 0, y: 0, width: probe.viewSize.width, height: probe.viewSize.height }
@@ -140,11 +139,11 @@ function rectOnPlane(plane: PlaneDefinition, value: Rect, range: PlaneRange): Re
   }
 }
 
-function clippedRect(rect: Rect, plane: PlaneDefinition): Rect | undefined {
-  const x = Math.max(0, rect.x)
-  const y = Math.max(0, rect.y)
-  const right = Math.min(plane.width, rect.x + rect.width)
-  const bottom = Math.min(plane.height, rect.y + rect.height)
+function clippedRect(rect: Rect, clip: Rect): Rect | undefined {
+  const x = Math.max(clip.x, rect.x)
+  const y = Math.max(clip.y, rect.y)
+  const right = Math.min(clip.x + clip.width, rect.x + rect.width)
+  const bottom = Math.min(clip.y + clip.height, rect.y + rect.height)
   if (right <= x || bottom <= y) return undefined
   return { x, y, width: right - x, height: bottom - y }
 }
@@ -188,6 +187,7 @@ function updateClippedProjection({
   color,
   fillAlpha,
   strokeAlpha,
+  clip = { x: 0, y: 0, width: plane.width, height: plane.height },
 }: {
   fill: Rectangle
   edges: [Line, Line, Line, Line]
@@ -196,14 +196,15 @@ function updateClippedProjection({
   color: { r: number; g: number; b: number }
   fillAlpha: number
   strokeAlpha: number
+  clip?: Rect
 }) {
-  const visible = clippedRect(rect, plane)
+  const visible = clippedRect(rect, clip)
   fill.update({
     ...(visible ?? { x: 0, y: 0, width: 0, height: 0 }),
     fillConfig: { color: { ...color, a: visible ? fillAlpha : 0 } },
     strokeConfig: { color: { ...color, a: 0 }, lineWidth: 0 },
   })
-  clippedRectEdges(rect, { x: 0, y: 0, width: plane.width, height: plane.height })
+  clippedRectEdges(rect, clip)
     .forEach((edge, index) => {
       edges[index].update({
         ...(edge ?? { x1: 0, y1: 0, x2: 0, y2: 0 }),
@@ -249,7 +250,10 @@ function updateContentReference(
   const visibleRange = visibleContentRange(probe, viewport)
   const containsVisibleWindow = containsRect(range, visibleRange)
   const projectedVisibleWindow = rectOnPlane(plane, visibleRange, range)
-  const visibleWindow = clippedRect(projectedVisibleWindow, plane)
+  const visibleWindow = clippedRect(
+    projectedVisibleWindow,
+    { x: 0, y: 0, width: plane.width, height: plane.height },
+  )
   plane.visibleWindow?.update({
     ...(visibleWindow ?? { x: 0, y: 0, width: 0, height: 0 }),
     fillConfig: { color: rgba(44, 137, 91, visibleWindow ? 0.05 : 0) },
@@ -277,6 +281,17 @@ export function CoordinateStack({
     const shapeProjection = projectContentRect(sample, currentViewport)
     const boundsProjection = projectContentRect(sample, currentViewport, LAB_CONTENT_BOUNDS)
     const points = {} as Record<PlaneName, Coordinate>
+    const surfaceRect = {
+      x: sample.surface.left,
+      y: sample.surface.top,
+      width: sample.surface.width,
+      height: sample.surface.height,
+    }
+    const clientCanvasDom = rectOnPlane(
+      runtime.planes.client,
+      surfaceRect,
+      clientReferenceRange(sample),
+    )
 
     for (const name of Object.keys(runtime.planes) as PlaneName[]) {
       const plane = runtime.planes[name]
@@ -285,6 +300,24 @@ export function CoordinateStack({
       const localPoint = pointOnPlane(plane, value, range)
       const localShape = rectOnPlane(plane, shapeProjection[name], range)
       const projectedContentBounds = rectOnPlane(plane, boundsProjection[name], range)
+      const projectionClip = name === "client"
+        ? clientCanvasDom
+        : { x: 0, y: 0, width: plane.width, height: plane.height }
+      if (name === "client") {
+        plane.canvasDom?.update({
+          ...projectionClip,
+          fillConfig: { color: rgba(54, 105, 221, 0.035) },
+          strokeConfig: { color: rgba(78, 89, 104, 0.72), lineWidth: 1, dash: [5, 4] },
+        })
+        plane.canvasDomValue?.update({
+          x: projectionClip.x + 8,
+          y: projectionClip.y + 8,
+          text: text(
+            `Canvas DOM @ ${formatPoint(surfaceRect)}`,
+            `Canvas DOM @ ${formatPoint(surfaceRect)}`,
+          ),
+        })
+      }
       plane.dot.update(localPoint)
       plane.value.update({
         x: Math.min(plane.width - 112, Math.max(12, localPoint.x + 12)),
@@ -299,6 +332,7 @@ export function CoordinateStack({
         color: { r: 54, g: 105, b: 221 },
         fillAlpha: 0.2,
         strokeAlpha: 0.95,
+        clip: projectionClip,
       })
       updateClippedProjection({
         fill: plane.contentBounds,
@@ -308,25 +342,34 @@ export function CoordinateStack({
         color: { r: 44, g: 137, b: 91 },
         fillAlpha: 0.06,
         strokeAlpha: 0.88,
+        clip: projectionClip,
       })
-      plane.shapeValue.update({
+      const clientLabelFits = visibleShape && visibleShape.width >= 88 && visibleShape.height >= 22
+      plane.shapeValue.update(name === "client" ? {
+        x: visibleShape ? visibleShape.x + 6 : 0,
+        y: visibleShape ? visibleShape.y + 6 : 0,
+        text: text("Shape inside DOM", "DOM 内 Shape"),
+        textBaseline: "top",
+        fillConfig: { color: rgba(54, 105, 221, clientLabelFits ? 1 : 0) },
+      } : {
         x: Math.min(plane.width - 170, Math.max(12, localShape.x)),
         y: Math.min(plane.height - 34, Math.max(76, localShape.y - 5)),
         text: name === "content"
           ? text(`Shape geometry ${formatRect(shapeProjection.content)} fixed`, `Shape 几何 ${formatRect(shapeProjection.content)} 不变`)
           : text(`Shape projection ${formatRect(shapeProjection[name])}`, `Shape 投影 ${formatRect(shapeProjection[name])}`),
+        textBaseline: "bottom",
         fillConfig: { color: rgba(54, 105, 221, visibleShape ? 1 : 0) },
       })
       plane.originValue.update({
         text: text(
-          `${name === "content" ? "reference" : "range"} start ${formatPoint(range)}`,
-          `${name === "content" ? "参考范围" : "范围"}起点 ${formatPoint(range)}`,
+          `${name === "content" ? "reference" : name === "client" ? "browser crop" : "range"} start ${formatPoint(range)}`,
+          `${name === "content" ? "参考范围" : name === "client" ? "浏览器裁切范围" : "范围"}起点 ${formatPoint(range)}`,
         ),
       })
       plane.extentValue.update({
         text: text(
-          `${name === "content" ? "reference" : "range"} end ${formatPoint({ x: range.x + range.width, y: range.y + range.height })}`,
-          `${name === "content" ? "参考范围" : "范围"}终点 ${formatPoint({ x: range.x + range.width, y: range.y + range.height })}`,
+          `${name === "content" ? "reference" : name === "client" ? "browser crop" : "range"} end ${formatPoint({ x: range.x + range.width, y: range.y + range.height })}`,
+          `${name === "content" ? "参考范围" : name === "client" ? "浏览器裁切范围" : "范围"}终点 ${formatPoint({ x: range.x + range.width, y: range.y + range.height })}`,
         ),
       })
       points[name] = plane.child.toContentPoint(localPoint)
@@ -334,6 +377,14 @@ export function CoordinateStack({
 
     runtime.rays[0].update({ x1: points.client.x, y1: points.client.y, x2: points.view.x, y2: points.view.y })
     runtime.rays[1].update({ x1: points.view.x, y1: points.view.y, x2: points.content.x, y2: points.content.y })
+    correspondingRectCorners(
+      clientCanvasDom,
+      { x: 0, y: 0, width: runtime.planes.view.width, height: runtime.planes.view.height },
+    ).forEach((corners, index) => {
+      const start = runtime.planes.client.child.toContentPoint(corners.from)
+      const end = runtime.planes.view.child.toContentPoint(corners.to)
+      runtime.clientViewLinks[index].update({ x1: start.x, y1: start.y, x2: end.x, y2: end.y })
+    })
     const contentWindow = updateContentReference(runtime.planes.content, sample, currentViewport)
     correspondingRectCorners(
       { x: 0, y: 0, width: runtime.planes.view.width, height: runtime.planes.view.height },
@@ -362,7 +413,7 @@ export function CoordinateStack({
     const definitions = createDefinitions(canvasArea.width, canvasArea.height)
     const planeNames: PlaneName[] = ["client", "view", "content"]
     const labels = {
-      client: ["CLIENT", text("Canvas DOM box", "Canvas DOM 区域")],
+      client: ["CLIENT", text("Browser coordinates; dashed rect: Canvas DOM", "浏览器坐标；虚线框：Canvas DOM")],
       view: ["VIEW", text("Logical Canvas surface", "Canvas 逻辑显示面")],
       content: ["CONTENT", text("Outer: fixed reference; solid rect: Demo bounds", "外框：固定参考系；实线框：Demo 边界")],
     }
@@ -483,6 +534,26 @@ export function CoordinateStack({
         font: { size: 8, fontWeight: 700 },
         fillConfig: { color: colors.green },
       }) : undefined
+      const canvasDom = name === "client" ? new Rectangle({
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        layer: plane.layer,
+        zIndex: 3,
+        fillConfig: { color: rgba(54, 105, 221, 0.035) },
+        strokeConfig: { color: rgba(78, 89, 104, 0.72), lineWidth: 1, dash: [5, 4] },
+      }) : undefined
+      const canvasDomValue = name === "client" ? new StayText({
+        x: 0,
+        y: 0,
+        text: "Canvas DOM",
+        layer: plane.layer,
+        zIndex: 6,
+        textBaseline: "top",
+        font: { size: 8, fontWeight: 700 },
+        fillConfig: { color: colors.gray },
+      }) : undefined
       const child = tools.appendChild({
         className: `coordinate-plane-${name}`,
         transform: plane.transform,
@@ -523,6 +594,8 @@ export function CoordinateStack({
           }),
           originValue,
           extentValue,
+          ...(canvasDom ? [canvasDom] : []),
+          ...(canvasDomValue ? [canvasDomValue] : []),
           contentBounds,
           ...contentBoundsEdges,
           ...(visibleWindow ? [visibleWindow] : []),
@@ -548,6 +621,8 @@ export function CoordinateStack({
         gridY,
         contentBounds,
         contentBoundsEdges,
+        canvasDom,
+        canvasDomValue,
         visibleWindow,
         visibleWindowValue,
       }
@@ -559,22 +634,15 @@ export function CoordinateStack({
       new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: 2, zIndex: 9, strokeConfig: rayStyle }),
     ]
     const linkStyle = { color: rgba(78, 89, 104, 0.2), lineWidth: 1, dash: [4, 5] }
-    const clientViewLinks = correspondingRectCorners(
-      { x: 0, y: 0, width: planes.client.width, height: planes.client.height },
-      { x: 0, y: 0, width: planes.view.width, height: planes.view.height },
-    ).map((corners) => {
-      const start = planes.client.child.toContentPoint(corners.from)
-      const end = planes.view.child.toContentPoint(corners.to)
-      return new Line({
-        x1: start.x,
-        y1: start.y,
-        x2: end.x,
-        y2: end.y,
-        layer: 0,
-        zIndex: -20,
-        strokeConfig: linkStyle,
-      })
-    })
+    const clientViewLinks = Array.from({ length: 4 }, () => new Line({
+      x1: 0,
+      y1: 0,
+      x2: 0,
+      y2: 0,
+      layer: 0,
+      zIndex: -20,
+      strokeConfig: linkStyle,
+    })) as [Line, Line, Line, Line]
     const viewContentLinks = Array.from({ length: 4 }, () => new Line({
       x1: 0,
       y1: 0,
@@ -627,7 +695,7 @@ export function CoordinateStack({
       }),
     ]
     tools.appendChild({ className: "coordinate-projection-ray", shape: [...clientViewLinks, ...viewContentLinks, ...rays, ...transformLabels] })
-    runtimeRef.current = { planes, rays, viewContentLinks }
+    runtimeRef.current = { planes, rays, clientViewLinks, viewContentLinks }
     update(probe, viewport)
   }
 
@@ -635,8 +703,8 @@ export function CoordinateStack({
     <CanvasCard
       title={text("One Shape through three coordinate spaces", "同一个 Shape 的三种坐标投影")}
       description={text(
-        "Blue projects the Shape from Content to View to Client. Orange converts pointer input in the opposite direction. Gray links corresponding plane corners.",
-        "蓝色表示 Shape 从 Content 到 View 再到 Client 的投影；橙色表示指针输入的反向换算；灰线只连接对应的平面四角。",
+        "Client places the Canvas DOM in browser coordinates; View starts at 0,0 across the full logical surface. Gray links their visible corners; orange follows pointer input in reverse.",
+        "Client 把 Canvas DOM 放进浏览器坐标；View 从 0,0 开始覆盖完整逻辑显示面。灰线连接对应可见范围，橙线表示反向的指针输入换算。",
       )}
       wide
     >

@@ -17,10 +17,10 @@ import { useI18n } from "../../i18n"
 
 const STACK_WIDTH = 320
 const STACK_HEIGHT = 300
-const PLANE_GRID_COLUMNS = 15
-const PLANE_GRID_ROWS = 10
-const CONTENT_GRID_COLUMNS = 48
-const CONTENT_GRID_ROWS = 30
+const PLANE_GRID_COLUMNS = 12
+const PLANE_GRID_ROWS = 4
+const CONTENT_GRID_COLUMNS = 36
+const CONTENT_GRID_ROWS = 18
 const CONTENT_GRID_SIZE = 50
 
 type PlaneName = "client" | "view" | "content"
@@ -29,9 +29,18 @@ export type CoordinateProbe = {
   client: Coordinate
   view: Coordinate
   content: Coordinate
-  sampleViewport: Readonly<ViewportState>
   viewSize: { width: number; height: number }
+  surface: {
+    left: number
+    top: number
+    width: number
+    height: number
+    scaleX: number
+    scaleY: number
+  }
 }
+
+type PlaneRange = { x: number; y: number; width: number; height: number }
 
 type PlaneDefinition = {
   width: number
@@ -46,6 +55,8 @@ type PlaneRuntime = PlaneDefinition & {
   child: StayInstantChild
   dot: Circle
   value: StayText
+  originValue: StayText
+  extentValue: StayText
   xAxis: Line
   yAxis: Line
   gridX: Line[]
@@ -58,14 +69,14 @@ type StackRuntime = {
 }
 
 function createDefinitions(width: number, height: number): Record<PlaneName, PlaneDefinition> {
-  const planeWidth = width * 0.58
-  const planeHeight = height * 0.5
+  const planeWidth = width * 0.66
+  const planeHeight = height * 0.22
   return {
     client: {
       width: planeWidth,
       height: planeHeight,
       layer: 0,
-      transform: { x: width * 0.12, y: height * 0.08, skewX: -12, scaleY: 0.78 },
+      transform: { x: width * 0.07, y: height * 0.05, skewX: -8, scaleY: 0.78 },
       fill: rgba(124, 132, 145, 0.13),
       stroke: rgba(124, 132, 145, 0.72),
     },
@@ -73,7 +84,7 @@ function createDefinitions(width: number, height: number): Record<PlaneName, Pla
       width: planeWidth,
       height: planeHeight,
       layer: 1,
-      transform: { x: width * 0.19, y: height * 0.23, skewX: -12, scaleY: 0.78 },
+      transform: { x: width * 0.15, y: height * 0.385, skewX: -8, scaleY: 0.78 },
       fill: rgba(54, 105, 221, 0.14),
       stroke: rgba(54, 105, 221, 0.82),
     },
@@ -81,24 +92,53 @@ function createDefinitions(width: number, height: number): Record<PlaneName, Pla
       width: planeWidth,
       height: planeHeight,
       layer: 2,
-      transform: { x: width * 0.26, y: height * 0.38, skewX: -12, scaleY: 0.78 },
+      transform: { x: width * 0.23, y: height * 0.72, skewX: -8, scaleY: 0.78 },
       fill: rgba(44, 137, 91, 0.16),
       stroke: rgba(44, 137, 91, 0.88),
     },
   }
 }
 
-const pointOnPlane = (plane: PlaneDefinition, probe: CoordinateProbe) => ({
-  x: probe.view.x / Math.max(1, probe.viewSize.width) * plane.width,
-  y: probe.view.y / Math.max(1, probe.viewSize.height) * plane.height,
-})
-
-const contentAtView = (view: Coordinate, viewport: Readonly<ViewportState>) => ({
-  x: (view.x - viewport.x) / viewport.scale,
-  y: (view.y - viewport.y) / viewport.scale,
-})
-
 const format = (x: number, y: number) => `${Math.round(x)}, ${Math.round(y)}`
+
+function visibleContentRange(probe: CoordinateProbe, viewport: Readonly<ViewportState>): PlaneRange {
+  return {
+    x: -viewport.x / viewport.scale,
+    y: -viewport.y / viewport.scale,
+    width: probe.viewSize.width / viewport.scale,
+    height: probe.viewSize.height / viewport.scale,
+  }
+}
+
+function planeRange(
+  name: PlaneName,
+  probe: CoordinateProbe,
+  viewport: Readonly<ViewportState>,
+): PlaneRange {
+  if (name === "client") {
+    return {
+      x: probe.surface.left,
+      y: probe.surface.top,
+      width: probe.surface.width,
+      height: probe.surface.height,
+    }
+  }
+  if (name === "view") {
+    return { x: 0, y: 0, width: probe.viewSize.width, height: probe.viewSize.height }
+  }
+  return visibleContentRange(probe, viewport)
+}
+
+function valueForPlane(name: PlaneName, probe: CoordinateProbe) {
+  return probe[name]
+}
+
+function pointOnPlane(plane: PlaneDefinition, value: Coordinate, range: PlaneRange) {
+  return {
+    x: (value.x - range.x) / Math.max(1, range.width) * plane.width,
+    y: (value.y - range.y) / Math.max(1, range.height) * plane.height,
+  }
+}
 
 function gridPosition(index: number, count: number, start: number, size: number) {
   return start + index / (count + 1) * size
@@ -195,19 +235,28 @@ export function CoordinateStack({
   const update = (sample: CoordinateProbe, currentViewport: Readonly<ViewportState>) => {
     const runtime = runtimeRef.current
     if (!runtime) return
-    const values = {
-      client: sample.client,
-      view: sample.view,
-      content: contentAtView(sample.view, currentViewport),
-    }
     const points = (Object.keys(runtime.planes) as PlaneName[]).reduce((result, name) => {
       const plane = runtime.planes[name]
-      const localPoint = pointOnPlane(plane, sample)
+      const range = planeRange(name, sample, currentViewport)
+      const value = valueForPlane(name, sample)
+      const localPoint = pointOnPlane(plane, value, range)
       plane.dot.update(localPoint)
       plane.value.update({
-        x: localPoint.x + 12,
-        y: localPoint.y - 10,
-        text: format(values[name].x, values[name].y),
+        x: Math.min(plane.width - 112, Math.max(12, localPoint.x + 12)),
+        y: Math.max(58, localPoint.y - 9),
+        text: text(`pointer ${format(value.x, value.y)}`, `指针 ${format(value.x, value.y)}`),
+      })
+      plane.originValue.update({
+        text: text(
+          `range start ${format(range.x, range.y)}`,
+          `范围起点 ${format(range.x, range.y)}`,
+        ),
+      })
+      plane.extentValue.update({
+        text: text(
+          `range end ${format(range.x + range.width, range.y + range.height)}`,
+          `范围终点 ${format(range.x + range.width, range.y + range.height)}`,
+        ),
       })
       result[name] = plane.child.toContentPoint(localPoint)
       return result
@@ -225,9 +274,9 @@ export function CoordinateStack({
     const definitions = createDefinitions(canvasArea.width, canvasArea.height)
     const planeNames: PlaneName[] = ["client", "view", "content"]
     const labels = {
-      client: ["CLIENT", text("Browser pixels", "浏览器像素")],
-      view: ["VIEW", text("Canvas surface", "Canvas 显示面")],
-      content: ["CONTENT", text("Child geometry", "Child 几何空间")],
+      client: ["CLIENT", text("Canvas DOM box", "Canvas DOM 区域")],
+      view: ["VIEW", text("Logical Canvas surface", "Canvas 逻辑显示面")],
+      content: ["CONTENT", text("Visible scene window", "当前可见场景")],
     }
     const planes = {} as Record<PlaneName, PlaneRuntime>
 
@@ -256,6 +305,27 @@ export function CoordinateStack({
         textBaseline: "bottom",
         font: { size: 11, fontWeight: 700 },
         fillConfig: { color: colors.orange },
+      })
+      const originValue = new StayText({
+        x: 12,
+        y: 51,
+        text: "0, 0",
+        layer: plane.layer,
+        zIndex: 5,
+        textBaseline: "top",
+        font: { size: 9 },
+        fillConfig: { color: colors.gray },
+      })
+      const extentValue = new StayText({
+        x: plane.width - 12,
+        y: plane.height - 10,
+        text: "0, 0",
+        layer: plane.layer,
+        zIndex: 5,
+        textAlign: "right",
+        textBaseline: "bottom",
+        font: { size: 9 },
+        fillConfig: { color: colors.gray },
       })
       const xAxis = new Line({
         x1: 0,
@@ -302,7 +372,7 @@ export function CoordinateStack({
           }),
           new StayText({
             x: 12,
-            y: 34,
+            y: 32,
             text: labels[name][1],
             layer: plane.layer,
             zIndex: 5,
@@ -310,13 +380,26 @@ export function CoordinateStack({
             font: { size: 10 },
             fillConfig: { color: colors.gray },
           }),
+          originValue,
+          extentValue,
           xAxis,
           yAxis,
           dot,
           value,
         ],
       })
-      planes[name] = { ...plane, child, dot, value, xAxis, yAxis, gridX, gridY }
+      planes[name] = {
+        ...plane,
+        child,
+        dot,
+        value,
+        originValue,
+        extentValue,
+        xAxis,
+        yAxis,
+        gridX,
+        gridY,
+      }
     })
 
     const rayStyle = { color: rgba(224, 113, 62, 0.82), lineWidth: 2, dash: [6, 5] }
@@ -324,32 +407,28 @@ export function CoordinateStack({
       new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: 2, zIndex: 9, strokeConfig: rayStyle }),
       new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: 2, zIndex: 9, strokeConfig: rayStyle }),
     ]
-    const localCorners = (plane: PlaneRuntime) => [
-      { x: 0, y: 0 },
-      { x: plane.width, y: 0 },
-      { x: 0, y: plane.height },
-      { x: plane.width, y: plane.height },
-    ]
-    const clientCorners = localCorners(planes.client)
-      .map((point) => planes.client.child.toContentPoint(point))
-    const contentCorners = localCorners(planes.content)
-      .map((point) => planes.content.child.toContentPoint(point))
-    const cornerLinks = clientCorners.map((start, index) => new Line({
-      x1: start.x,
-      y1: start.y,
-      x2: contentCorners[index].x,
-      y2: contentCorners[index].y,
-      layer: 2,
-      zIndex: -1,
-      strokeConfig: { color: rgba(78, 89, 104, 0.22), lineWidth: 1, dash: [4, 5] },
-    }))
-    const clientTopRight = planes.client.child.toContentPoint({ x: planes.client.width, y: 0 })
-    const viewTopRight = planes.view.child.toContentPoint({ x: planes.view.width, y: 0 })
+    const cornerLinks = ([
+      [planes.client, planes.view],
+      [planes.view, planes.content],
+    ] as Array<[PlaneRuntime, PlaneRuntime]>).flatMap(([from, to]) =>
+      [0, from.width].map((x) => {
+        const start = from.child.toContentPoint({ x, y: from.height })
+        const end = to.child.toContentPoint({ x, y: 0 })
+        return new Line({
+          x1: start.x,
+          y1: start.y,
+          x2: end.x,
+          y2: end.y,
+          layer: 2,
+          zIndex: -1,
+          strokeConfig: { color: rgba(78, 89, 104, 0.22), lineWidth: 1, dash: [4, 5] },
+        })
+      }))
     const transformLabels = [
       new StayText({
-        x: clientTopRight.x + 12,
-        y: clientTopRight.y + 62,
-        text: text("layout scale", "布局缩放"),
+        x: canvasArea.width * 0.68,
+        y: canvasArea.height * 0.285,
+        text: "Client → View",
         layer: 1,
         zIndex: 12,
         textBaseline: "middle",
@@ -357,14 +436,34 @@ export function CoordinateStack({
         fillConfig: { color: colors.blue },
       }),
       new StayText({
-        x: viewTopRight.x + 12,
-        y: viewTopRight.y + 62,
-        text: text("viewport inverse", "视口逆变换"),
+        x: canvasArea.width * 0.68,
+        y: canvasArea.height * 0.315,
+        text: text("subtract DOM origin, apply display scale", "减 DOM 原点，再乘显示比例"),
+        layer: 1,
+        zIndex: 12,
+        textBaseline: "middle",
+        font: { size: 9 },
+        fillConfig: { color: colors.gray },
+      }),
+      new StayText({
+        x: canvasArea.width * 0.76,
+        y: canvasArea.height * 0.62,
+        text: "View → Content",
         layer: 2,
         zIndex: 12,
         textBaseline: "middle",
         font: { size: 10, fontWeight: 700 },
         fillConfig: { color: colors.green },
+      }),
+      new StayText({
+        x: canvasArea.width * 0.76,
+        y: canvasArea.height * 0.65,
+        text: text("undo viewport offset and scale", "撤销 viewport 平移与缩放"),
+        layer: 2,
+        zIndex: 12,
+        textBaseline: "middle",
+        font: { size: 9 },
+        fillConfig: { color: colors.gray },
       }),
     ]
     tools.appendChild({ className: "coordinate-projection-ray", shape: [...cornerLinks, ...rays, ...transformLabels] })
@@ -374,8 +473,8 @@ export function CoordinateStack({
 
   return (
     <CanvasCard
-      title={text("Coordinate space stack", "三层坐标空间")}
-      description={text("One pointer ray crosses three independently defined rectangular planes.", "同一条指针投影线依次穿过三个独立定义的矩形平面。")}
+      title={text("One point in three coordinate spaces", "同一个点的三种坐标")}
+      description={text("Each plane shows its own visible range. The orange point is the same pointer.", "每张平面标出自己的可见范围，橙色点始终代表同一个指针。")}
       wide
     >
       <StayCanvas

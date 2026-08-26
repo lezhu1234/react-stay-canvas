@@ -53,6 +53,40 @@ const spaceStartMove: EventProps<string> = {
 
 const rounded = ({ x, y }: Coordinate) => `${Math.round(x)}, ${Math.round(y)}`
 
+function contentAtView(view: Coordinate, viewport: Readonly<ViewportState>) {
+  return {
+    x: (view.x - viewport.x) / viewport.scale,
+    y: (view.y - viewport.y) / viewport.scale,
+  }
+}
+
+function surfaceFrame({
+  logicalWidth,
+  logicalHeight,
+  clientRect,
+}: {
+  logicalWidth: number
+  logicalHeight: number
+  clientRect: { left: number; top: number; width: number; height: number }
+}) {
+  const width = clientRect.width || logicalWidth
+  const height = clientRect.height || logicalHeight
+  return {
+    left: clientRect.left,
+    top: clientRect.top,
+    width,
+    height,
+    scaleX: logicalWidth / width,
+    scaleY: logicalHeight / height,
+  }
+}
+
+const scalePair = ({ scaleX, scaleY }: CoordinateProbe["surface"]) =>
+  `${scaleX.toFixed(2)}×, ${scaleY.toFixed(2)}×`
+
+const scaleFactors = ({ scaleX, scaleY }: CoordinateProbe["surface"]) =>
+  `(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)})`
+
 export default function CoordinatesExample() {
   const { text } = useI18n()
   const toolsRef = useRef<StayTools>()
@@ -61,9 +95,10 @@ export default function CoordinatesExample() {
     client: { x: 0, y: 0 },
     view: { x: 0, y: 0 },
     content: { x: 0, y: 0 },
-    sampleViewport: { x: 0, y: 0, scale: 1 },
     viewSize: { width: 320, height: 440 },
+    surface: { left: 0, top: 0, width: 320, height: 440, scaleX: 1, scaleY: 1 },
   })
+  const [eventPoint, setEventPoint] = useState<Coordinate>({ x: 0, y: 0 })
   const [viewport, setViewport] = useState<Readonly<ViewportState>>({ x: 0, y: 0, scale: 1 })
 
   const moveMarker = (point: Coordinate) => {
@@ -75,24 +110,37 @@ export default function CoordinatesExample() {
     marker.label.update({ x: point.x + 14, y: point.y - 22 })
   }
 
+  const syncProbeWithViewport = (viewport: Readonly<ViewportState>) => {
+    setViewport(viewport)
+    setProbe((current) => {
+      const content = contentAtView(current.view, viewport)
+      moveMarker(content)
+      return { ...current, content }
+    })
+  }
+
   const listeners = useMemo<ListenerProps[]>(() => {
     const observe = (
       { e, originEvent, canvas, tools }: Parameters<ListenerProps["callback"]>[0],
       updateMarker = true,
+      nextViewport?: Readonly<ViewportState>,
     ) => {
-      if (!hasPointerPosition(e) || !(originEvent instanceof MouseEvent)) return
+      if (!hasPointerPosition(e) || !(originEvent instanceof MouseEvent)) return false
       const client = { x: originEvent.clientX, y: originEvent.clientY }
       const view = canvas.clientToCanvasPoint(client.x, client.y)
-      if (updateMarker) moveMarker(e.point)
-      const sampleViewport = tools.viewport.get()
+      const viewport = nextViewport ?? tools.viewport.get()
+      const content = nextViewport ? contentAtView(view, viewport) : e.point
+      if (updateMarker) moveMarker(content)
       setProbe({
         client,
         view,
-        content: e.point,
-        sampleViewport,
+        content,
         viewSize: { width: canvas.width, height: canvas.height },
+        surface: surfaceFrame(canvas.getSurfaceMetrics()),
       })
-      setViewport(sampleViewport)
+      setEventPoint(e.point)
+      setViewport(viewport)
+      return true
     }
 
     return [
@@ -100,7 +148,9 @@ export default function CoordinatesExample() {
         name: "coordinate-probe",
         selector: ".stay-canvas",
         event: ["mousemove", "mousedown"],
-        callback: observe,
+        callback: (props) => {
+          observe(props)
+        },
       },
       {
         name: "coordinate-pan",
@@ -112,17 +162,21 @@ export default function CoordinatesExample() {
             return { originViewport: props.tools.viewport.get() }
           },
           move: () => {
-            observe(props, false)
             const viewport = props.tools.viewport.panBy(props.e.movement ?? { x: 0, y: 0 })
-            setViewport(viewport)
+            observe(props, true, viewport)
             return props.composeStore
           },
           moveend: () => {
-            if (!props.e.cancelled) observe(props, false)
             const viewport = props.e.cancelled && props.composeStore.originViewport
               ? props.tools.viewport.restore(props.composeStore.originViewport)
               : props.tools.viewport.get()
-            setViewport(viewport)
+            const keepsLastClientSample = props.e.cancelled || props.originEvent.type === "lostpointercapture"
+            if (keepsLastClientSample) {
+              if (hasPointerPosition(props.e)) setEventPoint(props.e.point)
+              syncProbeWithViewport(viewport)
+            } else if (!observe(props, true, viewport)) {
+              syncProbeWithViewport(viewport)
+            }
             props.tools.changeCursor(isSpacePressed(props.e.pressedKeys) ? "grab" : "default")
             return { originViewport: undefined }
           },
@@ -135,17 +189,19 @@ export default function CoordinatesExample() {
         callback: ({ e, originEvent, tools, canvas }) => {
           if (!hasPointerPosition(e) || e.deltaY === undefined || !(originEvent instanceof MouseEvent)) return
           originEvent.preventDefault()
-          const sampleViewport = tools.viewport.get()
           const viewport = tools.viewport.zoomBy(Math.max(0.1, 1 - e.deltaY * 0.001), e.point)
           const client = { x: originEvent.clientX, y: originEvent.clientY }
-          moveMarker(e.point)
+          const view = canvas.clientToCanvasPoint(client.x, client.y)
+          const content = contentAtView(view, viewport)
+          moveMarker(content)
           setProbe({
             client,
-            view: canvas.clientToCanvasPoint(client.x, client.y),
-            content: e.point,
-            sampleViewport,
+            view,
+            content,
             viewSize: { width: canvas.width, height: canvas.height },
+            surface: surfaceFrame(canvas.getSurfaceMetrics()),
           })
+          setEventPoint(e.point)
           setViewport(viewport)
         },
       },
@@ -186,16 +242,33 @@ export default function CoordinatesExample() {
     const dot = new Circle({ x: 0, y: 0, radius: 6, zIndex: 20, fillConfig: { color: colors.orange } })
     const horizontal = new Line({ x1: -18, y1: 0, x2: 18, y2: 0, zIndex: 19, strokeConfig: { color: colors.orange, lineWidth: 2 } })
     const vertical = new Line({ x1: 0, y1: -18, x2: 0, y2: 18, zIndex: 19, strokeConfig: { color: colors.orange, lineWidth: 2 } })
-    const label = new StayText({ x: 14, y: -22, text: "e.point", textBaseline: "bottom", font: { size: 11, fontWeight: 700 }, zIndex: 20, fillConfig: { color: colors.orange } })
+    const label = new StayText({ x: 14, y: -22, text: "Content", textBaseline: "bottom", font: { size: 11, fontWeight: 700 }, zIndex: 20, fillConfig: { color: colors.orange } })
     markerRef.current = { dot, horizontal, vertical, label }
     tools.appendChild({ className: "coordinate-marker", shape: [dot, horizontal, vertical, label] })
+    const surface = surfaceFrame(gridChild.canvas.getSurfaceMetrics())
+    const view = { x: gridChild.canvas.width / 2, y: gridChild.canvas.height / 2 }
+    const client = {
+      x: surface.left + view.x / surface.scaleX,
+      y: surface.top + view.y / surface.scaleY,
+    }
+    const currentViewport = tools.viewport.get()
+    const content = contentAtView(view, currentViewport)
+    moveMarker(content)
+    setProbe({
+      client,
+      view,
+      content,
+      viewSize: { width: gridChild.canvas.width, height: gridChild.canvas.height },
+      surface,
+    })
+    setEventPoint(content)
   }
 
   const changeViewport = (action: (tools: StayTools) => Readonly<ViewportState>) => {
     const tools = toolsRef.current
     if (!tools) return
     const viewport = action(tools)
-    setViewport(viewport)
+    syncProbeWithViewport(viewport)
   }
 
   return (
@@ -221,16 +294,30 @@ export default function CoordinatesExample() {
         </CanvasCard>
       </div>
       <div className="coordinate-flow" aria-label={text("Coordinate conversion flow", "坐标转换流程")}>
-        <div><span>1 · Client</span><strong>{rounded(probe.client)}</strong><small>{text("Browser viewport pixels", "浏览器窗口像素")}</small></div>
-        <i aria-hidden="true">→</i>
-        <div><span>2 · View</span><strong>{rounded(probe.view)}</strong><small>{text("Displayed Canvas surface", "Canvas 显示平面")}</small></div>
-        <i aria-hidden="true">→</i>
-        <div><span>3 · Content</span><strong>{rounded(probe.content)}</strong><small>{text("Public e.point", "公开的 e.point")}</small></div>
+        <p>{text("The same pointer, expressed three ways", "同一个指针，三种坐标表达")}</p>
+        <div className="coordinate-flow-value coordinate-flow-client">
+          <span>Client</span><strong>{rounded(probe.client)}</strong><small>{text("Browser-window position", "浏览器窗口位置")}</small>
+        </div>
+        <div className="coordinate-flow-operation">
+          <span>{text("Subtract the Canvas DOM origin, then apply display scale", "减去 Canvas DOM 原点，再乘显示比例")}</span>
+          <code>[({rounded(probe.client)}) - ({Math.round(probe.surface.left)}, {Math.round(probe.surface.top)})] × {scaleFactors(probe.surface)}</code>
+        </div>
+        <div className="coordinate-flow-value coordinate-flow-view">
+          <span>View</span><strong>{rounded(probe.view)}</strong><small>{text("Logical Canvas surface", "Canvas 逻辑显示面")}</small>
+        </div>
+        <div className="coordinate-flow-operation">
+          <span>{text("Undo viewport offset and scale", "撤销 viewport 平移与缩放")}</span>
+          <code>[({rounded(probe.view)}) - ({Math.round(viewport.x)}, {Math.round(viewport.y)})] ÷ {viewport.scale.toFixed(2)}</code>
+        </div>
+        <div className="coordinate-flow-value coordinate-flow-result">
+          <span>Content</span><strong>{rounded(probe.content)}</strong><small>{text("Result in the current viewport", "当前 viewport 下的转换结果")}</small>
+        </div>
       </div>
       <StatusGrid items={[
-        [text("Sample viewport", "采样帧视口"), `${Math.round(probe.sampleViewport.x)}, ${Math.round(probe.sampleViewport.y)} · ${Math.round(probe.sampleViewport.scale * 100)}%`],
-        [text("Current viewport", "当前视口"), `${Math.round(viewport.x)}, ${Math.round(viewport.y)} · ${Math.round(viewport.scale * 100)}%`],
-        ["e.movement", text("View delta", "View 空间增量")],
+        [text("Canvas DOM origin", "Canvas DOM 原点"), `${Math.round(probe.surface.left)}, ${Math.round(probe.surface.top)}`],
+        [text("Display scale", "显示比例"), scalePair(probe.surface)],
+        ["Viewport", `${Math.round(viewport.x)}, ${Math.round(viewport.y)} / ${Math.round(viewport.scale * 100)}%`],
+        [text("Last event e.point", "最近事件 e.point"), rounded(eventPoint)],
         [text("Child geometry", "Child 几何"), text("Never changed", "始终不变")],
       ]} />
       <Toolbar>

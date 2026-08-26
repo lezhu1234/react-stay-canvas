@@ -116,8 +116,8 @@ export const catalog: ExampleDefinition[] = [
     order: 9,
     title: l("Coordinate spaces and viewport", "坐标空间与视口"),
     shortTitle: l("Coordinates", "坐标"),
-    summary: l("Trace one pointer through Client, View, and Content while the library pans and zooms without changing Child geometry.", "观察同一指针如何依次进入 Client、View 与 Content，并验证库在不改变 Child 几何的前提下平移和缩放。"),
-    features: ["Client → View → Content", "e.point", "e.movement", "tools.viewport"],
+    summary: l("Follow the actual values and formulas that map one pointer from Canvas DOM Client coordinates to View and Content.", "用实际数值和公式观察同一指针如何从 Canvas DOM 的 Client 坐标换算到 View，再换算到 Content。"),
+    features: ["Client → View → Content", "Child transform", "e.point", "tools.viewport"],
     component: CoordinatesExample,
   },
   {

@@ -24,6 +24,7 @@ import MotionStudioExample from "../example/src/examples/integrated/MotionStudio
 import CoordinatesExample from "../example/src/examples/simple/CoordinatesExample"
 import { type ExampleDefinition } from "../example/src/examples/types"
 import { I18nProvider } from "../example/src/i18n"
+import { installPointerEvents, pointer } from "./helpers/pointer"
 
 vi.stubGlobal("OffscreenCanvas", class {
   constructor(public width: number, public height: number) {}
@@ -139,7 +140,7 @@ describe("Example Canvas workspace", () => {
     expect(workspace?.querySelector(":scope > .diagram-canvas-area .diagram-canvas")).not.toBeNull()
   })
 
-  it("renders each coordinate space as a Rectangle on its own Canvas layer", () => {
+  it("renders each coordinate range as a transformed Rectangle and explains both conversions", () => {
     const frames: FrameRequestCallback[] = []
     window.requestAnimationFrame = (callback) => frames.push(callback)
     const container = document.createElement("div")
@@ -161,21 +162,109 @@ describe("Example Canvas workspace", () => {
     const width = stackLayers?.[0].width ?? 0
     const height = stackLayers?.[0].height ?? 0
     const planeSamples = [
-      { x: width * 0.12 + 8, y: height * 0.08 + 8 },
-      { x: width * 0.19 + 8, y: height * 0.23 + 8 },
-      { x: width * 0.26 + 8, y: height * 0.38 + 8 },
+      { x: width * 0.07 + 8, y: height * 0.05 + 8 },
+      { x: width * 0.15 + 8, y: height * 0.385 + 8 },
+      { x: width * 0.23 + 8, y: height * 0.72 + 8 },
     ]
     stackLayers?.forEach((canvas, index) => {
       const { x, y } = planeSamples[index]
       expect(canvas.getContext("2d")?.getImageData(x, y, 1, 1).data[3]).toBeGreaterThan(0)
     })
 
+    const flow = container.querySelector(".coordinate-flow")
+    expect(flow?.textContent).toContain("The same pointer, expressed three ways")
+    expect(flow?.textContent).toContain("Subtract the Canvas DOM origin")
+    expect(flow?.textContent).toContain("Undo viewport offset and scale")
+    expect(flow?.textContent).toContain("Result in the current viewport")
+    expect(flow?.textContent).not.toContain("The coordinate exposed as e.point")
+    expect(flow?.textContent).not.toContain("1 · Client")
+
+    const contentBeforePan = flow?.querySelector(".coordinate-flow-result strong")?.textContent
+    const pan = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
+      .find((button) => button.textContent === "Pan +40,+20")
+    act(() => pan?.click())
+    act(() => frames.splice(0).forEach((frame) => frame(16)))
+    expect(flow?.querySelector(".coordinate-flow-result strong")?.textContent)
+      .not.toBe(contentBeforePan)
+    expect(flow?.querySelectorAll(".coordinate-flow-operation code")[1]?.textContent)
+      .toContain("(40, 20)")
+
     const contentBeforeZoom = stackLayers?.[2].toDataURL()
     const zoomIn = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
       .find((button) => button.textContent === "Zoom in")
     act(() => zoomIn?.click())
-    act(() => frames.splice(0).forEach((frame) => frame(16)))
+    act(() => frames.splice(0).forEach((frame) => frame(32)))
     expect(stackLayers?.[2].toDataURL()).not.toBe(contentBeforeZoom)
+  })
+
+  it("keeps valid coordinate evidence across capture loss and wheel input", () => {
+    const restorePointerEvents = installPointerEvents()
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    try {
+      act(() => {
+        root?.render(<I18nProvider><CoordinatesExample /></I18nProvider>)
+      })
+
+      const liveLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")
+      const top = liveLayers[liveLayers.length - 1]
+      expect(top).toBeDefined()
+
+      act(() => {
+        top.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }))
+        top.dispatchEvent(pointer("pointerdown", 100, 100, { button: 0, buttons: 1 }))
+        top.dispatchEvent(pointer("pointermove", 150, 130, { buttons: 1 }))
+      })
+
+      const viewBeforeCancellation = container.querySelector(".coordinate-flow-view strong")?.textContent
+      const viewportBeforeCancellation = [...container.querySelectorAll(".status-grid div")]
+        .find((item) => item.querySelector("dt")?.textContent === "Viewport")
+      expect(viewBeforeCancellation).toBe("150, 130")
+      expect(viewportBeforeCancellation?.querySelector("dd")?.textContent).toBe("50, 30 / 100%")
+
+      act(() => {
+        top.dispatchEvent(pointer("lostpointercapture", 0, 0, { buttons: 1 }))
+      })
+
+      const viewportAfterCancellation = [...container.querySelectorAll(".status-grid div")]
+        .find((item) => item.querySelector("dt")?.textContent === "Viewport")
+      expect(container.querySelector(".coordinate-flow-view strong")?.textContent).toBe(viewBeforeCancellation)
+      expect(viewportAfterCancellation?.querySelector("dd")?.textContent).toBe("0, 0 / 100%")
+
+      act(() => {
+        top.dispatchEvent(pointer("pointerdown", 200, 200, { button: 0, buttons: 1 }))
+        top.dispatchEvent(pointer("pointermove", 240, 230, { buttons: 1 }))
+        top.dispatchEvent(pointer("lostpointercapture", 0, 0, { buttons: 0 }))
+      })
+
+      const viewportAfterRelease = [...container.querySelectorAll(".status-grid div")]
+        .find((item) => item.querySelector("dt")?.textContent === "Viewport")
+      const eventPoint = [...container.querySelectorAll(".status-grid div")]
+        .find((item) => item.querySelector("dt")?.textContent === "Last event e.point")
+      expect(container.querySelector(".coordinate-flow-view strong")?.textContent).toBe("240, 230")
+      expect(viewportAfterRelease?.querySelector("dd")?.textContent).toBe("40, 30 / 100%")
+      expect(eventPoint?.querySelector("dd")?.textContent).toBe("200, 200")
+
+      const reset = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
+        .find((button) => button.textContent === "Reset view")
+      act(() => reset?.click())
+      expect(eventPoint?.querySelector("dd")?.textContent).toBe("200, 200")
+
+      act(() => {
+        top.dispatchEvent(new WheelEvent("wheel", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 80,
+          clientY: 90,
+          deltaY: -100,
+        }))
+      })
+      expect(eventPoint?.querySelector("dd")?.textContent).toBe("80, 90")
+    } finally {
+      restorePointerEvents()
+    }
   })
 
   it("keeps Motion layers, Canvas, inspector, and timeline in one fixed workspace", async () => {

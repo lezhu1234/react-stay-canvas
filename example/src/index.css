@@ -667,17 +667,23 @@ input:focus-visible {
 }
 
 .coordinate-stack-canvas {
-  background: radial-gradient(circle at 45% 44%, rgba(54, 105, 221, 0.08), transparent 58%), #f6f7f2;
+  background: #f6f7f2;
 }
 
 .coordinate-flow {
   display: grid;
-  gap: 6px;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
+  gap: 5px;
 }
 
-.coordinate-flow div {
+.coordinate-flow > p {
+  margin: 0 0 2px;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.coordinate-flow-value {
   display: grid;
   min-width: 0;
   padding: 8px 9px;
@@ -687,14 +693,25 @@ input:focus-visible {
   background: var(--surface-strong);
 }
 
-.coordinate-flow span,
-.coordinate-flow small {
+.coordinate-flow-view {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 58%, var(--surface));
+}
+
+.coordinate-flow-result {
+  border-color: rgba(44, 137, 91, 0.5);
+  background: rgba(44, 137, 91, 0.08);
+}
+
+.coordinate-flow-value span,
+.coordinate-flow-value small,
+.coordinate-flow-operation span {
   color: var(--muted);
   font-size: 9px;
   font-style: normal;
 }
 
-.coordinate-flow strong {
+.coordinate-flow-value strong {
   overflow: hidden;
   color: var(--ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -703,11 +720,21 @@ input:focus-visible {
   white-space: nowrap;
 }
 
-.coordinate-flow i {
-  color: var(--accent);
-  font-style: normal;
-  text-align: center;
-  transform: rotate(90deg);
+.coordinate-flow-operation {
+  display: grid;
+  min-width: 0;
+  margin-left: 11px;
+  padding: 3px 0 3px 10px;
+  border-left: 1px solid var(--line);
+  gap: 2px;
+}
+
+.coordinate-flow-operation code {
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .toolbar {

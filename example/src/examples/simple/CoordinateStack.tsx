@@ -16,7 +16,6 @@ import {
 import { CanvasCard, colors, rgba, sceneCanvasArea } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import {
-  clientReferenceRange,
   clippedRectEdges,
   containsRect,
   contentReferenceRange,
@@ -24,7 +23,9 @@ import {
   formatPoint,
   formatRect,
   LAB_CONTENT_BOUNDS,
+  projectClientPlane,
   projectContentRect,
+  projectRectToRange,
   type CoordinateProbe,
   visibleContentRange,
 } from "./coordinateLabModel"
@@ -109,10 +110,10 @@ function createDefinitions(width: number, height: number): Record<PlaneName, Pla
 function planeRange(
   name: PlaneName,
   probe: CoordinateProbe,
-  _viewport: Readonly<ViewportState>,
+  clientRange: Readonly<Rect>,
 ): PlaneRange {
   if (name === "client") {
-    return clientReferenceRange(probe)
+    return clientRange
   }
   if (name === "view") {
     return { x: 0, y: 0, width: probe.viewSize.width, height: probe.viewSize.height }
@@ -132,11 +133,7 @@ function pointOnPlane(plane: PlaneDefinition, value: Coordinate, range: PlaneRan
 }
 
 function rectOnPlane(plane: PlaneDefinition, value: Rect, range: PlaneRange): Rect {
-  return {
-    ...pointOnPlane(plane, value, range),
-    width: value.width / Math.max(1, range.width) * plane.width,
-    height: value.height / Math.max(1, range.height) * plane.height,
-  }
+  return projectRectToRange(value, range, plane)
 }
 
 function clippedRect(rect: Rect, clip: Rect): Rect | undefined {
@@ -266,9 +263,11 @@ function updateContentReference(
 }
 
 export function CoordinateStack({
+  clientRange,
   probe,
   viewport,
 }: {
+  clientRange: Readonly<Rect>
   probe: CoordinateProbe
   viewport: Readonly<ViewportState>
 }) {
@@ -281,25 +280,23 @@ export function CoordinateStack({
     const shapeProjection = projectContentRect(sample, currentViewport)
     const boundsProjection = projectContentRect(sample, currentViewport, LAB_CONTENT_BOUNDS)
     const points = {} as Record<PlaneName, Coordinate>
-    const surfaceRect = {
-      x: sample.surface.left,
-      y: sample.surface.top,
-      width: sample.surface.width,
-      height: sample.surface.height,
-    }
-    const clientCanvasDom = rectOnPlane(
+    const clientFrame = projectClientPlane(
+      sample,
+      currentViewport,
+      clientRange,
       runtime.planes.client,
-      surfaceRect,
-      clientReferenceRange(sample),
     )
+    const clientCanvasDom = clientFrame.canvasDom
 
     for (const name of Object.keys(runtime.planes) as PlaneName[]) {
       const plane = runtime.planes[name]
-      const range = planeRange(name, sample, currentViewport)
+      const range = planeRange(name, sample, clientRange)
       const value = valueForPlane(name, sample)
-      const localPoint = pointOnPlane(plane, value, range)
-      const localShape = rectOnPlane(plane, shapeProjection[name], range)
-      const projectedContentBounds = rectOnPlane(plane, boundsProjection[name], range)
+      const localPoint = name === "client" ? clientFrame.point : pointOnPlane(plane, value, range)
+      const localShape = name === "client" ? clientFrame.shape : rectOnPlane(plane, shapeProjection[name], range)
+      const projectedContentBounds = name === "client"
+        ? clientFrame.contentBounds
+        : rectOnPlane(plane, boundsProjection[name], range)
       const projectionClip = name === "client"
         ? clientCanvasDom
         : { x: 0, y: 0, width: plane.width, height: plane.height }
@@ -313,8 +310,8 @@ export function CoordinateStack({
           x: projectionClip.x + 8,
           y: projectionClip.y + 8,
           text: text(
-            `Canvas DOM @ ${formatPoint(surfaceRect)}`,
-            `Canvas DOM @ ${formatPoint(surfaceRect)}`,
+            `Canvas DOM @ ${formatPoint({ x: sample.surface.left, y: sample.surface.top })}`,
+            `Canvas DOM @ ${formatPoint({ x: sample.surface.left, y: sample.surface.top })}`,
           ),
         })
       }
@@ -406,14 +403,14 @@ export function CoordinateStack({
     })
   }
 
-  useEffect(() => update(probe, viewport), [probe, viewport])
+  useEffect(() => update(probe, viewport), [clientRange, probe, viewport])
 
   const mounted = (tools: StayTools) => {
     const canvasArea = sceneCanvasArea(tools, STACK_WIDTH, STACK_HEIGHT)
     const definitions = createDefinitions(canvasArea.width, canvasArea.height)
     const planeNames: PlaneName[] = ["client", "view", "content"]
     const labels = {
-      client: ["CLIENT", text("Browser coordinates; dashed rect: Canvas DOM", "浏览器坐标；虚线框：Canvas DOM")],
+      client: ["CLIENT", text("Fixed browser crop; dashed rect: Canvas DOM", "固定浏览器裁切范围；虚线框：Canvas DOM")],
       view: ["VIEW", text("Logical Canvas surface", "Canvas 逻辑显示面")],
       content: ["CONTENT", text("Outer: fixed reference; solid rect: Demo bounds", "外框：固定参考系；实线框：Demo 边界")],
     }
@@ -703,8 +700,8 @@ export function CoordinateStack({
     <CanvasCard
       title={text("One Shape through three coordinate spaces", "同一个 Shape 的三种坐标投影")}
       description={text(
-        "Client places the Canvas DOM in browser coordinates; View starts at 0,0 across the full logical surface. Gray links their visible corners; orange follows pointer input in reverse.",
-        "Client 把 Canvas DOM 放进浏览器坐标；View 从 0,0 开始覆盖完整逻辑显示面。灰线连接对应可见范围，橙线表示反向的指针输入换算。",
+        "A fixed Client crop reveals CSS changes to the Canvas DOM. View starts at 0,0 across the full logical surface; Content stays independent.",
+        "固定的 Client 裁切范围会显现 Canvas DOM 的 CSS 变化。View 从 0,0 开始覆盖完整逻辑显示面，Content 保持独立。",
       )}
       wide
     >

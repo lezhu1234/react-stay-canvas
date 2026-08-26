@@ -25,10 +25,12 @@ import CoordinatesExample from "../example/src/examples/simple/CoordinatesExampl
 import {
   clippedRectEdges,
   clientReferenceRange,
+  containsRect,
   correspondingRectCorners,
   LAB_CONTENT_BOUNDS,
   LAB_SHAPE,
   projectContentRect,
+  projectClientPlane,
 } from "../example/src/examples/simple/coordinateLabModel"
 import { type ExampleDefinition } from "../example/src/examples/types"
 import { I18nProvider } from "../example/src/i18n"
@@ -113,6 +115,29 @@ describe("Example Canvas workspace", () => {
       viewSize: { width: 320, height: 240 },
       surface: { left: 100, top: 50, width: 640, height: 480, scaleX: 0.5, scaleY: 0.5 },
     })).toEqual({ x: -60, y: -430, width: 960, height: 1008 })
+
+    const initialProbe = {
+      client: { x: 420, y: 320 },
+      view: { x: 400, y: 300 },
+      content: { x: 400, y: 300 },
+      viewSize: { width: 800, height: 600 },
+      surface: { left: 100, top: 80, width: 640, height: 480, scaleX: 1.25, scaleY: 1.25 },
+    }
+    const maxSurface = { x: 196, y: 176, width: 800, height: 600 }
+    const fixedClientRange = clientReferenceRange(initialProbe, maxSurface)
+    expect(containsRect(fixedClientRange, maxSurface)).toBe(true)
+    const initialClientFrame = projectClientPlane(initialProbe, { x: 0, y: 0, scale: 1 }, fixedClientRange, { width: 240, height: 96 })
+    const transformedClientFrame = projectClientPlane({
+      ...initialProbe,
+      client: { x: 340, y: 320 },
+      surface: { left: 132, top: 104, width: 416, height: 432, scaleX: 800 / 416, scaleY: 600 / 432 },
+    }, { x: 0, y: 0, scale: 1 }, fixedClientRange, { width: 240, height: 96 })
+    expect(transformedClientFrame.canvasDom.x).toBeGreaterThan(initialClientFrame.canvasDom.x)
+    expect(transformedClientFrame.canvasDom.y).toBeGreaterThan(initialClientFrame.canvasDom.y)
+    expect(transformedClientFrame.canvasDom.width).toBeLessThan(initialClientFrame.canvasDom.width)
+    expect(transformedClientFrame.canvasDom.height).toBeLessThan(initialClientFrame.canvasDom.height)
+    expect(transformedClientFrame.shape).not.toEqual(initialClientFrame.shape)
+    expect(transformedClientFrame.point).not.toEqual(initialClientFrame.point)
 
     expect(clippedRectEdges(
       { x: -20, y: -10, width: 120, height: 80 },
@@ -262,6 +287,9 @@ describe("Example Canvas workspace", () => {
     const viewProjection = proofValue("View projection")
     const clientFootprint = proofValue("Client footprint")
     const visibleWindow = proofValue("Visible Content window")
+    const clientReferenceBeforeCss = proofRows
+      .find((item) => item.querySelector("dt")?.textContent === "CSS View to Client")
+      ?.querySelector("small")?.textContent
     expect(contentGeometry).toBe("145, 155 / 190×120")
     expect(container.querySelector(".coordinate-proof-stable small")?.textContent)
       .toContain("Demo Content bounds 0, 0 / 480×360")
@@ -316,6 +344,11 @@ describe("Example Canvas workspace", () => {
       .find((item) => item.querySelector("dt")?.textContent === "CSS View to Client")
       ?.querySelector("code")?.textContent)
       .toContain("CSS scale 0.65 × 0.90")
+    expect(proofRows
+      .find((item) => item.querySelector("dt")?.textContent === "CSS View to Client")
+      ?.querySelector("small")?.textContent)
+      .toBe(clientReferenceBeforeCss)
+    expect(proofValue("Client footprint")).not.toBe(clientFootprint)
 
     const resetCss = [...container.querySelectorAll<HTMLButtonElement>(".coordinate-operations button")]
       .find((button) => button.textContent === "Reset CSS display")

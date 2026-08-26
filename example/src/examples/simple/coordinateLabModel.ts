@@ -77,15 +77,26 @@ export function contentReferenceRange(probe: CoordinateProbe): Rect {
   }
 }
 
-export function clientReferenceRange(probe: CoordinateProbe): Rect {
+export function clientReferenceRange(probe: CoordinateProbe, includedRect?: Readonly<Rect>): Rect {
   const horizontalPadding = probe.surface.width * 0.25
   const topPadding = probe.surface.height
   const bottomPadding = probe.surface.height * 0.1
+  const x = probe.surface.left - horizontalPadding
+  const y = probe.surface.top - topPadding
+  const baseRight = probe.surface.left + probe.surface.width + horizontalPadding
+  const baseBottom = probe.surface.top + probe.surface.height + bottomPadding
+  const includedPadding = Math.min(probe.surface.width, probe.surface.height) * 0.05
+  const right = includedRect
+    ? Math.max(baseRight, includedRect.x + includedRect.width + includedPadding)
+    : baseRight
+  const bottom = includedRect
+    ? Math.max(baseBottom, includedRect.y + includedRect.height + includedPadding)
+    : baseBottom
   return {
-    x: probe.surface.left - horizontalPadding,
-    y: probe.surface.top - topPadding,
-    width: probe.surface.width + horizontalPadding * 2,
-    height: probe.surface.height + topPadding + bottomPadding,
+    x,
+    y,
+    width: right - x,
+    height: bottom - y,
   }
 }
 
@@ -107,6 +118,51 @@ export function correspondingRectCorners(from: Readonly<Rect>, to: Readonly<Rect
       y: to.y + to.height * corner.y,
     },
   }))
+}
+
+export function projectRectToRange(
+  value: Readonly<Rect>,
+  range: Readonly<Rect>,
+  target: Readonly<{ width: number; height: number }>,
+): Rect {
+  return {
+    x: (value.x - range.x) / Math.max(1, range.width) * target.width,
+    y: (value.y - range.y) / Math.max(1, range.height) * target.height,
+    width: value.width / Math.max(1, range.width) * target.width,
+    height: value.height / Math.max(1, range.height) * target.height,
+  }
+}
+
+export function projectPointToRange(
+  value: Readonly<Coordinate>,
+  range: Readonly<Rect>,
+  target: Readonly<{ width: number; height: number }>,
+): Coordinate {
+  return {
+    x: (value.x - range.x) / Math.max(1, range.width) * target.width,
+    y: (value.y - range.y) / Math.max(1, range.height) * target.height,
+  }
+}
+
+export function projectClientPlane(
+  probe: CoordinateProbe,
+  viewport: Readonly<ViewportState>,
+  clientRange: Readonly<Rect>,
+  target: Readonly<{ width: number; height: number }>,
+) {
+  const shapeProjection = projectContentRect(probe, viewport)
+  const boundsProjection = projectContentRect(probe, viewport, LAB_CONTENT_BOUNDS)
+  return {
+    canvasDom: projectRectToRange({
+      x: probe.surface.left,
+      y: probe.surface.top,
+      width: probe.surface.width,
+      height: probe.surface.height,
+    }, clientRange, target),
+    contentBounds: projectRectToRange(boundsProjection.client, clientRange, target),
+    point: projectPointToRange(probe.client, clientRange, target),
+    shape: projectRectToRange(shapeProjection.client, clientRange, target),
+  }
 }
 
 export function clippedRectEdges(rect: Readonly<Rect>, clip: Readonly<Rect>) {

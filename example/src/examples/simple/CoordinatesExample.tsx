@@ -19,6 +19,7 @@ import { hasPointerPosition } from "../actionEventGuards"
 import { CoordinateStack } from "./CoordinateStack"
 import {
   containsRect,
+  clientReferenceRange,
   contentAtView,
   contentReferenceRange,
   formatPoint,
@@ -44,6 +45,17 @@ const DEFAULT_CSS_DISPLAY: Readonly<CssDisplayTransform> = {
   offsetY: 0,
   scaleX: 0.8,
   scaleY: 0.8,
+}
+
+const CSS_SCALE_MAX = 1
+const CSS_OFFSET_MAX = 96
+
+const INITIAL_PROBE: CoordinateProbe = {
+  client: { x: 0, y: 0 },
+  view: { x: 0, y: 0 },
+  content: { x: 0, y: 0 },
+  viewSize: { width: 320, height: 440 },
+  surface: { left: 0, top: 0, width: 320, height: 440, scaleX: 1, scaleY: 1 },
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
@@ -109,13 +121,8 @@ export default function CoordinatesExample() {
   const surfaceCanvasRef = useRef<ReturnType<StayTools["appendChild"]>["canvas"]>()
   const markerRef = useRef<{ dot: Circle; horizontal: Line; vertical: Line; label: StayText }>()
   const [cssDisplay, setCssDisplay] = useState<CssDisplayTransform>({ ...DEFAULT_CSS_DISPLAY })
-  const [probe, setProbe] = useState<CoordinateProbe>({
-    client: { x: 0, y: 0 },
-    view: { x: 0, y: 0 },
-    content: { x: 0, y: 0 },
-    viewSize: { width: 320, height: 440 },
-    surface: { left: 0, top: 0, width: 320, height: 440, scaleX: 1, scaleY: 1 },
-  })
+  const [clientRange, setClientRange] = useState(() => clientReferenceRange(INITIAL_PROBE))
+  const [probe, setProbe] = useState<CoordinateProbe>(INITIAL_PROBE)
   const [eventPoint, setEventPoint] = useState<Coordinate>({ x: 0, y: 0 })
   const [viewport, setViewport] = useState<Readonly<ViewportState>>({ x: 0, y: 0, scale: 1 })
 
@@ -310,13 +317,20 @@ export default function CoordinatesExample() {
     const currentViewport = tools.viewport.get()
     const content = contentAtView(view, currentViewport)
     moveMarker(content)
-    setProbe({
+    const initialProbe = {
       client,
       view,
       content,
       viewSize: { width: gridChild.canvas.width, height: gridChild.canvas.height },
       surface,
-    })
+    }
+    setProbe(initialProbe)
+    setClientRange(clientReferenceRange(initialProbe, {
+      x: surface.left + CSS_OFFSET_MAX - DEFAULT_CSS_DISPLAY.offsetX,
+      y: surface.top + CSS_OFFSET_MAX - DEFAULT_CSS_DISPLAY.offsetY,
+      width: gridChild.canvas.width * CSS_SCALE_MAX,
+      height: gridChild.canvas.height * CSS_SCALE_MAX,
+    }))
     setEventPoint(content)
   }
 
@@ -340,7 +354,7 @@ export default function CoordinatesExample() {
   return (
     <DemoLayout>
       <div className="coordinate-workspace">
-        <CoordinateStack probe={probe} viewport={viewport} />
+        <CoordinateStack clientRange={clientRange} probe={probe} viewport={viewport} />
         <CanvasCard
           canvasDisplayTransform={cssDisplay}
           className="coordinate-live-card"
@@ -375,7 +389,7 @@ export default function CoordinatesExample() {
             <span>scaleX</span>
             <input
               aria-label="CSS scale X"
-              max={100}
+              max={CSS_SCALE_MAX * 100}
               min={50}
               onChange={(event) => updateCssDisplay({ scaleX: Number(event.target.value) / 100 })}
               step={5}
@@ -388,7 +402,7 @@ export default function CoordinatesExample() {
             <span>scaleY</span>
             <input
               aria-label="CSS scale Y"
-              max={100}
+              max={CSS_SCALE_MAX * 100}
               min={50}
               onChange={(event) => updateCssDisplay({ scaleY: Number(event.target.value) / 100 })}
               step={5}
@@ -402,9 +416,9 @@ export default function CoordinatesExample() {
               <span>translateX</span>
               <input
                 aria-label="CSS translate X"
-                max={96}
+                max={CSS_OFFSET_MAX}
                 min={0}
-                onChange={(event) => updateCssDisplay({ offsetX: clamp(Number(event.target.value), 0, 96) })}
+                onChange={(event) => updateCssDisplay({ offsetX: clamp(Number(event.target.value), 0, CSS_OFFSET_MAX) })}
                 step={8}
                 type="number"
                 value={cssDisplay.offsetX}
@@ -414,9 +428,9 @@ export default function CoordinatesExample() {
               <span>translateY</span>
               <input
                 aria-label="CSS translate Y"
-                max={96}
+                max={CSS_OFFSET_MAX}
                 min={0}
-                onChange={(event) => updateCssDisplay({ offsetY: clamp(Number(event.target.value), 0, 96) })}
+                onChange={(event) => updateCssDisplay({ offsetY: clamp(Number(event.target.value), 0, CSS_OFFSET_MAX) })}
                 step={8}
                 type="number"
                 value={cssDisplay.offsetY}
@@ -460,6 +474,10 @@ export default function CoordinatesExample() {
               {Math.round(probe.viewSize.width)}×{Math.round(probe.viewSize.height)} → {Math.round(probe.surface.width)}×{Math.round(probe.surface.height)}
             </dd>
             <code>{text("CSS scale", "CSS 缩放")} {(1 / probe.surface.scaleX).toFixed(2)} × {(1 / probe.surface.scaleY).toFixed(2)}</code>
+            <small>{text(
+              `Fixed Client crop ${clientRange ? formatRect(clientRange) : "measuring"}; Canvas DOM moves and scales inside it.`,
+              `固定 Client 裁切范围 ${clientRange ? formatRect(clientRange) : "测量中"}；Canvas DOM 在其中移动和缩放。`,
+            )}</small>
           </div>
           <div className="coordinate-proof-changing">
             <dt>{text("View projection", "View 中的投影")}</dt>

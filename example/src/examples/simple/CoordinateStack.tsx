@@ -54,6 +54,10 @@ type PlaneDefinition = {
 
 type PlaneRuntime = PlaneDefinition & {
   child: StayInstantChild
+  frame: Rectangle
+  shadow: Rectangle
+  title: StayText
+  description: StayText
   dot: Circle
   value: StayText
   originValue: StayText
@@ -136,6 +140,12 @@ function pointOnPlane(plane: PlaneDefinition, value: Coordinate, range: PlaneRan
 
 function rectOnPlane(plane: PlaneDefinition, value: Rect, range: PlaneRange): Rect {
   return projectRectToRange(value, range, plane)
+}
+
+function planeIsActive(name: PlaneName, mappingFocus: CoordinateMappingFocus) {
+  return name === "view"
+    || (mappingFocus === "view-client" && name === "client")
+    || (mappingFocus === "content-view" && name === "content")
 }
 
 function clippedRect(rect: Rect, clip: Rect): Rect | undefined {
@@ -294,6 +304,7 @@ export function CoordinateStack({
 
     for (const name of Object.keys(runtime.planes) as PlaneName[]) {
       const plane = runtime.planes[name]
+      const isActive = planeIsActive(name, mappingFocus)
       const range = planeRange(name, sample, clientRange)
       const value = valueForPlane(name, sample)
       const localPoint = name === "client" ? clientFrame.point : pointOnPlane(plane, value, range)
@@ -304,6 +315,32 @@ export function CoordinateStack({
       const projectionClip = name === "client"
         ? clientCanvasDom
         : { x: 0, y: 0, width: plane.width, height: plane.height }
+      plane.frame.update({
+        fillConfig: {
+          color: {
+            ...plane.fill,
+            a: isActive ? plane.fill.a : plane.fill.a * 0.52,
+          },
+        },
+        strokeConfig: {
+          color: {
+            ...plane.stroke,
+            a: isActive ? Math.min(1, plane.stroke.a + 0.1) : plane.stroke.a * 0.42,
+          },
+          lineWidth: isActive ? 2 : 1,
+        },
+      })
+      plane.shadow.update({
+        fillConfig: { color: rgba(39, 51, 67, isActive ? 0.14 : 0.065) },
+      })
+      plane.title.update({
+        fillConfig: {
+          color: { ...plane.stroke, a: isActive ? 1 : 0.48 },
+        },
+      })
+      plane.description.update({
+        fillConfig: { color: rgba(78, 89, 104, isActive ? 0.9 : 0.42) },
+      })
       if (name === "client") {
         plane.canvasDom?.update({
           ...projectionClip,
@@ -546,44 +583,57 @@ export function CoordinateStack({
         fillConfig: { color: rgba(54, 105, 221, 0.035) },
         strokeConfig: { color: rgba(78, 89, 104, 0.72), lineWidth: 1, dash: [5, 4] },
       }) : undefined
+      const shadow = new Rectangle({
+        x: 3,
+        y: 7,
+        width: plane.width,
+        height: plane.height,
+        layer: plane.layer,
+        zIndex: -2,
+        filter: "blur(6px)",
+        fillConfig: { color: rgba(39, 51, 67, 0.14) },
+        strokeConfig: { color: rgba(39, 51, 67, 0), lineWidth: 0 },
+      })
+      const frame = new Rectangle({
+        x: 0,
+        y: 0,
+        width: plane.width,
+        height: plane.height,
+        layer: plane.layer,
+        zIndex: 0,
+        fillConfig: { color: plane.fill },
+        strokeConfig: { color: plane.stroke, lineWidth: 2 },
+      })
+      const title = new StayText({
+        x: 12,
+        y: 13,
+        text: labels[name][0],
+        layer: plane.layer,
+        zIndex: 5,
+        textBaseline: "top",
+        font: { size: 14, fontWeight: 700 },
+        fillConfig: { color: plane.stroke },
+      })
+      const description = new StayText({
+        x: 12,
+        y: 33,
+        text: labels[name][1],
+        layer: plane.layer,
+        zIndex: 5,
+        textBaseline: "top",
+        font: { size: 9, fontWeight: 500 },
+        fillConfig: { color: colors.gray },
+      })
       const child = tools.appendChild({
         className: `coordinate-plane-${name}`,
         transform: plane.transform,
         shape: [
-          new Rectangle({
-            x: 0,
-            y: 0,
-            width: plane.width,
-            height: plane.height,
-            layer: plane.layer,
-            fillConfig: { color: plane.fill },
-            strokeConfig: {
-              color: name === "content" ? rgba(78, 89, 104, 0.46) : plane.stroke,
-              lineWidth: name === "content" ? 1 : 2,
-            },
-          }),
+          shadow,
+          frame,
           ...gridX,
           ...gridY,
-          new StayText({
-            x: 12,
-            y: 14,
-            text: labels[name][0],
-            layer: plane.layer,
-            zIndex: 5,
-            textBaseline: "top",
-            font: { size: 13, fontWeight: 700 },
-            fillConfig: { color: plane.stroke },
-          }),
-          new StayText({
-            x: 12,
-            y: 32,
-            text: labels[name][1],
-            layer: plane.layer,
-            zIndex: 5,
-            textBaseline: "top",
-            font: { size: 10 },
-            fillConfig: { color: colors.gray },
-          }),
+          title,
+          description,
           originValue,
           extentValue,
           ...(canvasDom ? [canvasDom] : []),
@@ -601,6 +651,10 @@ export function CoordinateStack({
       planes[name] = {
         ...plane,
         child,
+        frame,
+        shadow,
+        title,
+        description,
         dot,
         value,
         originValue,

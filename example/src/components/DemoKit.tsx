@@ -14,12 +14,18 @@ import { type StayCanvasProps, type StayTools } from "react-stay-canvas"
 
 import { useI18n } from "../i18n"
 
-export function DemoLayout({ children }: { children: ReactNode }) {
+export function DemoLayout({
+  children,
+  className,
+}: {
+  children: ReactNode
+  className?: string
+}) {
   const [primary, ...controls] = Children.toArray(children)
   const { text } = useI18n()
 
   return (
-    <div className="demo-layout">
+    <div className={["demo-layout", className].filter(Boolean).join(" ")}>
       <div className="demo-primary">{primary}</div>
       {controls.length > 0 && (
         <aside className="demo-controls" aria-label={text("Example controls", "示例控制区")}>

@@ -300,7 +300,24 @@ export default function CoordinatesExample() {
     tools.appendChild({
       className: "coordinate-object",
       shape: [
+        new Rectangle({
+          x: LAB_SHAPE.x + 7,
+          y: LAB_SHAPE.y + 9,
+          width: LAB_SHAPE.width,
+          height: LAB_SHAPE.height,
+          zIndex: -1,
+          filter: "blur(8px)",
+          fillConfig: { color: rgba(39, 51, 67, 0.16) },
+          strokeConfig: { color: rgba(39, 51, 67, 0), lineWidth: 0 },
+        }),
         new Rectangle({ ...LAB_SHAPE, fillConfig: { color: colors.blueSoft }, strokeConfig: { color: colors.blue, lineWidth: 2 } }),
+        new Line({
+          x1: LAB_SHAPE.x + 18,
+          y1: LAB_SHAPE.y + 38,
+          x2: LAB_SHAPE.x + LAB_SHAPE.width - 18,
+          y2: LAB_SHAPE.y + 38,
+          strokeConfig: { color: rgba(54, 105, 221, 0.28), lineWidth: 1 },
+        }),
         new StayText({ x: shapeCenterX, y: shapeCenterY - 8, text: text("Same Shape", "同一个 Shape"), textAlign: "center", textBaseline: "middle", font: { size: 18, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
         new StayText({ x: shapeCenterX, y: shapeCenterY + 24, text: `Content ${formatRect(LAB_SHAPE)}`, textAlign: "center", textBaseline: "middle", font: { size: 12 }, fillConfig: { color: colors.gray } }),
       ],
@@ -357,12 +374,12 @@ export default function CoordinatesExample() {
   const clientWidthFormula = `${Math.round(shapeProjection.view.width)} ÷ ${probe.surface.scaleX.toFixed(2)} = ${Math.round(shapeProjection.client.width)}`
 
   return (
-    <DemoLayout>
+    <DemoLayout className="coordinate-demo-layout">
       <div className="coordinate-workspace">
         <CoordinateStack clientRange={clientRange} mappingFocus={mappingFocus} probe={probe} viewport={viewport} />
         <CanvasCard
           canvasDisplayTransform={cssDisplay}
-          className="coordinate-live-card"
+          className={`coordinate-live-card coordinate-focus-${mappingFocus}`}
           title={text("Canvas DOM in Client", "Client 中的 Canvas DOM")}
           description={text(
             "CSS changes the Canvas DOM footprint, while the full logical View stays fixed. Move the pointer, scroll to zoom, or hold Space and drag to pan.",

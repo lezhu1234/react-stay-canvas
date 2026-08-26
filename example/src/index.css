@@ -669,44 +669,75 @@ input:focus-visible {
 }
 
 .coordinate-canvas {
-  background: #f6f7f2;
+  background:
+    radial-gradient(circle at 84% 18%, rgba(54, 105, 221, 0.09), transparent 28%),
+    radial-gradient(circle at 10% 88%, rgba(44, 137, 91, 0.07), transparent 34%),
+    #f6f7f2;
 }
 
 .coordinate-live-card .canvas-display-transform {
-  box-shadow: 0 0 0 2px rgba(54, 105, 221, 0.28);
+  box-shadow:
+    0 0 0 1px rgba(54, 105, 221, 0.44),
+    0 12px 30px rgba(39, 51, 67, 0.11);
+}
+
+.coordinate-demo-layout {
+  grid-template-columns: minmax(0, 1fr) 276px;
+  gap: 12px;
+}
+
+.coordinate-demo-layout .demo-controls {
+  padding: 12px;
+  border-color: color-mix(in srgb, var(--line) 82%, var(--accent));
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--surface) 96%, var(--accent-soft)), var(--surface) 38%),
+    var(--surface);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent),
+    0 18px 44px var(--shadow);
+}
+
+.coordinate-demo-layout .demo-control-panel {
+  padding: 13px 3px;
+}
+
+.coordinate-demo-layout .demo-control-panel:first-child {
+  padding-top: 3px;
 }
 
 .coordinate-operations {
   display: grid;
-  gap: 10px;
+  gap: 14px;
 }
 
 .coordinate-operation-group {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .coordinate-operation-group + .coordinate-operation-group {
-  padding-top: 10px;
+  padding-top: 14px;
   border-top: 1px solid var(--line);
 }
 
 .coordinate-operation-heading {
   display: grid;
   min-width: 0;
-  gap: 3px;
+  gap: 5px;
 }
 
 .coordinate-operation-heading strong {
   color: var(--ink);
-  font-size: 10px;
+  font-size: 12px;
+  letter-spacing: -0.02em;
 }
 
 .coordinate-operation-heading code {
   overflow: hidden;
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 8px;
+  font-size: 8.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -714,7 +745,7 @@ input:focus-visible {
 .coordinate-scale-control {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) 34px;
-  gap: 7px;
+  gap: 9px;
   align-items: center;
 }
 
@@ -727,6 +758,8 @@ input:focus-visible {
 }
 
 .coordinate-scale-control input {
+  height: 18px;
+  margin: 0;
   width: 100%;
   accent-color: var(--accent);
 }
@@ -741,7 +774,7 @@ input:focus-visible {
 .coordinate-offset-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  gap: 9px;
 }
 
 .coordinate-offset-controls label {
@@ -753,19 +786,19 @@ input:focus-visible {
 .coordinate-offset-controls input {
   width: 100%;
   min-width: 0;
-  height: 30px;
-  padding: 4px 7px;
+  height: 34px;
+  padding: 5px 9px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 9px;
   color: var(--ink);
-  background: var(--surface-strong);
+  background: color-mix(in srgb, var(--surface-strong) 76%, var(--surface));
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
 }
 
 .coordinate-operations > .coordinate-operation-group > .control-button {
   width: 100%;
-  min-height: 30px;
+  min-height: 34px;
   padding: 5px 8px;
   font-size: 10px;
 }
@@ -778,11 +811,15 @@ input:focus-visible {
 
 .coordinate-operation-group .toolbar .control-button {
   width: 100%;
-  min-height: 30px;
+  min-height: 34px;
   padding: 5px 7px;
   font-size: 9px;
   line-height: 1.2;
   white-space: normal;
+}
+
+.coordinate-demo-layout .control-button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
 }
 
 .coordinate-workspace {
@@ -790,23 +827,81 @@ input:focus-visible {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  grid-template-columns: minmax(320px, 1.35fr) minmax(320px, 0.85fr);
-  gap: 8px;
+  grid-template-columns: minmax(360px, 1.45fr) minmax(320px, 0.9fr);
+  gap: 12px;
   overflow-x: auto;
   scrollbar-gutter: stable;
 }
 
 .coordinate-workspace > .canvas-card {
   height: 100%;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 82%, var(--accent));
+  border-radius: 16px;
+  grid-template-rows: 50px minmax(0, 1fr);
+  background: color-mix(in srgb, var(--surface) 96%, var(--accent-soft));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent),
+    0 18px 46px var(--shadow);
+}
+
+.coordinate-workspace .canvas-card-heading {
+  padding: 1px 4px 10px;
+}
+
+.coordinate-workspace .canvas-card-heading h2 {
+  font-size: 15px;
+  letter-spacing: -0.035em;
+}
+
+.coordinate-workspace .canvas-card-heading p {
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1.4;
 }
 
 .coordinate-workspace .canvas-viewport {
   overflow: hidden;
+  border-color: color-mix(in srgb, var(--line) 76%, var(--accent));
+  border-radius: 11px;
   scrollbar-gutter: auto;
+  box-shadow:
+    inset 0 1px 4px rgba(39, 51, 67, 0.11),
+    0 8px 22px rgba(39, 51, 67, 0.08);
+  transition: border-color 240ms ease-out, box-shadow 240ms ease-out;
 }
 
 .coordinate-stack-canvas {
-  background: #f6f7f2;
+  background:
+    radial-gradient(circle at 16% 14%, rgba(54, 105, 221, 0.085), transparent 30%),
+    radial-gradient(circle at 84% 84%, rgba(44, 137, 91, 0.08), transparent 34%),
+    linear-gradient(155deg, #f8f9f5, #f1f3ed);
+}
+
+.coordinate-stack-card.coordinate-focus-view-client .canvas-viewport,
+.coordinate-live-card.coordinate-focus-view-client .canvas-viewport {
+  border-color: rgba(54, 105, 221, 0.48);
+  box-shadow:
+    inset 0 1px 4px rgba(54, 105, 221, 0.09),
+    0 12px 30px rgba(54, 105, 221, 0.11);
+}
+
+.coordinate-stack-card.coordinate-focus-content-view .canvas-viewport,
+.coordinate-live-card.coordinate-focus-content-view .canvas-viewport {
+  border-color: rgba(44, 137, 91, 0.5);
+  box-shadow:
+    inset 0 1px 4px rgba(44, 137, 91, 0.09),
+    0 12px 30px rgba(44, 137, 91, 0.11);
+}
+
+.coordinate-live-card .canvas-viewport-label {
+  top: 12px;
+  right: 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(246, 247, 242, 0.88);
+  box-shadow: 0 6px 18px rgba(39, 51, 67, 0.09);
+  backdrop-filter: blur(8px);
 }
 
 .coordinate-zoom-proof {
@@ -818,7 +913,7 @@ input:focus-visible {
 .coordinate-flow > p {
   margin: 0 0 2px;
   color: var(--ink);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.35;
 }
@@ -827,8 +922,9 @@ input:focus-visible {
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-strong);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-strong) 78%, var(--surface));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 5%, transparent);
 }
 
 .coordinate-zoom-proof dl > div {
@@ -888,9 +984,10 @@ input:focus-visible {
   min-width: 0;
   padding: 8px 9px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   gap: 2px;
-  background: var(--surface-strong);
+  background: color-mix(in srgb, var(--surface-strong) 78%, var(--surface));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 5%, transparent);
 }
 
 .coordinate-flow-view {
@@ -925,7 +1022,7 @@ input:focus-visible {
   min-width: 0;
   margin-left: 11px;
   padding: 3px 0 3px 10px;
-  border-left: 1px solid var(--line);
+  border-left: 1px solid color-mix(in srgb, var(--line) 72%, var(--accent));
   gap: 2px;
 }
 
@@ -947,6 +1044,12 @@ input:focus-visible {
 .coordinate-event-sample code {
   color: var(--ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coordinate-workspace .canvas-viewport {
+    transition: none;
+  }
 }
 
 .toolbar {

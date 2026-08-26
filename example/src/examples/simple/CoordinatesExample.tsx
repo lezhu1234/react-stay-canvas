@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react"
+import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
   Circle,
   type Coordinate,
@@ -31,7 +31,22 @@ import {
 } from "./coordinateLabModel"
 
 const isSpacePressed = (keys: Set<string>) => keys.has(" ") || keys.has("Spacebar")
-const CSS_DISPLAY_SCALE = 0.8
+
+type CssDisplayTransform = {
+  offsetX: number
+  offsetY: number
+  scaleX: number
+  scaleY: number
+}
+
+const DEFAULT_CSS_DISPLAY: Readonly<CssDisplayTransform> = {
+  offsetX: 0,
+  offsetY: 0,
+  scaleX: 0.8,
+  scaleY: 0.8,
+}
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 const spaceMoveEnd: EventProps<string> = {
   name: "moveend",
@@ -91,7 +106,9 @@ const scaleFactors = ({ scaleX, scaleY }: CoordinateProbe["surface"]) =>
 export default function CoordinatesExample() {
   const { text } = useI18n()
   const toolsRef = useRef<StayTools>()
+  const surfaceCanvasRef = useRef<ReturnType<StayTools["appendChild"]>["canvas"]>()
   const markerRef = useRef<{ dot: Circle; horizontal: Line; vertical: Line; label: StayText }>()
+  const [cssDisplay, setCssDisplay] = useState<CssDisplayTransform>({ ...DEFAULT_CSS_DISPLAY })
   const [probe, setProbe] = useState<CoordinateProbe>({
     client: { x: 0, y: 0 },
     view: { x: 0, y: 0 },
@@ -119,6 +136,21 @@ export default function CoordinatesExample() {
       return { ...current, content }
     })
   }
+
+  useLayoutEffect(() => {
+    const canvas = surfaceCanvasRef.current
+    if (!canvas) return
+    const surface = surfaceFrame(canvas.getSurfaceMetrics())
+    setProbe((current) => ({
+      ...current,
+      client: {
+        x: surface.left + current.view.x / surface.scaleX,
+        y: surface.top + current.view.y / surface.scaleY,
+      },
+      surface,
+      viewSize: { width: canvas.width, height: canvas.height },
+    }))
+  }, [cssDisplay])
 
   const listeners = useMemo<ListenerProps[]>(() => {
     const observe = (
@@ -228,6 +260,7 @@ export default function CoordinatesExample() {
       grid.set(`y:${y}`, new Line({ x1: -600, y1: y, x2: 1400, y2: y, zIndex: -10, strokeConfig: { color: { r: 78, g: 89, b: 104, a: 0.1 }, lineWidth: y === 0 ? 2 : 1 } }))
     }
     const gridChild = tools.appendChild({ className: "coordinate-grid", shape: grid })
+    surfaceCanvasRef.current = gridChild.canvas
     setProbe((current) => ({
       ...current,
       viewSize: { width: gridChild.canvas.width, height: gridChild.canvas.height },
@@ -294,6 +327,10 @@ export default function CoordinatesExample() {
     syncProbeWithViewport(viewport)
   }
 
+  const updateCssDisplay = (patch: Partial<CssDisplayTransform>) => {
+    setCssDisplay((current) => ({ ...current, ...patch }))
+  }
+
   const shapeProjection = projectContentRect(probe, viewport)
   const visibleContent = visibleContentRange(probe, viewport)
   const visibleWindowIsContained = containsRect(contentReferenceRange(probe), visibleContent)
@@ -305,14 +342,14 @@ export default function CoordinatesExample() {
       <div className="coordinate-workspace">
         <CoordinateStack probe={probe} viewport={viewport} />
         <CanvasCard
-          canvasDisplayScale={CSS_DISPLAY_SCALE}
+          canvasDisplayTransform={cssDisplay}
           className="coordinate-live-card"
           title={text("Canvas DOM in Client", "Client 中的 Canvas DOM")}
           description={text(
-            "The full View is displayed at CSS scale 80%. Move the pointer, scroll to zoom around it, or hold Space and drag to pan.",
-            "完整 View 通过 CSS scale(0.8) 显示。移动指针，滚轮以指针为锚点缩放，或按住空格键拖动画布。",
+            "CSS changes the Canvas DOM footprint, while the full logical View stays fixed. Move the pointer, scroll to zoom, or hold Space and drag to pan.",
+            "CSS 只改变 Canvas DOM 的显示区域，完整逻辑 View 保持不变。移动指针，滚轮缩放，或按住空格键拖动画布。",
           )}
-          viewportLabel={text("CLIENT DOM · CSS 80%", "CLIENT DOM · CSS 80%")}
+          viewportLabel={`CLIENT DOM · ${Math.round(cssDisplay.scaleX * 100)}% × ${Math.round(cssDisplay.scaleY * 100)}%`}
           wide
         >
           <StayCanvas
@@ -328,12 +365,79 @@ export default function CoordinatesExample() {
           />
         </CanvasCard>
       </div>
-      <Toolbar>
-        <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}>{text("Center zoom in", "中心放大")}</Button>
-        <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}>{text("Center zoom out", "中心缩小")}</Button>
-        <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}>{text("Pan +40,+20", "平移 +40,+20")}</Button>
-        <Button onClick={() => changeViewport((tools) => tools.viewport.reset())}>{text("Reset view", "重置视图")}</Button>
-      </Toolbar>
+      <div className="coordinate-operations">
+        <section className="coordinate-operation-group">
+          <div className="coordinate-operation-heading">
+            <strong>{text("CSS display", "CSS 显示变换")}</strong>
+            <code>translate({cssDisplay.offsetX}, {cssDisplay.offsetY}) scale({cssDisplay.scaleX.toFixed(2)}, {cssDisplay.scaleY.toFixed(2)})</code>
+          </div>
+          <label className="coordinate-scale-control">
+            <span>scaleX</span>
+            <input
+              aria-label="CSS scale X"
+              max={100}
+              min={50}
+              onChange={(event) => updateCssDisplay({ scaleX: Number(event.target.value) / 100 })}
+              step={5}
+              type="range"
+              value={Math.round(cssDisplay.scaleX * 100)}
+            />
+            <output>{Math.round(cssDisplay.scaleX * 100)}%</output>
+          </label>
+          <label className="coordinate-scale-control">
+            <span>scaleY</span>
+            <input
+              aria-label="CSS scale Y"
+              max={100}
+              min={50}
+              onChange={(event) => updateCssDisplay({ scaleY: Number(event.target.value) / 100 })}
+              step={5}
+              type="range"
+              value={Math.round(cssDisplay.scaleY * 100)}
+            />
+            <output>{Math.round(cssDisplay.scaleY * 100)}%</output>
+          </label>
+          <div className="coordinate-offset-controls">
+            <label>
+              <span>translateX</span>
+              <input
+                aria-label="CSS translate X"
+                max={96}
+                min={0}
+                onChange={(event) => updateCssDisplay({ offsetX: clamp(Number(event.target.value), 0, 96) })}
+                step={8}
+                type="number"
+                value={cssDisplay.offsetX}
+              />
+            </label>
+            <label>
+              <span>translateY</span>
+              <input
+                aria-label="CSS translate Y"
+                max={96}
+                min={0}
+                onChange={(event) => updateCssDisplay({ offsetY: clamp(Number(event.target.value), 0, 96) })}
+                step={8}
+                type="number"
+                value={cssDisplay.offsetY}
+              />
+            </label>
+          </div>
+          <Button onClick={() => setCssDisplay({ ...DEFAULT_CSS_DISPLAY })}>{text("Reset CSS display", "重置 CSS 显示")}</Button>
+        </section>
+        <section className="coordinate-operation-group">
+          <div className="coordinate-operation-heading">
+            <strong>Viewport</strong>
+            <code>translate({Math.round(viewport.x)}, {Math.round(viewport.y)}) scale({viewport.scale.toFixed(2)})</code>
+          </div>
+          <Toolbar>
+            <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}>{text("Center zoom in", "中心放大")}</Button>
+            <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}>{text("Center zoom out", "中心缩小")}</Button>
+            <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}>{text("Pan +40,+20", "平移 +40,+20")}</Button>
+            <Button onClick={() => changeViewport((tools) => tools.viewport.reset())}>{text("Reset view", "重置视图")}</Button>
+          </Toolbar>
+        </section>
+      </div>
       <div className="coordinate-zoom-proof" aria-label={text("Zoom cause and effect", "缩放因果证据")}>
         <p>{text("Zoom changes the projection, not the Shape", "缩放改变投影，不改变 Shape")}</p>
         <dl>
@@ -341,8 +445,8 @@ export default function CoordinatesExample() {
             <dt>{text("Content Shape geometry", "Content Shape 几何")}</dt>
             <dd>{formatRect(LAB_SHAPE)}</dd>
             <small>{text(
-              `Fixed source data inside explicit Demo Content bounds ${formatRect(LAB_CONTENT_BOUNDS)}. Root itself has no geometry. View ${Math.round(probe.viewSize.width)}×${Math.round(probe.viewSize.height)} and DOM ${Math.round(probe.surface.width)}×${Math.round(probe.surface.height)} also stay fixed.`,
-              `固定的源数据，位于显式定义的 Demo Content 边界 ${formatRect(LAB_CONTENT_BOUNDS)} 内。Root 本身没有几何边界。View ${Math.round(probe.viewSize.width)}×${Math.round(probe.viewSize.height)} 与 DOM ${Math.round(probe.surface.width)}×${Math.round(probe.surface.height)} 也保持不变。`,
+              `Fixed source data inside explicit Demo Content bounds ${formatRect(LAB_CONTENT_BOUNDS)}. Root itself has no geometry. The logical View stays ${Math.round(probe.viewSize.width)}×${Math.round(probe.viewSize.height)}; CSS controls the current DOM footprint ${Math.round(probe.surface.width)}×${Math.round(probe.surface.height)}.`,
+              `固定的源数据，位于显式定义的 Demo Content 边界 ${formatRect(LAB_CONTENT_BOUNDS)} 内。Root 本身没有几何边界。逻辑 View 保持 ${Math.round(probe.viewSize.width)}×${Math.round(probe.viewSize.height)}；当前 DOM 显示尺寸 ${Math.round(probe.surface.width)}×${Math.round(probe.surface.height)} 由 CSS 控制。`,
             )}</small>
           </div>
           <div>

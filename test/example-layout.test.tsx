@@ -227,11 +227,12 @@ describe("Example Canvas workspace", () => {
     expect(workspace?.querySelector(".coordinate-live-card .canvas-card-heading")?.textContent)
       .toContain("Canvas DOM in Client")
     expect(workspace?.querySelector(".coordinate-live-card .canvas-viewport-label")?.textContent)
-      .toBe("CLIENT DOM · CSS 80%")
-    expect(workspace?.textContent).toContain("displayed at CSS scale 80%")
+      .toBe("CLIENT DOM · 80% × 80%")
+    expect(workspace?.textContent).toContain("CSS changes the Canvas DOM footprint")
     const displayTransform = workspace?.querySelector<HTMLElement>(".coordinate-live-card .canvas-display-transform")
-    expect(displayTransform?.dataset.displayScale).toBe("0.8")
-    expect(displayTransform?.style.transform).toBe("scale(0.8)")
+    expect(displayTransform?.dataset.displayScaleX).toBe("0.8")
+    expect(displayTransform?.dataset.displayScaleY).toBe("0.8")
+    expect(displayTransform?.style.transform).toBe("translate(0px, 0px) scale(0.8, 0.8)")
 
     const width = stackLayers?.[0].width ?? 0
     const height = stackLayers?.[0].height ?? 0
@@ -270,6 +271,77 @@ describe("Example Canvas workspace", () => {
       .find((item) => item.querySelector("dt")?.textContent === "CSS View to Client")
       ?.querySelector("code")?.textContent)
       .toContain("CSS scale")
+
+    liveLayers?.forEach((layer) => {
+      vi.spyOn(layer, "getBoundingClientRect").mockImplementation(() => {
+        const scaleX = Number(displayTransform?.dataset.displayScaleX)
+        const scaleY = Number(displayTransform?.dataset.displayScaleY)
+        const left = Number(displayTransform?.dataset.displayOffsetX)
+        const top = Number(displayTransform?.dataset.displayOffsetY)
+        const width = layer.width * scaleX
+        const height = layer.height * scaleY
+        return {
+          bottom: top + height,
+          height,
+          left,
+          right: left + width,
+          top,
+          width,
+          x: left,
+          y: top,
+          toJSON: () => ({}),
+        } as DOMRect
+      })
+    })
+
+    const scaleXInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS scale X"]')
+    const scaleYInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS scale Y"]')
+    const offsetXInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS translate X"]')
+    const offsetYInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS translate Y"]')
+    const setInputValue = (input: HTMLInputElement | null, value: string) => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
+      setValue?.call(input, value)
+      input?.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+    act(() => {
+      setInputValue(scaleXInput, "65")
+      setInputValue(scaleYInput, "90")
+      setInputValue(offsetXInput, "32")
+      setInputValue(offsetYInput, "24")
+    })
+    expect(displayTransform?.style.transform).toBe("translate(32px, 24px) scale(0.65, 0.9)")
+    expect(workspace?.querySelector(".coordinate-live-card .canvas-viewport-label")?.textContent)
+      .toBe("CLIENT DOM · 65% × 90%")
+    expect(proofRows
+      .find((item) => item.querySelector("dt")?.textContent === "CSS View to Client")
+      ?.querySelector("code")?.textContent)
+      .toContain("CSS scale 0.65 × 0.90")
+
+    const resetCss = [...container.querySelectorAll<HTMLButtonElement>(".coordinate-operations button")]
+      .find((button) => button.textContent === "Reset CSS display")
+    act(() => resetCss?.click())
+    expect(displayTransform?.style.transform).toBe("translate(0px, 0px) scale(0.8, 0.8)")
+
+    const canvasBeforeIdentity = liveLayers?.[liveLayers.length - 1]
+    const identityPan = [...container.querySelectorAll<HTMLButtonElement>(".coordinate-operations button")]
+      .find((button) => button.textContent === "Pan +40,+20")
+    act(() => identityPan?.click())
+    expect(proofValue("Viewport")).toBe("40, 20 / 100%")
+    act(() => {
+      setInputValue(scaleXInput, "100")
+      setInputValue(scaleYInput, "100")
+    })
+    expect(displayTransform?.style.transform).toBe("translate(0px, 0px) scale(1, 1)")
+    expect(container.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")[1])
+      .toBe(canvasBeforeIdentity)
+    expect(proofValue("Viewport")).toBe("40, 20 / 100%")
+    expect(proofValue("Content Shape geometry")).toBe(contentGeometry)
+    act(() => {
+      resetCss?.click()
+      const resetView = [...container.querySelectorAll<HTMLButtonElement>(".coordinate-operations button")]
+        .find((button) => button.textContent === "Reset view")
+      resetView?.click()
+    })
 
     const contentPlaneBeforeZoom = stackLayers?.[2].toDataURL()
     const zoomIn = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]

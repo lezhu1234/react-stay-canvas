@@ -39,6 +39,21 @@ type CanvasScenePlacement = {
 
 type CanvasChild = ReturnType<StayTools["appendChild"]>
 
+type CanvasDisplayTransform = {
+  offsetX?: number
+  offsetY?: number
+  scaleX?: number
+  scaleY?: number
+}
+
+function positiveFiniteOr(value: number | undefined, fallback: number) {
+  return value !== undefined && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function finiteOr(value: number | undefined, fallback: number) {
+  return value !== undefined && Number.isFinite(value) ? value : fallback
+}
+
 const scenePlacementByTools = new WeakMap<StayTools, CanvasScenePlacement>()
 const placedSceneChildren = new WeakSet<CanvasChild>()
 
@@ -125,7 +140,7 @@ export function CanvasCard({
   wide = false,
   className,
   viewportLabel,
-  canvasDisplayScale = 1,
+  canvasDisplayTransform,
 }: {
   title: string
   description?: string
@@ -133,13 +148,15 @@ export function CanvasCard({
   wide?: boolean
   className?: string
   viewportLabel?: string
-  canvasDisplayScale?: number
+  canvasDisplayTransform?: CanvasDisplayTransform
 }) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const viewportSize = useInitialViewportSize(viewportRef)
-  const displayScale = Number.isFinite(canvasDisplayScale) && canvasDisplayScale > 0
-    ? canvasDisplayScale
-    : 1
+  const displayScaleX = positiveFiniteOr(canvasDisplayTransform?.scaleX, 1)
+  const displayScaleY = positiveFiniteOr(canvasDisplayTransform?.scaleY, 1)
+  const displayOffsetX = finiteOr(canvasDisplayTransform?.offsetX, 0)
+  const displayOffsetY = finiteOr(canvasDisplayTransform?.offsetY, 0)
+  const usesDisplayTransform = canvasDisplayTransform !== undefined
   const canvasFrame: { element: ReactNode; height?: number; width?: number } | null =
     isValidElement<StayCanvasProps>(children) && viewportSize
     ? (() => {
@@ -165,14 +182,17 @@ export function CanvasCard({
     : isValidElement<StayCanvasProps>(children)
       ? null
       : { element: children }
-  const canvas = canvasFrame && displayScale !== 1 && canvasFrame.width && canvasFrame.height
+  const canvas = canvasFrame && usesDisplayTransform && canvasFrame.width && canvasFrame.height
     ? (
         <div
           className="canvas-display-transform"
-          data-display-scale={displayScale}
+          data-display-offset-x={displayOffsetX}
+          data-display-offset-y={displayOffsetY}
+          data-display-scale-x={displayScaleX}
+          data-display-scale-y={displayScaleY}
           style={{
             height: canvasFrame.height,
-            transform: `scale(${displayScale})`,
+            transform: `translate(${displayOffsetX}px, ${displayOffsetY}px) scale(${displayScaleX}, ${displayScaleY})`,
             width: canvasFrame.width,
           }}
         >
@@ -191,9 +211,10 @@ export function CanvasCard({
         {viewportLabel && (
           <span
             className="canvas-viewport-label"
-            style={displayScale === 1 ? undefined : {
-              left: `calc(${displayScale * 100}% - 10px)`,
+            style={!usesDisplayTransform || !canvasFrame?.width ? undefined : {
+              left: displayOffsetX + canvasFrame.width * displayScaleX - 10,
               right: "auto",
+              top: displayOffsetY + 10,
               transform: "translateX(-100%)",
             }}
           >

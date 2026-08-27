@@ -259,6 +259,19 @@ class Stay<EventName extends string> {
     this.history.snapshot()
   }
 
+  resize(width: number, height: number) {
+    try {
+      // A pointer session cannot span two View coordinate frames. Dispatch its
+      // terminal event while the old surface metrics are still authoritative.
+      this.eventDispatcher.cancelPointerSession("resize")
+    } finally {
+      this.root.resize(width, height)
+      this.width = width
+      this.height = height
+      this.forceUpdateAllLayers()
+    }
+  }
+
   startRender() {
     this.renderer.start()
   }

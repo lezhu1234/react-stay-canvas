@@ -292,7 +292,7 @@ pointer up
   → normal terminal
 initiating button 已松开后的 lostpointercapture
   → 正常的 implicit-release terminal
-pointercancel / 异常 lostpointercapture / window blur / document hidden
+pointercancel / 异常 lostpointercapture / window blur / document hidden / 运行时 resize
   → cancelled terminal
 ```
 
@@ -303,9 +303,9 @@ pointercancel / 异常 lostpointercapture / window blur / document hidden
 所有正常和取消路径只终止一次。取消终止具有以下行为：
 
 - `dragend` 或 `moveend` 可收到 `e.cancelled === true`；
-- `e.cancelReason` 为 `pointercancel`、`lostpointercapture`、`blur` 或 `visibilitychange`；其中 `lostpointercapture` 只表示 initiating button 仍按下时发生的异常 Capture 丢失；
+- `e.cancelReason` 为 `pointercancel`、`lostpointercapture`、`blur`、`visibilitychange` 或 `resize`；其中 `lostpointercapture` 只表示 initiating button 仍按下时发生的异常 Capture 丢失；
 - 坐标使用本次会话最后收到的指针位置；
-- `originEvent` 保留真正导致取消的原生 Event；
+- DOM 取消时，`originEvent` 保留真正的原生 Event；逻辑 resize 会在坐标帧改变前使用一个 `Event("resize")` 作为终止原因；
 - 不产生 `click`，也不把取消伪装成普通 `mouseup`。
 
 当前模型只跟踪每个 Canvas 的主指针，不提供双指缩放等多指针手势。不同 Canvas 的按键状态、目标和 session 相互隔离。

@@ -63,7 +63,7 @@ Listener 的目标在标准 drag/move 手势开始时确定，后续 continuatio
 | `key` | 键盘 action 或显式提供 key 的手动 action |
 | `deltaX`, `deltaY`, `deltaZ` | wheel action 或显式提供 delta 的手动 action |
 | `pointerId`, `pointerType` | Pointer Events 输入 |
-| `cancelled`, `cancelReason` | Pointer Session 取消产生的 terminal action |
+| `cancelled`, `cancelReason` | Pointer Session 取消产生的 terminal action；原因包括 DOM 取消和逻辑 `resize` |
 
 action 名不决定这些字段是否存在。使用属性前应用类型守卫：
 

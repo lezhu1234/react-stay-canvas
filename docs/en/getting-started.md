@@ -63,7 +63,9 @@ Colors currently use RGBA objects shaped as `{ r, g, b, a }`, with RGB values fr
 }
 ```
 
-Use the outer layout to control spacing, scrolling, and responsive placement. Axis-aligned CSS scaling may change the displayed size: native pointer coordinates are normalized back into the `width` × `height` scene before event conditions, target hit testing, and Listeners run. Display scaling does not change scene geometry or bitmap resolution; change `width` and `height` and rebuild when the logical drawing resolution must change. Rotation, skew, and mirroring are not supported coordinate transforms.
+Use the outer layout to control spacing, scrolling, and responsive placement. Changing `width` or `height` resizes the existing View and backing stores while preserving Children, Content geometry, history, listeners, and viewport state. Set `recreateOnResize` only when a responsive scene must be rebuilt from `mounted`.
+
+Axis-aligned CSS scaling may instead change only the displayed size: native pointer coordinates are normalized back into the logical View before event conditions, target hit testing, and Listeners run. Display scaling does not change scene geometry or bitmap resolution. Rotation, skew, and mirroring are not supported coordinate transforms.
 
 The `layers` prop controls how many native Canvas elements form the scene. For example, `layers={3}` creates three equally sized, overlapping layers—not three side-by-side scenes.
 

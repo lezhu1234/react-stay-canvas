@@ -1,4 +1,5 @@
 import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "../../../userConstants"
+import type { PointerSessionCancelReason } from "../../../types/events"
 import type { EventInputSink } from "../contracts"
 import { PointerSession } from "./pointerSession"
 import { PressedInputState } from "./pressedInputState"
@@ -73,6 +74,10 @@ export class DomInputAdapter {
     this.pointerSession.destroy()
     this.cleanupCallbacks.splice(0).forEach((cleanup) => cleanup())
     this.bound = false
+  }
+
+  cancelPointerSession(reason: PointerSessionCancelReason) {
+    this.pointerSession.cancel(new Event(reason), reason)
   }
 
   private bindKeyboard() {

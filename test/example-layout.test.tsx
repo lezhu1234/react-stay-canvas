@@ -257,18 +257,52 @@ describe("Example Canvas workspace", () => {
     expect(controls?.querySelector(".event-log")).not.toBeNull()
   })
 
-  it("keeps the diagram palette and Canvas in the same two-column primary workspace", () => {
+  it("keeps the diagram scene mounted while its logical Canvas follows the workspace", () => {
+    const callbacks: ResizeObserverCallback[] = []
+    const originalResizeObserver = globalThis.ResizeObserver
+    class ResizeObserverMock {
+      constructor(callback: ResizeObserverCallback) {
+        callbacks.push(callback)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver
     const container = document.createElement("div")
     document.body.appendChild(container)
     root = createRoot(container)
 
-    act(() => {
-      root?.render(<I18nProvider><DiagramExample /></I18nProvider>)
-    })
+    try {
+      act(() => {
+        root?.render(<I18nProvider><DiagramExample /></I18nProvider>)
+      })
 
-    const workspace = container.querySelector(".diagram-stage-shell.diagram-workspace")
-    expect(workspace?.querySelector(":scope > .diagram-palette")).not.toBeNull()
-    expect(workspace?.querySelector(":scope > .diagram-canvas-area .diagram-canvas")).not.toBeNull()
+      const workspace = container.querySelector(".diagram-stage-shell.diagram-workspace")
+      const layers = workspace?.querySelectorAll<HTMLCanvasElement>(
+        ":scope > .diagram-canvas-area .diagram-canvas canvas",
+      )
+      const initialLayers = layers ? [...layers] : []
+      expect(workspace?.querySelector(":scope > .diagram-palette")).not.toBeNull()
+      expect(initialLayers).toHaveLength(3)
+      expect(initialLayers[0].width).toBe(920)
+      expect(initialLayers[0].height).toBe(480)
+
+      viewportWidth = 700
+      viewportHeight = 360
+      act(() => callbacks.forEach((callback) => callback([], {} as ResizeObserver)))
+
+      const resizedLayers = [...workspace!.querySelectorAll<HTMLCanvasElement>(
+        ":scope > .diagram-canvas-area .diagram-canvas canvas",
+      )]
+      expect(resizedLayers).toEqual(initialLayers)
+      resizedLayers.forEach((layer) => {
+        expect(layer.width).toBe(700)
+        expect(layer.height).toBe(360)
+      })
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+    }
   })
 
   it("keeps Shape geometry fixed while zoom changes its View and Client projections", () => {

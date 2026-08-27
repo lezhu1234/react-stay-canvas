@@ -292,7 +292,7 @@ pointer up
   → normal terminal
 lostpointercapture after the initiating button is released
   → normal implicit-release terminal
-pointercancel / unexpected lostpointercapture / window blur / document hidden
+pointercancel / unexpected lostpointercapture / window blur / document hidden / runtime resize
   → cancelled terminal
 ```
 
@@ -303,9 +303,9 @@ Browsers may emit `lostpointercapture` after the initiating button has already b
 Every normal or cancelled path terminates once. Cancellation has these semantics:
 
 - `dragend` or `moveend` may receive `e.cancelled === true`;
-- `e.cancelReason` is `pointercancel`, `lostpointercapture`, `blur`, or `visibilitychange`; `lostpointercapture` appears only for unexpected capture loss while the initiating button remains pressed;
+- `e.cancelReason` is `pointercancel`, `lostpointercapture`, `blur`, `visibilitychange`, or `resize`; `lostpointercapture` appears only for unexpected capture loss while the initiating button remains pressed;
 - coordinates come from the last pointer sample in the session;
-- `originEvent` remains the real native event that caused cancellation;
+- `originEvent` remains the real native event that caused a DOM cancellation; a logical resize uses an `Event("resize")` terminal cause before changing the coordinate frame;
 - cancellation emits no `click` and is not disguised as an ordinary `mouseup`.
 
 The current model tracks only the primary pointer for each Canvas; it does not implement multi-pointer gestures such as pinch zoom. Input state, targets, and sessions are isolated between Canvas instances.

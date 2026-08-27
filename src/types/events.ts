@@ -37,6 +37,7 @@ export type PointerSessionCancelReason =
   | "lostpointercapture"
   | "blur"
   | "visibilitychange"
+  | "resize"
 
 export interface ActionEvent<EventName extends string = string> {
   state: string

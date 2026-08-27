@@ -25,6 +25,8 @@ export class Canvas {
   status: string
   width: number
   bound: Rect
+  private readonly contextLayerSetFunctionList: ContextLayerSetFunction[]
+
   constructor(
     layers: HTMLCanvasElement[],
     contextLayerSetFunctionList: ContextLayerSetFunction[],
@@ -35,16 +37,11 @@ export class Canvas {
       throw new Error("Canvas must have at least one layer")
     }
     this.layers = layers
+    this.contextLayerSetFunctionList = [...contextLayerSetFunctionList]
     this.width = width
     this.height = height
     this.status = "default"
-    this.contexts = layers.map((layer, i) => {
-      const context = contextLayerSetFunctionList[i](layer)
-      if (!context) {
-        throw new Error(`Unable to get drawing context for layer ${i}`)
-      }
-      return context
-    })
+    this.contexts = []
 
     this.bound = {
       x: 0,
@@ -130,8 +127,27 @@ export class Canvas {
   }
 
   init() {
+    this.resize(this.width, this.height)
+  }
+
+  resize(width: number, height: number) {
+    this.width = width
+    this.height = height
+    this.bound = { x: 0, y: 0, width, height }
+
     this.layers.forEach((layer) => {
-      sizeBackingStore(layer, this.width, this.height)
+      sizeBackingStore(layer, width, height)
+    })
+
+    // Changing a Canvas backing-store size resets its context state. Resolve
+    // every configured context again after sizing so custom setters can
+    // restore the state they own without recreating the Stay runtime.
+    this.contexts = this.layers.map((layer, i) => {
+      const context = this.contextLayerSetFunctionList[i](layer)
+      if (!context) {
+        throw new Error(`Unable to get drawing context for layer ${i}`)
+      }
+      return context
     })
   }
 }

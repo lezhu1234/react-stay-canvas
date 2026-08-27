@@ -231,6 +231,7 @@ export default function DiagramExample() {
               "Drag shapes in, double-click labels, connect blue ports, and hold Space to pan.",
               "拖入图形，双击编辑文字，拖动蓝色连接点连线，按住空格拖动画布。",
             )}
+            resizeToViewport
             wide
           >
             <StayCanvas

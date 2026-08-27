@@ -156,16 +156,18 @@ export function CanvasSurface({
   className,
   viewportLabel,
   canvasDisplayTransform,
+  resizeToViewport = false,
   shrinkToViewport = false,
 }: {
   children: ReactNode
   className?: string
   viewportLabel?: string
   canvasDisplayTransform?: CanvasDisplayTransform
+  resizeToViewport?: boolean
   shrinkToViewport?: boolean
 }) {
   const viewportRef = useRef<HTMLDivElement>(null)
-  const observesResize = shrinkToViewport
+  const observesResize = resizeToViewport || shrinkToViewport
     || (isValidElement<StayCanvasProps>(children) && children.props.recreateOnResize === true)
   const viewportSize = useViewportSize(viewportRef, observesResize)
   const displayScaleX = positiveFiniteOr(canvasDisplayTransform?.scaleX, 1)
@@ -179,10 +181,10 @@ export function CanvasSurface({
         const sceneWidth = children.props.width ?? 500
         const sceneHeight = children.props.height ?? 500
         const hasMeasuredViewport = viewportSize.width > 1 && viewportSize.height > 1
-        const width = shrinkToViewport && hasMeasuredViewport
+        const width = (resizeToViewport || shrinkToViewport) && hasMeasuredViewport
           ? viewportSize.width
           : Math.max(sceneWidth, viewportSize.width)
-        const height = shrinkToViewport && hasMeasuredViewport
+        const height = (resizeToViewport || shrinkToViewport) && hasMeasuredViewport
           ? viewportSize.height
           : Math.max(sceneHeight, viewportSize.height)
         const placement = {
@@ -251,6 +253,7 @@ export function CanvasCard({
   className,
   viewportLabel,
   canvasDisplayTransform,
+  resizeToViewport = false,
 }: {
   title: string
   description?: string
@@ -259,6 +262,7 @@ export function CanvasCard({
   className?: string
   viewportLabel?: string
   canvasDisplayTransform?: CanvasDisplayTransform
+  resizeToViewport?: boolean
 }) {
   return (
     <section className={["canvas-card", wide ? "wide" : "", className ?? ""].filter(Boolean).join(" ")}>
@@ -266,7 +270,11 @@ export function CanvasCard({
         <h2>{title}</h2>
         {description && <p>{description}</p>}
       </div>
-      <CanvasSurface canvasDisplayTransform={canvasDisplayTransform} viewportLabel={viewportLabel}>
+      <CanvasSurface
+        canvasDisplayTransform={canvasDisplayTransform}
+        resizeToViewport={resizeToViewport}
+        viewportLabel={viewportLabel}
+      >
         {children}
       </CanvasSurface>
     </section>

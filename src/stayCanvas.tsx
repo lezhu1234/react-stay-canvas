@@ -161,10 +161,15 @@ const StayCanvas = forwardRef(
     )
 
     useEffect(() => {
-      if (width > 0 && height > 0 && (!initialized.current || recreateOnResize)) {
+      if (width <= 0 || height <= 0) return
+
+      if (!initialized.current || recreateOnResize) {
         init()
         initialized.current = true
+        return
       }
+
+      stay.current?.resize(width, height)
     }, [width, height])
 
     useEffect(

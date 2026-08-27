@@ -5,6 +5,7 @@ import {
   type CoordinateFrame,
   type PointerCoordinates,
   type PointerSamples,
+  type SurfaceMetrics,
 } from "../../coordinates/coordinateSystem"
 import type {
   ActionRoutePort,
@@ -30,9 +31,15 @@ type EventRuntimeContext<EventName extends string> = {
   actionRouter: ActionRoutePort<EventName>
 }
 
+type PointerMappingContext = {
+  frame: CoordinateFrame
+  metrics: SurfaceMetrics
+}
+
 export class EventRuntime<EventName extends string> {
   private readonly registry = new EventRegistry<EventName>()
   private readonly activatedDragSessions = new Set<number>()
+  private readonly pointerMappingContexts = new Map<number, PointerMappingContext>()
 
   constructor(private readonly context: EventRuntimeContext<EventName>) {}
 
@@ -66,6 +73,7 @@ export class EventRuntime<EventName extends string> {
       if (terminalSessionId !== undefined) {
         this.registry.clearPointerSession(terminalSessionId)
         this.activatedDragSessions.delete(terminalSessionId)
+        this.pointerMappingContexts.delete(terminalSessionId)
         this.context.actionRouter.endPointerSession(terminalSessionId)
       }
     }
@@ -225,11 +233,44 @@ export class EventRuntime<EventName extends string> {
       previous: current,
       current,
     }
-    const metrics = this.context.canvas.getSurfaceMetrics()
-    const frame = this.context.coordinates.getFrame(metrics)
+    const mappingContext = this.pointerMappingContext(input)
+    this.rememberPointerMappingContext(input, mappingContext)
     return {
-      coordinates: this.context.coordinates.mapPointer(samples, metrics, frame),
-      frame,
+      coordinates: this.context.coordinates.mapPointer(
+        samples,
+        mappingContext.metrics,
+        mappingContext.frame
+      ),
+      frame: mappingContext.frame,
+    }
+  }
+
+  private pointerMappingContext(input: EventInput): PointerMappingContext {
+    const sessionId = input.pointerSession?.id
+    if (
+      sessionId !== undefined &&
+      input.sessionTransition?.phase === "cancel" &&
+      input.sessionTransition.cancelReason === "resize"
+    ) {
+      const remembered = this.pointerMappingContexts.get(sessionId)
+      if (remembered) return remembered
+    }
+
+    const metrics = this.context.canvas.getSurfaceMetrics()
+    return {
+      metrics,
+      frame: this.context.coordinates.getFrame(metrics),
+    }
+  }
+
+  private rememberPointerMappingContext(
+    input: EventInput,
+    mappingContext: PointerMappingContext
+  ) {
+    const sessionId = input.pointerSession?.id
+    const phase = input.sessionTransition?.phase
+    if (sessionId !== undefined && (phase === "start" || phase === "continue")) {
+      this.pointerMappingContexts.set(sessionId, mappingContext)
     }
   }
 

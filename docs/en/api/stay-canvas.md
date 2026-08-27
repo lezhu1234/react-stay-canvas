@@ -24,7 +24,7 @@ import {
 | `listenerList` | `ListenerProps[]` | `[]` | Listeners registered during initialization |
 | `mounted` | `(tools: StayTools) => void` | — | Called after each runtime instance is created |
 | `passive` | `boolean` | `true` | Passive option for the wheel DOM listener |
-| `recreateOnResize` | `boolean` | `false` | Whether width or height changes recreate the runtime |
+| `recreateOnResize` | `boolean` | `false` | Opt into destructive runtime recreation when width or height changes |
 | `focusOnInit` | `boolean` | `true` | Whether to focus the top Canvas after initialization |
 | `viewport` | `{ minScale?, maxScale? }` | `{ minScale: 0.1, maxScale: 10 }` | Non-destructive viewport scale limits; fixed after runtime creation |
 
@@ -52,7 +52,11 @@ These lists are read when a runtime is created. A React rerender that only repla
 
 ### recreateOnResize
 
-With the default `false`, width and height prop changes after initialization do not rebuild the runtime. With `true`, every valid size change destroys the previous instance, creates a new one, and calls `mounted` again. This is not a content-preserving resize; application code must rebuild the scene.
+With the default `false`, valid width and height changes resize the existing runtime. The Canvas elements, `StayTools`, Children, Shapes, transforms, history, state, listeners, and viewport state retain their identity and values. Content geometry is not scaled, moved, or laid out again: shrinking clips more Content and expanding reveals more Content. The Root hit boundary follows the new View size, while the Content boundary represented by the Root Shape remains unchanged.
+
+Resizing resets each native Canvas backing store, then invokes the original context setter for every layer so it can restore context-owned state. Every layer repaints with the new `ShapeDrawProps.width` and `height`. An active Pointer Session is cancelled before the surface changes, using its last point in the old coordinate frame and `cancelReason: "resize"`.
+
+With `recreateOnResize={true}`, every valid size change instead destroys the previous instance, creates a new one, and calls `mounted` again. Use this only when application code intentionally rebuilds or lays out the entire scene; previous runtime and Child references become stale.
 
 ### passive
 
@@ -89,12 +93,13 @@ width: <width>px;
 height: <height>px;
 ```
 
-Each Canvas is absolutely positioned at `(0, 0)`. `width` and `height` define the logical View and bitmap resolution; a wider parent does not stretch it automatically. Responsive layouts have two distinct options:
+Each Canvas is absolutely positioned at `(0, 0)`. `width` and `height` define the logical View and bitmap resolution; a wider parent does not stretch it automatically. Responsive layouts have three distinct options:
 
-- Change the logical drawing size by passing explicit numeric dimensions and enable `recreateOnResize` when rebuilding the scene is intended.
+- Change the logical drawing size by passing new numeric dimensions. The existing scene and viewport are preserved by default.
+- Enable `recreateOnResize` when a size change must intentionally rebuild and lay out the scene from `mounted`.
 - Preserve the logical scene while applying a positive, axis-aligned CSS scale to the rendered Canvas or one of its wrappers. Native pointer input is normalized from the rendered bounding rectangle into Canvas-local logical coordinates before event routing.
 
-The second option preserves Content and history but only changes presentation. Keep the rendered scale stable during an active Pointer Session; changing layout in the middle of one interaction is outside this contract. Display scaling does not increase bitmap resolution, and it does not define coordinate behavior for rotation, skew, or mirroring.
+The third option only changes presentation and does not increase bitmap resolution. Keep the rendered scale stable during an active Pointer Session; changing CSS layout in the middle of one interaction is outside this contract. Rotation, skew, and mirroring do not have defined coordinate behavior.
 
 `viewport` is not React-controlled state. Use [`tools.viewport`](./stay-tools.md#non-destructive-viewport) to pan, zoom, or restore the runtime. It only changes the Content-to-View projection; it does not mutate Children or Shapes.
 

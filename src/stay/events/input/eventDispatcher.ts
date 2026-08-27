@@ -1,4 +1,5 @@
 import Canvas from "../../../canvas"
+import type { PointerSessionCancelReason } from "../../../types/events"
 import type { EventInputPort } from "../contracts"
 import { DomInputAdapter } from "./domInputAdapter"
 import { PressedInputState } from "./pressedInputState"
@@ -28,5 +29,9 @@ export class EventDispatcher {
   destroy() {
     this.inputAdapter.destroy()
     this.pressedState.clear()
+  }
+
+  cancelPointerSession(reason: PointerSessionCancelReason) {
+    this.inputAdapter.cancelPointerSession(reason)
   }
 }

@@ -36,9 +36,11 @@ export function ExamplePage({
   const sourceLabel = activeSource && sources.length > 1
     ? text(`TypeScript source code: ${sourceFileName(activeSource.path)}`, `TypeScript 源码：${sourceFileName(activeSource.path)}`)
     : text("TypeScript source code", "TypeScript 源码")
-  const pageClassName = definition.presentation === "immersive"
+  const isImmersive = definition.presentation === "immersive"
+  const pageClassName = isImmersive
     ? "example-page workspace-page immersive-page"
     : "example-page workspace-page"
+  const overviewHref = `${window.location.pathname}?example=${encodeURIComponent("/")}#/`
 
   return (
     <article className={pageClassName}>
@@ -52,6 +54,13 @@ export function ExamplePage({
           {definition.features.map((feature) => <span key={feature}>{feature}</span>)}
         </div>
       </header>
+
+      {isImmersive && (
+        <a className="immersive-overview-link" href={overviewHref}>
+          <span aria-hidden="true">←</span>
+          {text("Examples", "示例目录")}
+        </a>
+      )}
 
       <div className="tabs" role="tablist" aria-label={text("Example views", "示例视图")}>
         {(["result", "source"] as Tab[]).map((item) => (

@@ -227,6 +227,36 @@ describe("Example Canvas workspace", () => {
     expect(container.querySelector("#result-panel [data-testid='example-result']")).not.toBeNull()
   })
 
+  it("keeps immersive examples connected to the example catalog", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+    const definition: ExampleDefinition = {
+      path: "/simple/immersive",
+      sourcePaths: ["./ImmersiveExample.tsx"],
+      group: "Simple",
+      order: 1,
+      presentation: "immersive",
+      title: { en: "Immersive workspace", zh: "沉浸式工作区" },
+      shortTitle: { en: "Immersive", zh: "沉浸式" },
+      summary: { en: "An immersive workspace.", zh: "沉浸式工作区。" },
+      features: ["Canvas"],
+      component: () => <div />,
+    }
+
+    act(() => {
+      root?.render(
+        <I18nProvider>
+          <ExamplePage definition={definition} sources={[{ path: definition.sourcePaths[0], source: "export default function Immersive() {}" }]} />
+        </I18nProvider>,
+      )
+    })
+
+    const overviewLink = container.querySelector<HTMLAnchorElement>(".immersive-overview-link")
+    expect(overviewLink?.textContent).toContain("Examples")
+    expect(overviewLink?.getAttribute("href")).toBe("/?example=%2F#/")
+  })
+
   it("keeps the stage and every control group in separate workspace regions", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)

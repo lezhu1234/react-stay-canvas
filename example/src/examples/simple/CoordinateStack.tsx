@@ -1,13 +1,15 @@
 import { useEffect, useRef } from "react"
 import {
   Circle,
+  InstantShape,
   Line,
-  Rectangle,
   StayCanvas,
   StayText,
   type ChildTransform,
   type Coordinate,
   type Rect,
+  type ShapeDrawProps,
+  type ShapeProps,
   type StayInstantChild,
   type StayTools,
   type ViewportState,
@@ -32,6 +34,8 @@ const STACK_HEIGHT = 120
 const PLANE_ASPECT_RATIO = 4 / 3
 const PLANE_GRID_COLUMNS = 6
 const PLANE_GRID_ROWS = 5
+const PLANE_NEAR_SCALE = 1.32
+const PLANE_FAR_SCALE = 1.08
 
 type PlaneName = "client" | "view" | "content"
 
@@ -50,18 +54,97 @@ type PlaneDefinition = {
   stroke: ReturnType<typeof rgba>
 }
 
+type QuadPoints = [Coordinate, Coordinate, Coordinate, Coordinate]
+
+type PerspectiveQuadProps = ShapeProps & {
+  points: QuadPoints
+  filter?: string
+}
+
+class PerspectiveQuad extends InstantShape {
+  filter?: string
+  points: QuadPoints
+
+  constructor({ filter, points, ...props }: PerspectiveQuadProps) {
+    super(props)
+    this.filter = filter
+    this.points = points
+  }
+
+  private trace(context: ShapeDrawProps["context"]) {
+    context.beginPath()
+    context.moveTo(this.points[0].x, this.points[0].y)
+    this.points.slice(1).forEach((point) => context.lineTo(point.x, point.y))
+    context.closePath()
+  }
+
+  commonDraw({ context }: ShapeDrawProps) {
+    context.filter = this.filter ?? "none"
+  }
+
+  afterDraw({ context }: ShapeDrawProps) {
+    context.filter = "none"
+  }
+
+  fill({ context }: ShapeDrawProps) {
+    this.trace(context)
+    context.fill()
+  }
+
+  stroke({ context }: ShapeDrawProps) {
+    this.trace(context)
+    context.stroke()
+  }
+
+  copy() {
+    return new PerspectiveQuad({
+      ...this.copyProps(),
+      filter: this.filter,
+      points: this.points.map((point) => ({ ...point })) as QuadPoints,
+    })
+  }
+
+  getBound(): Rect {
+    const xs = this.points.map((point) => point.x)
+    const ys = this.points.map((point) => point.y)
+    const x = Math.min(...xs)
+    const y = Math.min(...ys)
+    return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
+  }
+
+  move(offsetX: number, offsetY: number) {
+    this.update({
+      points: this.points.map((point) => ({ x: point.x + offsetX, y: point.y + offsetY })) as QuadPoints,
+    })
+  }
+
+  update({ filter, points, ...props }: Partial<PerspectiveQuadProps>) {
+    this.filter = filter ?? this.filter
+    if (points) this.points = points
+    this.applyUpdate(props)
+    return this
+  }
+
+  zoom(zoomScale: number) {
+    this.update({
+      points: this.points.map((point) => this.getZoomPoint(zoomScale, point)) as QuadPoints,
+      strokeConfig: { lineWidth: this.strokeConfig.lineWidth * zoomScale },
+    })
+  }
+}
+
 type PlaneRuntime = PlaneDefinition & {
   child: StayInstantChild
-  frame: Rectangle
-  shadow: Rectangle
+  frame: PerspectiveQuad
+  shadow: PerspectiveQuad
   title: StayText
   dimension: StayText
   dot: Circle
   value: StayText
-  shape: Rectangle
+  shape: PerspectiveQuad
   shapeEdges: [Line, Line, Line, Line]
   canvasDomEdges?: [Line, Line, Line, Line]
-  viewportFill?: Rectangle
+  viewportFill?: PerspectiveQuad
   viewportEdges?: [Line, Line, Line, Line]
   viewportLabel?: StayText
 }
@@ -88,27 +171,66 @@ const planePalette = {
   },
 } as const
 
-function createDefinitions(width: number, height: number): Record<PlaneName, PlaneDefinition> {
+export function projectPlanePoint(
+  point: Readonly<Coordinate>,
+  width: number,
+  height: number,
+): Coordinate {
+  // Child transforms stay affine; this display-only warp adds depth without changing coordinate ownership.
+  const horizontalProgress = point.x / Math.max(1, width)
+  const verticalScale = PLANE_NEAR_SCALE
+    + (PLANE_FAR_SCALE - PLANE_NEAR_SCALE) * horizontalProgress
+  return {
+    x: point.x,
+    y: height / 2 + (point.y - height / 2) * verticalScale,
+  }
+}
+
+function projectPoint(plane: PlaneDefinition, point: Readonly<Coordinate>) {
+  return projectPlanePoint(point, plane.width, plane.height)
+}
+
+function quadForRect(plane: PlaneDefinition, rect: Readonly<Rect>): QuadPoints {
+  return [
+    projectPoint(plane, { x: rect.x, y: rect.y }),
+    projectPoint(plane, { x: rect.x + rect.width, y: rect.y }),
+    projectPoint(plane, { x: rect.x + rect.width, y: rect.y + rect.height }),
+    projectPoint(plane, { x: rect.x, y: rect.y + rect.height }),
+  ]
+}
+
+export function createPlaneDefinitions(width: number, height: number): Record<PlaneName, PlaneDefinition> {
   const horizontalPadding = Math.max(10, width * 0.03)
   const gap = Math.max(12, width * 0.055)
   const labelSpace = Math.max(28, Math.min(44, height * 0.18))
   const bottomPadding = Math.max(8, height * 0.04)
+  const minimumBlockTop = 4
   const widthBound = (width - horizontalPadding * 2 - gap * 2) / 3
-  const heightBound = (height - labelSpace - bottomPadding) * PLANE_ASPECT_RATIO
+  const projectedHeightSpace = Math.max(
+    1,
+    height - labelSpace - bottomPadding - minimumBlockTop,
+  )
+  const heightBound = projectedHeightSpace * PLANE_ASPECT_RATIO / PLANE_NEAR_SCALE
   const planeWidth = Math.max(1, Math.min(widthBound, heightBound))
   const planeHeight = planeWidth / PLANE_ASPECT_RATIO
   const groupWidth = planeWidth * 3 + gap * 2
   const startX = (width - groupWidth) / 2
-  const availableVerticalSpace = height - labelSpace - planeHeight - bottomPadding
-  const blockTop = Math.max(4, availableVerticalSpace * 0.67)
-  const planeY = blockTop + labelSpace
-  const labelY = planeY - Math.min(30, labelSpace * 0.72)
+  const desiredVerticalSpace = height - labelSpace - planeHeight - bottomPadding
+  const maximumBlockTop = height
+    - labelSpace
+    - planeHeight * PLANE_NEAR_SCALE
+    - bottomPadding
+  const blockTop = Math.max(
+    minimumBlockTop,
+    Math.min(desiredVerticalSpace * 0.67, maximumBlockTop),
+  )
+  const visualPlaneTop = blockTop + labelSpace
+  const planeY = visualPlaneTop + planeHeight * (PLANE_NEAR_SCALE - 1) / 2
+  const labelY = visualPlaneTop - Math.min(30, labelSpace * 0.72)
 
   const definition = (
     name: PlaneName,
     index: number,
-    rotation: number,
-    skewY: number,
   ): PlaneDefinition => {
     const x = startX + index * (planeWidth + gap)
     return {
@@ -117,15 +239,15 @@ function createDefinitions(width: number, height: number): Record<PlaneName, Pla
       labelX: x,
       labelY,
       layer: index,
-      transform: { x, y: planeY, rotation, skewY },
+      transform: { x, y: planeY },
       ...planePalette[name],
     }
   }
 
   return {
-    client: definition("client", 0, -1.2, -0.25),
-    view: definition("view", 1, 0.2, 0.12),
-    content: definition("content", 2, 1.2, 0.25),
+    client: definition("client", 0),
+    view: definition("view", 1),
+    content: definition("content", 2),
   }
 }
 
@@ -186,19 +308,25 @@ function updateShapeProjection(plane: PlaneRuntime, rect: Rect) {
   const clip = { x: 0, y: 0, width: plane.width, height: plane.height }
   const visible = clippedRect(rect, clip)
   plane.shape.update({
-    ...(visible ?? { x: 0, y: 0, width: 0, height: 0 }),
+    points: quadForRect(plane, visible ?? { x: 0, y: 0, width: 0, height: 0 }),
     fillConfig: { color: rgba(54, 105, 221, visible ? 0.13 : 0) },
     strokeConfig: { color: rgba(54, 105, 221, 0), lineWidth: 0 },
   })
   clippedRectEdges(rect, clip).forEach((edge, index) => {
+    const start = projectPoint(plane, edge ? { x: edge.x1, y: edge.y1 } : { x: 0, y: 0 })
+    const end = projectPoint(plane, edge ? { x: edge.x2, y: edge.y2 } : { x: 0, y: 0 })
     plane.shapeEdges[index].update({
-      ...(edge ?? { x1: 0, y1: 0, x2: 0, y2: 0 }),
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
       strokeConfig: { color: rgba(54, 105, 221, edge ? 0.9 : 0), lineWidth: 1.4 },
     })
   })
 }
 
 function updateFrameEdges(
+  plane: PlaneRuntime,
   edges: [Line, Line, Line, Line] | undefined,
   rect: Rect,
   clip: Rect,
@@ -208,13 +336,18 @@ function updateFrameEdges(
 ) {
   if (!edges) return
   clippedRectEdges(rect, clip).forEach((edge, index) => {
+    const start = projectPoint(plane, edge ? { x: edge.x1, y: edge.y1 } : { x: 0, y: 0 })
+    const end = projectPoint(plane, edge ? { x: edge.x2, y: edge.y2 } : { x: 0, y: 0 })
     const strokeConfig = {
       color: { ...color, a: edge ? color.a : 0 },
       lineWidth,
       ...(dash === undefined ? {} : { dash }),
     }
     edges[index].update({
-      ...(edge ?? { x1: 0, y1: 0, x2: 0, y2: 0 }),
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
       strokeConfig,
     })
   })
@@ -225,15 +358,14 @@ function updateViewportProjection(plane: PlaneRuntime, rect: Rect) {
   const clip = { x: 0, y: 0, width: plane.width, height: plane.height }
   const visible = clippedRect(rect, clip)
   plane.viewportFill.update({
-    ...(visible ?? { x: 0, y: 0, width: 0, height: 0 }),
+    points: quadForRect(plane, visible ?? { x: 0, y: 0, width: 0, height: 0 }),
     fillConfig: { color: rgba(70, 143, 77, visible ? 0.045 : 0) },
     strokeConfig: { color: rgba(70, 143, 77, 0), lineWidth: 0 },
   })
-  updateFrameEdges(plane.viewportEdges, rect, clip, rgba(70, 143, 77, 0.78), 1.4)
+  updateFrameEdges(plane, plane.viewportEdges, rect, clip, rgba(70, 143, 77, 0.78), 1.4)
   const labelVisible = visible && visible.width >= 52 && visible.height >= 24
   plane.viewportLabel.update({
-    x: visible ? visible.x + 7 : 0,
-    y: visible ? visible.y + 6 : 0,
+    ...(visible ? projectPoint(plane, { x: visible.x + 7, y: visible.y + 6 }) : { x: 0, y: 0 }),
     fillConfig: { color: rgba(70, 143, 77, labelVisible ? 0.9 : 0) },
   })
 }
@@ -252,8 +384,8 @@ function updateCornerLinks(
   visible = true,
 ) {
   correspondingRectCorners(fromRect, toRect).forEach(({ from, to }, index) => {
-    const start = fromPlane.child.toContentPoint(from)
-    const end = toPlane.child.toContentPoint(to)
+    const start = fromPlane.child.toContentPoint(projectPoint(fromPlane, from))
+    const end = toPlane.child.toContentPoint(projectPoint(toPlane, to))
     lines[index].update({
       x1: start.x,
       y1: start.y,
@@ -270,24 +402,34 @@ function updateCornerLinks(
 
 function createGrid(plane: PlaneDefinition) {
   const gridColor = { ...plane.stroke, a: 0.1 }
-  const gridX = Array.from({ length: PLANE_GRID_COLUMNS }, (_, index) => new Line({
-    x1: gridPosition(index + 1, PLANE_GRID_COLUMNS, plane.width),
-    y1: 0,
-    x2: gridPosition(index + 1, PLANE_GRID_COLUMNS, plane.width),
-    y2: plane.height,
-    layer: plane.layer,
-    zIndex: 1,
-    strokeConfig: { color: gridColor, lineWidth: 1 },
-  }))
-  const gridY = Array.from({ length: PLANE_GRID_ROWS }, (_, index) => new Line({
-    x1: 0,
-    y1: gridPosition(index + 1, PLANE_GRID_ROWS, plane.height),
-    x2: plane.width,
-    y2: gridPosition(index + 1, PLANE_GRID_ROWS, plane.height),
-    layer: plane.layer,
-    zIndex: 1,
-    strokeConfig: { color: gridColor, lineWidth: 1 },
-  }))
+  const gridX = Array.from({ length: PLANE_GRID_COLUMNS }, (_, index) => {
+    const x = gridPosition(index + 1, PLANE_GRID_COLUMNS, plane.width)
+    const start = projectPoint(plane, { x, y: 0 })
+    const end = projectPoint(plane, { x, y: plane.height })
+    return new Line({
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
+      layer: plane.layer,
+      zIndex: 1,
+      strokeConfig: { color: gridColor, lineWidth: 1 },
+    })
+  })
+  const gridY = Array.from({ length: PLANE_GRID_ROWS }, (_, index) => {
+    const y = gridPosition(index + 1, PLANE_GRID_ROWS, plane.height)
+    const start = projectPoint(plane, { x: 0, y })
+    const end = projectPoint(plane, { x: plane.width, y })
+    return new Line({
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
+      layer: plane.layer,
+      zIndex: 1,
+      strokeConfig: { color: gridColor, lineWidth: 1 },
+    })
+  })
   return { gridX, gridY }
 }
 
@@ -319,49 +461,48 @@ function createPlaneRuntime(
     font: { size: detailSize, fontWeight: 500 },
     fillConfig: { color: colors.gray },
   })
-  const shadow = new Rectangle({
-    x: 4,
-    y: 7,
-    width: plane.width,
-    height: plane.height,
+  const shadow = new PerspectiveQuad({
+    points: quadForRect(plane, { x: 4, y: 7, width: plane.width, height: plane.height }),
     layer: plane.layer,
     zIndex: -2,
     filter: "blur(9px)",
     fillConfig: { color: { ...plane.stroke, a: 0.1 } },
     strokeConfig: { color: rgba(39, 51, 67, 0), lineWidth: 0 },
   })
-  const frame = new Rectangle({
-    x: 0,
-    y: 0,
-    width: plane.width,
-    height: plane.height,
+  const frame = new PerspectiveQuad({
+    points: quadForRect(plane, { x: 0, y: 0, width: plane.width, height: plane.height }),
     layer: plane.layer,
     zIndex: 0,
     fillConfig: { color: plane.fill },
     strokeConfig: { color: plane.stroke, lineWidth: 1.25 },
   })
   const axisColor = rgba(78, 89, 104, 0.24)
+  const xAxisStart = projectPoint(plane, { x: 12, y: 20 })
+  const xAxisEnd = projectPoint(plane, { x: plane.width - 14, y: 20 })
   const xAxis = new Line({
-    x1: 12,
-    y1: 20,
-    x2: plane.width - 14,
-    y2: 20,
+    x1: xAxisStart.x,
+    y1: xAxisStart.y,
+    x2: xAxisEnd.x,
+    y2: xAxisEnd.y,
     layer: plane.layer,
     zIndex: 3,
     strokeConfig: { color: axisColor, lineWidth: 1 },
   })
+  const yAxisStart = projectPoint(plane, { x: 12, y: 20 })
+  const yAxisEnd = projectPoint(plane, { x: 12, y: plane.height - 12 })
   const yAxis = new Line({
-    x1: 12,
-    y1: 20,
-    x2: 12,
-    y2: plane.height - 12,
+    x1: yAxisStart.x,
+    y1: yAxisStart.y,
+    x2: yAxisEnd.x,
+    y2: yAxisEnd.y,
     layer: plane.layer,
     zIndex: 3,
     strokeConfig: { color: axisColor, lineWidth: 1 },
   })
+  const originPosition = projectPoint(plane, { x: 16, y: 7 })
   const originValue = new StayText({
-    x: 16,
-    y: 7,
+    x: originPosition.x,
+    y: originPosition.y,
     text: "0,0",
     layer: plane.layer,
     zIndex: 5,
@@ -369,9 +510,10 @@ function createPlaneRuntime(
     font: { size: detailSize },
     fillConfig: { color: colors.gray },
   })
+  const xLabelPosition = projectPoint(plane, { x: plane.width - 8, y: 14 })
   const xLabel = new StayText({
-    x: plane.width - 8,
-    y: 14,
+    x: xLabelPosition.x,
+    y: xLabelPosition.y,
     text: "X",
     layer: plane.layer,
     zIndex: 5,
@@ -380,9 +522,10 @@ function createPlaneRuntime(
     font: { size: detailSize, fontWeight: 700 },
     fillConfig: { color: colors.gray },
   })
+  const yLabelPosition = projectPoint(plane, { x: 6, y: plane.height - 5 })
   const yLabel = new StayText({
-    x: 6,
-    y: plane.height - 5,
+    x: yLabelPosition.x,
+    y: yLabelPosition.y,
     text: "Y",
     layer: plane.layer,
     zIndex: 5,
@@ -399,11 +542,8 @@ function createPlaneRuntime(
     zIndex: 4,
     strokeConfig: { color: rgba(74, 163, 214, 0.64), lineWidth: 1.15, dash: [5, 4] },
   })) as [Line, Line, Line, Line] : undefined
-  const viewportFill = name === "content" ? new Rectangle({
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
+  const viewportFill = name === "content" ? new PerspectiveQuad({
+    points: quadForRect(plane, { x: 0, y: 0, width: 0, height: 0 }),
     layer: plane.layer,
     zIndex: 4,
     fillConfig: { color: rgba(70, 143, 77, 0.045) },
@@ -428,11 +568,8 @@ function createPlaneRuntime(
     font: { size: detailSize, fontWeight: 700 },
     fillConfig: { color: rgba(70, 143, 77, 0.9) },
   }) : undefined
-  const shape = new Rectangle({
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
+  const shape = new PerspectiveQuad({
+    points: quadForRect(plane, { x: 0, y: 0, width: 0, height: 0 }),
     layer: plane.layer,
     zIndex: 7,
     fillConfig: { color: colors.blueSoft },
@@ -537,6 +674,7 @@ export function CoordinateStack({
       ranges[name] = range
       const value = sample[name]
       const localPoint = pointOnPlane(plane, value, range)
+      const projectedPoint = projectPoint(plane, localPoint)
       const localShape = rectOnPlane(plane, shapeProjection[name], range)
       const isActive = planeIsActive(name, mappingFocus)
 
@@ -552,11 +690,11 @@ export function CoordinateStack({
         text: `${Math.round(range.width)} × ${Math.round(range.height)}`,
         fillConfig: { color: rgba(78, 89, 104, isActive ? 0.72 : 0.5) },
       })
-      plane.dot.update(localPoint)
+      plane.dot.update(projectedPoint)
       const valueOnRight = localPoint.x < plane.width * 0.72
       plane.value.update({
-        x: localPoint.x + (valueOnRight ? 10 : -10),
-        y: Math.max(12, localPoint.y - 8),
+        x: projectedPoint.x + (valueOnRight ? 10 : -10),
+        y: Math.max(12, projectedPoint.y - 8),
         text: `(${formatPoint(value)})`,
         textAlign: valueOnRight ? "left" : "right",
       })
@@ -568,6 +706,7 @@ export function CoordinateStack({
       }
       if (name === "client") {
         updateFrameEdges(
+          plane,
           plane.canvasDomEdges,
           rectOnPlane(plane, {
             x: sample.surface.left,
@@ -582,7 +721,7 @@ export function CoordinateStack({
         )
       }
       updateShapeProjection(plane, localShape)
-      points[name] = plane.child.toContentPoint(localPoint)
+      points[name] = plane.child.toContentPoint(projectedPoint)
     }
 
     const clientViewActive = mappingFocus === "view-client"
@@ -641,7 +780,7 @@ export function CoordinateStack({
 
   const mounted = (tools: StayTools) => {
     const canvasArea = sceneCanvasArea(tools, STACK_WIDTH, STACK_HEIGHT)
-    const definitions = createDefinitions(canvasArea.width, canvasArea.height)
+    const definitions = createPlaneDefinitions(canvasArea.width, canvasArea.height)
     const planeNames: PlaneName[] = ["client", "view", "content"]
     const planes = {} as Record<PlaneName, PlaneRuntime>
     const overlayLabels: StayText[] = []

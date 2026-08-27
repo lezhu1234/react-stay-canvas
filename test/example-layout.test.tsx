@@ -21,7 +21,11 @@ import {
 import { ExamplePage } from "../example/src/components/ExamplePage"
 import DiagramExample from "../example/src/examples/integrated/DiagramExample"
 import MotionStudioExample from "../example/src/examples/integrated/MotionStudioExample"
-import { expandRangeToAspect } from "../example/src/examples/simple/CoordinateStack"
+import {
+  createPlaneDefinitions,
+  expandRangeToAspect,
+  projectPlanePoint,
+} from "../example/src/examples/simple/CoordinateStack"
 import CoordinatesExample from "../example/src/examples/simple/CoordinatesExample"
 import {
   clippedRectEdges,
@@ -83,6 +87,32 @@ afterEach(() => {
 })
 
 describe("Example Canvas workspace", () => {
+  it("projects coordinate planes toward a vertical perspective vanishing direction", () => {
+    const width = 240
+    const height = 180
+    const nearTop = projectPlanePoint({ x: 0, y: 0 }, width, height)
+    const nearBottom = projectPlanePoint({ x: 0, y: height }, width, height)
+    const farTop = projectPlanePoint({ x: width, y: 0 }, width, height)
+    const farBottom = projectPlanePoint({ x: width, y: height }, width, height)
+    const center = projectPlanePoint({ x: width / 2, y: height / 2 }, width, height)
+
+    expect(nearBottom.y - nearTop.y).toBeGreaterThan(farBottom.y - farTop.y)
+    expect(nearTop.y).toBeLessThan(farTop.y)
+    expect(nearBottom.y).toBeGreaterThan(farBottom.y)
+    expect(center).toEqual({ x: width / 2, y: height / 2 })
+  })
+
+  it("fits the projected plane bounds inside a height-constrained stack", () => {
+    const canvasHeight = 80
+    const plane = createPlaneDefinitions(728, canvasHeight).client
+    const top = projectPlanePoint({ x: 0, y: 0 }, plane.width, plane.height)
+    const bottom = projectPlanePoint({ x: 0, y: plane.height }, plane.width, plane.height)
+    const offsetY = plane.transform.y ?? 0
+
+    expect(offsetY + top.y).toBeGreaterThanOrEqual(0)
+    expect(offsetY + bottom.y).toBeLessThanOrEqual(canvasHeight)
+  })
+
   it("defines a bounded Content scene and connects all corresponding plane corners", () => {
     const fittedRange = expandRangeToAspect({ x: 100, y: 40, width: 300, height: 300 }, 4 / 3)
     expect(fittedRange.width / fittedRange.height).toBeCloseTo(4 / 3)

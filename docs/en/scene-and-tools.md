@@ -41,6 +41,17 @@ await tools.removeChild(child.id)
 
 `getChildrenWithoutRoot()` returns the Children created by application code. The internal root Child represents Canvas bounds and cannot be removed; most whole-scene application logic should exclude it as well.
 
+Applications can choose their own business Children, merge their Content bounds, and explicitly fit them into the current View:
+
+```ts
+const children = tools.getChildrenBySelector(".node|.edge")
+const bounds = unionRects(children.map((child) => child.getBound()))
+
+if (bounds) tools.viewport.fit(bounds, { padding: 32 })
+```
+
+The library performs the geometry and viewport calculation, while the application decides which Children count as scene content and when fitting should run.
+
 ## Transform one Child without rewriting geometry
 
 Pass a semantic transform when a multi-Shape object needs one shared local coordinate system:

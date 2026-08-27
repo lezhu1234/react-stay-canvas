@@ -16,6 +16,7 @@ import type {
 import type { Dict } from "../types/common"
 import type {
   ClientPoint,
+  ContentRect,
   ContentPoint,
   ContentVector,
   ViewPoint,
@@ -25,7 +26,7 @@ import type { ManualTriggerEvents } from "../types/manualActions"
 import type { Area, PointType } from "../types/geometry"
 import type { Cursor, StayCoordinates, StayTools } from "../types/tools"
 import { assert } from "../utils/assertions"
-import { numberAlmostEqual } from "../utils/geometry"
+import { fitRect, numberAlmostEqual } from "../utils/geometry"
 import { infixExpressionParser } from "../utils/selectors"
 import { StayAnimatedChild } from "./children/stayAnimatedChild"
 import { StayInstantChild } from "./children/stayInstantChild"
@@ -93,16 +94,16 @@ function prepareRegionContext(
   area: Area,
   targetSize: { width: number; height: number }
 ) {
-  const scale = Math.min(targetSize.width / area.width, targetSize.height / area.height)
-  const width = area.width * scale
-  const height = area.height * scale
-  const x = (targetSize.width - width) / 2
-  const y = (targetSize.height - height) / 2
+  const { rect, scale } = fitRect(area, {
+    x: 0,
+    y: 0,
+    ...targetSize,
+  })
 
   context.beginPath()
-  context.rect(x, y, width, height)
+  context.rect(rect.x, rect.y, rect.width, rect.height)
   context.clip()
-  context.translate(x, y)
+  context.translate(rect.x, rect.y)
   context.scale(scale, scale)
   context.translate(-area.x, -area.y)
 }
@@ -313,6 +314,8 @@ export function stayTools(this: Stay<any>): StayTools {
           this.coordinates.viewCenterToContent(metrics, frame)
         return this.coordinates.zoomBy(factor, resolvedAnchor)
       },
+      fit: (contentBounds: ContentRect, { padding = 0 } = {}) =>
+        this.coordinates.fit(contentBounds, this.root.getSurfaceMetrics(), padding),
       reset: () => this.coordinates.reset(),
       restore: (state: { x: number; y: number; scale: number }) =>
         this.coordinates.restore(state),

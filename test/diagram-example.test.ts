@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest"
-import { Circle, Path, Polygon, Rectangle, StayText } from "react-stay-canvas"
+import { Circle, Path, Polygon, Rectangle, StayText, unionRects } from "react-stay-canvas"
 
 import {
   type DiagramDocument,
@@ -19,7 +19,10 @@ import {
   DiagramSpaceStartMoveEvent,
   createDiagramListeners,
 } from "../example/src/examples/integrated/diagram/interactions"
-import { seedDiagram } from "../example/src/examples/integrated/diagram/scene"
+import {
+  fitDiagramViewport,
+  seedDiagram,
+} from "../example/src/examples/integrated/diagram/scene"
 import { createStage, md, mm, mu } from "./helpers/stage"
 import { createTextMeasureContext } from "./helpers/textMetrics"
 
@@ -325,6 +328,38 @@ describe("integrated diagram example", () => {
     })
     expect(() => replaceDiagramFromDocument(stage.tools, state, rootCollision)).toThrow("conflicts with the canvas")
     expect(toDiagramDocument(stage.tools)).toEqual(imported)
+  })
+
+  it("fits business diagram children without mutating their geometry or history", () => {
+    const { stage, state } = createDiagram()
+    const document = toDiagramDocument(stage.tools)
+    const historyLength = stage.stack.length
+    const bounds = unionRects(
+      stage.tools
+        .getChildrenBySelector(".node|.edge")
+        .map((child) => child.getBound())
+    )!
+    stage.tools.viewport.restore({ x: 300, y: -200, scale: 1.8 })
+
+    const viewport = fitDiagramViewport(stage.tools)
+    const topLeft = stage.tools.coordinates.contentToView(bounds)
+    const bottomRight = stage.tools.coordinates.contentToView({
+      x: bounds.x + bounds.width,
+      y: bounds.y + bounds.height,
+    })
+
+    expect(viewport).toEqual(stage.tools.viewport.get())
+    expect(viewport).not.toEqual({ x: 0, y: 0, scale: 1 })
+    expect(topLeft.x).toBeGreaterThanOrEqual(36)
+    expect(topLeft.y).toBeGreaterThanOrEqual(36)
+    expect(bottomRight.x).toBeLessThanOrEqual(900 - 36)
+    expect(bottomRight.y).toBeLessThanOrEqual(560 - 36)
+    expect(
+      Math.abs(topLeft.x - 36) < 0.0001 || Math.abs(topLeft.y - 36) < 0.0001
+    ).toBe(true)
+    expect(toDiagramDocument(stage.tools)).toEqual(document)
+    expect(stage.stack).toHaveLength(historyLength)
+    expect(state.viewportChanged).not.toHaveBeenCalled()
   })
 
   it("keeps imported ids safe from temporary marquee and connection children", async () => {

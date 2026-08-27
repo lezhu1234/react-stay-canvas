@@ -26,8 +26,10 @@ describe("Rectangle geometry", () => {
 
   it("computeFitInfo scales content to fit inside the rect", () => {
     // fit a 50x50 into 100x50 -> limited by height -> ratio 1
-    const { scaleRatio } = rect().computeFitInfo(50, 50)
+    const { rectangle, scaleRatio, offsetX, offsetY } = rect().computeFitInfo(50, 50)
     expect(scaleRatio).toBeCloseTo(1)
+    expect(rectangle.getBound()).toEqual({ x: 35, y: 20, width: 50, height: 50 })
+    expect({ offsetX, offsetY }).toEqual({ offsetX: 25, offsetY: 0 })
   })
 
   it("copy() is independent of the original", () => {

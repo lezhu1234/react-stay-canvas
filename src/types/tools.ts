@@ -16,6 +16,7 @@ import type {
 import type { Dict } from "./common"
 import type {
   ClientPoint,
+  ContentRect,
   ContentPoint,
   ContentVector,
   ViewPoint,
@@ -43,10 +44,19 @@ export interface ViewportOptions {
   maxScale?: number
 }
 
+export interface ViewportFitOptions {
+  /** Padding inside the Canvas View, measured in View pixels. */
+  padding?: number
+}
+
 export interface StayViewport {
   get: () => Readonly<ViewportState>
   panBy: (viewMovement: ViewVector) => Readonly<ViewportState>
   zoomBy: (factor: number, contentAnchor?: ContentPoint) => Readonly<ViewportState>
+  fit: (
+    contentBounds: ContentRect,
+    options?: ViewportFitOptions
+  ) => Readonly<ViewportState>
   reset: () => Readonly<ViewportState>
   restore: (state: ViewportState) => Readonly<ViewportState>
   toClientPoint: (contentPoint: ContentPoint) => ClientPoint

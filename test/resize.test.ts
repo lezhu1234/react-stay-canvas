@@ -79,6 +79,16 @@ describe("non-destructive resize", () => {
     expect(drawSizes).toEqual([{ width: 640, height: 360 }])
   })
 
+  it("uses the latest View size when fit is explicitly called after resize", () => {
+    const { stage } = createStage({ width: 300, height: 200 })
+    const bounds = { x: 0, y: 0, width: 100, height: 100 }
+
+    expect(stage.tools.viewport.fit(bounds)).toEqual({ x: 50, y: 0, scale: 2 })
+    stage.resize(600, 300)
+    expect(stage.tools.viewport.get()).toEqual({ x: 50, y: 0, scale: 2 })
+    expect(stage.tools.viewport.fit(bounds)).toEqual({ x: 150, y: 0, scale: 3 })
+  })
+
   it("cancels an active pointer session before changing the View frame", () => {
     const { stage, top } = createStage({ width: 300, height: 200 })
     const terminal: Array<{

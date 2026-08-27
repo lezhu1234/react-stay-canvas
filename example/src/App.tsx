@@ -100,6 +100,9 @@ export default function App() {
   const { locale, localized, switchLocale, text } = useI18n()
   const path = useHashPath()
   const active = getExampleByPath(path)
+  const shellClassName = active?.presentation === "immersive"
+    ? "app-shell example-active example-immersive"
+    : active ? "app-shell example-active" : "app-shell"
 
   useEffect(() => {
     document.title = active ? `${localized(active.title)} | react-stay-canvas` : text("react-stay-canvas examples", "react-stay-canvas 示例")
@@ -117,7 +120,7 @@ export default function App() {
   )
 
   return (
-    <div className={active ? "app-shell example-active" : "app-shell"}>
+    <div className={shellClassName}>
       <header className="topbar">
         <RouteLink className="brand" path="/">
           <span className="brand-mark" aria-hidden="true" />

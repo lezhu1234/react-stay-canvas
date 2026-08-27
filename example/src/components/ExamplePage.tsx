@@ -36,9 +36,12 @@ export function ExamplePage({
   const sourceLabel = activeSource && sources.length > 1
     ? text(`TypeScript source code: ${sourceFileName(activeSource.path)}`, `TypeScript 源码：${sourceFileName(activeSource.path)}`)
     : text("TypeScript source code", "TypeScript 源码")
+  const pageClassName = definition.presentation === "immersive"
+    ? "example-page workspace-page immersive-page"
+    : "example-page workspace-page"
 
   return (
-    <article className="example-page workspace-page">
+    <article className={pageClassName}>
       <header className="example-header">
         <div>
           <p className="example-kind">{definition.group === "Simple" ? text("Simple example", "简单示例") : text("Integrated example", "集成示例")}</p>

@@ -108,16 +108,18 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/simple/coordinates",
+    presentation: "immersive",
     sourcePaths: [
       "./examples/simple/CoordinatesExample.tsx",
       "./examples/simple/CoordinateStack.tsx",
+      "./examples/simple/coordinateLabModel.ts",
     ],
     group: "Simple",
     order: 9,
     title: l("Coordinate spaces and viewport", "坐标空间与视口"),
     shortTitle: l("Coordinates", "坐标"),
-    summary: l("Trace one pointer through Client, View, and Content while the library pans and zooms without changing Child geometry.", "观察同一指针如何依次进入 Client、View 与 Content，并验证库在不改变 Child 几何的前提下平移和缩放。"),
-    features: ["Client → View → Content", "e.point", "e.movement", "tools.viewport"],
+    summary: l("See one fixed Content Shape projected into View and Client while viewport zoom changes only its visible footprint.", "观察固定不变的 Content Shape 如何投影到 View 与 Client，并验证 viewport 缩放只改变显示结果。"),
+    features: ["Content → View → Client", "Shape projection", "Child transform", "e.point", "tools.viewport"],
     component: CoordinatesExample,
   },
   {

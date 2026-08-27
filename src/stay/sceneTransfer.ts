@@ -4,12 +4,14 @@ import type { Area } from "../types/geometry"
 import type { SceneChildFragment, SceneFragment } from "../types/children"
 import { StayInstantChild } from "./children/stayInstantChild"
 import { snapshotShapeMap } from "./shapeMapSnapshot"
+import { copyMatrix2D } from "./transforms/affine2D"
 
 export function captureSceneChild(child: StayInstantChild): SceneChildFragment {
   return {
     sourceId: child.id,
     className: child.className,
     shapes: snapshotShapeMap(child.shapeMap),
+    transform: copyMatrix2D(child.transform),
   }
 }
 
@@ -27,6 +29,7 @@ export function materializeSceneChild(
   return new StayInstantChild({
     className: fragment.className,
     shape: snapshotShapeMap(fragment.shapes),
+    transform: { matrix: fragment.transform },
     canvas,
   })
 }

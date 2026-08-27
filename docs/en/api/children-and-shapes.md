@@ -15,6 +15,7 @@ Create a static Child with `tools.appendChild(...)`.
 | `shape` | `T` | First Shape in `shapeMap` |
 | `shapeMap` | `Map<string, T>` | All Shapes in the Child |
 | `canvas` | `Canvas` | Owning Canvas runtime |
+| `transform` | `Readonly<Matrix2D>` | Snapshot of the resolved local-to-Content affine matrix |
 | `participatesInHistory` | `boolean` | `true` for static Children |
 
 ### Common methods
@@ -23,15 +24,23 @@ Create a static Child with `tools.appendChild(...)`.
 | --- | --- | --- |
 | `getShape()` | `T` | Same value as `shape` |
 | `getBound()` | `Rect` | Union of all Shape bounds |
+| `getShapeBound(shape)` | `Rect` | Content-space bound of one transformed Shape |
 | `containsPointer(point)` | `boolean` | True when any Shape is hit |
 | `inArea(area)` | `boolean` | True when any Shape center is inside the area |
+| `setTransform(transform)` | `this` | Replace the complete semantic or raw affine transform |
+| `toLocalPoint(point)` | `PointType` | Map a Content point into Child-local coordinates |
+| `toContentPoint(point)` | `PointType` | Map a Child-local point into Content coordinates |
 | `moveInit()` | `void` | Snapshot the start of continuous movement |
-| `move(offsetX, offsetY)` | `void` | Move every Shape as a unit |
-| `zoom(deltaY, center)` | `void` | Zoom every Shape as a unit |
+| `move(offsetX, offsetY)` | `void` | Destructively move every Shape by a Content-space vector |
+| `zoom(deltaY, center)` | `void` | Destructively zoom every Shape around a Content-space center |
 | `getLayers()` | `Set<number>` | Layers used by the Child |
 | `getShapes(layer)` | `T[]` | Shapes on one layer |
 
 `update(...)` is an internal replacement primitive for history restoration. Application code should call `child.shape.update(...)` or retrieve a specific Shape from `shapeMap` and update that Shape.
+
+Shape geometry remains in Child-local coordinates. Rendering, bounds, hit testing, area queries, history, scene transfer, and region capture apply the Child transform consistently. `setTransform()` replaces rather than merges the previous transform; semantic rotation and skew values use degrees. A raw `{ matrix: { a, b, c, d, e, f } }` transform is also accepted. Non-finite or non-invertible matrices throw because local hit testing requires an inverse.
+
+The `transform` getter returns a snapshot, so mutating the returned object does not change the Child. Animated Children may use the same static transform, but transform keyframes and interpolation are not yet supported.
 
 Children are Canvas-bound runtime entities and do not expose a copy operation. Use `exportChildren()` and `importChildren()` to capture and materialize a reusable scene fragment.
 

@@ -39,20 +39,53 @@ type CanvasScenePlacement = {
 
 type CanvasChild = ReturnType<StayTools["appendChild"]>
 
+type CanvasDisplayTransform = {
+  offsetX?: number
+  offsetY?: number
+  scaleX?: number
+  scaleY?: number
+}
+
+function positiveFiniteOr(value: number | undefined, fallback: number) {
+  return value !== undefined && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function finiteOr(value: number | undefined, fallback: number) {
+  return value !== undefined && Number.isFinite(value) ? value : fallback
+}
+
 const scenePlacementByTools = new WeakMap<StayTools, CanvasScenePlacement>()
 const placedSceneChildren = new WeakSet<CanvasChild>()
 
-function useInitialViewportSize(viewportRef: RefObject<HTMLDivElement>) {
+function useViewportSize(viewportRef: RefObject<HTMLDivElement>, observeResize: boolean) {
   const [size, setSize] = useState<{ height: number; width: number }>()
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current
     if (!viewport) return
-    setSize({
-      height: Math.max(1, Math.floor(viewport.clientHeight)),
-      width: Math.max(1, Math.floor(viewport.clientWidth)),
-    })
-  }, [viewportRef])
+
+    const measure = () => {
+      const nextSize = {
+        height: Math.max(1, Math.floor(viewport.clientHeight)),
+        width: Math.max(1, Math.floor(viewport.clientWidth)),
+      }
+      setSize((current) => current?.height === nextSize.height && current.width === nextSize.width
+        ? current
+        : nextSize)
+    }
+
+    measure()
+    if (!observeResize) return
+
+    if (typeof ResizeObserver === "function") {
+      const observer = new ResizeObserver(measure)
+      observer.observe(viewport)
+      return () => observer.disconnect()
+    }
+
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [observeResize, viewportRef])
 
   return size
 }
@@ -118,47 +151,124 @@ function mountPlacedScene(
   mounted?.(tools)
 }
 
-export function CanvasCard({
-  title,
-  description,
+export function CanvasSurface({
   children,
-  wide = false,
+  className,
+  viewportLabel,
+  canvasDisplayTransform,
+  shrinkToViewport = false,
 }: {
-  title: string
-  description?: string
   children: ReactNode
-  wide?: boolean
+  className?: string
+  viewportLabel?: string
+  canvasDisplayTransform?: CanvasDisplayTransform
+  shrinkToViewport?: boolean
 }) {
   const viewportRef = useRef<HTMLDivElement>(null)
-  const viewportSize = useInitialViewportSize(viewportRef)
-  const canvas = isValidElement<StayCanvasProps>(children) && viewportSize
+  const observesResize = shrinkToViewport
+    || (isValidElement<StayCanvasProps>(children) && children.props.recreateOnResize === true)
+  const viewportSize = useViewportSize(viewportRef, observesResize)
+  const displayScaleX = positiveFiniteOr(canvasDisplayTransform?.scaleX, 1)
+  const displayScaleY = positiveFiniteOr(canvasDisplayTransform?.scaleY, 1)
+  const displayOffsetX = finiteOr(canvasDisplayTransform?.offsetX, 0)
+  const displayOffsetY = finiteOr(canvasDisplayTransform?.offsetY, 0)
+  const usesDisplayTransform = canvasDisplayTransform !== undefined
+  const canvasFrame: { element: ReactNode; height?: number; width?: number } | null =
+    isValidElement<StayCanvasProps>(children) && viewportSize
     ? (() => {
         const sceneWidth = children.props.width ?? 500
         const sceneHeight = children.props.height ?? 500
-        const width = Math.max(sceneWidth, viewportSize.width)
-        const height = Math.max(sceneHeight, viewportSize.height)
+        const hasMeasuredViewport = viewportSize.width > 1 && viewportSize.height > 1
+        const width = shrinkToViewport && hasMeasuredViewport
+          ? viewportSize.width
+          : Math.max(sceneWidth, viewportSize.width)
+        const height = shrinkToViewport && hasMeasuredViewport
+          ? viewportSize.height
+          : Math.max(sceneHeight, viewportSize.height)
         const placement = {
           offsetX: Math.max(0, (width - sceneWidth) / 2),
           offsetY: Math.max(0, (height - sceneHeight) / 2),
         }
 
-        return cloneElement(children, {
+        return {
+          element: cloneElement(children, {
+            height,
+            mounted: (tools) => mountPlacedScene(tools, placement, children.props.mounted),
+            recreateOnResize: shrinkToViewport || children.props.recreateOnResize,
+            width,
+          }),
           height,
-          mounted: (tools) => mountPlacedScene(tools, placement, children.props.mounted),
           width,
-        })
+        }
       })()
     : isValidElement<StayCanvasProps>(children)
       ? null
-      : children
+      : { element: children }
+  const canvas = canvasFrame && usesDisplayTransform && canvasFrame.width && canvasFrame.height
+    ? (
+        <div
+          className="canvas-display-transform"
+          data-display-offset-x={displayOffsetX}
+          data-display-offset-y={displayOffsetY}
+          data-display-scale-x={displayScaleX}
+          data-display-scale-y={displayScaleY}
+          style={{
+            height: canvasFrame.height,
+            transform: `translate(${displayOffsetX}px, ${displayOffsetY}px) scale(${displayScaleX}, ${displayScaleY})`,
+            width: canvasFrame.width,
+          }}
+        >
+          {canvasFrame.element}
+        </div>
+      )
+    : canvasFrame?.element
 
   return (
-    <section className={wide ? "canvas-card wide" : "canvas-card"}>
+    <div className={["canvas-viewport", className ?? ""].filter(Boolean).join(" ")} ref={viewportRef}>
+      {viewportLabel && (
+        <span
+          className="canvas-viewport-label"
+          style={!usesDisplayTransform || !canvasFrame?.width ? undefined : {
+            left: displayOffsetX + canvasFrame.width * displayScaleX - 10,
+            right: "auto",
+            top: displayOffsetY + 10,
+            transform: "translateX(-100%)",
+          }}
+        >
+          {viewportLabel}
+        </span>
+      )}
+      {canvas}
+    </div>
+  )
+}
+
+export function CanvasCard({
+  title,
+  description,
+  children,
+  wide = false,
+  className,
+  viewportLabel,
+  canvasDisplayTransform,
+}: {
+  title: string
+  description?: string
+  children: ReactNode
+  wide?: boolean
+  className?: string
+  viewportLabel?: string
+  canvasDisplayTransform?: CanvasDisplayTransform
+}) {
+  return (
+    <section className={["canvas-card", wide ? "wide" : "", className ?? ""].filter(Boolean).join(" ")}>
       <div className="canvas-card-heading">
         <h2>{title}</h2>
         {description && <p>{description}</p>}
       </div>
-      <div className="canvas-viewport" ref={viewportRef}>{canvas}</div>
+      <CanvasSurface canvasDisplayTransform={canvasDisplayTransform} viewportLabel={viewportLabel}>
+        {children}
+      </CanvasSurface>
     </section>
   )
 }

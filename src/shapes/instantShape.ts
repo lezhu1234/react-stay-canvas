@@ -20,6 +20,14 @@ import W3Color, { RGB, RGBA, rgbaToString } from "../vendor/w3color"
 
 export const ZeroColor: RGBA = { a: 0, r: 0, g: 0, b: 0 }
 export const BlackColor: RGBA = { a: 1, r: 0, g: 0, b: 0 }
+
+function definedConfig<T extends object>(config?: T): Partial<T> {
+  if (!config) return {}
+  return Object.fromEntries(
+    Object.entries(config).filter(([, value]) => value !== undefined),
+  ) as Partial<T>
+}
+
 export interface GetCurrentArgumentsProps {
   startArguments: Dict
   endArguments: Dict
@@ -81,15 +89,15 @@ export abstract class InstantShape {
       lineCap: "butt",
       lineJoin: "miter",
       miterLimit: 10,
-      ...strokeConfig,
+      ...definedConfig(strokeConfig),
     }
     this.fillConfig = {
       color: ZeroColor,
-      ...fillConfig,
+      ...definedConfig(fillConfig),
     }
     this.globalConfig = {
       gco: "source-over",
-      ...globalConfig,
+      ...definedConfig(globalConfig),
     }
 
     this.zoomY = zoomY ?? 1
@@ -226,11 +234,11 @@ export abstract class InstantShape {
     this.stateDrawFuncMap = stateDrawFuncMap ?? this.stateDrawFuncMap
     this.strokeConfig = {
       ...this.strokeConfig,
-      ...strokeConfig,
+      ...definedConfig(strokeConfig),
     }
     this.fillConfig = {
       ...this.fillConfig,
-      ...fillConfig,
+      ...definedConfig(fillConfig),
     }
 
     if (state) {

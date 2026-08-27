@@ -73,6 +73,31 @@ describe("Rectangle geometry", () => {
   })
 })
 
+describe("Shape config updates", () => {
+  it("keeps required Canvas defaults when optional config fields are undefined", () => {
+    const line = new Line({
+      x1: 0,
+      y1: 0,
+      x2: 10,
+      y2: 10,
+      strokeConfig: { dash: undefined, lineWidth: undefined },
+    })
+
+    expect(line.strokeConfig.dash).toEqual([])
+    expect(line.strokeConfig.lineWidth).toBe(1)
+
+    line.update({
+      strokeConfig: { dash: [4, 6], lineWidth: 2 },
+    })
+    line.update({
+      strokeConfig: { dash: undefined, lineWidth: undefined },
+    })
+
+    expect(line.strokeConfig.dash).toEqual([4, 6])
+    expect(line.strokeConfig.lineWidth).toBe(2)
+  })
+})
+
 describe("Shape snapshots", () => {
   it("copies Path points independently", () => {
     const path = new Path({

@@ -77,9 +77,9 @@ export class Path extends InstantShape {
       ...props,
       fillConfig: undefined,
       strokeConfig: {
-        lineCap: "round",
-        lineJoin: "round",
         ...props.strokeConfig,
+        lineCap: props.strokeConfig?.lineCap ?? "round",
+        lineJoin: props.strokeConfig?.lineJoin ?? "round",
       },
     })
     const { points } = props

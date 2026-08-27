@@ -72,6 +72,7 @@ A Child gives one or more Shapes a shared:
 - hit-test result;
 - combined bounding box;
 - movement and zoom boundary;
+- non-destructive local-to-Content transform;
 - history identity.
 
 A button may contain a background Rectangle and a text Shape. Put them in the same Child so clicks on either part resolve to the same object and both parts move together.
@@ -101,6 +102,8 @@ tools.appendChild({
 ```
 
 `child.shape` returns the first Shape and is convenient for the common single-Shape case. Use `child.shapeMap` when a Child deliberately contains multiple Shapes.
+
+A Child transform moves, rotates, scales, or skews every owned Shape as one local object without rewriting Shape geometry. Rendering, bounds, point hits, area queries, history, scene transfer, and region capture use the same transform. Public pointer `e.point` remains in Content; call `child.toLocalPoint(e.point)` only when local geometry is required.
 
 ## Layers and `zIndex`
 

@@ -68,14 +68,16 @@ Optional by input source:
 An action name does not guarantee these fields. Narrow before use:
 
 ```ts
+import type { ActionEvent, ContentPoint } from "react-stay-canvas"
+
 function hasPointerPosition(
   e: ActionEvent,
-): e is ActionEvent & { x: number; y: number; point: PointType } {
+): e is ActionEvent & { x: number; y: number; point: ContentPoint } {
   return e.x !== undefined && e.y !== undefined && e.point !== undefined
 }
 ```
 
-Native pointer input passes through three internal spaces. Client is measured in browser viewport pixels. View is the CSS-normalized `width × height` Canvas plane. Content is obtained by inversely applying `tools.viewport`. Public `e.point` uses Content so hit testing and Child operations do not need viewport math; `e.movement` uses View so drag thresholds and panning feel do not change with zoom.
+Native pointer input passes through three internal spaces. Client is measured in browser viewport pixels. View is the CSS-normalized `width × height` Canvas plane. Content is obtained by inversely applying `tools.viewport`. Public `e.point` is a `ContentPoint`, so hit testing and Child operations do not need viewport math; `e.movement` is a `ViewVector`, so drag thresholds and panning feel do not change with zoom. Use `tools.coordinates` for explicit conversion.
 
 ## EventProps
 

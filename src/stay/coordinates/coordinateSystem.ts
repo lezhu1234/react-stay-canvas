@@ -1,24 +1,21 @@
+import type {
+  ClientPoint,
+  ContentPoint,
+  ContentVector,
+  CoordinateSpace,
+  SpacePoint,
+  SpaceVector,
+  ViewPoint,
+  ViewVector,
+} from "../../types/coordinates"
 import type { Coordinate, Rect } from "../../types/geometry"
 import type { ViewportOptions, ViewportState } from "../../types/tools"
 
-declare const coordinateSpace: unique symbol
+declare const rectCoordinateSpace: unique symbol
 
-type Space = "client" | "view" | "content"
-
-export type SpacePoint<S extends Space> = Readonly<
-  Coordinate & { readonly [coordinateSpace]: S }
+export type SpaceRect<S extends CoordinateSpace> = Readonly<
+  Rect & { readonly [rectCoordinateSpace]?: S }
 >
-
-export type SpaceVector<S extends Space> = SpacePoint<S>
-
-export type SpaceRect<S extends Space> = Readonly<
-  Rect & { readonly [coordinateSpace]: S }
->
-
-export type ClientPoint = SpacePoint<"client">
-export type ViewPoint = SpacePoint<"view">
-export type ContentPoint = SpacePoint<"content">
-export type ViewVector = SpaceVector<"view">
 
 export type SurfaceMetrics = Readonly<{
   logicalWidth: number
@@ -59,8 +56,9 @@ export type PointerCoordinates = Readonly<{
   viewOffsetFromStart: ViewVector
 }>
 
-const asPoint = <S extends Space>(point: Coordinate) => point as SpacePoint<S>
-const asRect = <S extends Space>(rect: Rect) => rect as SpaceRect<S>
+const asPoint = <S extends CoordinateSpace>(point: Coordinate) => point as SpacePoint<S>
+const asVector = <S extends CoordinateSpace>(vector: Coordinate) => vector as SpaceVector<S>
+const asRect = <S extends CoordinateSpace>(rect: Rect) => rect as SpaceRect<S>
 
 function finite(value: number, name: string) {
   if (!Number.isFinite(value)) throw new TypeError(`${name} must be finite`)
@@ -158,11 +156,11 @@ export class CoordinateSystem {
       client,
       view,
       content: this.viewToContent(view, frame),
-      viewMovement: asPoint<"view">({
+      viewMovement: asVector<"view">({
         x: view.x - previousView.x,
         y: view.y - previousView.y,
       }),
-      viewOffsetFromStart: asPoint<"view">({
+      viewOffsetFromStart: asVector<"view">({
         x: view.x - startView.x,
         y: view.y - startView.y,
       }),
@@ -201,7 +199,7 @@ export class CoordinateSystem {
     })
   }
 
-  contentToView(point: Coordinate, frame: CoordinateFrame): ViewPoint {
+  contentToView(point: ContentPoint, frame: CoordinateFrame): ViewPoint {
     const { offsetX, offsetY, scale } = frame.contentToView
     return asPoint<"view">({
       x: point.x * scale + offsetX,
@@ -209,8 +207,36 @@ export class CoordinateSystem {
     })
   }
 
+  viewVectorToContent(
+    vector: ViewVector,
+    frame: CoordinateFrame
+  ): ContentVector {
+    return asVector<"content">({
+      x: vector.x / frame.contentToView.scale,
+      y: vector.y / frame.contentToView.scale,
+    })
+  }
+
+  contentVectorToView(
+    vector: ContentVector,
+    frame: CoordinateFrame
+  ): ViewVector {
+    return asVector<"view">({
+      x: vector.x * frame.contentToView.scale,
+      y: vector.y * frame.contentToView.scale,
+    })
+  }
+
+  clientToContent(
+    point: ClientPoint,
+    metrics: SurfaceMetrics,
+    frame = this.getFrame(metrics)
+  ): ContentPoint {
+    return this.viewToContent(this.clientToView(point, metrics), frame)
+  }
+
   contentToClient(
-    point: Coordinate,
+    point: ContentPoint,
     metrics: SurfaceMetrics,
     frame = this.getFrame(metrics)
   ): ClientPoint {
@@ -230,13 +256,13 @@ export class CoordinateSystem {
     )
   }
 
-  panBy(delta: Coordinate): Readonly<ViewportState> {
+  panBy(delta: ViewVector): Readonly<ViewportState> {
     const x = this.#viewport.x + finite(delta.x, "viewport pan x")
     const y = this.#viewport.y + finite(delta.y, "viewport pan y")
     return this.#replace({ ...this.#viewport, x, y })
   }
 
-  zoomBy(factor: number, anchor: Coordinate): Readonly<ViewportState> {
+  zoomBy(factor: number, anchor: ContentPoint): Readonly<ViewportState> {
     finite(factor, "viewport zoom factor")
     if (factor <= 0) throw new RangeError("viewport zoom factor must be greater than 0")
 

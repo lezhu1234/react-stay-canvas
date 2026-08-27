@@ -1,5 +1,6 @@
 import type { ContextLayerSetFunction, DrawCanvasContext } from "./types/canvas"
-import type { PointType, Rect } from "./types/geometry"
+import type { ViewPoint } from "./types/coordinates"
+import type { Rect } from "./types/geometry"
 import type { SurfaceMetrics } from "./stay/coordinates/coordinateSystem"
 
 function sizeBackingStore(
@@ -62,7 +63,7 @@ export class Canvas {
     return this.layers[0].getBoundingClientRect().y
   }
 
-  clientToCanvasPoint(clientX: number, clientY: number): PointType {
+  clientToCanvasPoint(clientX: number, clientY: number): ViewPoint {
     const rect = this.getSurfaceMetrics().clientRect
     const scaleX = rect.width > 0 ? this.width / rect.width : 1
     const scaleY = rect.height > 0 ? this.height / rect.height : 1

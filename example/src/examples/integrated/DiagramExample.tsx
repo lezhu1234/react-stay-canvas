@@ -117,12 +117,12 @@ export default function DiagramExample() {
     const shellRect = shell.getBoundingClientRect()
     if (node?.className === "node") {
       const body = bodyOf(node)
-      const center = tools.viewport.toClientPoint({
+      const center = tools.coordinates.contentToClient({
         x: body.x + body.width / 2,
         y: body.y + body.height / 2,
       })
-      const left = tools.viewport.toClientPoint({ x: body.x, y: body.y })
-      const right = tools.viewport.toClientPoint({ x: body.x + body.width, y: body.y })
+      const left = tools.coordinates.contentToClient({ x: body.x, y: body.y })
+      const right = tools.coordinates.contentToClient({ x: body.x + body.width, y: body.y })
       setInlineEdit({
         id,
         value: labelOf(node).text,
@@ -132,7 +132,7 @@ export default function DiagramExample() {
       })
     } else if (edge?.className === "edge") {
       const label = edgeLabelOf(edge)
-      const anchor = tools.viewport.toClientPoint(label)
+      const anchor = tools.coordinates.contentToClient(label)
       setInlineEdit({
         id,
         value: label.text,

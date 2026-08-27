@@ -82,4 +82,20 @@ describe("CoordinateSystem", () => {
     expect(coordinates.clientToView({ x: 320, y: 180 } as any, zeroLayout))
       .toEqual({ x: 320, y: 180 })
   })
+
+  it("converts points and vectors without applying point offsets to vectors", () => {
+    const coordinates = new CoordinateSystem()
+    coordinates.restore({ x: 40, y: -10, scale: 2 })
+    const frame = coordinates.getFrame(metrics)
+
+    const client = { x: 300, y: 250 }
+    const content = coordinates.clientToContent(client, metrics, frame)
+
+    expect(content).toEqual({ x: 60, y: 85 })
+    expect(coordinates.contentToClient(content, metrics, frame)).toEqual(client)
+    expect(coordinates.viewVectorToContent({ x: 80, y: -40 }, frame))
+      .toEqual({ x: 40, y: -20 })
+    expect(coordinates.contentVectorToView({ x: 40, y: -20 }, frame))
+      .toEqual({ x: 80, y: -40 })
+  })
 })

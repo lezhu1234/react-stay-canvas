@@ -3,7 +3,8 @@ import type {
   StayInstantChildProps,
   StayInstantChildUpdateProps,
 } from "../../types/children"
-import type { Area, Coordinate, PointType, Rect } from "../../types/geometry"
+import type { ContentPoint } from "../../types/coordinates"
+import type { Area, PointType, Rect } from "../../types/geometry"
 import type { ChildTransform, Matrix2D } from "../../types/transform"
 import { uuid4 } from "../../utils/identifiers"
 import { parseLayer } from "../../utils/stage"
@@ -75,11 +76,11 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     return this
   }
 
-  toContentPoint(point: PointType): PointType {
+  toContentPoint(point: PointType): ContentPoint {
     return mapPoint(this.#transform, point)
   }
 
-  toLocalPoint(point: PointType): PointType {
+  toLocalPoint(point: ContentPoint): PointType {
     return mapPoint(this.#inverseTransform, point)
   }
 
@@ -162,7 +163,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     return shapeMap
   }
 
-  containsPointer(point: Coordinate): boolean {
+  containsPointer(point: ContentPoint): boolean {
     const localPoint = this.toLocalPoint(point)
     for (const shape of this.shapeMap.values()) {
       if (shape.contains(localPoint)) return true

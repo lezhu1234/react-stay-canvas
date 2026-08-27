@@ -68,14 +68,16 @@ Listener 的目标在标准 drag/move 手势开始时确定，后续 continuatio
 action 名不决定这些字段是否存在。使用属性前应用类型守卫：
 
 ```ts
+import type { ActionEvent, ContentPoint } from "react-stay-canvas"
+
 function hasPointerPosition(
   e: ActionEvent,
-): e is ActionEvent & { x: number; y: number; point: PointType } {
+): e is ActionEvent & { x: number; y: number; point: ContentPoint } {
   return e.x !== undefined && e.y !== undefined && e.point !== undefined
 }
 ```
 
-原生指针链路依次经过三套内部坐标：Client 是浏览器窗口像素；View 是 CSS 尺寸归一化后的 `width × height` Canvas 平面；Content 是逆向应用 `tools.viewport` 后的场景坐标。公开 `e.point` 使用 Content，保证命中和 Child 操作不需要关心视口；`e.movement` 使用 View，保证拖拽阈值和平移手感不随缩放改变。
+原生指针链路依次经过三套内部坐标：Client 是浏览器窗口像素；View 是 CSS 尺寸归一化后的 `width × height` Canvas 平面；Content 是逆向应用 `tools.viewport` 后的场景坐标。公开 `e.point` 的类型是 `ContentPoint`，保证命中和 Child 操作不需要关心视口；`e.movement` 的类型是 `ViewVector`，保证拖拽阈值和平移手感不随缩放改变。需要显式转换时使用 `tools.coordinates`。
 
 ## EventProps
 

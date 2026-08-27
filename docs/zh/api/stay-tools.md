@@ -23,7 +23,7 @@
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `selector` | 必填 | string、string[] 或函数 selector |
-| `point` | 必填 | Canvas 局部坐标 |
+| `point` | 必填 | `ContentPoint` 场景坐标 |
 | `returnFirst` | `false` | 是否最多返回排序后的第一项 |
 | `sortBy` | — | 命中结果排序 |
 | `withRoot` | `true` | 是否允许返回 root Child |
@@ -39,6 +39,25 @@
 
 ## 场景变换
 
+### 坐标转换
+
+`tools.coordinates` 是 Client、View 与 Content 三个全局空间之间的统一转换入口。它不保存第二份 viewport 状态；每次调用都使用当前 Canvas 显示尺寸和当前 viewport。
+
+| 方法 | 说明 |
+| --- | --- |
+| `clientToView(point)` | 浏览器 Client 点 → Canvas View 点 |
+| `viewToClient(point)` | Canvas View 点 → 浏览器 Client 点 |
+| `viewToContent(point)` | View 点 → 当前场景 Content 点 |
+| `contentToView(point)` | Content 点 → 当前 Canvas View 点 |
+| `clientToContent(point)` | 浏览器 Client 点 → 当前场景 Content 点 |
+| `contentToClient(point)` | Content 点 → 浏览器 Client 点，适合定位 DOM 浮层 |
+| `viewVectorToContent(vector)` | View 位移 → Content 位移；只应用缩放，不应用平移 |
+| `contentVectorToView(vector)` | Content 位移 → View 位移；只应用缩放，不应用平移 |
+
+包入口同时导出 `ClientPoint`、`ViewPoint`、`ContentPoint`、`ViewVector` 和 `ContentVector`。它们是零运行时成本的弱品牌类型：普通 `{ x, y }` 仍兼容现有 API，而由库返回、已经带空间语义的值不能误传给另一空间。点和向量也保持不同类型，因为点转换包含平移，向量转换不包含平移。
+
+`tools.coordinates` 使用调用时的最新 viewport。事件中的 `e.point` 则是该次输入采样时固定下来的 Content 点；即使较早的 Listener 在同轮事件中改变 viewport，后续 Listener 看到的 `e.point` 也不会改变。
+
 ### 非破坏性 Child 变换
 
 `appendChild()` 和 `createChild()` 可接收语义化 `{ x, y, rotation, scaleX, scaleY, skewX, skewY, origin }` transform，也可以使用高级原始 `{ matrix: { a, b, c, d, e, f } }`。旋转和倾斜使用角度制。该变换把 Child 局部 Shape 几何映射到 Content，不修改 Shape 属性。
@@ -52,11 +71,11 @@
 | 方法 | 说明 |
 | --- | --- |
 | `get()` | 返回 `{ x, y, scale }` 快照 |
-| `panBy({ x, y })` | 按 View 单位累加显示偏移 |
-| `zoomBy(factor, anchor?)` | 按正倍率缩放；`anchor` 是保持显示位置不变的 Content 点，默认使用 View 中心 |
+| `panBy(viewMovement)` | 按 `ViewVector` 累加显示偏移 |
+| `zoomBy(factor, contentAnchor?)` | 按正倍率缩放；anchor 是保持显示位置不变的 `ContentPoint`，默认使用 View 中心 |
 | `reset()` | 恢复 `{ x: 0, y: 0, scale: 1 }`（受 min/max 限制） |
 | `restore(state)` | 恢复先前快照，并把 scale 限制在配置范围内 |
-| `toClientPoint(point)` | 把 Content 点投影为浏览器 Client 坐标，适合定位 DOM 浮层 |
+| `toClientPoint(contentPoint)` | `coordinates.contentToClient()` 的兼容入口 |
 
 投影关系是 `View = Content × scale + (x, y)`。各方法同步返回新的只读快照；Renderer 会在下一帧用同一份坐标快照重绘全部脏图层。
 

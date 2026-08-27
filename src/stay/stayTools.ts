@@ -14,9 +14,16 @@ import type {
   SelectorFunc,
 } from "../types/children"
 import type { Dict } from "../types/common"
+import type {
+  ClientPoint,
+  ContentPoint,
+  ContentVector,
+  ViewPoint,
+  ViewVector,
+} from "../types/coordinates"
 import type { ManualTriggerEvents } from "../types/manualActions"
 import type { Area, PointType } from "../types/geometry"
-import type { Cursor, StayTools } from "../types/tools"
+import type { Cursor, StayCoordinates, StayTools } from "../types/tools"
 import { assert } from "../utils/assertions"
 import { numberAlmostEqual } from "../utils/geometry"
 import { infixExpressionParser } from "../utils/selectors"
@@ -258,26 +265,59 @@ export function stayTools(this: Stay<any>): StayTools {
     },
   }
 
+  const currentCoordinateFrame = () => {
+    const metrics = this.root.getSurfaceMetrics()
+    return { metrics, frame: this.coordinates.getFrame(metrics) }
+  }
+
+  const coordinateTools: StayCoordinates = {
+    clientToView: (point: ClientPoint) =>
+      this.coordinates.clientToView(point, this.root.getSurfaceMetrics()),
+    viewToClient: (point: ViewPoint) =>
+      this.coordinates.viewToClient(point, this.root.getSurfaceMetrics()),
+    viewToContent: (point: ViewPoint) => {
+      const { frame } = currentCoordinateFrame()
+      return this.coordinates.viewToContent(point, frame)
+    },
+    contentToView: (point: ContentPoint) => {
+      const { frame } = currentCoordinateFrame()
+      return this.coordinates.contentToView(point, frame)
+    },
+    clientToContent: (point: ClientPoint) => {
+      const { metrics, frame } = currentCoordinateFrame()
+      return this.coordinates.clientToContent(point, metrics, frame)
+    },
+    contentToClient: (point: ContentPoint) => {
+      const { metrics, frame } = currentCoordinateFrame()
+      return this.coordinates.contentToClient(point, metrics, frame)
+    },
+    viewVectorToContent: (vector: ViewVector) => {
+      const { frame } = currentCoordinateFrame()
+      return this.coordinates.viewVectorToContent(vector, frame)
+    },
+    contentVectorToView: (vector: ContentVector) => {
+      const { frame } = currentCoordinateFrame()
+      return this.coordinates.contentVectorToView(vector, frame)
+    },
+  }
+
   const stayTools = {
+    coordinates: coordinateTools,
     viewport: {
       get: () => this.coordinates.getViewport(),
-      panBy: (movement: PointType) => this.coordinates.panBy(movement),
-      zoomBy: (factor: number, anchor?: PointType) => {
+      panBy: (viewMovement: ViewVector) => this.coordinates.panBy(viewMovement),
+      zoomBy: (factor: number, contentAnchor?: ContentPoint) => {
         const metrics = this.root.getSurfaceMetrics()
         const frame = this.coordinates.getFrame(metrics)
-        const resolvedAnchor = anchor ?? this.coordinates.viewCenterToContent(metrics, frame)
+        const resolvedAnchor = contentAnchor ??
+          this.coordinates.viewCenterToContent(metrics, frame)
         return this.coordinates.zoomBy(factor, resolvedAnchor)
       },
       reset: () => this.coordinates.reset(),
       restore: (state: { x: number; y: number; scale: number }) =>
         this.coordinates.restore(state),
-      toClientPoint: (point: PointType) => {
-        const client = this.coordinates.contentToClient(
-          point,
-          this.root.getSurfaceMetrics()
-        )
-        return { x: client.x, y: client.y }
-      },
+      toClientPoint: (contentPoint: ContentPoint) =>
+        coordinateTools.contentToClient(contentPoint),
     },
     refresh: () => {
       this.forceUpdateAllLayers()

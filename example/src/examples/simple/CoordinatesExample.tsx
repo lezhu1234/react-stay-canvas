@@ -20,7 +20,6 @@ import { CoordinateStack, type CoordinateMappingFocus } from "./CoordinateStack"
 import {
   containsRect,
   clientReferenceRange,
-  contentAtView,
   contentReferenceRange,
   formatPoint,
   formatRect,
@@ -172,8 +171,10 @@ export default function CoordinatesExample() {
 
   const syncProbeWithViewport = (viewport: Readonly<ViewportState>) => {
     setViewport(viewport)
+    const tools = toolsRef.current
+    if (!tools) return
     setProbe((current) => {
-      const content = contentAtView(current.view, viewport)
+      const content = tools.coordinates.viewToContent(current.view)
       moveMarker(content)
       return { ...current, content }
     })
@@ -181,14 +182,12 @@ export default function CoordinatesExample() {
 
   useLayoutEffect(() => {
     const canvas = surfaceCanvasRef.current
-    if (!canvas) return
+    const tools = toolsRef.current
+    if (!canvas || !tools) return
     const surface = surfaceFrame(canvas.getSurfaceMetrics())
     setProbe((current) => ({
       ...current,
-      client: {
-        x: surface.left + current.view.x / surface.scaleX,
-        y: surface.top + current.view.y / surface.scaleY,
-      },
+      client: tools.coordinates.viewToClient(current.view),
       surface,
       viewSize: { width: canvas.width, height: canvas.height },
     }))
@@ -202,9 +201,9 @@ export default function CoordinatesExample() {
     ) => {
       if (!hasPointerPosition(e) || !(originEvent instanceof MouseEvent)) return false
       const client = { x: originEvent.clientX, y: originEvent.clientY }
-      const view = canvas.clientToCanvasPoint(client.x, client.y)
+      const view = tools.coordinates.clientToView(client)
       const viewport = nextViewport ?? tools.viewport.get()
-      const content = nextViewport ? contentAtView(view, viewport) : e.point
+      const content = tools.coordinates.viewToContent(view)
       if (updateMarker) moveMarker(content)
       setProbe({
         client,
@@ -268,8 +267,8 @@ export default function CoordinatesExample() {
           setMappingFocus("content-view")
           const viewport = tools.viewport.zoomBy(Math.max(0.1, 1 - e.deltaY * 0.001), e.point)
           const client = { x: originEvent.clientX, y: originEvent.clientY }
-          const view = canvas.clientToCanvasPoint(client.x, client.y)
-          const content = contentAtView(view, viewport)
+          const view = tools.coordinates.clientToView(client)
+          const content = tools.coordinates.viewToContent(view)
           moveMarker(content)
           setProbe({
             client,
@@ -364,15 +363,12 @@ export default function CoordinatesExample() {
     tools.appendChild({ className: "coordinate-marker", shape: [dot, horizontal, vertical, label] })
     const surface = surfaceFrame(gridChild.canvas.getSurfaceMetrics())
     const view = { x: gridChild.canvas.width / 2, y: gridChild.canvas.height / 2 }
-    const client = {
-      x: surface.left + view.x / surface.scaleX,
-      y: surface.top + view.y / surface.scaleY,
-    }
+    const client = tools.coordinates.viewToClient(view)
     const homeViewport = fitContentViewport(gridChild.canvas.width, gridChild.canvas.height)
     homeViewportRef.current = homeViewport
     const currentViewport = tools.viewport.restore(homeViewport)
     setViewport(currentViewport)
-    const content = contentAtView(view, currentViewport)
+    const content = tools.coordinates.viewToContent(view)
     moveMarker(content)
     const initialProbe = {
       client,

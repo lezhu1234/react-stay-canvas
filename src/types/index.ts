@@ -11,6 +11,7 @@ export type {
   ZeroToOne,
 } from "./common"
 export * from "./component"
+export * from "./coordinates"
 export * from "./events"
 export * from "./geometry"
 export * from "./manualActions"

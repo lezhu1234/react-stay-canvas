@@ -6,10 +6,11 @@
     "build": "rollup -c",
     "pub": "pnpm verify && pnpm publish --access public",
     "test": "npm test --prefix test",
+    "typecheck:public-api": "tsc -p test/types/tsconfig.json",
     "typecheck:example": "npm run typecheck --prefix example",
     "build:example": "npm run build --prefix example",
     "verify:docs": "node scripts/verify-docs.mjs",
-    "verify": "pnpm verify:docs && pnpm build && pnpm test && pnpm build:example"
+    "verify": "pnpm verify:docs && pnpm typecheck:public-api && pnpm build && pnpm test && pnpm build:example"
   },
   "repository": {
     "type": "git",

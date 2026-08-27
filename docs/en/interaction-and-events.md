@@ -216,13 +216,13 @@ Other fields depend on the input source and routing result:
 An action name cannot guarantee a field because a manual action may also be named `drag` or `keydown`. Use a type guard before reading coordinates or a target:
 
 ```tsx
-import type { ActionEvent, Coordinate } from "react-stay-canvas"
+import type { ActionEvent, ContentPoint } from "react-stay-canvas"
 
 type PositionedAction<EventName extends string = string> =
   ActionEvent<EventName> & {
     x: number
     y: number
-    point: Coordinate
+    point: ContentPoint
   }
 
 function hasPointerPosition<EventName extends string>(

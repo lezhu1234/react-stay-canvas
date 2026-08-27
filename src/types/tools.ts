@@ -14,7 +14,14 @@ import type {
   SelectorFunc,
 } from "./children"
 import type { Dict } from "./common"
-import type { Area, Coordinate, PointType } from "./geometry"
+import type {
+  ClientPoint,
+  ContentPoint,
+  ContentVector,
+  ViewPoint,
+  ViewVector,
+} from "./coordinates"
+import type { Area, PointType } from "./geometry"
 import type { ManualTriggerEvents } from "./manualActions"
 
 export interface StayDrawProps {
@@ -38,14 +45,26 @@ export interface ViewportOptions {
 
 export interface StayViewport {
   get: () => Readonly<ViewportState>
-  panBy: (movement: Coordinate) => Readonly<ViewportState>
-  zoomBy: (factor: number, anchor?: Coordinate) => Readonly<ViewportState>
+  panBy: (viewMovement: ViewVector) => Readonly<ViewportState>
+  zoomBy: (factor: number, contentAnchor?: ContentPoint) => Readonly<ViewportState>
   reset: () => Readonly<ViewportState>
   restore: (state: ViewportState) => Readonly<ViewportState>
-  toClientPoint: (point: Coordinate) => Coordinate
+  toClientPoint: (contentPoint: ContentPoint) => ClientPoint
+}
+
+export interface StayCoordinates {
+  clientToView: (point: ClientPoint) => ViewPoint
+  viewToClient: (point: ViewPoint) => ClientPoint
+  viewToContent: (point: ViewPoint) => ContentPoint
+  contentToView: (point: ContentPoint) => ViewPoint
+  clientToContent: (point: ClientPoint) => ContentPoint
+  contentToClient: (point: ContentPoint) => ClientPoint
+  viewVectorToContent: (vector: ViewVector) => ContentVector
+  contentVectorToView: (vector: ContentVector) => ViewVector
 }
 
 export interface BasicTools {
+  readonly coordinates: StayCoordinates
   readonly viewport: StayViewport
   appendChild: <T extends InstantShape>(props: AppendChildProps<T>) => StayInstantChild<T>
   removeChild: (childId: string) => Promise<void> | void

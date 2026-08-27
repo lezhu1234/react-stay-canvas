@@ -1,4 +1,4 @@
-import type { Coordinate } from "./geometry"
+import type { ContentPoint } from "./coordinates"
 
 export interface ManualActionEvent {
   state?: string
@@ -6,7 +6,7 @@ export interface ManualActionEvent {
   isMouseEvent?: boolean
   x?: number
   y?: number
-  point?: Coordinate
+  point?: ContentPoint
   key?: string
   deltaX?: number
   deltaY?: number

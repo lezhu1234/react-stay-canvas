@@ -249,7 +249,11 @@ describe("Example Canvas workspace", () => {
     root = createRoot(container)
 
     act(() => {
-      root?.render(<I18nProvider><CoordinatesExample /></I18nProvider>)
+      root?.render(
+        <React.StrictMode>
+          <I18nProvider><CoordinatesExample /></I18nProvider>
+        </React.StrictMode>,
+      )
     })
     act(() => frames.splice(0).forEach((frame) => frame(0)))
 

@@ -33,6 +33,15 @@ const PLANE_ASPECT_RATIO = 4 / 3
 const PLANE_GRID_COLUMNS = 6
 const PLANE_GRID_ROWS = 5
 
+type CoordinateStackHotData = { coordinateStackRevision?: number }
+
+const hotRuntime = (import.meta as ImportMeta & {
+  hot?: { data?: CoordinateStackHotData }
+}).hot
+const hotData = hotRuntime?.data
+const STACK_RUNTIME_REVISION = (hotData?.coordinateStackRevision ?? -1) + 1
+if (hotData) hotData.coordinateStackRevision = STACK_RUNTIME_REVISION
+
 type PlaneName = "client" | "view" | "content"
 
 export type CoordinateMappingFocus = "view-client" | "content-view"
@@ -67,6 +76,7 @@ type PlaneRuntime = PlaneDefinition & {
 }
 
 type StackRuntime = {
+  revision: number
   planes: Record<PlaneName, PlaneRuntime>
   clientViewLinks: [Line, Line, Line, Line]
   viewContentLinks: [Line, Line, Line, Line]
@@ -520,7 +530,7 @@ export function CoordinateStack({
 
   const update = (sample: CoordinateProbe, currentViewport: Readonly<ViewportState>) => {
     const runtime = runtimeRef.current
-    if (!runtime) return
+    if (!runtime || runtime.revision !== STACK_RUNTIME_REVISION) return
     const shapeProjection = projectContentRect(sample, currentViewport)
     const points = {} as Record<PlaneName, Coordinate>
     const ranges = {} as Record<PlaneName, PlaneRange>
@@ -666,14 +676,28 @@ export function CoordinateStack({
       className: "coordinate-projection-ray",
       shape: [...clientViewLinks, ...viewContentLinks, ...rays, ...overlayLabels],
     })
-    runtimeRef.current = { planes, clientViewLinks, viewContentLinks, rays }
+    runtimeRef.current = {
+      revision: STACK_RUNTIME_REVISION,
+      planes,
+      clientViewLinks,
+      viewContentLinks,
+      rays,
+    }
     update(probe, viewport)
   }
 
   return (
     <section aria-label={text("Three coordinate planes", "三层坐标空间")} className={`coordinate-stack-exhibit coordinate-focus-${mappingFocus}`}>
       <CanvasSurface className="coordinate-stack-surface" shrinkToViewport>
-        <StayCanvas className="demo-canvas coordinate-stack-canvas" focusOnInit={false} height={STACK_HEIGHT} layers={3} mounted={mounted} width={STACK_WIDTH} />
+        <StayCanvas
+          className="demo-canvas coordinate-stack-canvas"
+          focusOnInit={false}
+          height={STACK_HEIGHT}
+          key={`coordinate-stack-${STACK_RUNTIME_REVISION}`}
+          layers={3}
+          mounted={mounted}
+          width={STACK_WIDTH}
+        />
       </CanvasSurface>
     </section>
   )

@@ -26,7 +26,7 @@ export const catalog: ExampleDefinition[] = [
     title: l("Shapes and drawing styles", "图形与绘制样式"),
     shortTitle: l("Shapes", "图形"),
     summary: l("Render the stable built-in primitives with fill, stroke, dash, opacity, text, and a raster image.", "集中展示内置图形，以及填充、描边、虚线、透明度、文字和图片等常用样式。"),
-    features: ["Rectangle", "Circle", "Line", "StayText", "StayImage"],
+    features: ["Rectangle", "Circle", "Line", "Path", "Polygon", "StayText", "StayImage"],
     component: ShapesExample,
   },
   {
@@ -169,7 +169,7 @@ export const catalog: ExampleDefinition[] = [
     title: l("Classic workflow editor", "经典流程图编辑器"),
     shortTitle: l("Diagram", "图表"),
     summary: l("A classic flowchart workspace with a shape palette, true flowchart nodes, inline labels, orthogonal reconnectable edges, pan and zoom.", "一个经典的流程图工作区，提供图形库、标准流程图节点、原位文字编辑、可重连正交连线以及画布缩放和平移。"),
-    features: ["Path + Line edges", "shape palette", "inline edit", "pan + zoom", "history + JSON"],
+    features: ["Path + Polygon edges", "shape palette", "inline edit", "pan + zoom", "history + JSON"],
     component: DiagramExample,
   },
   {

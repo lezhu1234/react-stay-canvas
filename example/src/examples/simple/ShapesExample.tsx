@@ -4,6 +4,7 @@ import {
   Line,
   Path,
   Point,
+  Polygon,
   Rectangle,
   StayCanvas,
   StayImage,
@@ -142,6 +143,31 @@ export default function ShapesExample() {
         }),
       ],
     }))
+    placeSceneChild(tools, tools.appendChild({
+      className: "shape",
+      shape: [
+        new Polygon({
+          points: [
+            { x: 65, y: 150 },
+            { x: 104, y: 168 },
+            { x: 90, y: 190 },
+            { x: 40, y: 190 },
+            { x: 26, y: 168 },
+          ],
+          fillConfig: { color: colors.greenSoft },
+          strokeConfig: { color: colors.green, lineWidth: 3, lineJoin: "round" },
+        }),
+        new StayText({
+          x: 65,
+          y: 194,
+          text: "Polygon",
+          textAlign: "center",
+          textBaseline: "top",
+          font: { size: 10, fontWeight: 700 },
+          fillConfig: { color: colors.ink },
+        }),
+      ],
+    }))
 
     const image = new Image()
     image.onload = () => {
@@ -185,7 +211,7 @@ export default function ShapesExample() {
 
   return (
     <DemoLayout>
-      <CanvasCard title={text("Built-in shape palette", "内置图形与样式")} description={text("Six drawing primitives share one incremental renderer.", "同一个 Canvas 中绘制六种内容，并按需增量重绘。")} wide>
+      <CanvasCard title={text("Built-in shape palette", "内置图形与样式")} description={text("Seven drawing primitives share one incremental renderer.", "同一个 Canvas 中绘制七种内容，并按需增量重绘。")} wide>
         <StayCanvas className="demo-canvas" height={330} layers={2} mounted={mounted} width={440} />
       </CanvasCard>
       <Toolbar>

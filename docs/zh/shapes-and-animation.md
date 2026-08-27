@@ -19,10 +19,13 @@ Shape 负责几何、绘制、命中和自身状态；Child 负责把一个或�
 | `StayImage` | `image`、`x`、`y`、`width`、`height`、`opacity` | 是 | 是 | 继承矩形边界；应在图片加载后创建 |
 | `Point` | `x`、`y` | 否 | 否 | 仅可作为几何工具；追加后会因 `getBound()` 未实现而在渲染时抛错 |
 | `Path` | `points`、`strokeConfig.lineWidth` | 是 | 否 | 使用原生 `Path2D` 描边，端帽和连接默认采用圆形 |
+| `Polygon` | `points`、`fillRule` | 是 | 否 | 闭合可填充区域；至少需要三个点 |
 
 这里的“默认命中”指 `Child.containsPointer()` 是否能直接依赖该 Shape 的 `contains()`。一个 Child 只要有任意一个 Shape 命中，就会命中整个 Child。因此常见做法是把不可命中的文字或线条，与一个透明度很低或可见的 `Rectangle` 放在同一个 Child 中，由矩形提供稳定命中区域。
 
 `Path` 根据路径点建立一条原生 `Path2D` 中心线，并通过 `context.stroke()` 绘制。`strokeConfig.lineWidth` 是唯一宽度来源；不接受 `fillConfig`。边界会在所有点的坐标极值上向四周扩张半线宽；命中会先检查边界，再比较指针到最近线段的距离。空路径、单点、重复点和多段折线都具有明确的静态几何语义；缩放会同时缩放路径点与线宽。
+
+`Polygon` 会把最后一个点闭合到第一个点，同时接受 `fillConfig` 与 `strokeConfig`。它至少需要三个点，并会持有传入坐标的副本，因此之后修改输入数组不会改变 Shape。`fillRule` 默认为 `"nonzero"`，也支持 `"evenodd"`。命中检测采用与 Canvas 填充相同的规则，并把边界上的点视为命中。边界、面积、质心、移动、缩放、更新和复制都基于这份闭合几何。
 
 `StayText` 的坐标语义与 Canvas 一致：默认 `start + alphabetic` 把 `(x, y)` 作为左侧字母基线锚点；需要把文字放在某个视觉中心时，传入相同中心坐标并设置 `textAlign: "center"`、`textBaseline: "middle"`。文字绘制、包围盒、移动、缩放和关键帧插值使用同一个锚点。`offsetXRatio` 和 `offsetYRatio` 会在该锚点基础上按文字宽高继续偏移。
 

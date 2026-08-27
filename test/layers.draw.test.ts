@@ -66,6 +66,42 @@ describe("real drawing (node-canvas ctx spy)", () => {
     expect(l0).not.toHaveBeenCalled()
   })
 
+  it("orders Shapes globally by zIndex while preserving insertion order for ties", () => {
+    const { stage } = createStage({ layers: 1 })
+    const drawOrder: string[] = []
+    const recordingRectangle = (name: string, zIndex: number) =>
+      new Rectangle({
+        x: 10,
+        y: 10,
+        width: 20,
+        height: 20,
+        zIndex,
+        stateDrawFuncMap: {
+          default: {
+            afterDraw: () => drawOrder.push(name),
+          },
+        },
+      })
+
+    stage.tools.appendChild({
+      className: "first-child",
+      shape: [recordingRectangle("first-high", 3), recordingRectangle("first-low", 1)],
+    })
+    stage.tools.appendChild({
+      className: "second-child",
+      shape: [recordingRectangle("second-middle", 2), recordingRectangle("second-high", 3)],
+    })
+
+    stage.draw({ now: 0 })
+
+    expect(drawOrder).toEqual([
+      "first-low",
+      "second-middle",
+      "first-high",
+      "second-high",
+    ])
+  })
+
   it("dirty tracking: an unchanged layer is not repainted", () => {
     const { stage, layers } = createStage({ layers: 2 })
     const strokeRect = vi.spyOn(layers[0].getContext("2d")!, "strokeRect")

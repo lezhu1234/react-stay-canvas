@@ -1,17 +1,12 @@
 import { Canvas } from "../canvas"
-import { InstantShape } from "../shapes/instantShape"
 import type { DrawReturn, StayDrawProps } from "../types/tools"
-import { hasIntersection } from "../utils/geometry"
 import { StayInstantChild } from "./children/stayInstantChild"
 import { CoordinateSystem } from "./coordinates/coordinateSystem"
+import { executeCanvas2DRenderPlan } from "./rendering/canvas2DExecutor"
+import { createLayerRenderPlan } from "./rendering/renderPlan"
 
 interface DrawLayer {
   forceUpdate: boolean
-}
-
-interface RenderShape {
-  child: StayInstantChild
-  shape: InstantShape
 }
 
 // Owns the render loop, per-layer dirty tracking, the layer draw pass, and the
@@ -72,10 +67,7 @@ export class Renderer {
     })
 
     const updatedLayers: number[] = []
-    const updatedChilds: {
-      child: StayInstantChild
-      shapes: InstantShape[]
-    }[] = []
+    const updatedChilds: DrawReturn["updatedChilds"] = []
 
     try {
       for (let layerIndex = 0; layerIndex < childrenInlayer.length; layerIndex++) {
@@ -88,37 +80,18 @@ export class Renderer {
         updatedLayers.push(layerIndex)
 
         this.root.withLayerFrame(layerIndex, frame.contentToView, (context) => {
-          let layerDrawShapes: RenderShape[] = []
-
-          for (let i = 0; i < children.length; i++) {
-            const child = children[i]
-            const shapes = child.getShapes(layerIndex)
-            layerDrawShapes.push(...shapes.map((shape) => ({ child, shape })))
-            child.layerDraw(layerIndex)
-            if (shapes.length > 0) {
-              updatedChilds.push({ child, shapes })
-            }
-          }
-
-          layerDrawShapes = layerDrawShapes
-            .filter(({ child, shape }) =>
-              hasIntersection(child.getShapeBound(shape), frame.visibleContentArea))
-            .sort((first, second) => first.shape.zIndex - second.shape.zIndex)
-
-          layerDrawShapes.forEach(({ child, shape }) => {
-            const { a, b, c, d, e, f } = child.getTransformMatrix()
-            context.save()
-            try {
-              context.transform(a, b, c, d, e, f)
-              shape.draw({
-                context,
-                now,
-                width: this.root.width,
-                height: this.root.height,
-              })
-            } finally {
-              context.restore()
-            }
+          const plan = createLayerRenderPlan(
+            children,
+            layerIndex,
+            frame.visibleContentArea
+          )
+          updatedChilds.push(...plan.updatedChildren)
+          executeCanvas2DRenderPlan({
+            context,
+            items: plan.items,
+            now,
+            width: this.root.width,
+            height: this.root.height,
           })
         })
       }

@@ -99,7 +99,8 @@ function createDefinitions(width: number, height: number): Record<PlaneName, Pla
   const planeHeight = planeWidth / PLANE_ASPECT_RATIO
   const groupWidth = planeWidth * 3 + gap * 2
   const startX = (width - groupWidth) / 2
-  const blockTop = Math.max(4, (height - labelSpace - planeHeight - bottomPadding) / 2)
+  const availableVerticalSpace = height - labelSpace - planeHeight - bottomPadding
+  const blockTop = Math.max(4, availableVerticalSpace * 0.67)
   const planeY = blockTop + labelSpace
   const labelY = planeY - Math.min(30, labelSpace * 0.72)
 

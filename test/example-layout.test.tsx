@@ -299,7 +299,7 @@ describe("Example Canvas workspace", () => {
     })
 
     const flow = container.querySelector(".coordinate-flow")
-    expect(flow?.textContent).toContain("The same pointer, expressed three ways")
+    expect(flow?.textContent).toContain("Coordinates")
     expect(flow?.textContent).toContain("Subtract the Canvas DOM origin")
     expect(flow?.textContent).toContain("Undo viewport offset and scale")
     expect(flow?.textContent).toContain("Scene result")
@@ -379,13 +379,13 @@ describe("Example Canvas workspace", () => {
     expect(proofValue("Client footprint")).not.toBe(clientFootprint)
 
     const resetCss = [...container.querySelectorAll<HTMLButtonElement>(".coordinate-operations button")]
-      .find((button) => button.textContent === "Reset CSS display")
+      .find((button) => button.textContent === "Reset")
     act(() => resetCss?.click())
     expect(displayTransform?.style.transform).toBe("translate(0px, 0px) scale(0.8, 0.8)")
 
     const canvasBeforeIdentity = liveLayers?.[liveLayers.length - 1]
     const identityPan = [...container.querySelectorAll<HTMLButtonElement>(".coordinate-operations button")]
-      .find((button) => button.textContent === "Pan +40,+20")
+      .find((button) => button.textContent === "pan")
     act(() => identityPan?.click())
     expect(stackCard?.classList.contains("coordinate-focus-content-view")).toBe(true)
     expect(proofValue("Viewport")).toBe("40, 20 / 100%")
@@ -402,13 +402,13 @@ describe("Example Canvas workspace", () => {
     act(() => {
       resetCss?.click()
       const resetView = [...container.querySelectorAll<HTMLButtonElement>(".coordinate-operations button")]
-        .find((button) => button.textContent === "Reset view")
+        .find((button) => button.textContent === "reset")
       resetView?.click()
     })
 
     const contentPlaneBeforeZoom = stackLayers?.[2].toDataURL()
     const zoomIn = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
-      .find((button) => button.textContent === "Center zoom in")
+      .find((button) => button.textContent === "zoom in")
     act(() => zoomIn?.click())
     expect(stackCard?.classList.contains("coordinate-focus-content-view")).toBe(true)
     act(() => frames.splice(0).forEach((frame) => frame(16)))
@@ -420,11 +420,11 @@ describe("Example Canvas workspace", () => {
     expect(stackLayers?.[2].toDataURL()).not.toBe(contentPlaneBeforeZoom)
 
     const reset = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
-      .find((button) => button.textContent === "Reset view")
+      .find((button) => button.textContent === "reset")
     act(() => reset?.click())
 
     const zoomOut = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
-      .find((button) => button.textContent === "Center zoom out")
+      .find((button) => button.textContent === "zoom out")
     act(() => {
       for (let click = 0; click < 6; click += 1) zoomOut?.click()
     })
@@ -438,7 +438,7 @@ describe("Example Canvas workspace", () => {
 
     const contentBeforePan = flow?.querySelector(".coordinate-flow-result strong")?.textContent
     const pan = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
-      .find((button) => button.textContent === "Pan +40,+20")
+      .find((button) => button.textContent === "pan")
     act(() => pan?.click())
     act(() => frames.splice(0).forEach((frame) => frame(16)))
     expect(flow?.querySelector(".coordinate-flow-result strong")?.textContent)
@@ -563,7 +563,7 @@ describe("Example Canvas workspace", () => {
       expect(eventPoint?.textContent).toBe("225, 213")
 
       const reset = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
-        .find((button) => button.textContent === "Reset view")
+        .find((button) => button.textContent === "reset")
       act(() => reset?.click())
       expect(eventPoint?.textContent).toBe("225, 213")
 

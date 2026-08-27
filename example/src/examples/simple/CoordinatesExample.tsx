@@ -51,6 +51,21 @@ const CSS_SCALE_MAX = 1
 const CSS_OFFSET_MAX = 96
 const VIEWPORT_MIN_SCALE = 0.4
 
+function ViewportIcon({ name }: { name: "zoom-in" | "zoom-out" | "pan" | "reset" }) {
+  if (name === "pan") {
+    return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8.5 11V6.7a1.45 1.45 0 0 1 2.9 0V10 5.2a1.45 1.45 0 0 1 2.9 0V10 6.2a1.45 1.45 0 0 1 2.9 0v5.3l.9-1.1a1.55 1.55 0 0 1 2.35-.08 1.6 1.6 0 0 1 .08 2.06l-3.4 4.65A6.2 6.2 0 0 1 12.1 19.6H11a6.1 6.1 0 0 1-5.4-3.25L3.7 12.8a1.5 1.5 0 0 1 2.55-1.56L8.5 14" /></svg>
+  }
+  if (name === "reset") {
+    return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5" /></svg>
+  }
+  const isZoomIn = name === "zoom-in"
+  return <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.2 15.2 5 5M7.5 10.5h6" />{isZoomIn && <path d="M10.5 7.5v6" />}</svg>
+}
+
+function ConsoleLabel({ index, children }: { index: number; children: string }) {
+  return <span className="coordinate-console-label"><b>{index}</b>{children}</span>
+}
+
 const INITIAL_PROBE: CoordinateProbe = {
   client: { x: 0, y: 0 },
   view: { x: 0, y: 0 },
@@ -414,7 +429,7 @@ export default function CoordinatesExample() {
           <section className={`coordinate-live-exhibit coordinate-focus-${mappingFocus}`}>
             <header className="coordinate-live-heading">
               <div>
-                <h3>{text("Live Canvas", "实时 Canvas")}</h3>
+                <h3>Live Canvas</h3>
                 <span>CLIENT SPACE</span>
               </div>
               <p>{Math.round(probe.viewSize.width)} × {Math.round(probe.viewSize.height)}</p>
@@ -443,13 +458,15 @@ export default function CoordinatesExample() {
 
       <footer className="coordinate-console">
         <div className="coordinate-console-intro">
-          <span>{text("Live signal", "实时信号")}</span>
-          <strong>{mappingFocus === "view-client" ? "VIEW → CLIENT" : "CONTENT → VIEW"}</strong>
-          <small>{text("The highlighted mapping follows your last operation.", "高亮映射会跟随最近一次操作。")}</small>
+          <ConsoleLabel index={1}>Live signal</ConsoleLabel>
+          <div className="coordinate-signal-card">
+            <strong>{mappingFocus === "view-client" ? "VIEW → CLIENT" : "CONTENT → VIEW"}</strong>
+          </div>
+          <small className="coordinate-sync-status">{text("Synchronized", "同步正常")}</small>
         </div>
 
         <div className="coordinate-flow" aria-label={text("Coordinate conversion flow", "坐标转换流程")}>
-          <p>{text("The same pointer, expressed three ways", "同一个指针，三种坐标表达")}</p>
+          <p><ConsoleLabel index={2}>Coordinates</ConsoleLabel></p>
           <div className="coordinate-flow-value coordinate-flow-client">
             <span>Client</span><strong>{formatPoint(probe.client)}</strong><small>{text("Browser window", "浏览器窗口")}</small>
           </div>
@@ -476,7 +493,7 @@ export default function CoordinatesExample() {
         <div className="coordinate-operations">
           <section className="coordinate-operation-group">
             <div className="coordinate-operation-heading">
-              <strong>{text("CSS display", "CSS 显示变换")}</strong>
+              <strong><ConsoleLabel index={3}>CSS display</ConsoleLabel></strong>
               <code>translate({cssDisplay.offsetX}, {cssDisplay.offsetY}) scale({cssDisplay.scaleX.toFixed(2)}, {cssDisplay.scaleY.toFixed(2)})</code>
             </div>
             <label className="coordinate-scale-control">
@@ -490,7 +507,7 @@ export default function CoordinatesExample() {
                 type="range"
                 value={Math.round(cssDisplay.scaleX * 100)}
               />
-              <output>{Math.round(cssDisplay.scaleX * 100)}%</output>
+              <output>{cssDisplay.scaleX.toFixed(3)}</output>
             </label>
             <label className="coordinate-scale-control">
               <span>scaleY</span>
@@ -503,7 +520,7 @@ export default function CoordinatesExample() {
                 type="range"
                 value={Math.round(cssDisplay.scaleY * 100)}
               />
-              <output>{Math.round(cssDisplay.scaleY * 100)}%</output>
+              <output>{cssDisplay.scaleY.toFixed(3)}</output>
             </label>
             <div className="coordinate-offset-controls">
               <label>
@@ -534,18 +551,18 @@ export default function CoordinatesExample() {
             <Button onClick={() => {
               setMappingFocus("view-client")
               setCssDisplay({ ...DEFAULT_CSS_DISPLAY })
-            }}>{text("Reset CSS display", "重置 CSS 显示")}</Button>
+            }}>Reset</Button>
           </section>
           <section className="coordinate-operation-group">
             <div className="coordinate-operation-heading">
-              <strong>Viewport</strong>
+              <strong><ConsoleLabel index={4}>Viewport</ConsoleLabel></strong>
               <code>translate({Math.round(viewport.x)}, {Math.round(viewport.y)}) scale({viewport.scale.toFixed(2)})</code>
             </div>
             <Toolbar>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}>{text("Center zoom in", "中心放大")}</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}>{text("Center zoom out", "中心缩小")}</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}>{text("Pan +40,+20", "平移 +40,+20")}</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.restore(homeViewportRef.current))}>{text("Reset view", "重置视图")}</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}><ViewportIcon name="zoom-in" />zoom in</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}><ViewportIcon name="zoom-out" />zoom out</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}><ViewportIcon name="pan" />pan</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.restore(homeViewportRef.current))}><ViewportIcon name="reset" />reset</Button>
             </Toolbar>
             <button
               aria-controls="coordinate-evidence"
@@ -554,8 +571,8 @@ export default function CoordinatesExample() {
               onClick={() => setEvidenceOpen((open) => !open)}
               type="button"
             >
-              <span>{text("Evidence", "证据")}</span>
-              <strong>{evidenceOpen ? text("Close", "收起") : text("Inspect", "查看")}</strong>
+              <span aria-hidden="true">▤</span>
+              <strong>Evidence</strong>
             </button>
           </section>
         </div>

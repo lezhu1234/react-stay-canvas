@@ -692,7 +692,7 @@ input:focus-visible {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr) 216px;
+  grid-template-rows: minmax(0, 1fr) clamp(72px, 24%, 216px);
   overflow: hidden;
   border: 1px solid rgba(61, 92, 84, 0.14);
   border-radius: 14px;
@@ -956,7 +956,7 @@ input:focus-visible {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  padding: 156px 30px 24px;
+  padding: clamp(96px, 14vh, 156px) 30px 24px;
   grid-template-columns: minmax(500px, 1.55fr) minmax(300px, 0.9fr);
   gap: 38px;
   overflow: hidden;
@@ -1341,10 +1341,6 @@ input:focus-visible {
 }
 
 @media (max-width: 760px) {
-  .coordinate-experience {
-    grid-template-rows: minmax(0, 1fr) 216px;
-  }
-
   .coordinate-hero {
     top: 16px;
     left: 18px;
@@ -1356,7 +1352,7 @@ input:focus-visible {
   }
 
   .coordinate-workspace {
-    padding: 142px 12px 12px;
+    padding: clamp(88px, 14vh, 142px) 12px 12px;
     grid-template-columns: minmax(300px, 1.35fr) minmax(210px, 0.85fr);
     gap: 10px;
     overflow-x: auto;

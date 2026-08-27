@@ -32,9 +32,9 @@ import {
 
 const STACK_WIDTH = 320
 const STACK_HEIGHT = 300
-const PLANE_GRID_COLUMNS = 6
-const PLANE_GRID_ROWS = 2
-const CONTENT_GRID_LINES = 18
+const PLANE_GRID_COLUMNS = 3
+const PLANE_GRID_ROWS = 5
+const CONTENT_GRID_LINES = 6
 const CONTENT_GRID_SIZE = 100
 
 type PlaneName = "client" | "view" | "content"
@@ -83,31 +83,31 @@ type StackRuntime = {
 }
 
 function createDefinitions(width: number, height: number): Record<PlaneName, PlaneDefinition> {
-  const planeWidth = width * 0.66
-  const planeHeight = height * 0.22
+  const planeWidth = width * 0.245
+  const planeHeight = height * 0.58
   return {
     client: {
       width: planeWidth,
       height: planeHeight,
       layer: 0,
-      transform: { x: width * 0.07, y: height * 0.05, skewX: -8, scaleY: 0.78 },
-      fill: rgba(124, 132, 145, 0.13),
+      transform: { x: width * 0.075, y: height * 0.245, rotation: -2.5, skewY: -1.5 },
+      fill: rgba(225, 229, 226, 0.5),
       stroke: rgba(124, 132, 145, 0.72),
     },
     view: {
       width: planeWidth,
       height: planeHeight,
       layer: 1,
-      transform: { x: width * 0.15, y: height * 0.385, skewX: -8, scaleY: 0.78 },
-      fill: rgba(54, 105, 221, 0.14),
+      transform: { x: width * 0.375, y: height * 0.205, rotation: 1, skewY: 1.25 },
+      fill: rgba(54, 105, 221, 0.12),
       stroke: rgba(54, 105, 221, 0.82),
     },
     content: {
       width: planeWidth,
       height: planeHeight,
       layer: 2,
-      transform: { x: width * 0.23, y: height * 0.72, skewX: -8, scaleY: 0.78 },
-      fill: rgba(44, 137, 91, 0.16),
+      transform: { x: width * 0.675, y: height * 0.245, rotation: 2.5, skewY: 1.5 },
+      fill: rgba(44, 137, 91, 0.12),
       stroke: rgba(44, 137, 91, 0.88),
     },
   }
@@ -331,7 +331,7 @@ export function CoordinateStack({
         },
       })
       plane.shadow.update({
-        fillConfig: { color: rgba(39, 51, 67, isActive ? 0.14 : 0.065) },
+        fillConfig: { color: rgba(39, 51, 67, isActive ? 0.12 : 0.045) },
       })
       plane.title.update({
         fillConfig: {
@@ -451,9 +451,9 @@ export function CoordinateStack({
     const definitions = createDefinitions(canvasArea.width, canvasArea.height)
     const planeNames: PlaneName[] = ["client", "view", "content"]
     const labels = {
-      client: ["CLIENT", text("Fixed browser crop; dashed rect: Canvas DOM", "固定浏览器裁切范围；虚线框：Canvas DOM")],
-      view: ["VIEW", text("Logical Canvas surface", "Canvas 逻辑显示面")],
-      content: ["CONTENT", text("Outer: fixed reference; solid rect: Demo bounds", "外框：固定参考系；实线框：Demo 边界")],
+      client: ["CLIENT", text("Browser window", "浏览器窗口")],
+      view: ["VIEW", text("Logical Canvas", "逻辑 Canvas")],
+      content: ["CONTENT", text("Scene geometry", "场景几何")],
     }
     const planes = {} as Record<PlaneName, PlaneRuntime>
 
@@ -467,42 +467,42 @@ export function CoordinateStack({
       const dot = new Circle({
         x: 0,
         y: 0,
-        radius: 6,
+        radius: 5,
         layer: plane.layer,
         zIndex: 10,
         fillConfig: { color: colors.orange },
         strokeConfig: { color: colors.paper, lineWidth: 2 },
       })
       const value = new StayText({
-        x: plane.width - 12,
-        y: 14,
+        x: plane.width - 10,
+        y: 12,
         text: "0, 0",
         layer: plane.layer,
         zIndex: 11,
         textAlign: "right",
         textBaseline: "top",
-        font: { size: 9, fontWeight: 700 },
+        font: { size: 8, fontWeight: 700 },
         fillConfig: { color: colors.orange },
       })
       const originValue = new StayText({
-        x: 12,
-        y: plane.height - 10,
+        x: 10,
+        y: plane.height - 9,
         text: "0, 0",
         layer: plane.layer,
         zIndex: 5,
         textBaseline: "bottom",
-        font: { size: 9 },
+        font: { size: 8 },
         fillConfig: { color: colors.gray },
       })
       const extentValue = new StayText({
-        x: plane.width - 12,
-        y: plane.height - 10,
+        x: plane.width - 10,
+        y: plane.height - 9,
         text: "0, 0",
         layer: plane.layer,
         zIndex: 5,
         textAlign: "right",
         textBaseline: "bottom",
-        font: { size: 9 },
+        font: { size: 8 },
         fillConfig: { color: colors.gray },
       })
       const shape = new Rectangle({
@@ -525,13 +525,13 @@ export function CoordinateStack({
         strokeConfig: { color: colors.blue, lineWidth: 2 },
       })) as [Line, Line, Line, Line]
       const shapeValue = new StayText({
-        x: 12,
-        y: 76,
+        x: 10,
+        y: 66,
         text: "Shape",
         layer: plane.layer,
         zIndex: 8,
         textBaseline: "bottom",
-        font: { size: 9, fontWeight: 700 },
+        font: { size: 8, fontWeight: 700 },
         fillConfig: { color: colors.blue },
       })
       const contentBounds = new Rectangle({
@@ -564,13 +564,13 @@ export function CoordinateStack({
         strokeConfig: { color: rgba(44, 137, 91, 0.64), lineWidth: 1, dash: [5, 4] },
       }) : undefined
       const visibleWindowValue = name === "content" ? new StayText({
-        x: 12,
+        x: 10,
         y: plane.height - 28,
         text: "viewport",
         layer: plane.layer,
         zIndex: 6,
         textBaseline: "bottom",
-        font: { size: 8, fontWeight: 700 },
+        font: { size: 7, fontWeight: 700 },
         fillConfig: { color: colors.green },
       }) : undefined
       const canvasDom = name === "client" ? new Rectangle({
@@ -584,14 +584,14 @@ export function CoordinateStack({
         strokeConfig: { color: rgba(78, 89, 104, 0.72), lineWidth: 1, dash: [5, 4] },
       }) : undefined
       const shadow = new Rectangle({
-        x: 3,
-        y: 7,
+        x: 7,
+        y: 12,
         width: plane.width,
         height: plane.height,
         layer: plane.layer,
         zIndex: -2,
-        filter: "blur(6px)",
-        fillConfig: { color: rgba(39, 51, 67, 0.14) },
+        filter: "blur(10px)",
+        fillConfig: { color: rgba(39, 51, 67, 0.12) },
         strokeConfig: { color: rgba(39, 51, 67, 0), lineWidth: 0 },
       })
       const frame = new Rectangle({
@@ -606,22 +606,22 @@ export function CoordinateStack({
       })
       const title = new StayText({
         x: 12,
-        y: 13,
+        y: 15,
         text: labels[name][0],
         layer: plane.layer,
         zIndex: 5,
         textBaseline: "top",
-        font: { size: 14, fontWeight: 700 },
+        font: { size: 13, fontWeight: 700 },
         fillConfig: { color: plane.stroke },
       })
       const description = new StayText({
         x: 12,
-        y: 33,
+        y: 36,
         text: labels[name][1],
         layer: plane.layer,
         zIndex: 5,
         textBaseline: "top",
-        font: { size: 9, fontWeight: 500 },
+        font: { size: 8, fontWeight: 500 },
         fillConfig: { color: colors.gray },
       })
       const child = tools.appendChild({
@@ -698,8 +698,8 @@ export function CoordinateStack({
     })) as [Line, Line, Line, Line]
     const transformLabels = [
       new StayText({
-        x: canvasArea.width * 0.68,
-        y: canvasArea.height * 0.285,
+        x: canvasArea.width * 0.31,
+        y: canvasArea.height * 0.12,
         text: "View → Client",
         layer: 1,
         zIndex: 12,
@@ -708,9 +708,9 @@ export function CoordinateStack({
         fillConfig: { color: colors.blue },
       }),
       new StayText({
-        x: canvasArea.width * 0.68,
-        y: canvasArea.height * 0.315,
-        text: text("place the Canvas DOM and apply display scale", "叠加 Canvas DOM 位置与显示比例"),
+        x: canvasArea.width * 0.31,
+        y: canvasArea.height * 0.15,
+        text: text("CSS display mapping", "CSS 显示映射"),
         layer: 1,
         zIndex: 12,
         textBaseline: "middle",
@@ -718,8 +718,8 @@ export function CoordinateStack({
         fillConfig: { color: colors.gray },
       }),
       new StayText({
-        x: canvasArea.width * 0.76,
-        y: canvasArea.height * 0.62,
+        x: canvasArea.width * 0.61,
+        y: canvasArea.height * 0.12,
         text: "Content → View",
         layer: 2,
         zIndex: 12,
@@ -728,9 +728,9 @@ export function CoordinateStack({
         fillConfig: { color: colors.green },
       }),
       new StayText({
-        x: canvasArea.width * 0.76,
-        y: canvasArea.height * 0.65,
-        text: text("apply viewport offset and scale", "应用 viewport 平移与缩放"),
+        x: canvasArea.width * 0.61,
+        y: canvasArea.height * 0.15,
+        text: text("viewport mapping", "viewport 映射"),
         layer: 2,
         zIndex: 12,
         textBaseline: "middle",
@@ -746,14 +746,14 @@ export function CoordinateStack({
   return (
     <CanvasCard
       className={`coordinate-stack-card coordinate-focus-${mappingFocus}`}
-      title={text("One Shape through three coordinate spaces", "同一个 Shape 的三种坐标投影")}
+      title={text("Three coordinate planes", "三层坐标空间")}
       description={text(
         mappingFocus === "view-client"
-          ? "Showing View to Client: CSS places and scales the Canvas DOM. Content stays independent."
-          : "Showing Content to View: viewport changes the projection. The logical Shape stays fixed.",
+          ? "CSS changes the last projection only."
+          : "Viewport changes the middle projection only.",
         mappingFocus === "view-client"
-          ? "当前突出 View 到 Client：CSS 放置并缩放 Canvas DOM，Content 保持独立。"
-          : "当前突出 Content 到 View：viewport 改变投影，Shape 逻辑几何保持不变。",
+          ? "CSS 只改变最后一段投影。"
+          : "Viewport 只改变中间一段投影。",
       )}
       wide
     >

@@ -13,7 +13,7 @@ import {
   type ViewportState,
 } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, rgba, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, rgba, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition } from "../actionEventGuards"
 import { CoordinateStack, type CoordinateMappingFocus } from "./CoordinateStack"
@@ -126,6 +126,7 @@ export default function CoordinatesExample() {
   const [eventPoint, setEventPoint] = useState<Coordinate>({ x: 0, y: 0 })
   const [viewport, setViewport] = useState<Readonly<ViewportState>>({ x: 0, y: 0, scale: 1 })
   const [mappingFocus, setMappingFocus] = useState<CoordinateMappingFocus>("view-client")
+  const [evidenceOpen, setEvidenceOpen] = useState(false)
 
   const moveMarker = (point: Coordinate) => {
     const marker = markerRef.current
@@ -374,112 +375,183 @@ export default function CoordinatesExample() {
   const clientWidthFormula = `${Math.round(shapeProjection.view.width)} ÷ ${probe.surface.scaleX.toFixed(2)} = ${Math.round(shapeProjection.client.width)}`
 
   return (
-    <DemoLayout className="coordinate-demo-layout">
-      <div className="coordinate-workspace">
-        <CoordinateStack clientRange={clientRange} mappingFocus={mappingFocus} probe={probe} viewport={viewport} />
-        <CanvasCard
-          canvasDisplayTransform={cssDisplay}
-          className={`coordinate-live-card coordinate-focus-${mappingFocus}`}
-          title={text("Canvas DOM in Client", "Client 中的 Canvas DOM")}
-          description={text(
-            "CSS changes the Canvas DOM footprint, while the full logical View stays fixed. Move the pointer, scroll to zoom, or hold Space and drag to pan.",
-            "CSS 只改变 Canvas DOM 的显示区域，完整逻辑 View 保持不变。移动指针，滚轮缩放，或按住空格键拖动画布。",
-          )}
-          viewportLabel={`CLIENT DOM · ${Math.round(cssDisplay.scaleX * 100)}% × ${Math.round(cssDisplay.scaleY * 100)}%`}
-          wide
+    <div className="coordinate-experience">
+      <section className="coordinate-stage">
+        <header className="coordinate-hero">
+          <p>{text("Coordinate laboratory · 01", "坐标实验室 · 01")}</p>
+          <h2>{text("One point. Three spaces.", "一个点，三个空间。")}</h2>
+          <span>{text(
+            "Move through the installation to see where CSS ends, where the View begins, and why Content never loses its identity.",
+            "移动指针穿过这组空间装置，看清 CSS 在哪里结束、View 从哪里开始，以及 Content 为什么始终保持自己的身份。",
+          )}</span>
+        </header>
+        <div className="coordinate-workspace">
+          <CoordinateStack clientRange={clientRange} mappingFocus={mappingFocus} probe={probe} viewport={viewport} />
+          <CanvasCard
+            canvasDisplayTransform={cssDisplay}
+            className={`coordinate-live-card coordinate-focus-${mappingFocus}`}
+            title={text("Live Canvas", "实时 Canvas")}
+            description={text(
+              "The same Shape, now rendered where the user actually sees it. Move, zoom, or hold Space and drag.",
+              "同一个 Shape，渲染在用户真正看到的位置。移动指针、滚轮缩放，或按住空格键拖动。",
+            )}
+            viewportLabel={`CLIENT DOM · ${Math.round(cssDisplay.scaleX * 100)}% × ${Math.round(cssDisplay.scaleY * 100)}%`}
+            wide
+          >
+            <StayCanvas
+              className="demo-canvas coordinate-canvas"
+              eventList={[spaceStartMove]}
+              height={440}
+              layers={2}
+              listenerList={listeners}
+              mounted={mounted}
+              passive={false}
+              viewport={{ minScale: 0.4, maxScale: 3 }}
+              width={320}
+            />
+          </CanvasCard>
+        </div>
+      </section>
+
+      <footer className="coordinate-console">
+        <div className="coordinate-console-intro">
+          <span>{text("Live signal", "实时信号")}</span>
+          <strong>{mappingFocus === "view-client" ? "VIEW → CLIENT" : "CONTENT → VIEW"}</strong>
+          <small>{text("The highlighted mapping follows your last operation.", "高亮映射会跟随最近一次操作。")}</small>
+        </div>
+
+        <div className="coordinate-flow" aria-label={text("Coordinate conversion flow", "坐标转换流程")}>
+          <p>{text("The same pointer, expressed three ways", "同一个指针，三种坐标表达")}</p>
+          <div className="coordinate-flow-value coordinate-flow-client">
+            <span>Client</span><strong>{formatPoint(probe.client)}</strong><small>{text("Browser window", "浏览器窗口")}</small>
+          </div>
+          <div className="coordinate-flow-operation">
+            <span>{text(
+              "Subtract the Canvas DOM origin, then apply the inverse CSS scale",
+              "减去 Canvas DOM 原点，再乘 CSS 缩放的倒数（逻辑尺寸 ÷ DOM 尺寸）",
+            )}</span>
+            <code>[({formatPoint(probe.client)}) - ({Math.round(probe.surface.left)}, {Math.round(probe.surface.top)})] × {scaleFactors(probe.surface)}</code>
+          </div>
+          <div className="coordinate-flow-value coordinate-flow-view">
+            <span>View</span><strong>{formatPoint(probe.view)}</strong><small>{text("Logical Canvas", "逻辑 Canvas")}</small>
+          </div>
+          <div className="coordinate-flow-operation">
+            <span>{text("Undo viewport offset and scale", "撤销 viewport 平移与缩放")}</span>
+            <code>[({formatPoint(probe.view)}) - ({Math.round(viewport.x)}, {Math.round(viewport.y)})] ÷ {viewport.scale.toFixed(2)}</code>
+          </div>
+          <div className="coordinate-flow-value coordinate-flow-result">
+            <span>Content</span><strong>{formatPoint(probe.content)}</strong><small>{text("Scene result", "场景结果")}</small>
+          </div>
+          <p className="coordinate-event-sample">e.point: <code>{formatPoint(eventPoint)}</code></p>
+        </div>
+
+        <div className="coordinate-operations">
+          <section className="coordinate-operation-group">
+            <div className="coordinate-operation-heading">
+              <strong>{text("CSS display", "CSS 显示变换")}</strong>
+              <code>translate({cssDisplay.offsetX}, {cssDisplay.offsetY}) scale({cssDisplay.scaleX.toFixed(2)}, {cssDisplay.scaleY.toFixed(2)})</code>
+            </div>
+            <label className="coordinate-scale-control">
+              <span>scaleX</span>
+              <input
+                aria-label="CSS scale X"
+                max={CSS_SCALE_MAX * 100}
+                min={50}
+                onChange={(event) => updateCssDisplay({ scaleX: Number(event.target.value) / 100 })}
+                step={5}
+                type="range"
+                value={Math.round(cssDisplay.scaleX * 100)}
+              />
+              <output>{Math.round(cssDisplay.scaleX * 100)}%</output>
+            </label>
+            <label className="coordinate-scale-control">
+              <span>scaleY</span>
+              <input
+                aria-label="CSS scale Y"
+                max={CSS_SCALE_MAX * 100}
+                min={50}
+                onChange={(event) => updateCssDisplay({ scaleY: Number(event.target.value) / 100 })}
+                step={5}
+                type="range"
+                value={Math.round(cssDisplay.scaleY * 100)}
+              />
+              <output>{Math.round(cssDisplay.scaleY * 100)}%</output>
+            </label>
+            <div className="coordinate-offset-controls">
+              <label>
+                <span>translateX</span>
+                <input
+                  aria-label="CSS translate X"
+                  max={CSS_OFFSET_MAX}
+                  min={0}
+                  onChange={(event) => updateCssDisplay({ offsetX: clamp(Number(event.target.value), 0, CSS_OFFSET_MAX) })}
+                  step={8}
+                  type="number"
+                  value={cssDisplay.offsetX}
+                />
+              </label>
+              <label>
+                <span>translateY</span>
+                <input
+                  aria-label="CSS translate Y"
+                  max={CSS_OFFSET_MAX}
+                  min={0}
+                  onChange={(event) => updateCssDisplay({ offsetY: clamp(Number(event.target.value), 0, CSS_OFFSET_MAX) })}
+                  step={8}
+                  type="number"
+                  value={cssDisplay.offsetY}
+                />
+              </label>
+            </div>
+            <Button onClick={() => {
+              setMappingFocus("view-client")
+              setCssDisplay({ ...DEFAULT_CSS_DISPLAY })
+            }}>{text("Reset CSS display", "重置 CSS 显示")}</Button>
+          </section>
+          <section className="coordinate-operation-group">
+            <div className="coordinate-operation-heading">
+              <strong>Viewport</strong>
+              <code>translate({Math.round(viewport.x)}, {Math.round(viewport.y)}) scale({viewport.scale.toFixed(2)})</code>
+            </div>
+            <Toolbar>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}>{text("Center zoom in", "中心放大")}</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}>{text("Center zoom out", "中心缩小")}</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}>{text("Pan +40,+20", "平移 +40,+20")}</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.reset())}>{text("Reset view", "重置视图")}</Button>
+            </Toolbar>
+          </section>
+        </div>
+
+        <button
+          aria-controls="coordinate-evidence"
+          aria-expanded={evidenceOpen}
+          className="coordinate-evidence-toggle"
+          onClick={() => setEvidenceOpen((open) => !open)}
+          type="button"
         >
-          <StayCanvas
-            className="demo-canvas coordinate-canvas"
-            eventList={[spaceStartMove]}
-            height={440}
-            layers={2}
-            listenerList={listeners}
-            mounted={mounted}
-            passive={false}
-            viewport={{ minScale: 0.4, maxScale: 3 }}
-            width={320}
-          />
-        </CanvasCard>
-      </div>
-      <div className="coordinate-operations">
-        <section className="coordinate-operation-group">
-          <div className="coordinate-operation-heading">
-            <strong>{text("CSS display", "CSS 显示变换")}</strong>
-            <code>translate({cssDisplay.offsetX}, {cssDisplay.offsetY}) scale({cssDisplay.scaleX.toFixed(2)}, {cssDisplay.scaleY.toFixed(2)})</code>
-          </div>
-          <label className="coordinate-scale-control">
-            <span>scaleX</span>
-            <input
-              aria-label="CSS scale X"
-              max={CSS_SCALE_MAX * 100}
-              min={50}
-              onChange={(event) => updateCssDisplay({ scaleX: Number(event.target.value) / 100 })}
-              step={5}
-              type="range"
-              value={Math.round(cssDisplay.scaleX * 100)}
-            />
-            <output>{Math.round(cssDisplay.scaleX * 100)}%</output>
-          </label>
-          <label className="coordinate-scale-control">
-            <span>scaleY</span>
-            <input
-              aria-label="CSS scale Y"
-              max={CSS_SCALE_MAX * 100}
-              min={50}
-              onChange={(event) => updateCssDisplay({ scaleY: Number(event.target.value) / 100 })}
-              step={5}
-              type="range"
-              value={Math.round(cssDisplay.scaleY * 100)}
-            />
-            <output>{Math.round(cssDisplay.scaleY * 100)}%</output>
-          </label>
-          <div className="coordinate-offset-controls">
-            <label>
-              <span>translateX</span>
-              <input
-                aria-label="CSS translate X"
-                max={CSS_OFFSET_MAX}
-                min={0}
-                onChange={(event) => updateCssDisplay({ offsetX: clamp(Number(event.target.value), 0, CSS_OFFSET_MAX) })}
-                step={8}
-                type="number"
-                value={cssDisplay.offsetX}
-              />
-            </label>
-            <label>
-              <span>translateY</span>
-              <input
-                aria-label="CSS translate Y"
-                max={CSS_OFFSET_MAX}
-                min={0}
-                onChange={(event) => updateCssDisplay({ offsetY: clamp(Number(event.target.value), 0, CSS_OFFSET_MAX) })}
-                step={8}
-                type="number"
-                value={cssDisplay.offsetY}
-              />
-            </label>
-          </div>
-          <Button onClick={() => {
-            setMappingFocus("view-client")
-            setCssDisplay({ ...DEFAULT_CSS_DISPLAY })
-          }}>{text("Reset CSS display", "重置 CSS 显示")}</Button>
-        </section>
-        <section className="coordinate-operation-group">
-          <div className="coordinate-operation-heading">
-            <strong>Viewport</strong>
-            <code>translate({Math.round(viewport.x)}, {Math.round(viewport.y)}) scale({viewport.scale.toFixed(2)})</code>
-          </div>
-          <Toolbar>
-            <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}>{text("Center zoom in", "中心放大")}</Button>
-            <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}>{text("Center zoom out", "中心缩小")}</Button>
-            <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}>{text("Pan +40,+20", "平移 +40,+20")}</Button>
-            <Button onClick={() => changeViewport((tools) => tools.viewport.reset())}>{text("Reset view", "重置视图")}</Button>
-          </Toolbar>
-        </section>
-      </div>
-      <div className="coordinate-zoom-proof" aria-label={text("Zoom cause and effect", "缩放因果证据")}>
-        <p>{text("Zoom changes the projection, not the Shape", "缩放改变投影，不改变 Shape")}</p>
-        <dl>
+          <span>{text("Evidence", "证据")}</span>
+          <strong>{evidenceOpen ? text("Close", "收起") : text("Inspect", "查看")}</strong>
+        </button>
+      </footer>
+
+      <aside
+        aria-hidden={!evidenceOpen}
+        className="coordinate-evidence"
+        data-open={evidenceOpen ? "true" : "false"}
+        hidden={!evidenceOpen}
+        id="coordinate-evidence"
+      >
+        <div className="coordinate-evidence-heading">
+          <span>{text("Projection evidence", "投影证据")}</span>
+          <button
+            aria-label={text("Close evidence", "关闭证据面板")}
+            onClick={() => setEvidenceOpen(false)}
+            type="button"
+          >×</button>
+        </div>
+        <div className="coordinate-zoom-proof" aria-label={text("Zoom cause and effect", "缩放因果证据")}>
+          <p>{text("Zoom changes the projection, not the Shape", "缩放改变投影，不改变 Shape")}</p>
+          <dl>
           <div className="coordinate-proof-stable">
             <dt>{text("Content Shape geometry", "Content Shape 几何")}</dt>
             <dd>{formatRect(LAB_SHAPE)}</dd>
@@ -521,32 +593,9 @@ export default function CoordinatesExample() {
               ? text("Fully shown in the fixed reference. It changes inversely while View stays fixed.", "完整显示在固定参考系中。View 不变时，它会反向变化。")
               : text("Extends beyond the fixed reference. Only the intersection is filled; no false boundary is drawn.", "超出固定参考系。只填充交集，不绘制伪造边界。")}</small>
           </div>
-        </dl>
-      </div>
-      <div className="coordinate-flow" aria-label={text("Coordinate conversion flow", "坐标转换流程")}>
-        <p>{text("The same pointer, expressed three ways", "同一个指针，三种坐标表达")}</p>
-        <div className="coordinate-flow-value coordinate-flow-client">
-          <span>Client</span><strong>{formatPoint(probe.client)}</strong><small>{text("Browser-window position", "浏览器窗口位置")}</small>
+          </dl>
         </div>
-        <div className="coordinate-flow-operation">
-          <span>{text(
-            "Subtract the Canvas DOM origin, then apply the inverse CSS scale",
-            "减去 Canvas DOM 原点，再乘 CSS 缩放的倒数（逻辑尺寸 ÷ DOM 尺寸）",
-          )}</span>
-          <code>[({formatPoint(probe.client)}) - ({Math.round(probe.surface.left)}, {Math.round(probe.surface.top)})] × {scaleFactors(probe.surface)}</code>
-        </div>
-        <div className="coordinate-flow-value coordinate-flow-view">
-          <span>View</span><strong>{formatPoint(probe.view)}</strong><small>{text("Logical Canvas surface", "Canvas 逻辑显示面")}</small>
-        </div>
-        <div className="coordinate-flow-operation">
-          <span>{text("Undo viewport offset and scale", "撤销 viewport 平移与缩放")}</span>
-          <code>[({formatPoint(probe.view)}) - ({Math.round(viewport.x)}, {Math.round(viewport.y)})] ÷ {viewport.scale.toFixed(2)}</code>
-        </div>
-        <div className="coordinate-flow-value coordinate-flow-result">
-          <span>Content</span><strong>{formatPoint(probe.content)}</strong><small>{text("Result in the current viewport", "当前 viewport 下的转换结果")}</small>
-        </div>
-        <p className="coordinate-event-sample">{text("Last event e.point", "最近事件 e.point")}: <code>{formatPoint(eventPoint)}</code></p>
-      </div>
-    </DemoLayout>
+      </aside>
+    </div>
   )
 }

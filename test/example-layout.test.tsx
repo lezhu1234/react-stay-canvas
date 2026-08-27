@@ -252,10 +252,18 @@ describe("Example Canvas workspace", () => {
     expect(stackLayers).toHaveLength(3)
     expect(liveLayers).toHaveLength(2)
     expect(workspace?.querySelector(".coordinate-live-card .canvas-card-heading")?.textContent)
-      .toContain("Canvas DOM in Client")
+      .toContain("Live Canvas")
     expect(workspace?.querySelector(".coordinate-live-card .canvas-viewport-label")?.textContent)
       .toBe("CLIENT DOM · 80% × 80%")
-    expect(workspace?.textContent).toContain("CSS changes the Canvas DOM footprint")
+    expect(container.querySelector(".coordinate-hero")?.textContent).toContain("One point. Three spaces.")
+    expect(workspace?.textContent).toContain("The same Shape")
+    const evidence = container.querySelector<HTMLElement>(".coordinate-evidence")
+    const evidenceToggle = container.querySelector<HTMLButtonElement>(".coordinate-evidence-toggle")
+    expect(evidence?.hidden).toBe(true)
+    act(() => evidenceToggle?.click())
+    expect(evidence?.hidden).toBe(false)
+    expect(evidence?.textContent).toContain("Zoom changes the projection, not the Shape")
+    expect(evidence?.querySelector('button[aria-label="Close evidence"]')).not.toBeNull()
     const displayTransform = workspace?.querySelector<HTMLElement>(".coordinate-live-card .canvas-display-transform")
     expect(displayTransform?.dataset.displayScaleX).toBe("0.8")
     expect(displayTransform?.dataset.displayScaleY).toBe("0.8")
@@ -264,9 +272,9 @@ describe("Example Canvas workspace", () => {
     const width = stackLayers?.[0].width ?? 0
     const height = stackLayers?.[0].height ?? 0
     const planeSamples = [
-      { x: width * 0.07 + 8, y: height * 0.05 + 8 },
-      { x: width * 0.15 + 8, y: height * 0.385 + 8 },
-      { x: width * 0.23 + 8, y: height * 0.72 + 8 },
+      { x: width * 0.075 + 8, y: height * 0.245 + 8 },
+      { x: width * 0.375 + 8, y: height * 0.205 + 8 },
+      { x: width * 0.675 + 8, y: height * 0.245 + 8 },
     ]
     stackLayers?.forEach((canvas, index) => {
       const { x, y } = planeSamples[index]
@@ -277,7 +285,7 @@ describe("Example Canvas workspace", () => {
     expect(flow?.textContent).toContain("The same pointer, expressed three ways")
     expect(flow?.textContent).toContain("Subtract the Canvas DOM origin")
     expect(flow?.textContent).toContain("Undo viewport offset and scale")
-    expect(flow?.textContent).toContain("Result in the current viewport")
+    expect(flow?.textContent).toContain("Scene result")
     expect(flow?.textContent).not.toContain("The coordinate exposed as e.point")
     expect(flow?.textContent).not.toContain("1 · Client")
 

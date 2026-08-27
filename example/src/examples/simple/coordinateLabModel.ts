@@ -1,4 +1,11 @@
-import type { Coordinate, Rect, ViewportState } from "react-stay-canvas"
+import type {
+  ClientPoint,
+  ContentPoint,
+  Coordinate,
+  Rect,
+  ViewPoint,
+  ViewportState,
+} from "react-stay-canvas"
 
 export const LAB_SHAPE: Readonly<Rect> = {
   x: 145,
@@ -29,9 +36,9 @@ const RECT_CORNERS = [
 ] as const
 
 export type CoordinateProbe = {
-  client: Coordinate
-  view: Coordinate
-  content: Coordinate
+  client: ClientPoint
+  view: ViewPoint
+  content: ContentPoint
   viewSize: { width: number; height: number }
   surface: {
     left: number
@@ -47,13 +54,6 @@ export type RectProjection = {
   client: Rect
   view: Rect
   content: Rect
-}
-
-export function contentAtView(view: Coordinate, viewport: Readonly<ViewportState>) {
-  return {
-    x: (view.x - viewport.x) / viewport.scale,
-    y: (view.y - viewport.y) / viewport.scale,
-  }
 }
 
 export function visibleContentRange(

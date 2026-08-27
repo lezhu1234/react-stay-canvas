@@ -15,6 +15,7 @@ src/types/
 ├── children.ts
 ├── common.ts
 ├── component.ts
+├── coordinates.ts
 ├── events.ts
 ├── geometry.ts
 ├── manualActions.ts
@@ -74,7 +75,10 @@ routing. Root input is hit-tested in View; ordinary Children are hit-tested in C
 pointer `point` remains Content while `movement` is a View-space delta. No renderer, Shape, or
 integration example may keep a second authoritative viewport or perform its own inverse mapping.
 
-The public `tools.viewport` object is intentionally a thin facade over this owner. Legacy
+The public `tools.coordinates` object is the stateless conversion facade over this owner, while
+`tools.viewport` is the mutation facade for the same viewport state. Public weak-branded point and
+vector types preserve plain `{ x, y }` inputs while preventing known cross-space values from being
+mixed. Legacy
 `move`/`zoom`/`reset` tools remain destructive geometry operations and must not be used as a
 viewport implementation.
 

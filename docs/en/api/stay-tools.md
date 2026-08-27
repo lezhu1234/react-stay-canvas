@@ -23,7 +23,7 @@
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `selector` | required | String, string array, or function selector |
-| `point` | required | Canvas-local coordinate |
+| `point` | required | Scene-space `ContentPoint` |
 | `returnFirst` | `false` | Return at most the first sorted match |
 | `sortBy` | — | Hit-result ordering |
 | `withRoot` | `true` | Whether root may be returned |
@@ -39,6 +39,25 @@
 
 ## Scene transforms
 
+### Coordinate conversion
+
+`tools.coordinates` is the unified conversion surface for the three global Client, View, and Content spaces. It does not own a second viewport state; every call uses the current Canvas display metrics and current viewport.
+
+| Method | Meaning |
+| --- | --- |
+| `clientToView(point)` | Browser Client point → Canvas View point |
+| `viewToClient(point)` | Canvas View point → browser Client point |
+| `viewToContent(point)` | View point → current scene Content point |
+| `contentToView(point)` | Content point → current Canvas View point |
+| `clientToContent(point)` | Browser Client point → current scene Content point |
+| `contentToClient(point)` | Content point → browser Client point, suitable for DOM overlays |
+| `viewVectorToContent(vector)` | View displacement → Content displacement; applies scale but not translation |
+| `contentVectorToView(vector)` | Content displacement → View displacement; applies scale but not translation |
+
+The package root also exports `ClientPoint`, `ViewPoint`, `ContentPoint`, `ViewVector`, and `ContentVector`. These are zero-runtime-cost weak branded types: plain `{ x, y }` values remain compatible with existing APIs, while values returned with a known space cannot be passed to a different space by mistake. Points and vectors are also distinct because point conversion includes translation and vector conversion does not.
+
+`tools.coordinates` reads the latest viewport when it is called. By contrast, event `e.point` is the Content point captured for that input sample; it stays stable even when an earlier Listener changes the viewport during the same dispatch.
+
 ### Non-destructive Child transform
 
 `appendChild()` and `createChild()` accept an optional semantic `{ x, y, rotation, scaleX, scaleY, skewX, skewY, origin }` transform or an advanced raw `{ matrix: { a, b, c, d, e, f } }`. Rotation and skew are degrees. The transform maps Child-local Shape geometry into Content without changing Shape properties.
@@ -52,11 +71,11 @@
 | Method | Meaning |
 | --- | --- |
 | `get()` | Return a `{ x, y, scale }` snapshot |
-| `panBy({ x, y })` | Accumulate a display offset in View units |
-| `zoomBy(factor, anchor?)` | Zoom by a positive factor; `anchor` is the Content point whose display position stays fixed, defaulting to the View center |
+| `panBy(viewMovement)` | Accumulate a `ViewVector` display offset |
+| `zoomBy(factor, contentAnchor?)` | Zoom by a positive factor; the anchor is the `ContentPoint` whose display position stays fixed, defaulting to the View center |
 | `reset()` | Restore `{ x: 0, y: 0, scale: 1 }`, subject to min/max limits |
 | `restore(state)` | Restore a previous snapshot and clamp its scale to configured limits |
-| `toClientPoint(point)` | Project a Content point into browser Client coordinates for DOM overlays |
+| `toClientPoint(contentPoint)` | Compatibility entry point for `coordinates.contentToClient()` |
 
 The projection is `View = Content × scale + (x, y)`. Every method synchronously returns the new read-only snapshot; the Renderer uses one coordinate snapshot to repaint all dirty layers on the next frame.
 

@@ -139,8 +139,24 @@ describe("CSS-scaled Canvas coordinates", () => {
       movement: { x: 0, y: 0 },
       target: child,
     })
-    expect(stage.tools.viewport.toClientPoint({ x: 110, y: 90 }))
+    expect(stage.tools.coordinates.clientToView({ x: 560, y: 350 }))
+      .toEqual({ x: 270, y: 160 })
+    expect(stage.tools.coordinates.viewToContent({ x: 270, y: 160 }))
+      .toEqual({ x: 110, y: 90 })
+    expect(stage.tools.coordinates.clientToContent({ x: 560, y: 350 }))
+      .toEqual({ x: 110, y: 90 })
+    expect(stage.tools.coordinates.contentToView({ x: 110, y: 90 }))
+      .toEqual({ x: 270, y: 160 })
+    expect(stage.tools.coordinates.viewToClient({ x: 270, y: 160 }))
       .toEqual({ x: 560, y: 350 })
+    expect(stage.tools.coordinates.contentToClient({ x: 110, y: 90 }))
+      .toEqual({ x: 560, y: 350 })
+    expect(stage.tools.coordinates.viewVectorToContent({ x: 20, y: -10 }))
+      .toEqual({ x: 10, y: -5 })
+    expect(stage.tools.coordinates.contentVectorToView({ x: 10, y: -5 }))
+      .toEqual({ x: 20, y: -10 })
+    expect(stage.tools.viewport.toClientPoint({ x: 110, y: 90 }))
+      .toEqual(stage.tools.coordinates.contentToClient({ x: 110, y: 90 }))
   })
 
   it("keeps root listeners in View even when Content is outside the scene origin", () => {
@@ -203,17 +219,23 @@ describe("CSS-scaled Canvas coordinates", () => {
       name: "stable-frame-target-listener",
       event: "mousedown",
       selector: ".stable-frame-target",
-      callback: ({ e }) => observed(e),
+      callback: ({ e, tools }) => observed({
+        e,
+        currentContent: tools.coordinates.clientToContent({ x: 110, y: 90 }),
+      }),
     })
 
     top.dispatchEvent(md(110, 90))
 
     expect(observed).toHaveBeenCalledOnce()
     expect(observed.mock.calls[0][0]).toMatchObject({
-      point: { x: 110, y: 90 },
-      target: child,
+      e: {
+        point: { x: 110, y: 90 },
+        target: child,
+      },
+      currentContent: { x: -190, y: 90 },
     })
-    expect(Object.keys(observed.mock.calls[0][0])).not.toEqual(
+    expect(Object.keys(observed.mock.calls[0][0].e)).not.toEqual(
       expect.arrayContaining(["client", "view", "content", "coordinates", "coordinateFrame"]),
     )
     expect(stage.tools.viewport.get().x).toBe(300)

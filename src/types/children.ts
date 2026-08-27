@@ -6,6 +6,7 @@ import type { StayInstantChild } from "../stay/children/stayInstantChild"
 import type { SORT_CHILDREN_METHODS } from "../userConstants"
 import type { StayShapeTransitionConfig } from "./animation"
 import type { valueof } from "./common"
+import type { ContentPoint } from "./coordinates"
 import type { Area, PointType, Size } from "./geometry"
 import type { DrawActionsValuesType } from "./shapes"
 import type { ChildTransform, Matrix2D } from "./transform"
@@ -42,7 +43,7 @@ export type ChildSortFunction = (a: StayInstantChild, b: StayInstantChild) => nu
 
 export interface getContainPointChildrenProps {
   selector: string | string[] | ((child: StayInstantChild) => boolean)
-  point: PointType
+  point: ContentPoint
   returnFirst?: boolean | undefined
   sortBy?: ChildSortFunction
   withRoot?: boolean

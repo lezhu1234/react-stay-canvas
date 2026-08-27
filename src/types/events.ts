@@ -4,7 +4,7 @@ import type { StayInstantChild } from "../stay/children/stayInstantChild"
 import type { FRAME_EVENT_NAME, KEYBOARRD_EVENTS, MOUSE_EVENTS } from "../userConstants"
 import type { ChildSortFunction } from "./children"
 import type { Dict, storeType, valueof } from "./common"
-import type { Coordinate } from "./geometry"
+import type { ContentPoint, ViewVector } from "./coordinates"
 import type { ManualTriggerEvents } from "./manualActions"
 import type { StayTools } from "./tools"
 
@@ -48,8 +48,8 @@ export interface ActionEvent<EventName extends string = string> {
   target?: StayInstantChild
   x?: number
   y?: number
-  point?: Coordinate
-  movement?: Coordinate
+  point?: ContentPoint
+  movement?: ViewVector
   key?: string
   deltaX?: number
   deltaY?: number
@@ -64,8 +64,8 @@ export interface MouseActionEvent<EventName extends PredefinedMouseEventName>
   extends ActionEvent<EventName> {
   x: number
   y: number
-  point: Coordinate
-  movement?: Coordinate
+  point: ContentPoint
+  movement?: ViewVector
   isMouseEvent: true
 }
 

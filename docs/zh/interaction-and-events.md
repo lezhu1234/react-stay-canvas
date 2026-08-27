@@ -216,13 +216,13 @@ Listener 回调同时收到两个事件对象：
 动作名不能保证字段存在，因为手动动作也可以命名为 `drag` 或 `keydown`。读取坐标和 target 前应使用类型守卫：
 
 ```tsx
-import type { ActionEvent, Coordinate } from "react-stay-canvas"
+import type { ActionEvent, ContentPoint } from "react-stay-canvas"
 
 type PositionedAction<EventName extends string = string> =
   ActionEvent<EventName> & {
     x: number
     y: number
-    point: Coordinate
+    point: ContentPoint
   }
 
 function hasPointerPosition<EventName extends string>(

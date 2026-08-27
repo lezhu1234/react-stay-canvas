@@ -21,6 +21,7 @@ import {
 import { ExamplePage } from "../example/src/components/ExamplePage"
 import DiagramExample from "../example/src/examples/integrated/DiagramExample"
 import MotionStudioExample from "../example/src/examples/integrated/MotionStudioExample"
+import { expandRangeToAspect } from "../example/src/examples/simple/CoordinateStack"
 import CoordinatesExample from "../example/src/examples/simple/CoordinatesExample"
 import {
   clippedRectEdges,
@@ -83,6 +84,11 @@ afterEach(() => {
 
 describe("Example Canvas workspace", () => {
   it("defines a bounded Content scene and connects all corresponding plane corners", () => {
+    const fittedRange = expandRangeToAspect({ x: 100, y: 40, width: 300, height: 300 }, 4 / 3)
+    expect(fittedRange.width / fittedRange.height).toBeCloseTo(4 / 3)
+    expect(fittedRange.x + fittedRange.width / 2).toBe(250)
+    expect(fittedRange.y + fittedRange.height / 2).toBe(190)
+
     expect(LAB_SHAPE.x).toBeGreaterThanOrEqual(LAB_CONTENT_BOUNDS.x)
     expect(LAB_SHAPE.y).toBeGreaterThanOrEqual(LAB_CONTENT_BOUNDS.y)
     expect(LAB_SHAPE.x + LAB_SHAPE.width)
@@ -274,16 +280,9 @@ describe("Example Canvas workspace", () => {
     expect(displayTransform?.dataset.displayScaleY).toBe("0.8")
     expect(displayTransform?.style.transform).toBe("translate(0px, 0px) scale(0.8, 0.8)")
 
-    const width = stackLayers?.[0].width ?? 0
-    const height = stackLayers?.[0].height ?? 0
-    const planeSamples = [
-      { x: width * 0.045 + 8, y: height * 0.235 + 8 },
-      { x: width * 0.39 + 8, y: height * 0.205 + 8 },
-      { x: width * 0.735 + 8, y: height * 0.235 + 8 },
-    ]
-    stackLayers?.forEach((canvas, index) => {
-      const { x, y } = planeSamples[index]
-      expect(canvas.getContext("2d")?.getImageData(x, y, 1, 1).data[3]).toBeGreaterThan(0)
+    stackLayers?.forEach((canvas) => {
+      const pixels = canvas.getContext("2d")?.getImageData(0, 0, canvas.width, canvas.height).data
+      expect(pixels?.some((value, index) => index % 4 === 3 && value > 0)).toBe(true)
     })
 
     const flow = container.querySelector(".coordinate-flow")

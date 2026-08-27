@@ -54,7 +54,7 @@
 | `viewVectorToContent(vector)` | View displacement → Content displacement; applies scale but not translation |
 | `contentVectorToView(vector)` | Content displacement → View displacement; applies scale but not translation |
 
-The package root also exports `ClientPoint`, `ViewPoint`, `ContentPoint`, `ViewVector`, and `ContentVector`. These are zero-runtime-cost weak branded types: plain `{ x, y }` values remain compatible with existing APIs, while values returned with a known space cannot be passed to a different space by mistake. Points and vectors are also distinct because point conversion includes translation and vector conversion does not.
+The package root also exports `ClientPoint`, `ViewPoint`, `ContentPoint`, `ViewVector`, `ContentVector`, `ViewRect`, and `ContentRect`. These are zero-runtime-cost weak branded types: plain coordinate and rectangle values remain compatible with existing APIs, while values returned with a known space cannot be passed to a different space by mistake. Points and vectors are also distinct because point conversion includes translation and vector conversion does not.
 
 `tools.coordinates` reads the latest viewport when it is called. By contrast, event `e.point` is the Content point captured for that input sample; it stays stable even when an earlier Listener changes the viewport during the same dispatch.
 
@@ -73,11 +73,14 @@ The package root also exports `ClientPoint`, `ViewPoint`, `ContentPoint`, `ViewV
 | `get()` | Return a `{ x, y, scale }` snapshot |
 | `panBy(viewMovement)` | Accumulate a `ViewVector` display offset |
 | `zoomBy(factor, contentAnchor?)` | Zoom by a positive factor; the anchor is the `ContentPoint` whose display position stays fixed, defaulting to the View center |
+| `fit(contentBounds, { padding? })` | Uniformly scale and center one `ContentRect` inside the current View; padding is measured in View pixels |
 | `reset()` | Restore `{ x: 0, y: 0, scale: 1 }`, subject to min/max limits |
 | `restore(state)` | Restore a previous snapshot and clamp its scale to configured limits |
 | `toClientPoint(contentPoint)` | Compatibility entry point for `coordinates.contentToClient()` |
 
-The projection is `View = Content × scale + (x, y)`. Every method synchronously returns the new read-only snapshot; the Renderer uses one coordinate snapshot to repaint all dirty layers on the next frame.
+The projection is `View = Content × scale + (x, y)`. `fit()` is an explicit one-shot operation: it does not select Children and is not rerun after append, import, or resize. Configured scale limits take precedence over fitting, while the requested bounds remain centered. Bounds may have zero width or zero height, but not both. Every method synchronously returns the new read-only snapshot; the Renderer uses one coordinate snapshot to repaint all dirty layers on the next frame.
+
+The package root exports two stateless rectangle helpers. `unionRects(rects)` returns the axis-aligned union or `undefined` for an empty iterable and preserves the input rectangle type. `fitRect(source, target)` returns the uniform scale and centered rectangle while preserving the target rectangle type. This keeps known View/Content brands intact through helper composition. Viewport fitting and region capture share this calculation; applications remain responsible for choosing which Child bounds represent their business scene.
 
 ### Destructive scene transforms
 

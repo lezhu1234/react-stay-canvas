@@ -21,7 +21,16 @@ import {
   type NodeKind,
   type NodeShape,
 } from "./diagram/model"
-import { bodyOf, edgeLabelOf, edges, labelOf, nodeKind, nodes, seedDiagram } from "./diagram/scene"
+import {
+  bodyOf,
+  edgeLabelOf,
+  edges,
+  fitDiagramViewport,
+  labelOf,
+  nodeKind,
+  nodes,
+  seedDiagram,
+} from "./diagram/scene"
 import {
   addDiagramNode,
   bindDiagramShortcuts,
@@ -261,7 +270,7 @@ export default function DiagramExample() {
             <button onClick={() => changeScale(-1)} title={text("Zoom out", "缩小")}>−</button>
             <output>{Math.round(viewportScale * 100)}%</output>
             <button onClick={() => changeScale(1)} title={text("Zoom in", "放大")}>＋</button>
-            <button onClick={() => runWithTools((tools) => engine.viewportChanged(tools.viewport.reset()))} title={text("Reset view", "重置视图")}>⌂</button>
+            <button onClick={() => runWithTools((tools) => engine.viewportChanged(fitDiagramViewport(tools)))} title={text("Fit diagram", "适应图表")}>⌂</button>
           </div>
         </div>
         {inlineEdit && (

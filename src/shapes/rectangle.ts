@@ -7,6 +7,7 @@ import type {
   ShapeProps,
 } from "../types/shapes"
 import { isRGBA } from "../utils/color"
+import { fitRect } from "../utils/geometry"
 import { RGBA } from "../vendor/w3color"
 import { AnimatedShape } from "./animatedShape"
 import { InstantShape, ZeroColor } from "./instantShape"
@@ -141,28 +142,15 @@ export class Rectangle extends AnimatedShape {
   }
 
   computeFitInfo(width: number, height: number) {
-    const widthRatio = this.width / width
-    const heightRatio = this.height / height
-
-    let offsetX = 0
-    let offsetY = 0
-    const scaleRatio = Math.min(widthRatio, heightRatio)
-    const afterWidth = width * scaleRatio
-    const afterHeight = height * scaleRatio
-
-    if (widthRatio > heightRatio) {
-      offsetX = (this.width - afterWidth) / 2
-    } else {
-      offsetY = (this.height - afterHeight) / 2
-    }
+    const fit = fitRect(
+      { x: 0, y: 0, width, height },
+      this.getBound()
+    )
+    const offsetX = fit.rect.x - this.x
+    const offsetY = fit.rect.y - this.y
     return {
-      rectangle: new Rectangle({
-        x: this.x + offsetX,
-        y: this.y + offsetY,
-        width: afterWidth,
-        height: afterHeight,
-      }),
-      scaleRatio,
+      rectangle: new Rectangle(fit.rect),
+      scaleRatio: fit.scale,
       offsetX,
       offsetY,
     }

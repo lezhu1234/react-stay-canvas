@@ -41,6 +41,17 @@ await tools.removeChild(child.id)
 
 `getChildrenWithoutRoot()` 返回应用创建的所有 Child。内部 root Child 代表 Canvas 边界，不应删除；需要做全场景遍历时通常也应排除它。
 
+应用可以自行选择业务 Child，合并它们的 Content 边界，再显式适配到当前 View：
+
+```ts
+const children = tools.getChildrenBySelector(".node|.edge")
+const bounds = unionRects(children.map((child) => child.getBound()))
+
+if (bounds) tools.viewport.fit(bounds, { padding: 32 })
+```
+
+库负责几何和 viewport 计算；哪些 Child 属于业务场景、何时触发适配，仍由应用决定。
+
 ## 不改写几何地变换单个 Child
 
 多 Shape 对象需要共享一套局部坐标时，可以在创建时传入语义化 transform：

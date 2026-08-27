@@ -1,21 +1,18 @@
 import type {
   ClientPoint,
+  ContentRect,
   ContentPoint,
   ContentVector,
   CoordinateSpace,
+  SpaceRect,
   SpacePoint,
   SpaceVector,
   ViewPoint,
   ViewVector,
 } from "../../types/coordinates"
-import type { Coordinate, Rect } from "../../types/geometry"
+import type { Coordinate } from "../../types/geometry"
 import type { ViewportOptions, ViewportState } from "../../types/tools"
-
-declare const rectCoordinateSpace: unique symbol
-
-export type SpaceRect<S extends CoordinateSpace> = Readonly<
-  Rect & { readonly [rectCoordinateSpace]?: S }
->
+import { fitRect } from "../../utils/geometry"
 
 export type SurfaceMetrics = Readonly<{
   logicalWidth: number
@@ -58,7 +55,7 @@ export type PointerCoordinates = Readonly<{
 
 const asPoint = <S extends CoordinateSpace>(point: Coordinate) => point as SpacePoint<S>
 const asVector = <S extends CoordinateSpace>(vector: Coordinate) => vector as SpaceVector<S>
-const asRect = <S extends CoordinateSpace>(rect: Rect) => rect as SpaceRect<S>
+const asRect = <S extends CoordinateSpace>(rect: SpaceRect<S>) => rect
 
 function finite(value: number, name: string) {
   if (!Number.isFinite(value)) throw new TypeError(`${name} must be finite`)
@@ -270,6 +267,34 @@ export class CoordinateSystem {
     const x = this.#viewport.x + anchor.x * (this.#viewport.scale - scale)
     const y = this.#viewport.y + anchor.y * (this.#viewport.scale - scale)
     return this.#replace({ x, y, scale })
+  }
+
+  fit(
+    contentBounds: ContentRect,
+    metrics: SurfaceMetrics,
+    padding = 0
+  ): Readonly<ViewportState> {
+    finite(padding, "viewport fit padding")
+    if (padding < 0) throw new RangeError("viewport fit padding cannot be negative")
+
+    const target = {
+      x: padding,
+      y: padding,
+      width: metrics.logicalWidth - padding * 2,
+      height: metrics.logicalHeight - padding * 2,
+    }
+    const requested = fitRect(contentBounds, target)
+    const scale = this.#clampScale(requested.scale)
+    const contentCenterX = contentBounds.x + contentBounds.width / 2
+    const contentCenterY = contentBounds.y + contentBounds.height / 2
+    const viewCenterX = metrics.logicalWidth / 2
+    const viewCenterY = metrics.logicalHeight / 2
+
+    return this.#replace({
+      x: viewCenterX - contentCenterX * scale,
+      y: viewCenterY - contentCenterY * scale,
+      scale,
+    })
   }
 
   reset(): Readonly<ViewportState> {

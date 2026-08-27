@@ -53,6 +53,47 @@ describe("CoordinateSystem", () => {
       .toThrow("viewport.scale must be greater than 0")
   })
 
+  it("fits Content bounds inside the padded View and keeps them centered", () => {
+    const coordinates = new CoordinateSystem()
+
+    const state = coordinates.fit(
+      { x: 100, y: 50, width: 400, height: 200 },
+      metrics,
+      50
+    )
+
+    expect(state).toEqual({ x: -200, y: -8.5, scale: 2.5 })
+    const frame = coordinates.getFrame(metrics)
+    expect(coordinates.contentToView({ x: 100, y: 50 } as any, frame))
+      .toEqual({ x: 50, y: 116.5 })
+    expect(coordinates.contentToView({ x: 500, y: 250 } as any, frame))
+      .toEqual({ x: 1050, y: 616.5 })
+  })
+
+  it("fits single-axis geometry and recenters after applying scale limits", () => {
+    const coordinates = new CoordinateSystem({ minScale: 0.5, maxScale: 2 })
+
+    expect(coordinates.fit(
+      { x: 100, y: 50, width: 0, height: 200 },
+      metrics,
+      50
+    )).toEqual({ x: 350, y: 66.5, scale: 2 })
+  })
+
+  it("rejects indeterminate bounds and padding that leaves no View area", () => {
+    const coordinates = new CoordinateSystem()
+
+    expect(() => coordinates.fit(
+      { x: 10, y: 20, width: 0, height: 0 },
+      metrics
+    )).toThrow("source must have a positive width or height")
+    expect(() => coordinates.fit(
+      { x: 10, y: 20, width: 10, height: 10 },
+      metrics,
+      metrics.logicalHeight / 2
+    )).toThrow("target width and height must be greater than 0")
+  })
+
   it("maps one pointer sample set into all three spaces", () => {
     const coordinates = new CoordinateSystem()
     coordinates.restore({ x: 40, y: -10, scale: 2 })

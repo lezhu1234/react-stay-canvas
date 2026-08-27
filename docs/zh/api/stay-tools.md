@@ -54,7 +54,7 @@
 | `viewVectorToContent(vector)` | View 位移 → Content 位移；只应用缩放，不应用平移 |
 | `contentVectorToView(vector)` | Content 位移 → View 位移；只应用缩放，不应用平移 |
 
-包入口同时导出 `ClientPoint`、`ViewPoint`、`ContentPoint`、`ViewVector` 和 `ContentVector`。它们是零运行时成本的弱品牌类型：普通 `{ x, y }` 仍兼容现有 API，而由库返回、已经带空间语义的值不能误传给另一空间。点和向量也保持不同类型，因为点转换包含平移，向量转换不包含平移。
+包入口同时导出 `ClientPoint`、`ViewPoint`、`ContentPoint`、`ViewVector`、`ContentVector`、`ViewRect` 和 `ContentRect`。它们是零运行时成本的弱品牌类型：普通坐标和矩形值仍兼容现有 API，而由库返回、已经带空间语义的值不能误传给另一空间。点和向量也保持不同类型，因为点转换包含平移，向量转换不包含平移。
 
 `tools.coordinates` 使用调用时的最新 viewport。事件中的 `e.point` 则是该次输入采样时固定下来的 Content 点；即使较早的 Listener 在同轮事件中改变 viewport，后续 Listener 看到的 `e.point` 也不会改变。
 
@@ -73,11 +73,14 @@
 | `get()` | 返回 `{ x, y, scale }` 快照 |
 | `panBy(viewMovement)` | 按 `ViewVector` 累加显示偏移 |
 | `zoomBy(factor, contentAnchor?)` | 按正倍率缩放；anchor 是保持显示位置不变的 `ContentPoint`，默认使用 View 中心 |
+| `fit(contentBounds, { padding? })` | 把一个 `ContentRect` 等比缩放并居中放入当前 View；padding 使用 View 像素 |
 | `reset()` | 恢复 `{ x: 0, y: 0, scale: 1 }`（受 min/max 限制） |
 | `restore(state)` | 恢复先前快照，并把 scale 限制在配置范围内 |
 | `toClientPoint(contentPoint)` | `coordinates.contentToClient()` 的兼容入口 |
 
-投影关系是 `View = Content × scale + (x, y)`。各方法同步返回新的只读快照；Renderer 会在下一帧用同一份坐标快照重绘全部脏图层。
+投影关系是 `View = Content × scale + (x, y)`。`fit()` 是显式的一次性操作：它不选择 Child，也不会在 append、import 或 resize 后自动重跑。配置的缩放范围优先于完整适配，但目标边界仍保持居中。边界可以只有宽或高为零，不能两者同时为零。各方法同步返回新的只读快照；Renderer 会在下一帧用同一份坐标快照重绘全部脏图层。
+
+包入口还导出两个无状态矩形工具。`unionRects(rects)` 返回轴对齐并集，空输入返回 `undefined`，并保留输入矩形类型；`fitRect(source, target)` 返回等比缩放值和居中矩形，并保留 target 的矩形类型。因此组合工具时，已知的 View/Content 品牌不会丢失。viewport 适配与区域截图共用这套计算；哪些 Child 边界代表业务场景，仍由应用决定。
 
 ### 破坏性场景变换
 

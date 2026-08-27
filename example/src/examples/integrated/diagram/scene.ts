@@ -9,6 +9,7 @@ import {
   type ShapeDrawProps,
   StayText,
   type StayTools,
+  unionRects,
 } from "react-stay-canvas"
 
 import { colors, rgba, sceneArea, scenePoint } from "../../../components/DemoKit"
@@ -55,6 +56,12 @@ const edgeHandleKey = (end: "from" | "to") => `handle:${end}`
 
 export const nodes = (tools: StayTools) => tools.getChildrenBySelector<NodeShape>(".node") as NodeChild[]
 export const edges = (tools: StayTools) => tools.getChildrenBySelector<EdgeShape>(".edge") as EdgeChild[]
+
+export function fitDiagramViewport(tools: StayTools) {
+  const bounds = unionRects([...nodes(tools), ...edges(tools)].map((child) => child.getBound()))
+  return bounds ? tools.viewport.fit(bounds, { padding: 36 }) : tools.viewport.get()
+}
+
 export const bodyOf = (child: NodeChild) => child.shapeMap.get(NODE_BODY_KEY) as Rectangle
 export const labelOf = (child: NodeChild) => child.shapeMap.get(NODE_LABEL_KEY) as StayText
 export const portOf = (child: NodeChild, port: Port) => child.shapeMap.get(nodePortKey(port)) as Circle

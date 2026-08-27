@@ -244,6 +244,14 @@ describe("Example Canvas workspace", () => {
   it("keeps Shape geometry fixed while zoom changes its View and Client projections", () => {
     const frames: FrameRequestCallback[] = []
     window.requestAnimationFrame = (callback) => frames.push(callback)
+    const contextPrototype = Object.getPrototypeOf(
+      document.createElement("canvas").getContext("2d")!,
+    ) as CanvasRenderingContext2D
+    const nativeSetLineDash = contextPrototype.setLineDash
+    const setLineDash = vi.spyOn(contextPrototype, "setLineDash").mockImplementation(function (dash) {
+      expect(Array.isArray(dash)).toBe(true)
+      nativeSetLineDash.call(this, dash)
+    })
     const container = document.createElement("div")
     document.body.appendChild(container)
     root = createRoot(container)
@@ -256,6 +264,7 @@ describe("Example Canvas workspace", () => {
       )
     })
     act(() => frames.splice(0).forEach((frame) => frame(0)))
+    expect(setLineDash).toHaveBeenCalled()
 
     const workspace = container.querySelector(".coordinate-workspace")
     const stackCard = workspace?.querySelector(".coordinate-stack-exhibit")

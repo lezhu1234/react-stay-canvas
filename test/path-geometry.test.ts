@@ -75,6 +75,10 @@ describe("Path geometry", () => {
 
   it("defaults to a round native stroke and preserves explicit Canvas styles", () => {
     const rounded = new Path({ points: [new Point({ x: 0, y: 0 })] })
+    const roundedWithUndefinedFields = new Path({
+      points: [new Point({ x: 0, y: 0 })],
+      strokeConfig: { lineCap: undefined, lineJoin: undefined },
+    })
     const styled = new Path({
       points: [new Point({ x: 0, y: 0 }), new Point({ x: 10, y: 0 })],
       strokeConfig: {
@@ -86,6 +90,7 @@ describe("Path geometry", () => {
     })
 
     expect(rounded.strokeConfig).toMatchObject({ lineCap: "round", lineJoin: "round" })
+    expect(roundedWithUndefinedFields.strokeConfig).toMatchObject({ lineCap: "round", lineJoin: "round" })
     expect(styled.strokeConfig).toMatchObject({
       dash: [3, 2],
       lineCap: "square",

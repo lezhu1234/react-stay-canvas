@@ -2,6 +2,10 @@ import type { ChildSortFunction, SelectorFunc } from "../../../types/children"
 import type { EventProps } from "../../../types/events"
 import { StayInstantChild } from "../../children/stayInstantChild"
 import type {
+  CoordinateFrame,
+  PointerCoordinates,
+} from "../../coordinates/coordinateSystem"
+import type {
   EvaluatedActions,
   EventDefinitionLookup,
   NormalizedActionEvent,
@@ -45,11 +49,6 @@ export type TargetResolverContext = {
     selector: string | SelectorFunc,
     sortBy?: ChildSortFunction
   ) => StayInstantChild[]
-  hitTest: (props: {
-    point: { x: number; y: number }
-    selector: string | SelectorFunc
-    sortBy?: ChildSortFunction
-  }) => StayInstantChild[]
 }
 
 export class ActionTargetResolver {
@@ -132,7 +131,9 @@ export class ActionTargetResolver {
     eventDefinition: EventProps<T>,
     role: EventDefinitionRole,
     sessionId: number | undefined,
-    originEvent: Event
+    originEvent: Event,
+    coordinates: PointerCoordinates | undefined,
+    coordinateFrame: CoordinateFrame | undefined
   ): TargetDecision {
     if (role.kind === "gesture" && sessionId !== undefined) {
       return this.resolveGestureTarget(
@@ -163,7 +164,9 @@ export class ActionTargetResolver {
         eventName,
         sourceEvent,
         eventDefinition,
-        originEvent
+        originEvent,
+        coordinates,
+        coordinateFrame
       )
       return target ? { kind: "target", target } : { kind: "skip" }
     }
@@ -235,16 +238,31 @@ export class ActionTargetResolver {
     eventName: T,
     sourceEvent: NormalizedActionEvent<T>,
     eventDefinition: EventProps<T>,
-    originEvent: Event
+    originEvent: Event,
+    coordinates: PointerCoordinates | undefined,
+    coordinateFrame: CoordinateFrame | undefined
   ): StayInstantChild | undefined {
-    const point = sourceEvent.point
-    if (!point) return undefined
+    if (!coordinates || !coordinateFrame) return undefined
 
     return this.context
-      .hitTest({ point, selector: registration.selector, sortBy: registration.sortBy })
+      .select(registration.selector, registration.sortBy)
+      .filter((child) => this.containsPointer(child, coordinates, coordinateFrame))
       .find((child) =>
         this.acceptsTarget(child, eventName, sourceEvent, eventDefinition, originEvent)
       )
+  }
+
+  private containsPointer(
+    child: StayInstantChild,
+    coordinates: PointerCoordinates,
+    coordinateFrame: CoordinateFrame
+  ) {
+    if (child === this.context.rootChild) {
+      const { x, y } = coordinates.view
+      const { width, height } = coordinateFrame.viewBounds
+      return x >= 0 && y >= 0 && x <= width && y <= height
+    }
+    return child.containsPointer(coordinates.content)
   }
 
   private targetIfAccepted<T extends string>(
@@ -331,7 +349,9 @@ export class ActionTargetResolver {
       gesture.start as T,
       start.info,
       start.event,
-      originEvent
+      originEvent,
+      start.coordinates,
+      start.coordinateFrame
     )
     this.setGestureOwner(
       sessionId,

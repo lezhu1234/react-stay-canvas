@@ -58,7 +58,8 @@ Optional by input source:
 | Field | Present when |
 | --- | --- |
 | `target` | Selector routing resolves a Child |
-| `x`, `y`, `point` | Pointer, mouse, wheel, or explicit manual coordinates exist; native input is Canvas-local logical space even when CSS scales the display |
+| `x`, `y`, `point` | Native pointer, mouse, and wheel inputs use Content coordinates; manual actions retain only explicitly supplied values |
+| `movement` | View-coordinate delta between adjacent Pointer Session samples; `{ x: 0, y: 0 }` for ordinary stateless mouse input |
 | `key` | Keyboard input or an explicit manual key exists |
 | `deltaX`, `deltaY`, `deltaZ` | Wheel input or explicit manual deltas exist |
 | `pointerId`, `pointerType` | Input came from Pointer Events |
@@ -73,6 +74,8 @@ function hasPointerPosition(
   return e.x !== undefined && e.y !== undefined && e.point !== undefined
 }
 ```
+
+Native pointer input passes through three internal spaces. Client is measured in browser viewport pixels. View is the CSS-normalized `width × height` Canvas plane. Content is obtained by inversely applying `tools.viewport`. Public `e.point` uses Content so hit testing and Child operations do not need viewport math; `e.movement` uses View so drag thresholds and panning feel do not change with zoom.
 
 ## EventProps
 

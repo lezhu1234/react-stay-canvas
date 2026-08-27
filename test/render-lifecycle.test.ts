@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest"
 import { Renderer } from "../src/stay/renderer"
 import { createStay } from "../src/stay/stay"
 import { createStage } from "./helpers/stage"
+import { CoordinateSystem } from "../src/stay/coordinates/coordinateSystem"
 
 // The RAF render loop engages on construction for every stage: renderer.start()
 // draws once then schedules `window.requestAnimationFrame`, so a stage whose loop
@@ -39,10 +40,17 @@ describe("render lifecycle", () => {
     let scheduledCount = 0
     window.requestAnimationFrame = () => ++scheduledCount
     let renderer: Renderer
-    renderer = new Renderer({ layers: [] } as any, () => {
-      renderer.stop()
-      return []
-    })
+    renderer = new Renderer(
+      {
+        layers: [],
+        getSurfaceMetrics: () => ({ logicalWidth: 1, logicalHeight: 1 }),
+      } as any,
+      () => {
+        renderer.stop()
+        return []
+      },
+      new CoordinateSystem()
+    )
 
     renderer.start()
 

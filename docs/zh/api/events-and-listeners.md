@@ -58,7 +58,8 @@ Listener 的目标在标准 drag/move 手势开始时确定，后续 continuatio
 | 字段 | 出现条件 |
 | --- | --- |
 | `target` | selector 成功解析出 Child |
-| `x`, `y`, `point` | 指针、鼠标、wheel 或显式提供坐标的手动 action；即使 CSS 缩放显示，原生输入仍是 Canvas 局部逻辑坐标 |
+| `x`, `y`, `point` | 原生指针、鼠标或 wheel 输入时是 Content 坐标；手动 action 仅保留调用方显式提供的值 |
+| `movement` | Pointer Session 中相邻采样的 View 坐标增量；普通无状态鼠标事件为 `{ x: 0, y: 0 }` |
 | `key` | 键盘 action 或显式提供 key 的手动 action |
 | `deltaX`, `deltaY`, `deltaZ` | wheel action 或显式提供 delta 的手动 action |
 | `pointerId`, `pointerType` | Pointer Events 输入 |
@@ -73,6 +74,8 @@ function hasPointerPosition(
   return e.x !== undefined && e.y !== undefined && e.point !== undefined
 }
 ```
+
+原生指针链路依次经过三套内部坐标：Client 是浏览器窗口像素；View 是 CSS 尺寸归一化后的 `width × height` Canvas 平面；Content 是逆向应用 `tools.viewport` 后的场景坐标。公开 `e.point` 使用 Content，保证命中和 Child 操作不需要关心视口；`e.movement` 使用 View，保证拖拽阈值和平移手感不随缩放改变。
 
 ## EventProps
 

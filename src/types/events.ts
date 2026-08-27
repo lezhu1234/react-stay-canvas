@@ -49,6 +49,7 @@ export interface ActionEvent<EventName extends string = string> {
   x?: number
   y?: number
   point?: Coordinate
+  movement?: Coordinate
   key?: string
   deltaX?: number
   deltaY?: number
@@ -64,6 +65,7 @@ export interface MouseActionEvent<EventName extends PredefinedMouseEventName>
   x: number
   y: number
   point: Coordinate
+  movement?: Coordinate
   isMouseEvent: true
 }
 

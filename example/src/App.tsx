@@ -80,8 +80,8 @@ function CatalogHome() {
         <h1>{text("Learn one behavior. Regress the whole system.", "从基础绘制到完整流程，都有示例可以直接验证。")}</h1>
         <p>
           {text(
-            "Thirteen isolated examples cover the public surface of react-stay-canvas, from individual shapes to complete editing workflows.",
-            "13 个可独立运行的示例，覆盖 react-stay-canvas 从基础绘制到完整编辑流程的主要能力。",
+            "Fourteen isolated examples cover the public surface of react-stay-canvas, from individual shapes to complete editing workflows.",
+            "14 个可独立运行的示例，覆盖 react-stay-canvas 从基础绘制到完整编辑流程的主要能力。",
           )}
         </p>
         <div className="catalog-metrics" aria-label={text("Example counts", "示例数量")}>

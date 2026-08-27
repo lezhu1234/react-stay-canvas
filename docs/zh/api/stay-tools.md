@@ -39,6 +39,23 @@
 
 ## 场景变换
 
+### 非破坏性视口
+
+`tools.viewport` 改变 Content 在 View 中的显示位置，不修改 Child/Shape 几何，也不产生历史记录：
+
+| 方法 | 说明 |
+| --- | --- |
+| `get()` | 返回 `{ x, y, scale }` 快照 |
+| `panBy({ x, y })` | 按 View 单位累加显示偏移 |
+| `zoomBy(factor, anchor?)` | 按正倍率缩放；`anchor` 是保持显示位置不变的 Content 点，默认使用 View 中心 |
+| `reset()` | 恢复 `{ x: 0, y: 0, scale: 1 }`（受 min/max 限制） |
+| `restore(state)` | 恢复先前快照，并把 scale 限制在配置范围内 |
+| `toClientPoint(point)` | 把 Content 点投影为浏览器 Client 坐标，适合定位 DOM 浮层 |
+
+投影关系是 `View = Content × scale + (x, y)`。各方法同步返回新的只读快照；Renderer 会在下一帧用同一份坐标快照重绘全部脏图层。
+
+### 破坏性场景变换
+
 | 方法 | 说明 |
 | --- | --- |
 | `moveStart()` | 保存全场景移动起点 |
@@ -46,7 +63,7 @@
 | `zoom(deltaY, center, filter?)` | 以 Canvas 局部点为中心缩放 |
 | `reset()` | 执行当前基于 root 的逆变换；场景移动后并不可靠 |
 
-`move()`、`zoom()`、`reset()` 返回下一次 runtime tick 完成的 Promise，不代表浏览器已经完成一帧合成。场景移动后，`reset()` 不能可靠地恢复初始状态；详见[当前限制](../known-limitations.md#场景操作)。
+这些旧方法直接修改 Child/Shape 坐标，适合确实需要烘焙几何的批处理，不是视口控制。`move()`、`zoom()`、`reset()` 返回下一次 runtime tick 完成的 Promise，不代表浏览器已经完成一帧合成。场景移动后，`reset()` 不能可靠地恢复初始状态；详见[当前限制](../known-limitations.md#场景操作)。
 
 ## 历史
 

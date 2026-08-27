@@ -202,9 +202,7 @@ export class StayAnimatedChild<
       const ratioChanged = () =>
         !lastInfo.beforeShape.sameAs(lastInfo.afterShape) && lastInfo.ratio !== currentInfo.ratio
 
-      const inView = () => !lastInfo.shape.isOutOfViewport() || !currentInfo.shape.isOutOfViewport()
-      // Update is needed if any of these conditions are true
-      return inView() && (beforeStateChanged() || afterStateChanged() || ratioChanged())
+      return beforeStateChanged() || afterStateChanged() || ratioChanged()
     }
     const updateCurrentShape = (name: string, shape: T, frameBoundInfo: FrameBoundInfo<T>) => {
       frameBoundInfo.shape = shape

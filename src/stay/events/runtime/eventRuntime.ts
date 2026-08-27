@@ -1,6 +1,11 @@
 import Canvas from "../../../canvas"
 import type { EventProps, StayEventProps } from "../../../types/events"
-import type { PointType } from "../../../types/geometry"
+import {
+  CoordinateSystem,
+  type CoordinateFrame,
+  type PointerCoordinates,
+  type PointerSamples,
+} from "../../coordinates/coordinateSystem"
 import type {
   ActionRoutePort,
   EvaluatedActions,
@@ -8,11 +13,6 @@ import type {
   EventInput,
   NormalizedActionEvent,
 } from "../contracts"
-import {
-  beginClickPairing,
-  clearClickPairing,
-  getClickPairing,
-} from "../clickPairing"
 import {
   describeEventDefinition,
   type EventDefinitionScope,
@@ -23,6 +23,7 @@ type Store = Map<string, any>
 
 type EventRuntimeContext<EventName extends string> = {
   canvas: Canvas
+  coordinates: CoordinateSystem
   store: Store
   stateStore: Store
   getState: () => string
@@ -31,6 +32,7 @@ type EventRuntimeContext<EventName extends string> = {
 
 export class EventRuntime<EventName extends string> {
   private readonly registry = new EventRegistry<EventName>()
+  private readonly activatedDragSessions = new Set<number>()
 
   constructor(private readonly context: EventRuntimeContext<EventName>) {}
 
@@ -44,17 +46,16 @@ export class EventRuntime<EventName extends string> {
 
   clearEvents() {
     this.registry.clear()
-    clearClickPairing(this.context.store)
+    this.activatedDragSessions.clear()
     this.context.actionRouter.clearGestureOwners()
   }
 
   handleInput(input: EventInput) {
-    const point = this.canvasPoint(input)
-    this.beginClickCandidate(input, point)
+    const mapped = this.pointerCoordinates(input)
     const terminalSessionId = this.terminalSessionId(input)
 
     try {
-      const triggerEvents = this.evaluate(input, point)
+      const triggerEvents = this.evaluate(input, mapped?.coordinates, mapped?.frame)
       this.context.actionRouter.dispatch(
         input.originEvent,
         triggerEvents,
@@ -64,7 +65,7 @@ export class EventRuntime<EventName extends string> {
     } finally {
       if (terminalSessionId !== undefined) {
         this.registry.clearPointerSession(terminalSessionId)
-        clearClickPairing(this.context.store, terminalSessionId)
+        this.activatedDragSessions.delete(terminalSessionId)
         this.context.actionRouter.endPointerSession(terminalSessionId)
       }
     }
@@ -72,7 +73,8 @@ export class EventRuntime<EventName extends string> {
 
   private evaluate(
     input: EventInput,
-    point?: PointType
+    coordinates?: PointerCoordinates,
+    coordinateFrame?: CoordinateFrame
   ): EvaluatedActions<EventName> {
     const triggerEvents: EvaluatedActions<EventName> = {}
     const namesAtStart = this.registry.names()
@@ -82,19 +84,21 @@ export class EventRuntime<EventName extends string> {
         eventName,
         input.pointerSession?.id
       )
-      if (!registered || !this.shouldEvaluate(registered, input)) return
+      if (!registered || !this.shouldEvaluate(registered, input, coordinates)) return
 
       const actionEvent = this.createActionEvent(
         eventName,
         registered.definition,
         input,
-        point
+        coordinates
       )
       if (!this.conditionPasses(registered.definition, actionEvent)) return
 
       this.runSuccess(registered, actionEvent, input)
       triggerEvents[eventName] = {
         info: actionEvent,
+        coordinates,
+        coordinateFrame,
         event: registered.definition,
         role: registered.role,
         scope: registered.scope,
@@ -107,7 +111,8 @@ export class EventRuntime<EventName extends string> {
 
   private shouldEvaluate(
     registered: RegisteredEvent<EventName>,
-    input: EventInput
+    input: EventInput,
+    coordinates?: PointerCoordinates
   ) {
     const { definition, role, scope } = registered
     const rawTrigger = input.rawAction?.trigger
@@ -124,10 +129,15 @@ export class EventRuntime<EventName extends string> {
       ) {
         return false
       }
-      const pairing = getClickPairing(this.context.store)
       return sessionId !== undefined &&
-        pairing?.sessionId === sessionId &&
-        pairing.initiatingButton === input.pointerSession?.initiatingButton
+        input.pointerSession !== undefined &&
+        coordinates !== undefined &&
+        Date.now() - input.pointerSession.startedAt < 500 &&
+        Math.hypot(
+          coordinates.viewOffsetFromStart.x,
+          coordinates.viewOffsetFromStart.y
+        ) < 10 &&
+        !this.activatedDragSessions.has(sessionId)
     }
 
     if (role.phase === "start") {
@@ -139,7 +149,16 @@ export class EventRuntime<EventName extends string> {
     }
 
     if (role.phase === "continue") {
-      return rawTrigger === definition.trigger && transition.phase === "continue"
+      if (rawTrigger !== definition.trigger || transition.phase !== "continue") return false
+      if (role.family !== "drag") return true
+      if (this.activatedDragSessions.has(sessionId)) return true
+      if (!coordinates) return false
+      const activated = Math.hypot(
+        coordinates.viewOffsetFromStart.x,
+        coordinates.viewOffsetFromStart.y
+      ) >= 10
+      if (activated) this.activatedDragSessions.add(sessionId)
+      return activated
     }
 
     if (transition.phase !== "end" && transition.phase !== "cancel") return false
@@ -154,23 +173,24 @@ export class EventRuntime<EventName extends string> {
     eventName: EventName,
     event: StayEventProps<EventName>,
     input: EventInput,
-    point?: PointType
+    coordinates?: PointerCoordinates
   ): NormalizedActionEvent<EventName> {
     const actionEvent: NormalizedActionEvent<EventName> = {
       state: this.context.getState(),
       name: eventName,
       pressedKeys: new Set(input.pressedKeys),
-      isMouseEvent: Boolean(input.pointerSample) || input.originEvent instanceof MouseEvent,
+      isMouseEvent: Boolean(coordinates) || input.originEvent instanceof MouseEvent,
     }
 
     if (input.originEvent instanceof KeyboardEvent) {
       actionEvent.key = input.originEvent.key
     }
 
-    if (point) {
-      actionEvent.x = point.x
-      actionEvent.y = point.y
-      actionEvent.point = { ...point }
+    if (coordinates) {
+      actionEvent.x = coordinates.content.x
+      actionEvent.y = coordinates.content.y
+      actionEvent.point = { ...coordinates.content }
+      actionEvent.movement = { ...coordinates.viewMovement }
     }
 
     const session = input.pointerSession
@@ -194,11 +214,23 @@ export class EventRuntime<EventName extends string> {
     return actionEvent
   }
 
-  private canvasPoint(input: EventInput): PointType | undefined {
-    const sample = input.pointerSample ?? this.sampleFromMouseEvent(input.originEvent)
-    return sample
-      ? this.context.canvas.clientToCanvasPoint(sample.clientX, sample.clientY)
-      : undefined
+  private pointerCoordinates(input: EventInput): {
+    coordinates: PointerCoordinates
+    frame: CoordinateFrame
+  } | undefined {
+    const current = input.pointerSample ?? this.sampleFromMouseEvent(input.originEvent)
+    if (!current) return undefined
+    const samples: PointerSamples = input.pointerSamples ?? {
+      start: current,
+      previous: current,
+      current,
+    }
+    const metrics = this.context.canvas.getSurfaceMetrics()
+    const frame = this.context.coordinates.getFrame(metrics)
+    return {
+      coordinates: this.context.coordinates.mapPointer(samples, metrics, frame),
+      frame,
+    }
   }
 
   private sampleFromMouseEvent(originEvent: Event) {
@@ -262,19 +294,6 @@ export class EventRuntime<EventName extends string> {
     }
 
     return { kind: "persistent" }
-  }
-
-  private beginClickCandidate(input: EventInput, point?: PointType) {
-    const transition = input.sessionTransition
-    const session = input.pointerSession
-    if (transition?.phase !== "start" || !point || !session) return
-
-    beginClickPairing(this.context.store, {
-      sessionId: session.id,
-      initiatingButton: session.initiatingButton,
-      point: { ...point },
-      startedAt: Date.now(),
-    })
   }
 
   private terminalSessionId(input: EventInput) {

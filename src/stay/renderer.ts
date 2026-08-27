@@ -1,7 +1,9 @@
 import { Canvas } from "../canvas"
 import { InstantShape } from "../shapes/instantShape"
 import type { DrawReturn, StayDrawProps } from "../types/tools"
+import { hasIntersection } from "../utils/geometry"
 import { StayInstantChild } from "./children/stayInstantChild"
+import { CoordinateSystem } from "./coordinates/coordinateSystem"
 
 interface DrawLayer {
   forceUpdate: boolean
@@ -15,10 +17,12 @@ export class Renderer {
   #layers: DrawLayer[]
   #nextTick: (() => void)[] = []
   #running = false
+  #lastRenderedCoordinateRevision = -1
 
   constructor(
     private readonly root: Canvas,
-    private readonly getRenderChildren: () => StayInstantChild[]
+    private readonly getRenderChildren: () => StayInstantChild[],
+    private readonly coordinates: CoordinateSystem
   ) {
     this.#layers = root.layers.map(() => ({ forceUpdate: false }))
   }
@@ -44,8 +48,12 @@ export class Renderer {
       updateCurrentLayer: boolean
     }
 
+    beforeDrawCallback?.()
+
+    const frame = this.coordinates.getFrame(this.root.getSurfaceMetrics())
+    const viewportChanged = frame.revision !== this.#lastRenderedCoordinateRevision
     const childrenInlayer: ChildLayer[] = this.#layers.map((layer) => {
-      const childInLayer = { updateCurrentLayer: layer.forceUpdate }
+      const childInLayer = { updateCurrentLayer: viewportChanged || layer.forceUpdate }
       layer.forceUpdate = false
       return childInLayer
     })
@@ -64,44 +72,47 @@ export class Renderer {
       shapes: InstantShape[]
     }[] = []
 
-    if (beforeDrawCallback) {
-      beforeDrawCallback()
-    }
+    try {
+      for (let layerIndex = 0; layerIndex < childrenInlayer.length; layerIndex++) {
+        const { updateCurrentLayer } = childrenInlayer[layerIndex]
 
-    for (let layerIndex = 0; layerIndex < childrenInlayer.length; layerIndex++) {
-      const { updateCurrentLayer } = childrenInlayer[layerIndex]
-
-      if (!updateCurrentLayer) {
-        continue
-      }
-
-      updatedLayers.push(layerIndex)
-
-      const context = this.root.contexts[layerIndex]
-      this.root.clear(context)
-
-      let layerDrawShapes: InstantShape[] = []
-
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i]
-        const shapes = child.getShapes(layerIndex)
-        layerDrawShapes.push(...shapes)
-        child.layerDraw(layerIndex)
-        if (shapes.length > 0) {
-          updatedChilds.push({ child, shapes })
+        if (!updateCurrentLayer) {
+          continue
         }
-      }
 
-      layerDrawShapes = layerDrawShapes.sort((s1, s2) => s1.zIndex - s2.zIndex)
+        updatedLayers.push(layerIndex)
 
-      layerDrawShapes.forEach((shape) => {
-        shape.draw({
-          context,
-          now,
-          width: this.root.width,
-          height: this.root.height,
+        this.root.withLayerFrame(layerIndex, frame.contentToView, (context) => {
+          let layerDrawShapes: InstantShape[] = []
+
+          for (let i = 0; i < children.length; i++) {
+            const child = children[i]
+            const shapes = child.getShapes(layerIndex)
+            layerDrawShapes.push(...shapes)
+            child.layerDraw(layerIndex)
+            if (shapes.length > 0) {
+              updatedChilds.push({ child, shapes })
+            }
+          }
+
+          layerDrawShapes = layerDrawShapes
+            .filter((shape) => hasIntersection(shape.getBound(), frame.visibleContentArea))
+            .sort((s1, s2) => s1.zIndex - s2.zIndex)
+
+          layerDrawShapes.forEach((shape) => {
+            shape.draw({
+              context,
+              now,
+              width: this.root.width,
+              height: this.root.height,
+            })
+          })
         })
-      })
+      }
+      this.#lastRenderedCoordinateRevision = frame.revision
+    } catch (error) {
+      this.forceUpdateAllLayers()
+      throw error
     }
 
     if (afterDrawCallback) {

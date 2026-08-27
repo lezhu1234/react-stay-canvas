@@ -134,6 +134,22 @@ describe("export / import children", () => {
 })
 
 describe("regionToTargetCanvas", () => {
+  it("exports Content independently of the live viewport", async () => {
+    const { stage } = createStage({ width: 120, height: 60 })
+    const shape = filledRect(10, 10, 20, 20)
+    const child = stage.tools.appendChild({ className: "r", shape })
+    stage.tools.viewport.restore({ x: -80, y: 20, scale: 2 })
+
+    const canvas = await stage.tools.regionToTargetCanvas({
+      area: { x: 0, y: 0, width: 120, height: 60 },
+      children: [child],
+    })
+
+    expect(pixelAlpha(canvas, 15, 15)).toBe(255)
+    expect(shape).toMatchObject({ x: 10, y: 10, width: 20, height: 20 })
+    expect(stage.tools.viewport.get()).toEqual({ x: -80, y: 20, scale: 2 })
+  })
+
   it("seeks children when progress is zero", async () => {
     const { stage } = createStage()
     const child = stage.tools.appendChild({ className: "r", shape: rect(0, 0) })

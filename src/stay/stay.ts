@@ -6,7 +6,7 @@ import { InstantShape } from "../shapes/instantShape"
 import type { ContextLayerSetFunction } from "../types/canvas"
 import type { SelectorFunc } from "../types/children"
 import type { EventProps, ListenerNamePayloadPair, ListenerProps } from "../types/events"
-import type { DrawReturn, StayDrawProps, StayTools } from "../types/tools"
+import type { DrawReturn, StayDrawProps, StayTools, ViewportOptions } from "../types/tools"
 import {
   DEFAULTSTATE,
   FRAME_EVENT_NAME,
@@ -18,6 +18,7 @@ import { uuid4 } from "../utils/identifiers"
 
 import { ChildrenStore } from "./children/childrenStore"
 import { StayInstantChild } from "./children/stayInstantChild"
+import { CoordinateSystem } from "./coordinates/coordinateSystem"
 import { EventDispatcher } from "./events/input/eventDispatcher"
 import { ActionRouter } from "./events/routing/actionRouter"
 import { EventRuntime } from "./events/runtime/eventRuntime"
@@ -29,6 +30,7 @@ import { SetShapeChildCurrentTime, StackItem } from "./types"
 
 class Stay<EventName extends string> {
   readonly children = new ChildrenStore()
+  readonly coordinates: CoordinateSystem
   actionRouter: ActionRouter<EventName>
   eventRuntime: EventRuntime<EventName>
   renderer: Renderer
@@ -49,8 +51,9 @@ class Stay<EventName extends string> {
   rootId: string
   tools: StayTools
 
-  constructor(root: Canvas, passive: boolean) {
+  constructor(root: Canvas, passive: boolean, viewportOptions?: ViewportOptions) {
     this.root = root
+    this.coordinates = new CoordinateSystem(viewportOptions)
     this.passive = passive
     this.x = 0
     this.y = 0
@@ -89,15 +92,17 @@ class Stay<EventName extends string> {
         store: this.store,
         stateStore: this.stateStore,
         select: (selector, sortBy) => this.tools.getChildrenBySelector(selector, sortBy),
-        hitTest: (props) => this.tools.getContainPointChildren(props),
       },
     })
     this.tools = stayTools.call(this)
-    this.renderer = new Renderer(this.root, () =>
-      this.children.values().filter((child) => child.id !== this.rootId)
+    this.renderer = new Renderer(
+      this.root,
+      () => this.children.values().filter((child) => child.id !== this.rootId),
+      this.coordinates
     )
     this.eventRuntime = new EventRuntime({
       canvas: this.root,
+      coordinates: this.coordinates,
       store: this.store,
       stateStore: this.stateStore,
       getState: () => this.state,
@@ -266,9 +271,14 @@ export function createStay(
   contextLayerSetFunctionList: ContextLayerSetFunction[],
   width: number,
   height: number,
-  passive: boolean
+  passive: boolean,
+  viewportOptions?: ViewportOptions
 ): Stay<string> {
-  return new Stay(new Canvas(canvasLayers, contextLayerSetFunctionList, width, height), passive)
+  return new Stay(
+    new Canvas(canvasLayers, contextLayerSetFunctionList, width, height),
+    passive,
+    viewportOptions
+  )
 }
 
 export default Stay

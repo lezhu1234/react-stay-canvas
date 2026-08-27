@@ -228,6 +228,26 @@ export function stayTools(this: Stay<any>): StayTools {
   }
 
   const stayTools = {
+    viewport: {
+      get: () => this.coordinates.getViewport(),
+      panBy: (movement: PointType) => this.coordinates.panBy(movement),
+      zoomBy: (factor: number, anchor?: PointType) => {
+        const metrics = this.root.getSurfaceMetrics()
+        const frame = this.coordinates.getFrame(metrics)
+        const resolvedAnchor = anchor ?? this.coordinates.viewCenterToContent(metrics, frame)
+        return this.coordinates.zoomBy(factor, resolvedAnchor)
+      },
+      reset: () => this.coordinates.reset(),
+      restore: (state: { x: number; y: number; scale: number }) =>
+        this.coordinates.restore(state),
+      toClientPoint: (point: PointType) => {
+        const client = this.coordinates.contentToClient(
+          point,
+          this.root.getSurfaceMetrics()
+        )
+        return { x: client.x, y: client.y }
+      },
+    },
     refresh: () => {
       this.forceUpdateAllLayers()
       this.draw({ now: Date.now() })

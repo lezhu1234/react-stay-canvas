@@ -15,6 +15,7 @@ export function createActionEventEnvelope<EventName extends string>(
   if (source.x !== undefined) envelope.x = source.x
   if (source.y !== undefined) envelope.y = source.y
   if (source.point) envelope.point = { ...source.point }
+  if (source.movement) envelope.movement = { ...source.movement }
   if (source.key !== undefined) envelope.key = source.key
   if (source.deltaX !== undefined) envelope.deltaX = source.deltaX
   if (source.deltaY !== undefined) envelope.deltaY = source.deltaY

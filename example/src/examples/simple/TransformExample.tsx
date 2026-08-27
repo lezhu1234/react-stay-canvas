@@ -202,7 +202,7 @@ export default function TransformExample() {
   return (
     <DemoLayout>
       <div className="pointer-session-demo">
-        <CanvasCard title={text("Viewport transforms", "平移与缩放")} description={text("Hold Space and drag from the Canvas into the striped release zone, then release outside.", "按住空格键从 Canvas 内拖到右侧条纹区域，并在 Canvas 外松开鼠标。") }>
+        <CanvasCard title={text("Geometry transforms", "几何变换")} description={text("These tools rewrite Child geometry. Hold Space and drag into the striped release zone, then release outside.", "这些工具会改写 Child 几何。按住空格键拖到右侧条纹区，再在 Canvas 外松开鼠标。") }>
           <StayCanvas className="demo-canvas demo-canvas-grid" eventList={[spaceStartMoveEvent]} height={290} listenerList={listeners} mounted={mounted} passive={false} width={440} />
         </CanvasCard>
         <aside className="outside-release-zone">

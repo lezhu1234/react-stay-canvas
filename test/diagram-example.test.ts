@@ -50,19 +50,17 @@ const edgeGeometry = (child: { shapeMap: Map<string, unknown> }) => ({
 })
 
 function engine(): DiagramEngine {
-  const state: DiagramEngine = {
+  return {
     selected: new Set(),
     nodeSequence: 0,
     edgeSequence: 0,
     changed: vi.fn(),
     edit: vi.fn(),
-    viewport: { scale: 1, x: 0, y: 0 },
-    setViewport: vi.fn((viewport) => { state.viewport = viewport }),
+    viewportChanged: vi.fn(),
     say: vi.fn(),
     save: vi.fn(),
     import: vi.fn(),
   }
-  return state
 }
 
 async function drag(target: HTMLCanvasElement, from: [number, number], to: [number, number]) {
@@ -236,21 +234,21 @@ describe("integrated diagram example", () => {
 
     top.dispatchEvent(new WheelEvent("wheel", { clientX: 450, clientY: 280, deltaY: -100, bubbles: true, cancelable: true }))
     await tick()
-    expect(state.viewport.scale).toBeCloseTo(1.1)
-    expect(state.viewport.x).toBeCloseTo(-45)
-    expect(state.viewport.y).toBeCloseTo(-28)
-    const viewportBeforeControlDrag = { ...state.viewport }
+    expect(stage.tools.viewport.get().scale).toBeCloseTo(1.1)
+    expect(stage.tools.viewport.get().x).toBeCloseTo(-45)
+    expect(stage.tools.viewport.get().y).toBeCloseTo(-28)
+    const viewportBeforeControlDrag = stage.tools.viewport.get()
     key(top, "keydown", "Control")
     await drag(top, [20, 20], [50, 60])
     key(top, "keyup", "Control")
-    expect(state.viewport).toEqual(viewportBeforeControlDrag)
+    expect(stage.tools.viewport.get()).toEqual(viewportBeforeControlDrag)
 
     const selectedBeforeSpaceClick = state.selectedEdge
     key(top, "keydown", " ")
     await click(top, [20, 20])
     key(top, "keyup", " ")
     expect(state.selectedEdge).toBe(selectedBeforeSpaceClick)
-    expect(state.viewport).toEqual(viewportBeforeControlDrag)
+    expect(stage.tools.viewport.get()).toEqual(viewportBeforeControlDrag)
 
     const spaceDown = key(top, "keydown", " ")
     expect(spaceDown.defaultPrevented).toBe(true)
@@ -258,18 +256,31 @@ describe("integrated diagram example", () => {
     await drag(top, [300, 250], [330, 290])
     key(top, "keyup", " ")
     expect(top.style.cursor).toBe("default")
-    expect(state.viewport.scale).toBeCloseTo(1.1)
-    expect(state.viewport.x).toBeCloseTo(-15)
-    expect(state.viewport.y).toBeCloseTo(12)
+    expect(stage.tools.viewport.get().scale).toBeCloseTo(1.1)
+    expect(stage.tools.viewport.get().x).toBeCloseTo(-15)
+    expect(stage.tools.viewport.get().y).toBeCloseTo(12)
     expect(toDiagramDocument(stage.tools)).toEqual(documentBeforeViewportChange)
 
-    const settledViewport = { ...state.viewport }
+    const observedViewportClick = vi.fn()
+    stage.addEventListener({
+      name: "zoomed-diagram-click-probe",
+      event: "click",
+      selector: ".stay-canvas",
+      callback: ({ e }) => observedViewportClick(e.point),
+    })
+    const zoomedNodePoint = stage.tools.viewport.toClientPoint({ x: 300, y: 250 })
+    await click(top, [zoomedNodePoint.x, zoomedNodePoint.y])
+    expect(observedViewportClick.mock.calls[0][0].x).toBeCloseTo(300)
+    expect(observedViewportClick.mock.calls[0][0].y).toBeCloseTo(250)
+    expect(state.selected).toEqual(new Set(["node-2"]))
+
+    const settledViewport = stage.tools.viewport.get()
     key(top, "keydown", " ")
     top.dispatchEvent(md(300, 250)); await tick()
     top.dispatchEvent(mm(350, 300)); await tick()
-    expect(state.viewport).not.toEqual(settledViewport)
+    expect(stage.tools.viewport.get()).not.toEqual(settledViewport)
     window.dispatchEvent(new Event("blur")); await tick()
-    expect(state.viewport).toEqual(settledViewport)
+    expect(stage.tools.viewport.get()).toEqual(settledViewport)
     expect(toDiagramDocument(stage.tools)).toEqual(documentBeforeViewportChange)
   })
 

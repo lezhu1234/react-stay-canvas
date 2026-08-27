@@ -1,4 +1,4 @@
-import type { Cursor, StayTools } from "react-stay-canvas"
+import type { Cursor, StayTools, ViewportState } from "react-stay-canvas"
 import type { Circle, Line, Path, Rectangle, StayText } from "react-stay-canvas"
 
 export const SCENE_WIDTH = 900
@@ -68,8 +68,7 @@ export type DiagramEngine = {
   edgeSequence: number
   changed: () => void
   edit: (id: string) => void
-  viewport: { scale: number; x: number; y: number }
-  setViewport: (viewport: DiagramEngine["viewport"]) => void
+  viewportChanged: (viewport: Readonly<ViewportState>) => void
   say: (en: string, zh: string) => void
   save: () => void
   import: () => void

@@ -14,7 +14,7 @@ import type {
   SelectorFunc,
 } from "./children"
 import type { Dict } from "./common"
-import type { Area, PointType } from "./geometry"
+import type { Area, Coordinate, PointType } from "./geometry"
 import type { ManualTriggerEvents } from "./manualActions"
 
 export interface StayDrawProps {
@@ -25,7 +25,28 @@ export interface StayDrawProps {
 
 export type StayTools = BasicTools & InstantTools & AnimatedTools
 
+export interface ViewportState {
+  x: number
+  y: number
+  scale: number
+}
+
+export interface ViewportOptions {
+  minScale?: number
+  maxScale?: number
+}
+
+export interface StayViewport {
+  get: () => Readonly<ViewportState>
+  panBy: (movement: Coordinate) => Readonly<ViewportState>
+  zoomBy: (factor: number, anchor?: Coordinate) => Readonly<ViewportState>
+  reset: () => Readonly<ViewportState>
+  restore: (state: ViewportState) => Readonly<ViewportState>
+  toClientPoint: (point: Coordinate) => Coordinate
+}
+
 export interface BasicTools {
+  readonly viewport: StayViewport
   appendChild: <T extends InstantShape>(props: AppendChildProps<T>) => StayInstantChild<T>
   removeChild: (childId: string) => Promise<void> | void
   getContainPointChildren: <T extends InstantShape = InstantShape>(

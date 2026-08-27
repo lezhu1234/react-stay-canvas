@@ -16,8 +16,8 @@ import {
 
 | Prop | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `width` | `number` | `500` | CSS and scene width; must be greater than zero |
-| `height` | `number` | `500` | CSS and scene height; must be greater than zero |
+| `width` | `number` | `500` | CSS and logical View width; must be greater than zero |
+| `height` | `number` | `500` | CSS and logical View height; must be greater than zero |
 | `layers` | `number \| ContextLayerSetFunction[]` | `2` | Canvas layer count or one custom 2D-context setter per layer |
 | `className` | `string` | `""` | Class name on the outer `<div>` |
 | `eventList` | `EventProps[]` | `[]` | Event definitions registered during initialization |
@@ -26,6 +26,7 @@ import {
 | `passive` | `boolean` | `true` | Passive option for the wheel DOM listener |
 | `recreateOnResize` | `boolean` | `false` | Whether width or height changes recreate the runtime |
 | `focusOnInit` | `boolean` | `true` | Whether to focus the top Canvas after initialization |
+| `viewport` | `{ minScale?, maxScale? }` | `{ minScale: 0.1, maxScale: 10 }` | Non-destructive viewport scale limits; fixed after runtime creation |
 
 ### layers
 
@@ -88,12 +89,14 @@ width: <width>px;
 height: <height>px;
 ```
 
-Each Canvas is absolutely positioned at `(0, 0)`. `width` and `height` define the logical scene and bitmap resolution; a wider parent does not stretch it automatically. Responsive layouts have two distinct options:
+Each Canvas is absolutely positioned at `(0, 0)`. `width` and `height` define the logical View and bitmap resolution; a wider parent does not stretch it automatically. Responsive layouts have two distinct options:
 
 - Change the logical drawing size by passing explicit numeric dimensions and enable `recreateOnResize` when rebuilding the scene is intended.
 - Preserve the logical scene while applying a positive, axis-aligned CSS scale to the rendered Canvas or one of its wrappers. Native pointer input is normalized from the rendered bounding rectangle into Canvas-local logical coordinates before event routing.
 
-The second option preserves scene content and history but only changes presentation. Keep the rendered scale stable during an active Pointer Session; changing layout in the middle of one interaction is outside this contract. Display scaling does not increase bitmap resolution, and it does not define coordinate behavior for rotation, skew, or mirroring.
+The second option preserves Content and history but only changes presentation. Keep the rendered scale stable during an active Pointer Session; changing layout in the middle of one interaction is outside this contract. Display scaling does not increase bitmap resolution, and it does not define coordinate behavior for rotation, skew, or mirroring.
+
+`viewport` is not React-controlled state. Use [`tools.viewport`](./stay-tools.md#non-destructive-viewport) to pan, zoom, or restore the runtime. It only changes the Content-to-View projection; it does not mutate Children or Shapes.
 
 ## Related reference
 

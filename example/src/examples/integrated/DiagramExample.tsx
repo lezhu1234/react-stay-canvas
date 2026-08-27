@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { type EventProps, StayCanvas, type StayTools } from "react-stay-canvas"
 
 import {
@@ -50,7 +50,7 @@ export default function DiagramExample() {
   const [entries, setEntries] = useState<string[]>([])
   const [draftLabel, setDraftLabel] = useState("")
   const [draftKind, setDraftKind] = useState<NodeKind>("process")
-  const [viewport, setViewport] = useState({ scale: 1, x: 0, y: 0 })
+  const [viewportScale, setViewportScale] = useState(1)
   const [inlineEdit, setInlineEdit] = useState<{
     id: string
     value: string
@@ -64,16 +64,14 @@ export default function DiagramExample() {
     edgeSequence: 0,
     changed: () => {},
     edit: () => {},
-    viewport: { scale: 1, x: 0, y: 0 },
-    setViewport: () => {},
+    viewportChanged: () => {},
     say: () => {},
     save: () => {},
     import: () => {},
   })
   const engine = engineRef.current
 
-  engine.viewport = viewport
-  engine.setViewport = setViewport
+  engine.viewportChanged = ({ scale }) => setViewportScale(scale)
   engine.say = (en, zh) => setEntries((current) => [text(en, zh), ...current].slice(0, 8))
   engine.changed = () => {
     const tools = toolsRef.current
@@ -113,28 +111,33 @@ export default function DiagramExample() {
   const openInlineEditor = (id: string) => {
     const tools = toolsRef.current
     const shell = stageShellRef.current
-    const canvas = shell?.querySelector<HTMLElement>(".diagram-canvas")
-    if (!tools || !shell || !canvas) return
+    if (!tools || !shell) return
     const node = tools.getChildById<NodeShape>(id) as NodeChild | undefined
     const edge = tools.getChildById<EdgeShape>(id) as EdgeChild | undefined
     const shellRect = shell.getBoundingClientRect()
-    const canvasRect = canvas.getBoundingClientRect()
     if (node?.className === "node") {
       const body = bodyOf(node)
+      const center = tools.viewport.toClientPoint({
+        x: body.x + body.width / 2,
+        y: body.y + body.height / 2,
+      })
+      const left = tools.viewport.toClientPoint({ x: body.x, y: body.y })
+      const right = tools.viewport.toClientPoint({ x: body.x + body.width, y: body.y })
       setInlineEdit({
         id,
         value: labelOf(node).text,
-        left: canvasRect.left - shellRect.left + body.x * viewport.scale,
-        top: canvasRect.top - shellRect.top + (body.y + body.height / 2) * viewport.scale - 17,
-        width: Math.max(100, body.width * viewport.scale),
+        left: left.x - shellRect.left,
+        top: center.y - shellRect.top - 17,
+        width: Math.max(100, right.x - left.x),
       })
     } else if (edge?.className === "edge") {
       const label = edgeLabelOf(edge)
+      const anchor = tools.viewport.toClientPoint(label)
       setInlineEdit({
         id,
         value: label.text,
-        left: canvasRect.left - shellRect.left + label.x * viewport.scale - 70,
-        top: canvasRect.top - shellRect.top + label.y * viewport.scale - 24,
+        left: anchor.x - shellRect.left - 70,
+        top: anchor.y - shellRect.top - 24,
         width: 140,
       })
     }
@@ -166,13 +169,6 @@ export default function DiagramExample() {
     }
   }, [selectedEdge, selectedId, selectedKind, selectedLabel, selectedNode])
 
-  useLayoutEffect(() => {
-    const canvas = stageShellRef.current?.querySelector<HTMLElement>(".diagram-canvas")
-    if (!canvas) return
-    canvas.style.transformOrigin = "0 0"
-    canvas.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`
-  }, [summary.nodes, viewport])
-
   useEffect(() => bindDiagramShortcuts(engine, () => toolsRef.current), [engine])
   const listeners = useMemo(() => createDiagramListeners(engine), [engine])
 
@@ -191,14 +187,10 @@ export default function DiagramExample() {
     }
   }
 
-  const changeScale = (nextScale: number) => {
-    const scale = Math.max(0.6, Math.min(1.8, nextScale))
-    const center = { x: SCENE_WIDTH / 2, y: SCENE_HEIGHT / 2 }
-    setViewport((current) => ({
-      scale,
-      x: current.x + center.x * (current.scale - scale),
-      y: current.y + center.y * (current.scale - scale),
-    }))
+  const changeScale = (direction: -1 | 1) => {
+    const tools = toolsRef.current
+    if (!tools) return
+    engine.viewportChanged(tools.viewport.zoomBy(direction > 0 ? 1.1 : 1 / 1.1))
   }
 
   const palette = (["start", "process", "decision", "end"] as NodeKind[]).map((kind) => ({
@@ -242,7 +234,7 @@ export default function DiagramExample() {
             wide
           >
             <StayCanvas
-              className="demo-canvas demo-canvas-grid diagram-canvas"
+              className="demo-canvas diagram-canvas"
               eventList={[
                 DiagramClickEvent as EventProps<string>,
                 DiagramDoubleClickEvent as EventProps<string>,
@@ -254,6 +246,7 @@ export default function DiagramExample() {
               listenerList={listeners}
               mounted={mounted}
               passive={false}
+              viewport={{ minScale: 0.6, maxScale: 1.8 }}
               width={SCENE_WIDTH}
             />
           </CanvasCard>
@@ -264,10 +257,10 @@ export default function DiagramExample() {
             <button disabled={engine.selected.size === 0} onClick={() => runWithTools((tools) => duplicateDiagramSelection(tools, engine))} title={text("Duplicate", "复制")}>⧉</button>
             <button disabled={summary.selected === 0} onClick={() => runWithTools((tools) => removeDiagramSelection(tools, engine))} title={text("Delete", "删除")}>⌫</button>
             <span />
-            <button onClick={() => changeScale(viewport.scale - 0.1)} title={text("Zoom out", "缩小")}>−</button>
-            <output>{Math.round(viewport.scale * 100)}%</output>
-            <button onClick={() => changeScale(viewport.scale + 0.1)} title={text("Zoom in", "放大")}>＋</button>
-            <button onClick={() => setViewport({ scale: 1, x: 0, y: 0 })} title={text("Reset view", "重置视图")}>⌂</button>
+            <button onClick={() => changeScale(-1)} title={text("Zoom out", "缩小")}>−</button>
+            <output>{Math.round(viewportScale * 100)}%</output>
+            <button onClick={() => changeScale(1)} title={text("Zoom in", "放大")}>＋</button>
+            <button onClick={() => runWithTools((tools) => engine.viewportChanged(tools.viewport.reset()))} title={text("Reset view", "重置视图")}>⌂</button>
           </div>
         </div>
         {inlineEdit && (
@@ -339,7 +332,7 @@ export default function DiagramExample() {
         [text("Nodes", "节点"), summary.nodes],
         [text("Edges", "连线"), summary.edges],
         [text("Selected", "已选择"), summary.selected],
-        [text("Zoom", "缩放"), `${Math.round(viewport.scale * 100)}%`],
+        [text("Zoom", "缩放"), `${Math.round(viewportScale * 100)}%`],
       ]} />
       <EventLog entries={entries} />
     </DemoLayout>

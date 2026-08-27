@@ -643,6 +643,73 @@ input:focus-visible {
   background-size: 20px 20px;
 }
 
+.coordinate-canvas {
+  background: #f6f7f2;
+}
+
+.coordinate-workspace {
+  display: grid;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(320px, 1.35fr) minmax(320px, 0.85fr);
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+}
+
+.coordinate-workspace > .canvas-card {
+  height: 100%;
+}
+
+.coordinate-workspace .canvas-viewport {
+  overflow: hidden;
+}
+
+.coordinate-stack-canvas {
+  background: radial-gradient(circle at 45% 44%, rgba(54, 105, 221, 0.08), transparent 58%), #f6f7f2;
+}
+
+.coordinate-flow {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+}
+
+.coordinate-flow div {
+  display: grid;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  gap: 2px;
+  background: var(--surface-strong);
+}
+
+.coordinate-flow span,
+.coordinate-flow small {
+  color: var(--muted);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.coordinate-flow strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coordinate-flow i {
+  color: var(--accent);
+  font-style: normal;
+  text-align: center;
+  transform: rotate(90deg);
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1157,11 +1224,6 @@ input:focus-visible {
 
 .diagram-canvas-area .canvas-viewport {
   overflow: hidden;
-}
-
-.diagram-canvas {
-  transition: transform 80ms linear;
-  will-change: transform;
 }
 
 .diagram-floating-toolbar {

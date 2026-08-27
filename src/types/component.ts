@@ -9,7 +9,7 @@ import type {
   PredefinedMouseEventName,
   PredefinedWheelEventName,
 } from "./events"
-import type { StayTools } from "./tools"
+import type { StayTools, ViewportOptions } from "./tools"
 
 export interface composeProps {
   status?: string
@@ -39,4 +39,5 @@ export interface StayCanvasProps<EventName extends string = string> {
   mounted?: (tools: StayTools) => void
   recreateOnResize?: boolean
   focusOnInit?: boolean
+  viewport?: ViewportOptions
 }

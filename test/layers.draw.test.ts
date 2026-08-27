@@ -190,4 +190,50 @@ describe("real drawing (node-canvas ctx spy)", () => {
     stage.tools.refresh() // forces all layers → repaints
     expect(strokeRect).toHaveBeenCalledWith(1, 1, 2, 2)
   })
+
+  it("repaints every layer with the same viewport transform without mutating geometry", () => {
+    const { stage, layers } = createStage({ width: 200, height: 100, layers: 2 })
+    const shape = new Rectangle({
+      x: 20,
+      y: 10,
+      width: 30,
+      height: 20,
+      layer: 1,
+      strokeConfig: { color: rgba(1, 1, 1), lineWidth: 1 },
+    })
+    stage.tools.appendChild({ className: "viewport-shape", shape })
+    stage.draw({})
+    const transforms = layers.map((layer) => vi.spyOn(layer.getContext("2d")!, "setTransform"))
+
+    stage.tools.viewport.restore({ x: 15, y: -5, scale: 2 })
+    const result = stage.draw({})
+
+    expect(result.updatedLayers).toEqual([0, 1])
+    transforms.forEach((transform) => {
+      expect(transform).toHaveBeenCalledWith(2, 0, 0, 2, 15, -5)
+    })
+    expect(shape).toMatchObject({ x: 20, y: 10, width: 30, height: 20 })
+  })
+
+  it("uses the visible Content area for culling after a viewport change", () => {
+    const { stage, layers } = createStage({ width: 200, height: 100, layers: 1 })
+    const strokeRect = vi.spyOn(layers[0].getContext("2d")!, "strokeRect")
+    stage.tools.appendChild({
+      className: "distant-shape",
+      shape: new Rectangle({
+        x: 500,
+        y: 20,
+        width: 30,
+        height: 20,
+        strokeConfig: { color: rgba(1, 1, 1), lineWidth: 1 },
+      }),
+    })
+
+    stage.draw({})
+    expect(strokeRect).not.toHaveBeenCalled()
+    stage.tools.viewport.panBy({ x: -400, y: 0 })
+    stage.draw({})
+
+    expect(strokeRect).toHaveBeenCalledWith(500, 20, 30, 20)
+  })
 })

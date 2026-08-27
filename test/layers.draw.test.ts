@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest"
-import { Path, Point, Rectangle } from "react-stay-canvas"
+import { Path, Point, Polygon, Rectangle } from "react-stay-canvas"
 import { createStage } from "./helpers/stage"
 
 // Dimension 6 (Layers + real draw): assert the shape actually paints on the
@@ -169,6 +169,32 @@ describe("real drawing (node-canvas ctx spy)", () => {
     expect(stage.tools.getContainPointChildren({
       selector: ".path",
       point: { x: 25, y: 12 },
+      returnFirst: true,
+      withRoot: false,
+    })).toHaveLength(1)
+  })
+
+  it("fills and hits Polygon through the public scene API", () => {
+    const { stage, layers } = createStage({ layers: 2 })
+    const context = layers[1].getContext("2d")!
+    const fill = vi.spyOn(context, "fill")
+    const closePath = vi.spyOn(context, "closePath")
+    stage.tools.appendChild({
+      className: "polygon",
+      shape: new Polygon({
+        points: [{ x: 10, y: 10 }, { x: 50, y: 10 }, { x: 30, y: 40 }],
+        layer: 1,
+        fillRule: "evenodd",
+        fillConfig: { color: rgba(20, 120, 80) },
+      }),
+    })
+
+    expect(() => stage.draw({})).not.toThrow()
+    expect(closePath).toHaveBeenCalledOnce()
+    expect(fill).toHaveBeenCalledWith("evenodd")
+    expect(stage.tools.getContainPointChildren({
+      selector: ".polygon",
+      point: { x: 30, y: 20 },
       returnFirst: true,
       withRoot: false,
     })).toHaveLength(1)

@@ -4,6 +4,7 @@ import {
   Line,
   Path,
   Point,
+  Polygon,
   Rectangle,
   type ShapeDrawProps,
   StayText,
@@ -43,7 +44,7 @@ import {
 const transparent = rgba(0, 0, 0, 0)
 export const EDGE_PATH_KEY = "path"
 const EDGE_HIT_PATH_KEY = "hit-area"
-const EDGE_ARROW_KEYS = ["arrow:0", "arrow:1"] as const
+const EDGE_ARROW_KEY = "arrow"
 const NODE_BODY_KEY = "body"
 const NODE_LABEL_KEY = "label"
 const NODE_OUTLINE_KEY = "outline"
@@ -64,6 +65,7 @@ export const edgeLabelOf = (child: EdgeChild) => child.shapeMap.get(EDGE_LABEL_K
 export const edgeHandleOf = (child: EdgeChild, end: "from" | "to") => child.shapeMap.get(edgeHandleKey(end)) as Circle
 export const edgePathOf = (child: EdgeChild) => child.shapeMap.get(EDGE_PATH_KEY) as Path
 const edgeHitPathOf = (child: EdgeChild) => child.shapeMap.get(EDGE_HIT_PATH_KEY) as Path | undefined
+const edgeArrowOf = (child: EdgeChild) => child.shapeMap.get(EDGE_ARROW_KEY) as Polygon
 
 const validPort = (value: unknown): value is Port =>
   typeof value === "string" && PORT_ORDER.includes(value as Port)
@@ -338,8 +340,7 @@ export function updateEdgeShapes(child: EdgeChild, start: Coordinate, end: Coord
   const pathPoints = points.map((point) => new Point(point))
   edgePathOf(child).update({ points: pathPoints })
   edgeHitPathOf(child)?.update({ points: pathPoints.map((point) => point.copy()) })
-  const wingA = child.shapeMap.get(EDGE_ARROW_KEYS[0]) as Line
-  const wingB = child.shapeMap.get(EDGE_ARROW_KEYS[1]) as Line
+  const arrow = edgeArrowOf(child)
   const finalStart = points[2]
   const targetAngle: Record<Port, number> = {
     w: 0,
@@ -357,8 +358,7 @@ export function updateEdgeShapes(child: EdgeChild, start: Coordinate, end: Coord
   })
   const a = wing(Math.PI / 6)
   const b = wing(-Math.PI / 6)
-  wingA.update({ x1: end.x, y1: end.y, x2: a.x, y2: a.y })
-  wingB.update({ x1: end.x, y1: end.y, x2: b.x, y2: b.y })
+  arrow.update({ points: [end, a, b] })
   edgeHandleOf(child, "from")?.update({ ...start, radius: EDGE_HANDLE_RADIUS })
   edgeHandleOf(child, "to")?.update({ ...end, radius: EDGE_HANDLE_RADIUS })
   edgeLabelOf(child)?.update({
@@ -380,16 +380,21 @@ function createEdgeShapes(start: Coordinate, end: Coordinate, preview = false) {
     zIndex: preview ? 9 : 1,
     strokeConfig,
   })
-  const arrows = EDGE_ARROW_KEYS.map((key): [string, EdgeShape] => [key, new Line({
-    x1: start.x,
-    y1: start.y,
-    x2: end.x,
-    y2: end.y,
+  const arrow = new Polygon({
+    points: [start, end, end],
     layer: preview ? 2 : 0,
     zIndex: preview ? 9 : 1,
-    strokeConfig,
-  })])
-  const visibleShapes: [string, EdgeShape][] = [[EDGE_PATH_KEY, path], ...arrows]
+    fillConfig: { color: strokeConfig.color },
+    strokeConfig: {
+      color: strokeConfig.color,
+      lineWidth: preview ? 1 : 1.5,
+      lineJoin: "round",
+    },
+  })
+  const visibleShapes: [string, EdgeShape][] = [
+    [EDGE_PATH_KEY, path],
+    [EDGE_ARROW_KEY, arrow],
+  ]
   if (preview) return new Map<string, EdgeShape>(visibleShapes)
   return new Map<string, EdgeShape>([
     ...visibleShapes,
@@ -500,10 +505,10 @@ export function paintControls(tools: StayTools, engine: Pick<DiagramEngine, "sel
     edgePathOf(edge).update({
       strokeConfig: { color: active ? colors.blue : colors.gray, lineWidth: active ? 3 : 2.5 },
     })
-    EDGE_ARROW_KEYS.forEach((key) => {
-      ;(edge.shapeMap.get(key) as Line).update({
-        strokeConfig: { color: active ? colors.blue : colors.gray, lineWidth: active ? 3 : 2.5 },
-      })
+    const arrowColor = active ? colors.blue : colors.gray
+    edgeArrowOf(edge).update({
+      fillConfig: { color: arrowColor },
+      strokeConfig: { color: arrowColor, lineWidth: active ? 2 : 1.5 },
     })
     ;(["from", "to"] as const).forEach((end) => edgeHandleOf(edge, end).update({
       fillConfig: { color: active ? colors.paper : transparent },

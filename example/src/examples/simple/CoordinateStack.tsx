@@ -1,15 +1,13 @@
 import { useEffect, useRef } from "react"
 import {
   Circle,
-  InstantShape,
   Line,
+  Polygon,
   StayCanvas,
   StayText,
   type ChildTransform,
   type Coordinate,
   type Rect,
-  type ShapeDrawProps,
-  type ShapeProps,
   type StayInstantChild,
   type StayTools,
   type ViewportState,
@@ -56,95 +54,18 @@ type PlaneDefinition = {
 
 type QuadPoints = [Coordinate, Coordinate, Coordinate, Coordinate]
 
-type PerspectiveQuadProps = ShapeProps & {
-  points: QuadPoints
-  filter?: string
-}
-
-class PerspectiveQuad extends InstantShape {
-  filter?: string
-  points: QuadPoints
-
-  constructor({ filter, points, ...props }: PerspectiveQuadProps) {
-    super(props)
-    this.filter = filter
-    this.points = points
-  }
-
-  private trace(context: ShapeDrawProps["context"]) {
-    context.beginPath()
-    context.moveTo(this.points[0].x, this.points[0].y)
-    this.points.slice(1).forEach((point) => context.lineTo(point.x, point.y))
-    context.closePath()
-  }
-
-  commonDraw({ context }: ShapeDrawProps) {
-    context.filter = this.filter ?? "none"
-  }
-
-  afterDraw({ context }: ShapeDrawProps) {
-    context.filter = "none"
-  }
-
-  fill({ context }: ShapeDrawProps) {
-    this.trace(context)
-    context.fill()
-  }
-
-  stroke({ context }: ShapeDrawProps) {
-    this.trace(context)
-    context.stroke()
-  }
-
-  copy() {
-    return new PerspectiveQuad({
-      ...this.copyProps(),
-      filter: this.filter,
-      points: this.points.map((point) => ({ ...point })) as QuadPoints,
-    })
-  }
-
-  getBound(): Rect {
-    const xs = this.points.map((point) => point.x)
-    const ys = this.points.map((point) => point.y)
-    const x = Math.min(...xs)
-    const y = Math.min(...ys)
-    return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
-  }
-
-  move(offsetX: number, offsetY: number) {
-    this.update({
-      points: this.points.map((point) => ({ x: point.x + offsetX, y: point.y + offsetY })) as QuadPoints,
-    })
-  }
-
-  update({ filter, points, ...props }: Partial<PerspectiveQuadProps>) {
-    this.filter = filter ?? this.filter
-    if (points) this.points = points
-    this.applyUpdate(props)
-    return this
-  }
-
-  zoom(zoomScale: number) {
-    this.update({
-      points: this.points.map((point) => this.getZoomPoint(zoomScale, point)) as QuadPoints,
-      strokeConfig: { lineWidth: this.strokeConfig.lineWidth * zoomScale },
-    })
-  }
-}
-
 type PlaneRuntime = PlaneDefinition & {
   child: StayInstantChild
-  frame: PerspectiveQuad
-  shadow: PerspectiveQuad
+  frame: Polygon
+  shadow: Polygon
   title: StayText
   dimension: StayText
   dot: Circle
   value: StayText
-  shape: PerspectiveQuad
+  shape: Polygon
   shapeEdges: [Line, Line, Line, Line]
   canvasDomEdges?: [Line, Line, Line, Line]
-  viewportFill?: PerspectiveQuad
+  viewportFill?: Polygon
   viewportEdges?: [Line, Line, Line, Line]
   viewportLabel?: StayText
 }
@@ -461,7 +382,7 @@ function createPlaneRuntime(
     font: { size: detailSize, fontWeight: 500 },
     fillConfig: { color: colors.gray },
   })
-  const shadow = new PerspectiveQuad({
+  const shadow = new Polygon({
     points: quadForRect(plane, { x: 4, y: 7, width: plane.width, height: plane.height }),
     layer: plane.layer,
     zIndex: -2,
@@ -469,7 +390,7 @@ function createPlaneRuntime(
     fillConfig: { color: { ...plane.stroke, a: 0.1 } },
     strokeConfig: { color: rgba(39, 51, 67, 0), lineWidth: 0 },
   })
-  const frame = new PerspectiveQuad({
+  const frame = new Polygon({
     points: quadForRect(plane, { x: 0, y: 0, width: plane.width, height: plane.height }),
     layer: plane.layer,
     zIndex: 0,
@@ -542,7 +463,7 @@ function createPlaneRuntime(
     zIndex: 4,
     strokeConfig: { color: rgba(74, 163, 214, 0.64), lineWidth: 1.15, dash: [5, 4] },
   })) as [Line, Line, Line, Line] : undefined
-  const viewportFill = name === "content" ? new PerspectiveQuad({
+  const viewportFill = name === "content" ? new Polygon({
     points: quadForRect(plane, { x: 0, y: 0, width: 0, height: 0 }),
     layer: plane.layer,
     zIndex: 4,
@@ -568,7 +489,7 @@ function createPlaneRuntime(
     font: { size: detailSize, fontWeight: 700 },
     fillConfig: { color: rgba(70, 143, 77, 0.9) },
   }) : undefined
-  const shape = new PerspectiveQuad({
+  const shape = new Polygon({
     points: quadForRect(plane, { x: 0, y: 0, width: 0, height: 0 }),
     layer: plane.layer,
     zIndex: 7,

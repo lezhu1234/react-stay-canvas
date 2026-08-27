@@ -115,10 +115,13 @@ interface CanvasGlobalProps {
 | `StayImage` | `image`, `x`, `y`, `width`, `height`, `opacity` | `sx`, `sy`, `swidth`, `sheight`, `imageLoaded` |
 | `Point` | `x`, `y` | — |
 | `Path` | `points` | — |
+| `Polygon` | `points` | `fillRule`, `filter` |
 
 Every constructor also accepts common `ShapeProps`. The animated built-ins `Rectangle`, `Line`, `StayText`, and `StayImage` additionally accept `transition`.
 
 `Path` is a native stroked centerline rather than a fillable area. Its width comes only from `strokeConfig.lineWidth`; `fillConfig` is not part of `PathAttr`. It defaults to round caps and joins while preserving explicitly supplied Canvas stroke settings.
+
+`Polygon` is a closed fillable area. `PolygonAttr.points` must contain at least three coordinates. `fillRule` accepts `"nonzero"` (the default) or `"evenodd"` and governs both Canvas filling and hit testing. The Shape copies its input points and exposes derived bounds, area, and centroid through the standard Shape geometry methods.
 
 `StayImage` uses the image's natural size when `swidth` or `sheight` is omitted. Explicit source-crop dimensions are preserved during construction, update, and copy. Timeline interpolation does not currently preserve custom crop dimensions; see [Current limitations](../known-limitations.md#rendering-and-geometry).
 

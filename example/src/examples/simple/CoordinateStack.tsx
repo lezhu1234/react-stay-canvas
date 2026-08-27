@@ -13,7 +13,7 @@ import {
   type ViewportState,
 } from "react-stay-canvas"
 
-import { CanvasCard, colors, rgba, sceneCanvasArea } from "../../components/DemoKit"
+import { CanvasSurface, colors, rgba, sceneCanvasArea } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import {
   clippedRectEdges,
@@ -30,11 +30,11 @@ import {
   visibleContentRange,
 } from "./coordinateLabModel"
 
-const STACK_WIDTH = 320
-const STACK_HEIGHT = 300
-const PLANE_GRID_COLUMNS = 3
-const PLANE_GRID_ROWS = 5
-const CONTENT_GRID_LINES = 6
+const STACK_WIDTH = 240
+const STACK_HEIGHT = 120
+const PLANE_GRID_COLUMNS = 4
+const PLANE_GRID_ROWS = 4
+const CONTENT_GRID_LINES = 5
 const CONTENT_GRID_SIZE = 100
 
 type PlaneName = "client" | "view" | "content"
@@ -83,14 +83,14 @@ type StackRuntime = {
 }
 
 function createDefinitions(width: number, height: number): Record<PlaneName, PlaneDefinition> {
-  const planeWidth = width * 0.245
-  const planeHeight = height * 0.58
+  const planeWidth = width * 0.22
+  const planeHeight = height * 0.6
   return {
     client: {
       width: planeWidth,
       height: planeHeight,
       layer: 0,
-      transform: { x: width * 0.075, y: height * 0.245, rotation: -2.5, skewY: -1.5 },
+      transform: { x: width * 0.045, y: height * 0.235, rotation: -2.5, skewY: -1.25 },
       fill: rgba(225, 229, 226, 0.5),
       stroke: rgba(124, 132, 145, 0.72),
     },
@@ -98,7 +98,7 @@ function createDefinitions(width: number, height: number): Record<PlaneName, Pla
       width: planeWidth,
       height: planeHeight,
       layer: 1,
-      transform: { x: width * 0.375, y: height * 0.205, rotation: 1, skewY: 1.25 },
+      transform: { x: width * 0.39, y: height * 0.205, rotation: 0.75, skewY: 0.75 },
       fill: rgba(54, 105, 221, 0.12),
       stroke: rgba(54, 105, 221, 0.82),
     },
@@ -106,7 +106,7 @@ function createDefinitions(width: number, height: number): Record<PlaneName, Pla
       width: planeWidth,
       height: planeHeight,
       layer: 2,
-      transform: { x: width * 0.675, y: height * 0.245, rotation: 2.5, skewY: 1.5 },
+      transform: { x: width * 0.735, y: height * 0.235, rotation: 2.5, skewY: 1.25 },
       fill: rgba(44, 137, 91, 0.12),
       stroke: rgba(44, 137, 91, 0.88),
     },
@@ -744,27 +744,20 @@ export function CoordinateStack({
   }
 
   return (
-    <CanvasCard
-      className={`coordinate-stack-card coordinate-focus-${mappingFocus}`}
-      title={text("Three coordinate planes", "三层坐标空间")}
-      description={text(
-        mappingFocus === "view-client"
-          ? "CSS changes the last projection only."
-          : "Viewport changes the middle projection only.",
-        mappingFocus === "view-client"
-          ? "CSS 只改变最后一段投影。"
-          : "Viewport 只改变中间一段投影。",
-      )}
-      wide
+    <section
+      aria-label={text("Three coordinate planes", "三层坐标空间")}
+      className={`coordinate-stack-exhibit coordinate-focus-${mappingFocus}`}
     >
-      <StayCanvas
-        className="demo-canvas coordinate-stack-canvas"
-        focusOnInit={false}
-        height={STACK_HEIGHT}
-        layers={3}
-        mounted={mounted}
-        width={STACK_WIDTH}
-      />
-    </CanvasCard>
+      <CanvasSurface className="coordinate-stack-surface" shrinkToViewport>
+        <StayCanvas
+          className="demo-canvas coordinate-stack-canvas"
+          focusOnInit={false}
+          height={STACK_HEIGHT}
+          layers={3}
+          mounted={mounted}
+          width={STACK_WIDTH}
+        />
+      </CanvasSurface>
+    </section>
   )
 }

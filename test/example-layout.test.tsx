@@ -46,24 +46,28 @@ vi.stubGlobal("OffscreenCanvas", class {
 let root: Root | undefined
 let originalClientHeight: PropertyDescriptor | undefined
 let originalClientWidth: PropertyDescriptor | undefined
+let viewportHeight = 480
+let viewportWidth = 920
 
 beforeEach(() => {
   ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
   window.localStorage.clear()
   window.requestAnimationFrame = () => 1
   window.cancelAnimationFrame = () => {}
+  viewportHeight = 480
+  viewportWidth = 920
   originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight")
   originalClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth")
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     configurable: true,
     get() {
-      return this.classList?.contains("canvas-viewport") ? 480 : 0
+      return this.classList?.contains("canvas-viewport") ? viewportHeight : 0
     },
   })
   Object.defineProperty(HTMLElement.prototype, "clientWidth", {
     configurable: true,
     get() {
-      return this.classList?.contains("canvas-viewport") ? 920 : 0
+      return this.classList?.contains("canvas-viewport") ? viewportWidth : 0
     },
   })
 })
@@ -244,19 +248,20 @@ describe("Example Canvas workspace", () => {
     act(() => frames.splice(0).forEach((frame) => frame(0)))
 
     const workspace = container.querySelector(".coordinate-workspace")
-    const stackCard = workspace?.querySelector(".coordinate-stack-card")
+    const stackCard = workspace?.querySelector(".coordinate-stack-exhibit")
     const stackLayers = workspace?.querySelectorAll<HTMLCanvasElement>(".coordinate-stack-canvas canvas")
     const liveLayers = workspace?.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")
-    expect(workspace?.querySelectorAll(":scope > .canvas-card")).toHaveLength(2)
+    expect(workspace?.querySelectorAll(":scope > section")).toHaveLength(2)
     expect(stackCard?.classList.contains("coordinate-focus-view-client")).toBe(true)
     expect(stackLayers).toHaveLength(3)
     expect(liveLayers).toHaveLength(2)
-    expect(workspace?.querySelector(".coordinate-live-card .canvas-card-heading")?.textContent)
+    expect(workspace?.querySelector(".coordinate-live-exhibit .coordinate-live-heading")?.textContent)
       .toContain("Live Canvas")
-    expect(workspace?.querySelector(".coordinate-live-card .canvas-viewport-label")?.textContent)
+    expect(workspace?.querySelector(".coordinate-live-exhibit .canvas-viewport-label")?.textContent)
       .toBe("CLIENT DOM · 80% × 80%")
-    expect(container.querySelector(".coordinate-hero")?.textContent).toContain("One point. Three spaces.")
-    expect(workspace?.textContent).toContain("The same Shape")
+    expect(container.querySelector(".coordinate-hero")?.textContent).toContain("One point,")
+    expect(container.querySelector(".coordinate-hero")?.textContent).toContain("three spaces.")
+    expect(workspace?.querySelector(".coordinate-live-heading")?.textContent).toContain("CLIENT SPACE")
     const evidence = container.querySelector<HTMLElement>(".coordinate-evidence")
     const evidenceToggle = container.querySelector<HTMLButtonElement>(".coordinate-evidence-toggle")
     expect(evidence?.hidden).toBe(true)
@@ -264,7 +269,7 @@ describe("Example Canvas workspace", () => {
     expect(evidence?.hidden).toBe(false)
     expect(evidence?.textContent).toContain("Zoom changes the projection, not the Shape")
     expect(evidence?.querySelector('button[aria-label="Close evidence"]')).not.toBeNull()
-    const displayTransform = workspace?.querySelector<HTMLElement>(".coordinate-live-card .canvas-display-transform")
+    const displayTransform = workspace?.querySelector<HTMLElement>(".coordinate-live-exhibit .canvas-display-transform")
     expect(displayTransform?.dataset.displayScaleX).toBe("0.8")
     expect(displayTransform?.dataset.displayScaleY).toBe("0.8")
     expect(displayTransform?.style.transform).toBe("translate(0px, 0px) scale(0.8, 0.8)")
@@ -272,9 +277,9 @@ describe("Example Canvas workspace", () => {
     const width = stackLayers?.[0].width ?? 0
     const height = stackLayers?.[0].height ?? 0
     const planeSamples = [
-      { x: width * 0.075 + 8, y: height * 0.245 + 8 },
-      { x: width * 0.375 + 8, y: height * 0.205 + 8 },
-      { x: width * 0.675 + 8, y: height * 0.245 + 8 },
+      { x: width * 0.045 + 8, y: height * 0.235 + 8 },
+      { x: width * 0.39 + 8, y: height * 0.205 + 8 },
+      { x: width * 0.735 + 8, y: height * 0.235 + 8 },
     ]
     stackLayers?.forEach((canvas, index) => {
       const { x, y } = planeSamples[index]
@@ -349,7 +354,7 @@ describe("Example Canvas workspace", () => {
     })
     expect(stackCard?.classList.contains("coordinate-focus-view-client")).toBe(true)
     expect(displayTransform?.style.transform).toBe("translate(32px, 24px) scale(0.65, 0.9)")
-    expect(workspace?.querySelector(".coordinate-live-card .canvas-viewport-label")?.textContent)
+    expect(workspace?.querySelector(".coordinate-live-exhibit .canvas-viewport-label")?.textContent)
       .toBe("CLIENT DOM · 65% × 90%")
     expect(proofRows
       .find((item) => item.querySelector("dt")?.textContent === "CSS View to Client")
@@ -428,6 +433,48 @@ describe("Example Canvas workspace", () => {
       .not.toBe(contentBeforePan)
     expect(flow?.querySelectorAll(".coordinate-flow-operation code")[1]?.textContent)
       .toContain("(40, 20)")
+  })
+
+  it("recreates responsive coordinate canvases when their surfaces resize", () => {
+    const callbacks: ResizeObserverCallback[] = []
+    const originalResizeObserver = globalThis.ResizeObserver
+    class ResizeObserverMock {
+      constructor(callback: ResizeObserverCallback) {
+        callbacks.push(callback)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver
+
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    try {
+      act(() => {
+        root?.render(<I18nProvider><CoordinatesExample /></I18nProvider>)
+      })
+
+      expect(container.querySelector<HTMLCanvasElement>(".coordinate-canvas canvas")?.width).toBe(920)
+      expect(container.querySelector<HTMLCanvasElement>(".coordinate-canvas canvas")?.height).toBe(480)
+
+      viewportWidth = 210
+      viewportHeight = 81
+      act(() => callbacks.forEach((callback) => callback([], {} as ResizeObserver)))
+
+      expect(container.querySelector<HTMLCanvasElement>(".coordinate-canvas canvas")?.width).toBe(210)
+      expect(container.querySelector<HTMLCanvasElement>(".coordinate-canvas canvas")?.height).toBe(81)
+      expect(container.querySelector<HTMLCanvasElement>(".coordinate-stack-canvas canvas")?.width).toBe(210)
+      expect(container.querySelector<HTMLCanvasElement>(".coordinate-stack-canvas canvas")?.height).toBe(81)
+      expect([...container.querySelectorAll(".coordinate-zoom-proof dl > div")]
+        .find((item) => item.querySelector("dt")?.textContent === "Viewport")
+        ?.querySelector("dd")?.textContent)
+        .toBe("9, -31 / 40%")
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+    }
   })
 
   it("keeps valid coordinate evidence across capture loss and wheel input", () => {

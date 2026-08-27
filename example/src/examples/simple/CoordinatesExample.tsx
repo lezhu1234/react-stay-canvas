@@ -13,7 +13,7 @@ import {
   type ViewportState,
 } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, rgba, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasSurface, colors, rgba, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition } from "../actionEventGuards"
 import { CoordinateStack, type CoordinateMappingFocus } from "./CoordinateStack"
@@ -49,6 +49,7 @@ const DEFAULT_CSS_DISPLAY: Readonly<CssDisplayTransform> = {
 
 const CSS_SCALE_MAX = 1
 const CSS_OFFSET_MAX = 96
+const VIEWPORT_MIN_SCALE = 0.4
 
 const INITIAL_PROBE: CoordinateProbe = {
   client: { x: 0, y: 0 },
@@ -115,9 +116,26 @@ function surfaceFrame({
 const scaleFactors = ({ scaleX, scaleY }: CoordinateProbe["surface"]) =>
   `(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)})`
 
+function fitContentViewport(width: number, height: number): Readonly<ViewportState> {
+  if (width >= LAB_CONTENT_BOUNDS.width && height >= LAB_CONTENT_BOUNDS.height) {
+    return { x: 0, y: 0, scale: 1 }
+  }
+
+  const scale = Math.max(
+    VIEWPORT_MIN_SCALE,
+    Math.min(1, width / LAB_CONTENT_BOUNDS.width, height / LAB_CONTENT_BOUNDS.height),
+  )
+  return {
+    x: (width - LAB_CONTENT_BOUNDS.width * scale) / 2,
+    y: (height - LAB_CONTENT_BOUNDS.height * scale) / 2,
+    scale,
+  }
+}
+
 export default function CoordinatesExample() {
   const { text } = useI18n()
   const toolsRef = useRef<StayTools>()
+  const homeViewportRef = useRef<Readonly<ViewportState>>({ x: 0, y: 0, scale: 1 })
   const surfaceCanvasRef = useRef<ReturnType<StayTools["appendChild"]>["canvas"]>()
   const markerRef = useRef<{ dot: Circle; horizontal: Line; vertical: Line; label: StayText }>()
   const [cssDisplay, setCssDisplay] = useState<CssDisplayTransform>({ ...DEFAULT_CSS_DISPLAY })
@@ -335,7 +353,10 @@ export default function CoordinatesExample() {
       x: surface.left + view.x / surface.scaleX,
       y: surface.top + view.y / surface.scaleY,
     }
-    const currentViewport = tools.viewport.get()
+    const homeViewport = fitContentViewport(gridChild.canvas.width, gridChild.canvas.height)
+    homeViewportRef.current = homeViewport
+    const currentViewport = tools.viewport.restore(homeViewport)
+    setViewport(currentViewport)
     const content = contentAtView(view, currentViewport)
     moveMarker(content)
     const initialProbe = {
@@ -379,37 +400,44 @@ export default function CoordinatesExample() {
       <section className="coordinate-stage">
         <header className="coordinate-hero">
           <p>{text("Coordinate laboratory · 01", "坐标实验室 · 01")}</p>
-          <h2>{text("One point. Three spaces.", "一个点，三个空间。")}</h2>
+          <h2>
+            <span>{text("One point,", "一个点，")}</span>
+            <span>{text("three spaces.", "三个空间。")}</span>
+          </h2>
           <span>{text(
-            "Move through the installation to see where CSS ends, where the View begins, and why Content never loses its identity.",
-            "移动指针穿过这组空间装置，看清 CSS 在哪里结束、View 从哪里开始，以及 Content 为什么始终保持自己的身份。",
+            "The same point, expressed and mapped across three coordinate spaces.",
+            "同一个点在不同坐标空间中的表达与映射关系。",
           )}</span>
         </header>
         <div className="coordinate-workspace">
           <CoordinateStack clientRange={clientRange} mappingFocus={mappingFocus} probe={probe} viewport={viewport} />
-          <CanvasCard
-            canvasDisplayTransform={cssDisplay}
-            className={`coordinate-live-card coordinate-focus-${mappingFocus}`}
-            title={text("Live Canvas", "实时 Canvas")}
-            description={text(
-              "The same Shape, now rendered where the user actually sees it. Move, zoom, or hold Space and drag.",
-              "同一个 Shape，渲染在用户真正看到的位置。移动指针、滚轮缩放，或按住空格键拖动。",
-            )}
-            viewportLabel={`CLIENT DOM · ${Math.round(cssDisplay.scaleX * 100)}% × ${Math.round(cssDisplay.scaleY * 100)}%`}
-            wide
-          >
-            <StayCanvas
-              className="demo-canvas coordinate-canvas"
-              eventList={[spaceStartMove]}
-              height={440}
-              layers={2}
-              listenerList={listeners}
-              mounted={mounted}
-              passive={false}
-              viewport={{ minScale: 0.4, maxScale: 3 }}
-              width={320}
-            />
-          </CanvasCard>
+          <section className={`coordinate-live-exhibit coordinate-focus-${mappingFocus}`}>
+            <header className="coordinate-live-heading">
+              <div>
+                <h3>{text("Live Canvas", "实时 Canvas")}</h3>
+                <span>CLIENT SPACE</span>
+              </div>
+              <p>{Math.round(probe.viewSize.width)} × {Math.round(probe.viewSize.height)}</p>
+            </header>
+            <CanvasSurface
+              canvasDisplayTransform={cssDisplay}
+              className="coordinate-live-surface"
+              shrinkToViewport
+              viewportLabel={`CLIENT DOM · ${Math.round(cssDisplay.scaleX * 100)}% × ${Math.round(cssDisplay.scaleY * 100)}%`}
+            >
+              <StayCanvas
+                className="demo-canvas coordinate-canvas"
+                eventList={[spaceStartMove]}
+                height={360}
+                layers={2}
+                listenerList={listeners}
+                mounted={mounted}
+                passive={false}
+                viewport={{ minScale: VIEWPORT_MIN_SCALE, maxScale: 3 }}
+                width={480}
+              />
+            </CanvasSurface>
+          </section>
         </div>
       </section>
 
@@ -517,21 +545,20 @@ export default function CoordinatesExample() {
               <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}>{text("Center zoom in", "中心放大")}</Button>
               <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}>{text("Center zoom out", "中心缩小")}</Button>
               <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}>{text("Pan +40,+20", "平移 +40,+20")}</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.reset())}>{text("Reset view", "重置视图")}</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.restore(homeViewportRef.current))}>{text("Reset view", "重置视图")}</Button>
             </Toolbar>
+            <button
+              aria-controls="coordinate-evidence"
+              aria-expanded={evidenceOpen}
+              className="coordinate-evidence-toggle"
+              onClick={() => setEvidenceOpen((open) => !open)}
+              type="button"
+            >
+              <span>{text("Evidence", "证据")}</span>
+              <strong>{evidenceOpen ? text("Close", "收起") : text("Inspect", "查看")}</strong>
+            </button>
           </section>
         </div>
-
-        <button
-          aria-controls="coordinate-evidence"
-          aria-expanded={evidenceOpen}
-          className="coordinate-evidence-toggle"
-          onClick={() => setEvidenceOpen((open) => !open)}
-          type="button"
-        >
-          <span>{text("Evidence", "证据")}</span>
-          <strong>{evidenceOpen ? text("Close", "收起") : text("Inspect", "查看")}</strong>
-        </button>
       </footer>
 
       <aside

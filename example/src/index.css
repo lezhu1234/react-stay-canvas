@@ -1006,6 +1006,7 @@ input:focus-visible {
 }
 
 .coordinate-stack-exhibit {
+  padding-top: 120px;
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -1455,6 +1456,47 @@ input:focus-visible {
   }
 }
 
+@media (max-height: 840px) {
+  .coordinate-hero {
+    top: 18px;
+    left: 12px;
+    width: min(640px, 62vw);
+  }
+
+  .coordinate-hero p {
+    margin-bottom: 7px;
+    font-size: 12px;
+  }
+
+  .coordinate-hero h2 {
+    font-size: 34px;
+    line-height: 1;
+  }
+
+  .coordinate-hero h2 span {
+    display: inline;
+  }
+
+  .coordinate-hero h2 span + span {
+    margin-left: 0.28em;
+  }
+
+  .coordinate-hero > span {
+    max-width: none;
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .coordinate-workspace {
+    padding-top: 124px;
+  }
+
+  .coordinate-stack-exhibit {
+    padding-top: 0;
+  }
+}
+
 @media (max-height: 700px) {
   .coordinate-experience {
     grid-template-rows: minmax(0, 1fr) 72px;
@@ -1673,10 +1715,39 @@ input:focus-visible {
   display: none;
 }
 
+.example-active.example-immersive .immersive-page > .immersive-overview-link {
+  position: fixed;
+  z-index: 41;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(17, 37, 31, 0.22);
+  border-radius: 999px;
+  gap: 7px;
+  align-items: center;
+  color: #174b38;
+  background: rgba(248, 247, 242, 0.9);
+  box-shadow: 0 8px 24px rgba(34, 64, 54, 0.09);
+  font-size: 12px;
+  font-weight: 760;
+  text-decoration: none;
+  backdrop-filter: blur(12px);
+}
+
+.example-active.example-immersive .immersive-page > .immersive-overview-link:hover,
+.example-active.example-immersive .immersive-page > .immersive-overview-link:focus-visible {
+  border-color: rgba(47, 138, 104, 0.58);
+  color: #063b26;
+  background: rgba(255, 255, 255, 0.96);
+  outline: none;
+}
+
 .example-active.example-immersive .immersive-page > .tabs {
   position: fixed;
   z-index: 40;
-  top: 10px;
+  top: 52px;
   right: 10px;
   width: max-content;
   opacity: 0;

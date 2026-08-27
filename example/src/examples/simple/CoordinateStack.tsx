@@ -17,11 +17,14 @@ import { CanvasSurface, colors, rgba, sceneCanvasArea } from "../../components/D
 import { useI18n } from "../../i18n"
 import {
   clippedRectEdges,
+  containsRect,
+  correspondingRectCorners,
   contentReferenceRange,
   formatPoint,
   projectContentRect,
   projectRectToRange,
   type CoordinateProbe,
+  visibleContentRange,
 } from "./coordinateLabModel"
 
 const STACK_WIDTH = 240
@@ -57,10 +60,16 @@ type PlaneRuntime = PlaneDefinition & {
   value: StayText
   shape: Rectangle
   shapeEdges: [Line, Line, Line, Line]
+  canvasDomEdges?: [Line, Line, Line, Line]
+  viewportFill?: Rectangle
+  viewportEdges?: [Line, Line, Line, Line]
+  viewportLabel?: StayText
 }
 
 type StackRuntime = {
   planes: Record<PlaneName, PlaneRuntime>
+  clientViewLinks: [Line, Line, Line, Line]
+  viewContentLinks: [Line, Line, Line, Line]
   rays: [Line, Line]
 }
 
@@ -188,8 +197,69 @@ function updateShapeProjection(plane: PlaneRuntime, rect: Rect) {
   })
 }
 
+function updateFrameEdges(
+  edges: [Line, Line, Line, Line] | undefined,
+  rect: Rect,
+  clip: Rect,
+  color: ReturnType<typeof rgba>,
+  lineWidth: number,
+  dash?: number[],
+) {
+  if (!edges) return
+  clippedRectEdges(rect, clip).forEach((edge, index) => {
+    edges[index].update({
+      ...(edge ?? { x1: 0, y1: 0, x2: 0, y2: 0 }),
+      strokeConfig: { color: { ...color, a: edge ? color.a : 0 }, lineWidth, dash },
+    })
+  })
+}
+
+function updateViewportProjection(plane: PlaneRuntime, rect: Rect) {
+  if (!plane.viewportFill || !plane.viewportEdges || !plane.viewportLabel) return
+  const clip = { x: 0, y: 0, width: plane.width, height: plane.height }
+  const visible = clippedRect(rect, clip)
+  plane.viewportFill.update({
+    ...(visible ?? { x: 0, y: 0, width: 0, height: 0 }),
+    fillConfig: { color: rgba(70, 143, 77, visible ? 0.045 : 0) },
+    strokeConfig: { color: rgba(70, 143, 77, 0), lineWidth: 0 },
+  })
+  updateFrameEdges(plane.viewportEdges, rect, clip, rgba(70, 143, 77, 0.78), 1.4)
+  const labelVisible = visible && visible.width >= 52 && visible.height >= 24
+  plane.viewportLabel.update({
+    x: visible ? visible.x + 7 : 0,
+    y: visible ? visible.y + 6 : 0,
+    fillConfig: { color: rgba(70, 143, 77, labelVisible ? 0.9 : 0) },
+  })
+}
+
 function gridPosition(index: number, count: number, size: number) {
   return index / (count + 1) * size
+}
+
+function updateCornerLinks(
+  lines: [Line, Line, Line, Line],
+  fromPlane: PlaneRuntime,
+  fromRect: Rect,
+  toPlane: PlaneRuntime,
+  toRect: Rect,
+  active: boolean,
+  visible = true,
+) {
+  correspondingRectCorners(fromRect, toRect).forEach(({ from, to }, index) => {
+    const start = fromPlane.child.toContentPoint(from)
+    const end = toPlane.child.toContentPoint(to)
+    lines[index].update({
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
+      strokeConfig: {
+        color: rgba(78, 89, 104, visible ? (active ? 0.2 : 0.065) : 0),
+        lineWidth: active ? 1 : 0.8,
+        dash: [4, 6],
+      },
+    })
+  })
 }
 
 function createGrid(plane: PlaneDefinition) {
@@ -314,6 +384,44 @@ function createPlaneRuntime(
     font: { size: detailSize, fontWeight: 700 },
     fillConfig: { color: colors.gray },
   })
+  const canvasDomEdges = name === "client" ? Array.from({ length: 4 }, () => new Line({
+    x1: 0,
+    y1: 0,
+    x2: 0,
+    y2: 0,
+    layer: plane.layer,
+    zIndex: 4,
+    strokeConfig: { color: rgba(74, 163, 214, 0.64), lineWidth: 1.15, dash: [5, 4] },
+  })) as [Line, Line, Line, Line] : undefined
+  const viewportFill = name === "content" ? new Rectangle({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    layer: plane.layer,
+    zIndex: 4,
+    fillConfig: { color: rgba(70, 143, 77, 0.045) },
+    strokeConfig: { color: rgba(70, 143, 77, 0), lineWidth: 0 },
+  }) : undefined
+  const viewportEdges = name === "content" ? Array.from({ length: 4 }, () => new Line({
+    x1: 0,
+    y1: 0,
+    x2: 0,
+    y2: 0,
+    layer: plane.layer,
+    zIndex: 5,
+    strokeConfig: { color: rgba(70, 143, 77, 0.78), lineWidth: 1.4 },
+  })) as [Line, Line, Line, Line] : undefined
+  const viewportLabel = name === "content" ? new StayText({
+    x: 0,
+    y: 0,
+    text: "VIEWPORT",
+    layer: plane.layer,
+    zIndex: 6,
+    textBaseline: "top",
+    font: { size: detailSize, fontWeight: 700 },
+    fillConfig: { color: rgba(70, 143, 77, 0.9) },
+  }) : undefined
   const shape = new Rectangle({
     x: 0,
     y: 0,
@@ -365,6 +473,10 @@ function createPlaneRuntime(
       originValue,
       xLabel,
       yLabel,
+      ...(canvasDomEdges ?? []),
+      ...(viewportFill ? [viewportFill] : []),
+      ...(viewportEdges ?? []),
+      ...(viewportLabel ? [viewportLabel] : []),
       shape,
       ...shapeEdges,
       dot,
@@ -373,7 +485,22 @@ function createPlaneRuntime(
   })
   return {
     labels: [title, dimension],
-    runtime: { ...plane, child, frame, shadow, title, dimension, dot, value, shape, shapeEdges },
+    runtime: {
+      ...plane,
+      child,
+      frame,
+      shadow,
+      title,
+      dimension,
+      dot,
+      value,
+      shape,
+      shapeEdges,
+      canvasDomEdges,
+      viewportFill,
+      viewportEdges,
+      viewportLabel,
+    },
   }
 }
 
@@ -396,10 +523,12 @@ export function CoordinateStack({
     if (!runtime) return
     const shapeProjection = projectContentRect(sample, currentViewport)
     const points = {} as Record<PlaneName, Coordinate>
+    const ranges = {} as Record<PlaneName, PlaneRange>
 
     for (const name of Object.keys(runtime.planes) as PlaneName[]) {
       const plane = runtime.planes[name]
       const range = planeRange(name, plane, sample, clientRange)
+      ranges[name] = range
       const value = sample[name]
       const localPoint = pointOnPlane(plane, value, range)
       const localShape = rectOnPlane(plane, shapeProjection[name], range)
@@ -425,11 +554,67 @@ export function CoordinateStack({
         text: `(${formatPoint(value)})`,
         textAlign: valueOnRight ? "left" : "right",
       })
+      if (name === "content") {
+        updateViewportProjection(
+          plane,
+          rectOnPlane(plane, visibleContentRange(sample, currentViewport), range),
+        )
+      }
+      if (name === "client") {
+        updateFrameEdges(
+          plane.canvasDomEdges,
+          rectOnPlane(plane, {
+            x: sample.surface.left,
+            y: sample.surface.top,
+            width: sample.surface.width,
+            height: sample.surface.height,
+          }, range),
+          { x: 0, y: 0, width: plane.width, height: plane.height },
+          rgba(74, 163, 214, 0.64),
+          1.15,
+          [5, 4],
+        )
+      }
       updateShapeProjection(plane, localShape)
       points[name] = plane.child.toContentPoint(localPoint)
     }
 
     const clientViewActive = mappingFocus === "view-client"
+    const clientCanvasDom = rectOnPlane(runtime.planes.client, {
+      x: sample.surface.left,
+      y: sample.surface.top,
+      width: sample.surface.width,
+      height: sample.surface.height,
+    }, ranges.client)
+    const viewPlaneRect = {
+      x: 0,
+      y: 0,
+      width: runtime.planes.view.width,
+      height: runtime.planes.view.height,
+    }
+    const visibleContent = visibleContentRange(sample, currentViewport)
+    const contentViewport = rectOnPlane(
+      runtime.planes.content,
+      visibleContent,
+      ranges.content,
+    )
+    updateCornerLinks(
+      runtime.clientViewLinks,
+      runtime.planes.client,
+      clientCanvasDom,
+      runtime.planes.view,
+      viewPlaneRect,
+      clientViewActive,
+    )
+    updateCornerLinks(
+      runtime.viewContentLinks,
+      runtime.planes.view,
+      viewPlaneRect,
+      runtime.planes.content,
+      contentViewport,
+      !clientViewActive,
+      containsRect(ranges.content, visibleContent),
+    )
     runtime.rays[0].update({
       x1: points.client.x,
       y1: points.client.y,
@@ -462,12 +647,26 @@ export function CoordinateStack({
     })
 
     const rayStyle = { color: rgba(224, 102, 61, 0.72), lineWidth: 1.4 }
+    const createMappingLinks = () => Array.from({ length: 4 }, () => new Line({
+      x1: 0,
+      y1: 0,
+      x2: 0,
+      y2: 0,
+      layer: 0,
+      zIndex: -20,
+      strokeConfig: { color: rgba(78, 89, 104, 0.12), lineWidth: 0.9, dash: [4, 6] },
+    })) as [Line, Line, Line, Line]
+    const clientViewLinks = createMappingLinks()
+    const viewContentLinks = createMappingLinks()
     const rays: [Line, Line] = [
       new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: 2, zIndex: 9, strokeConfig: rayStyle }),
       new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: 2, zIndex: 9, strokeConfig: rayStyle }),
     ]
-    tools.appendChild({ className: "coordinate-projection-ray", shape: [...rays, ...overlayLabels] })
-    runtimeRef.current = { planes, rays }
+    tools.appendChild({
+      className: "coordinate-projection-ray",
+      shape: [...clientViewLinks, ...viewContentLinks, ...rays, ...overlayLabels],
+    })
+    runtimeRef.current = { planes, clientViewLinks, viewContentLinks, rays }
     update(probe, viewport)
   }
 

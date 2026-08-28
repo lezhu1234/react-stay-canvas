@@ -16,12 +16,14 @@ export const PLANE_ASPECT_RATIO = 4 / 3
 export const PLANE_GRID_COLUMNS = 6
 export const PLANE_GRID_ROWS = 5
 
-const PLANE_NEAR_SCALE = 1.46
-const PLANE_FAR_SCALE = 0.88
-const PLANE_WIDTH_SCALES = [1.08, 1, 0.96] as const
 const CAMERA_FIELD_OF_VIEW = Math.PI / 3
-const CAMERA_NEAR_DEPTH = 4.5
-const CAMERA_FAR_DEPTH = CAMERA_NEAR_DEPTH * PLANE_NEAR_SCALE / PLANE_FAR_SCALE
+const CAMERA_POSITION_X = 4.95
+const GROUND_HEIGHT = -2.8
+const PANEL_LAYOUT = [
+  { centerX: -4.5, depth: 7.6, worldWidth: 4, worldHeight: 6.2, yaw: 0.14, logicalScale: 1 },
+  { centerX: 0.7, depth: 7.2, worldWidth: 3.7, worldHeight: 5.8, yaw: 0.2, logicalScale: 0.92 },
+  { centerX: 5.25, depth: 6.9, worldWidth: 3.4, worldHeight: 5.45, yaw: 0.25, logicalScale: 0.86 },
+] as const
 
 export type PlaneName = "client" | "view" | "content"
 export type PlaneRange = { x: number; y: number; width: number; height: number }
@@ -33,6 +35,7 @@ export type PlaneDefinition = {
   labelX: number
   labelY: number
   placement: ChildPlacement
+  worldQuad: readonly [Vector3, Vector3, Vector3, Vector3]
   fill: ReturnType<typeof rgba>
   stroke: ReturnType<typeof rgba>
 }
@@ -46,23 +49,23 @@ export type PlaneBasis = {
 
 export const planePalette = {
   client: {
-    fill: rgba(178, 224, 246, 0.2),
+    fill: rgba(90, 190, 236, 0.12),
     stroke: rgba(77, 178, 224, 0.9),
   },
   view: {
-    fill: rgba(181, 205, 255, 0.18),
+    fill: rgba(72, 114, 235, 0.13),
     stroke: rgba(67, 112, 230, 0.92),
   },
   content: {
-    fill: rgba(174, 232, 205, 0.18),
+    fill: rgba(51, 180, 121, 0.12),
     stroke: rgba(45, 151, 108, 0.92),
   },
 } as const
 
 export function createCoordinateCamera() {
   return new PerspectiveCamera({
-    position: [0, 0, 0],
-    target: [0, 0, -1],
+    position: [CAMERA_POSITION_X, 0, 0],
+    target: [CAMERA_POSITION_X, 0, -1],
     verticalFieldOfView: CAMERA_FIELD_OF_VIEW,
     near: 0.1,
     far: 20,
@@ -82,53 +85,61 @@ export function createPlaneDefinitions(
   width: number,
   height: number,
 ): Record<PlaneName, PlaneDefinition> {
-  const horizontalPadding = Math.max(12, width * 0.035)
-  const labelSpace = Math.max(34, Math.min(54, height * 0.14))
-  const bottomPadding = Math.max(12, height * 0.05)
-  const verticalOffsets = [0, height * 0.075, height * 0.145] as const
-  const minimumBlockTop = 4
-  const widthScaleTotal = PLANE_WIDTH_SCALES.reduce((total, scale) => total + scale, 0)
-  const overlapScaleTotal = 0.28
-  const widthBound = (width - horizontalPadding * 2) / (widthScaleTotal - overlapScaleTotal)
-  const projectedHeightSpace = Math.max(
-    1,
-    height - labelSpace - bottomPadding - minimumBlockTop - verticalOffsets[2],
-  )
-  const heightBound = projectedHeightSpace * PLANE_ASPECT_RATIO
-    / PLANE_NEAR_SCALE / PLANE_WIDTH_SCALES[0]
-  const baseWidth = Math.max(1, Math.min(widthBound, heightBound))
-  const planeWidths = PLANE_WIDTH_SCALES.map((scale) => baseWidth * scale)
-  const gaps = [-baseWidth * 0.14, -baseWidth * 0.14] as const
-  const planeHeight = planeWidths[0] / PLANE_ASPECT_RATIO
-  const groupWidth = planeWidths.reduce((total, planeWidth) => total + planeWidth, 0)
-    + gaps[0] + gaps[1]
-  const startX = (width - groupWidth) / 2
-  const visualPlaneTop = minimumBlockTop + labelSpace
+  const logicalBaseWidth = Math.max(120, Math.min(280, height * 0.58))
+  const aspect = width / Math.max(1, height)
+  const halfFieldHeight = Math.tan(CAMERA_FIELD_OF_VIEW / 2)
+
+  const projectWorldPoint = (point: Vector3): Coordinate => {
+    const depth = -point[2]
+    return {
+      x: ((point[0] - CAMERA_POSITION_X) / (depth * halfFieldHeight * aspect) + 1) * width / 2,
+      y: (1 - point[1] / (depth * halfFieldHeight)) * height / 2,
+    }
+  }
+
+  const panelWorldQuad = ({
+    centerX,
+    depth,
+    worldWidth,
+    worldHeight,
+    yaw,
+  }: typeof PANEL_LAYOUT[number]): [Vector3, Vector3, Vector3, Vector3] => {
+    const horizontal: Vector3 = [Math.cos(yaw), 0, -Math.sin(yaw)]
+    const halfWidth = worldWidth / 2
+    const leftBottom: Vector3 = [
+      centerX - horizontal[0] * halfWidth,
+      GROUND_HEIGHT,
+      -depth - horizontal[2] * halfWidth,
+    ]
+    const rightBottom: Vector3 = [
+      centerX + horizontal[0] * halfWidth,
+      GROUND_HEIGHT,
+      -depth + horizontal[2] * halfWidth,
+    ]
+    return [
+      [leftBottom[0], GROUND_HEIGHT + worldHeight, leftBottom[2]],
+      [rightBottom[0], GROUND_HEIGHT + worldHeight, rightBottom[2]],
+      rightBottom,
+      leftBottom,
+    ]
+  }
 
   const definition = (name: PlaneName, index: number): PlaneDefinition => {
-    const planeWidth = planeWidths[index]
-    const x = startX
-      + planeWidths.slice(0, index).reduce((total, value) => total + value, 0)
-      + gaps.slice(0, index).reduce((total, value) => total + value, 0)
-    const nearTop = visualPlaneTop + verticalOffsets[index]
-    const farTop = nearTop
-      + planeHeight * (PLANE_NEAR_SCALE - PLANE_FAR_SCALE) / 2
-    const farBottom = farTop + planeHeight * PLANE_FAR_SCALE
-    const nearBottom = nearTop + planeHeight * PLANE_NEAR_SCALE
+    const layout = PANEL_LAYOUT[index]
+    const planeWidth = logicalBaseWidth * layout.logicalScale
+    const planeHeight = planeWidth / PLANE_ASPECT_RATIO
+    const worldQuad = panelWorldQuad(layout)
+    const [topLeft, topRight, bottomRight, bottomLeft] = worldQuad.map(projectWorldPoint) as QuadPoints
     return {
       width: planeWidth,
       height: planeHeight,
-      labelX: x,
-      labelY: nearTop - Math.min(19, labelSpace * 0.44),
+      labelX: (topLeft.x + topRight.x) / 2,
+      labelY: Math.min(topLeft.y, topRight.y) + Math.max(18, height * 0.04),
       placement: projectivePlacementFromQuad(
         { x: 0, y: 0, width: planeWidth, height: planeHeight },
-        {
-          topLeft: { x, y: nearTop },
-          topRight: { x: x + planeWidth, y: farTop },
-          bottomRight: { x: x + planeWidth, y: farBottom },
-          bottomLeft: { x, y: nearBottom },
-        },
+        { topLeft, topRight, bottomRight, bottomLeft },
       ),
+      worldQuad,
       ...planePalette[name],
     }
   }
@@ -171,39 +182,14 @@ export function projectPlanePoint(
   }
 }
 
-function worldPointFromCanvas(
-  point: Readonly<Coordinate>,
-  depth: number,
-  canvasWidth: number,
-  canvasHeight: number,
-): Vector3 {
-  const normalizedX = point.x / canvasWidth * 2 - 1
-  const normalizedY = 1 - point.y / canvasHeight * 2
-  const halfHeight = depth * Math.tan(CAMERA_FIELD_OF_VIEW / 2)
-  return [
-    normalizedX * halfHeight * canvasWidth / canvasHeight,
-    normalizedY * halfHeight,
-    -depth,
-  ]
-}
-
-export function createPlaneBasis(
-  plane: PlaneDefinition,
-  canvasWidth: number,
-  canvasHeight: number,
-): PlaneBasis {
-  const topLeft = projectPlanePoint(plane, { x: 0, y: 0 })
-  const topRight = projectPlanePoint(plane, { x: plane.width, y: 0 })
-  const bottomLeft = projectPlanePoint(plane, { x: 0, y: plane.height })
-  const origin = worldPointFromCanvas(topLeft, CAMERA_NEAR_DEPTH, canvasWidth, canvasHeight)
-  const right = worldPointFromCanvas(topRight, CAMERA_FAR_DEPTH, canvasWidth, canvasHeight)
-  const bottom = worldPointFromCanvas(bottomLeft, CAMERA_NEAR_DEPTH, canvasWidth, canvasHeight)
+export function createPlaneBasis(plane: PlaneDefinition): PlaneBasis {
+  const [origin, right, , bottom] = plane.worldQuad
   const horizontal: Vector3 = [right[0] - origin[0], right[1] - origin[1], right[2] - origin[2]]
   const vertical: Vector3 = [bottom[0] - origin[0], bottom[1] - origin[1], bottom[2] - origin[2]]
   const normal: Vector3 = [
-    horizontal[1] * vertical[2] - horizontal[2] * vertical[1],
-    horizontal[2] * vertical[0] - horizontal[0] * vertical[2],
-    horizontal[0] * vertical[1] - horizontal[1] * vertical[0],
+    vertical[1] * horizontal[2] - vertical[2] * horizontal[1],
+    vertical[2] * horizontal[0] - vertical[0] * horizontal[2],
+    vertical[0] * horizontal[1] - vertical[1] * horizontal[0],
   ]
   const normalLength = Math.hypot(...normal)
   return {
@@ -216,13 +202,54 @@ export function createPlaneBasis(
 
 export function floorMeshGeometry(): MeshGeometryInput {
   const points: Vector3[] = [
-    [-6, -1.72, -3.7],
-    [6, -1.72, -3.7],
-    [18, -1.72, -14],
-    [-18, -1.72, -14],
+    [-9, GROUND_HEIGHT, -3.2],
+    [9, GROUND_HEIGHT, -3.2],
+    [24, GROUND_HEIGHT, -19],
+    [-24, GROUND_HEIGHT, -19],
   ]
   const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
   appendQuad(builder, points, [0, 1, 0])
+  return builder
+}
+
+export function contactShadowReceiverGeometry(
+  planes: readonly PlaneDefinition[],
+): MeshGeometryInput {
+  const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
+  const shadowOffset: Vector3 = [-0.62, 0.008, -0.42]
+  planes.forEach((plane) => {
+    const bottomRight = plane.worldQuad[2]
+    const bottomLeft = plane.worldQuad[3]
+    const edgeX = bottomRight[0] - bottomLeft[0]
+    const edgeZ = bottomRight[2] - bottomLeft[2]
+    const edgeLength = Math.hypot(edgeX, edgeZ)
+    const marginX = edgeX / edgeLength * 0.08
+    const marginZ = edgeZ / edgeLength * 0.08
+    const nearLeft: Vector3 = [bottomLeft[0] - marginX, bottomLeft[1] + 0.008, bottomLeft[2] - marginZ]
+    const nearRight: Vector3 = [bottomRight[0] + marginX, bottomRight[1] + 0.008, bottomRight[2] + marginZ]
+    const farRight: Vector3 = [
+      nearRight[0] + shadowOffset[0],
+      nearRight[1] + shadowOffset[1],
+      nearRight[2] + shadowOffset[2],
+    ]
+    const farLeft: Vector3 = [
+      nearLeft[0] + shadowOffset[0],
+      nearLeft[1] + shadowOffset[1],
+      nearLeft[2] + shadowOffset[2],
+    ]
+    const baseIndex = builder.positions.length / 3
+    builder.positions.push(...nearLeft, ...nearRight, ...farRight, ...farLeft)
+    builder.normals.push(
+      0, 1, 0,
+      0, 1, 0,
+      0, 0.4, 0.92,
+      0, 0.4, 0.92,
+    )
+    builder.indices.push(
+      baseIndex, baseIndex + 1, baseIndex + 2,
+      baseIndex, baseIndex + 2, baseIndex + 3,
+    )
+  })
   return builder
 }
 
@@ -235,9 +262,12 @@ export function planeWorldPoint(
   const horizontal = point.x / plane.width
   const vertical = point.y / plane.height
   return [
-    basis.origin[0] + basis.horizontal[0] * horizontal + basis.vertical[0] * vertical,
-    basis.origin[1] + basis.horizontal[1] * horizontal + basis.vertical[1] * vertical,
-    basis.origin[2] + basis.horizontal[2] * horizontal + basis.vertical[2] * vertical + depthOffset,
+    basis.origin[0] + basis.horizontal[0] * horizontal + basis.vertical[0] * vertical
+      + basis.normal[0] * depthOffset,
+    basis.origin[1] + basis.horizontal[1] * horizontal + basis.vertical[1] * vertical
+      + basis.normal[1] * depthOffset,
+    basis.origin[2] + basis.horizontal[2] * horizontal + basis.vertical[2] * vertical
+      + basis.normal[2] * depthOffset,
   ]
 }
 
@@ -258,6 +288,22 @@ function appendQuad(
   builder.indices.push(offset, offset + 1, offset + 2, offset, offset + 2, offset + 3)
 }
 
+function appendQuadWithComputedNormal(
+  builder: GeometryBuilder,
+  points: readonly [Vector3, Vector3, Vector3, Vector3],
+) {
+  const first = points[0]
+  const along = points[1].map((value, index) => value - first[index]) as [number, number, number]
+  const across = points[3].map((value, index) => value - first[index]) as [number, number, number]
+  const normal: Vector3 = [
+    along[1] * across[2] - along[2] * across[1],
+    along[2] * across[0] - along[0] * across[2],
+    along[0] * across[1] - along[1] * across[0],
+  ]
+  const length = Math.hypot(...normal)
+  appendQuad(builder, points, [normal[0] / length, normal[1] / length, normal[2] / length])
+}
+
 function appendPlaneQuad(
   builder: GeometryBuilder,
   plane: PlaneDefinition,
@@ -267,9 +313,28 @@ function appendPlaneQuad(
 ) {
   appendQuad(
     builder,
-    points.map((point) => planeWorldPoint(plane, basis, point, depthOffset)),
+    [points[0], points[3], points[2], points[1]]
+      .map((point) => planeWorldPoint(plane, basis, point, depthOffset)),
     basis.normal,
   )
+}
+
+export function planeVolumeGeometry(
+  plane: PlaneDefinition,
+  basis: PlaneBasis,
+  thickness: number,
+): MeshGeometryInput {
+  const localCorners = pointsForRect({ x: 0, y: 0, width: plane.width, height: plane.height })
+  const front = localCorners.map((point) => planeWorldPoint(plane, basis, point, thickness / 2)) as
+    [Vector3, Vector3, Vector3, Vector3]
+  const back = localCorners.map((point) => planeWorldPoint(plane, basis, point, -thickness / 2)) as
+    [Vector3, Vector3, Vector3, Vector3]
+  const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
+  appendQuadWithComputedNormal(builder, [back[0], back[1], front[1], front[0]])
+  appendQuadWithComputedNormal(builder, [back[1], back[2], front[2], front[1]])
+  appendQuadWithComputedNormal(builder, [back[2], back[3], front[3], front[2]])
+  appendQuadWithComputedNormal(builder, [back[3], back[0], front[0], front[3]])
+  return builder
 }
 
 function segmentQuad(segment: Readonly<LineSegment>, width: number): QuadPoints | undefined {
@@ -340,6 +405,7 @@ export function dashedSegments(
 export function emptyMeshGeometry(): MeshGeometryInput {
   return {
     positions: [0, 0, -100, 0, 0, -100, 0, 0, -100],
+    normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
     indices: [0, 1, 2],
   }
 }

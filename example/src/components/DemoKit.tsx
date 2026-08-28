@@ -33,6 +33,8 @@ export function DemoLayout({ children }: { children: ReactNode }) {
 }
 
 type CanvasScenePlacement = {
+  canvasHeight: number
+  canvasWidth: number
   offsetX: number
   offsetY: number
 }
@@ -91,26 +93,26 @@ function useViewportSize(viewportRef: RefObject<HTMLDivElement>, observeResize: 
 }
 
 function getScenePlacement(tools: StayTools) {
-  return scenePlacementByTools.get(tools) ?? { offsetX: 0, offsetY: 0 }
+  return scenePlacementByTools.get(tools)
 }
 
 export function scenePoint(tools: StayTools, x: number, y: number) {
-  const { offsetX, offsetY } = getScenePlacement(tools)
+  const { offsetX = 0, offsetY = 0 } = getScenePlacement(tools) ?? {}
   return { x: x + offsetX, y: y + offsetY }
 }
 
 export function sceneArea(tools: StayTools, width: number, height: number) {
-  const { offsetX, offsetY } = getScenePlacement(tools)
+  const { offsetX = 0, offsetY = 0 } = getScenePlacement(tools) ?? {}
   return { x: offsetX, y: offsetY, width, height }
 }
 
 export function sceneCanvasArea(tools: StayTools, sceneWidth: number, sceneHeight: number) {
-  const { offsetX, offsetY } = getScenePlacement(tools)
+  const placement = getScenePlacement(tools)
   return {
     x: 0,
     y: 0,
-    width: sceneWidth + offsetX * 2,
-    height: sceneHeight + offsetY * 2,
+    width: placement?.canvasWidth ?? sceneWidth,
+    height: placement?.canvasHeight ?? sceneHeight,
   }
 }
 
@@ -129,7 +131,7 @@ export function sceneLine(
 export function placeSceneChild<T extends CanvasChild>(tools: StayTools, child: T): T {
   if (placedSceneChildren.has(child)) return child
   placedSceneChildren.add(child)
-  const { offsetX, offsetY } = getScenePlacement(tools)
+  const { offsetX = 0, offsetY = 0 } = getScenePlacement(tools) ?? {}
   if (offsetX === 0 && offsetY === 0) return child
   child.moveInit()
   child.move(offsetX, offsetY)
@@ -205,6 +207,8 @@ export function CanvasSurface({
           ? fittedViewportHeight
           : Math.max(sceneHeight, viewportSize.height)
         const placement = {
+          canvasHeight: height,
+          canvasWidth: width,
           offsetX: Math.max(0, (width - sceneWidth) / 2),
           offsetY: Math.max(0, (height - sceneHeight) / 2),
         }

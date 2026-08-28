@@ -92,6 +92,8 @@ export function createRecordingWebGLContext(
     texParameteri: vi.fn(),
     pixelStorei: vi.fn(),
     uniform1i: vi.fn(),
+    uniform3fv: vi.fn(),
+    uniform1f: vi.fn(),
     texImage2D: vi.fn(),
     drawElements: vi.fn(),
   }
@@ -115,6 +117,7 @@ export function createRecordingWebGL2Context(
     deleteVertexArray: vi.fn(),
     bindVertexArray: vi.fn(),
     uniformMatrix4fv: vi.fn(),
+    uniformMatrix3fv: vi.fn(),
     uniform4fv: vi.fn(),
     depthFunc: vi.fn(),
     clearDepth: vi.fn(),

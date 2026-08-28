@@ -41,6 +41,7 @@ export type PlaneBasis = {
   origin: Vector3
   horizontal: Vector3
   vertical: Vector3
+  normal: Vector3
 }
 
 export const planePalette = {
@@ -202,10 +203,19 @@ export function createPlaneBasis(
   const origin = worldPointFromCanvas(topLeft, CAMERA_NEAR_DEPTH, canvasWidth, canvasHeight)
   const right = worldPointFromCanvas(topRight, CAMERA_FAR_DEPTH, canvasWidth, canvasHeight)
   const bottom = worldPointFromCanvas(bottomLeft, CAMERA_NEAR_DEPTH, canvasWidth, canvasHeight)
+  const horizontal: Vector3 = [right[0] - origin[0], right[1] - origin[1], right[2] - origin[2]]
+  const vertical: Vector3 = [bottom[0] - origin[0], bottom[1] - origin[1], bottom[2] - origin[2]]
+  const normal: Vector3 = [
+    horizontal[1] * vertical[2] - horizontal[2] * vertical[1],
+    horizontal[2] * vertical[0] - horizontal[0] * vertical[2],
+    horizontal[0] * vertical[1] - horizontal[1] * vertical[0],
+  ]
+  const normalLength = Math.hypot(...normal)
   return {
     origin,
-    horizontal: [right[0] - origin[0], right[1] - origin[1], right[2] - origin[2]],
-    vertical: [bottom[0] - origin[0], bottom[1] - origin[1], bottom[2] - origin[2]],
+    horizontal,
+    vertical,
+    normal: [normal[0] / normalLength, normal[1] / normalLength, normal[2] / normalLength],
   }
 }
 
@@ -226,12 +236,18 @@ export function planeWorldPoint(
 
 type GeometryBuilder = {
   positions: number[]
+  normals: number[]
   indices: number[]
 }
 
-function appendQuad(builder: GeometryBuilder, points: readonly Vector3[]) {
+function appendQuad(
+  builder: GeometryBuilder,
+  points: readonly Vector3[],
+  normal: Vector3,
+) {
   const offset = builder.positions.length / 3
   points.forEach((point) => builder.positions.push(...point))
+  points.forEach(() => builder.normals.push(...normal))
   builder.indices.push(offset, offset + 1, offset + 2, offset, offset + 2, offset + 3)
 }
 
@@ -242,8 +258,11 @@ function appendPlaneQuad(
   points: QuadPoints,
   depthOffset: number,
 ) {
-  appendQuad(builder, points.map((point) =>
-    planeWorldPoint(plane, basis, point, depthOffset)))
+  appendQuad(
+    builder,
+    points.map((point) => planeWorldPoint(plane, basis, point, depthOffset)),
+    basis.normal,
+  )
 }
 
 function segmentQuad(segment: Readonly<LineSegment>, width: number): QuadPoints | undefined {
@@ -268,7 +287,7 @@ export function rectMeshGeometry(
   depthOffset: number,
 ): MeshGeometryInput {
   if (!rect || rect.width <= 0 || rect.height <= 0) return emptyMeshGeometry()
-  const builder: GeometryBuilder = { positions: [], indices: [] }
+  const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
   appendPlaneQuad(builder, plane, basis, pointsForRect(rect), depthOffset)
   return builder
 }
@@ -280,7 +299,7 @@ export function lineMeshGeometry(
   width: number,
   depthOffset: number,
 ): MeshGeometryInput {
-  const builder: GeometryBuilder = { positions: [], indices: [] }
+  const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
   segments.forEach((segment) => {
     if (!segment) return
     const quad = segmentQuad(segment, width)
@@ -319,5 +338,10 @@ export function emptyMeshGeometry(): MeshGeometryInput {
 }
 
 export function meshColor(color: ReturnType<typeof rgba>): MeshColor {
-  return [color.r / 255, color.g / 255, color.b / 255, color.a]
+  return [
+    1 - (1 - color.r / 255) * color.a,
+    1 - (1 - color.g / 255) * color.a,
+    1 - (1 - color.b / 255) * color.a,
+    1,
+  ]
 }

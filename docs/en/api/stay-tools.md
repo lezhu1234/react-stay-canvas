@@ -30,7 +30,23 @@
 
 ## Native WebGL2 scene
 
-`tools.webgl` manages native Mesh children in the same instance and identity store as Canvas2D Children. A `StayWebGLChild` owns an ordered Mesh list on one WebGL2 layer; its Mesh geometry, model matrix, and color are CPU-authoritative and mutations invalidate that layer.
+`tools.webgl` manages native Mesh children in the same instance and identity store as Canvas2D Children. A `StayWebGLChild` owns an ordered Mesh list on one WebGL2 layer; its Mesh geometry, model matrix, and material are CPU-authoritative and mutations invalidate that layer.
+
+`Mesh` defaults to an opaque `UnlitMaterial`. Use explicit non-zero per-vertex normals with `LambertMaterial`; normals are copied, normalized in the shader, and transformed with the model matrix's inverse transpose. Material values are immutable, so replace one with `mesh.setMaterial()` rather than sharing mutable material state:
+
+```ts
+const mesh = new Mesh({
+  geometry: {
+    positions: [-1, -1, 0, 1, -1, 0, 0, 1, 0],
+    normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+    indices: [0, 1, 2],
+  },
+  material: new LambertMaterial({ color: [0.2, 0.55, 0.9, 1] }),
+})
+```
+
+Both current materials are opaque and require color alpha `1`. Transparency and glass are separate future contracts, not an interpretation of a partially transparent opaque color.
+Without any configured lights, a Lambert material renders black; add ambient or directional light explicitly instead of relying on a hidden default rig.
 
 | Method | Meaning |
 | --- | --- |
@@ -42,7 +58,7 @@
 | `webgl.exportChildren(children)` | Capture deep-owned CPU Mesh fragments with source ids |
 | `webgl.importChildren(fragment)` | Materialize new Child ids and independent Mesh state |
 
-`Mesh`, `PerspectiveCamera`, `StayWebGLChild`, and the minimal Matrix4 helpers are exported from the package root. GPU programs, VAOs, buffers, shaders, and layer runtimes remain internal. WebGL2 Child picking/raycast, lights, materials, shadows, and Canvas capture are not part of this surface yet.
+`Mesh`, `UnlitMaterial`, `LambertMaterial`, `AmbientLight`, `DirectionalLight`, `PerspectiveCamera`, `StayWebGLChild`, and the minimal Matrix4 helpers are exported from the package root. GPU programs, VAOs, buffers, shaders, and layer runtimes remain internal. WebGL2 Child picking/raycast, transparent materials, shadows, textures, and Canvas capture are not part of this surface yet.
 
 ## State and display
 
@@ -120,7 +136,7 @@ These legacy methods directly mutate Child/Shape coordinates. They are batch geo
 | `redo()` | Redo one item; logs when none remain |
 | `resetHistory()` | Clear undo/redo and use the current static scene as the new baseline |
 
-Canvas2D and WebGL2 static Children participate in the same History transaction and id namespace. Camera changes are display state and are not recorded. Animated Children do not participate in history. See [Scenes and tools: History transactions](../scene-and-tools.md#history-transactions) for boundaries and examples.
+Canvas2D and WebGL2 static Children participate in the same History transaction and id namespace. Camera and Light changes are layer display state and are not recorded. Animated Children do not participate in history. See [Scenes and tools: History transactions](../scene-and-tools.md#history-transactions) for boundaries and examples.
 
 ## Animation
 
@@ -153,7 +169,7 @@ interface DrawReturn {
 
 Scene transfer captures common Shape state and independently owned style containers. It intentionally captures only the current projection of an Animated Child and is not a timeline serialization format.
 
-Native Mesh transfer is separate because it has no 2D area/placement transform: use `tools.webgl.exportChildren()` and `tools.webgl.importChildren()`. Camera state is owned by the target layer config and is not included.
+Native Mesh transfer is separate because it has no 2D area/placement transform: use `tools.webgl.exportChildren()` and `tools.webgl.importChildren()`. Camera and Light state is owned by the target layer config and is not included.
 
 ## Actions and Listeners
 

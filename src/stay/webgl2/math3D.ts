@@ -1,5 +1,6 @@
 export type Vector3 = readonly [number, number, number]
 export type Matrix4 = Float32Array
+export type Matrix3 = Float32Array
 
 function finite(value: number, name: string) {
   if (!Number.isFinite(value)) throw new TypeError(`${name} must be finite`)
@@ -54,6 +55,46 @@ export function multiplyMatrix4(first: Matrix4, second: Matrix4): Matrix4 {
     }
   }
   return result
+}
+
+/** @internal Returns the inverse-transpose of an affine model matrix's linear part. */
+export function normalMatrix3FromMatrix4(matrix: Matrix4): Matrix3 {
+  if (matrix[3] !== 0 || matrix[7] !== 0 || matrix[11] !== 0 || matrix[15] !== 1) {
+    throw new RangeError("Lambert Mesh model matrix must be affine")
+  }
+  const a00 = matrix[0]
+  const a01 = matrix[4]
+  const a02 = matrix[8]
+  const a10 = matrix[1]
+  const a11 = matrix[5]
+  const a12 = matrix[9]
+  const a20 = matrix[2]
+  const a21 = matrix[6]
+  const a22 = matrix[10]
+  const cofactor00 = a11 * a22 - a12 * a21
+  const cofactor01 = a12 * a20 - a10 * a22
+  const cofactor02 = a10 * a21 - a11 * a20
+  const determinant = a00 * cofactor00 + a01 * cofactor01 + a02 * cofactor02
+  if (!Number.isFinite(determinant) || determinant === 0) {
+    throw new RangeError("Lambert Mesh model matrix must have an invertible linear part")
+  }
+  const inverseDeterminant = 1 / determinant
+  const values = [
+    cofactor00 * inverseDeterminant,
+    (a02 * a21 - a01 * a22) * inverseDeterminant,
+    (a01 * a12 - a02 * a11) * inverseDeterminant,
+    cofactor01 * inverseDeterminant,
+    (a00 * a22 - a02 * a20) * inverseDeterminant,
+    (a02 * a10 - a00 * a12) * inverseDeterminant,
+    cofactor02 * inverseDeterminant,
+    (a01 * a20 - a00 * a21) * inverseDeterminant,
+    (a00 * a11 - a01 * a10) * inverseDeterminant,
+  ]
+  const normalMatrix = new Float32Array(values)
+  if (![...normalMatrix].every(Number.isFinite)) {
+    throw new RangeError("Lambert Mesh normal matrix exceeds Float32 range")
+  }
+  return normalMatrix
 }
 
 export function perspectiveMatrix4(

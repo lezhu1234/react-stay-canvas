@@ -3,9 +3,15 @@ import { describe, expect, it } from "vitest"
 
 import {
   identityMatrix4,
+  normalMatrix3FromMatrix4,
   translationMatrix4,
 } from "../src/stay/webgl2/math3D"
 import { Mesh } from "../src/stay/webgl2/mesh"
+import {
+  LambertMaterial,
+  UnlitMaterial,
+} from "../src/stay/webgl2/material"
+import { AmbientLight, DirectionalLight } from "../src/stay/webgl2/light"
 import { PerspectiveCamera } from "../src/stay/webgl2/perspectiveCamera"
 import { WebGL2SceneRuntime } from "../src/stay/webgl2/sceneRuntime"
 import {
@@ -21,6 +27,14 @@ const triangle = (z = 0) => ({
   ],
   indices: [0, 1, 2],
 })
+
+const litTriangle = (z = 0) => ({
+  ...triangle(z),
+  normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+})
+
+const unlit = (color: readonly [number, number, number, number]) =>
+  new UnlitMaterial({ color })
 
 const camera = () => new PerspectiveCamera({
   position: [0, 0, 3],
@@ -44,7 +58,7 @@ describe("internal WebGL2 scene runtime", () => {
     const mesh = new Mesh({
       geometry: { positions, indices: [0, 1, 2] },
       modelMatrix,
-      color: [0.1, 0.2, 0.3, 1],
+      material: unlit([0.1, 0.2, 0.3, 1]),
     })
     positions[0] = 99
     modelMatrix[12] = 99
@@ -72,27 +86,27 @@ describe("internal WebGL2 scene runtime", () => {
     canvas.height = 160
     const gl = createRecordingWebGL2Context(canvas)
     const runtime = new WebGL2SceneRuntime(gl.context)
-    const mesh = new Mesh({ geometry: triangle(), color: [0, 1, 0, 1] })
+    const mesh = new Mesh({ geometry: triangle(), material: unlit([0, 1, 0, 1]) })
 
     runtime.render([mesh], camera())
     mesh.setModelMatrix(translationMatrix4(0.2, 0, 0))
-    mesh.setColor([0, 0.8, 0.2, 1])
+    mesh.setMaterial(unlit([0, 0.8, 0.2, 1]))
     runtime.render([mesh], camera())
 
     expect(gl.spies.createProgram).toHaveBeenCalledOnce()
     expect(gl.spies.createVertexArray).toHaveBeenCalledOnce()
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(2)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(3)
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(2)
 
     mesh.setGeometry(triangle(-0.25))
     runtime.render([mesh], camera())
     expect(gl.spies.createVertexArray).toHaveBeenCalledOnce()
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(2)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(4)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(6)
 
     runtime.render([], camera())
-    expect(gl.spies.deleteBuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.deleteBuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.deleteVertexArray).toHaveBeenCalledOnce()
     runtime.dispose()
     expect(gl.spies.deleteProgram).toHaveBeenCalledOnce()
@@ -102,19 +116,19 @@ describe("internal WebGL2 scene runtime", () => {
     const canvas = document.createElement("canvas")
     const gl = createRecordingWebGL2Context(canvas)
     const runtime = new WebGL2SceneRuntime(gl.context)
-    const mesh = new Mesh({ geometry: triangle(), color: [0, 1, 0, 1] })
+    const mesh = new Mesh({ geometry: triangle(), material: unlit([0, 1, 0, 1]) })
     const changes: number[] = []
     mesh.subscribeChanges(() => changes.push(mesh.geometryRevision))
 
     runtime.render([mesh], camera())
     mesh.setGeometry(triangle())
     mesh.setModelMatrix(identityMatrix4())
-    mesh.setColor([0, 1, 0, 1])
+    mesh.setMaterial(unlit([0, 1, 0, 1]))
     runtime.render([mesh], camera())
 
     expect(changes).toEqual([])
     expect(mesh.geometryRevision).toBe(0)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(2)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(3)
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(2)
     runtime.dispose()
   })
@@ -131,13 +145,13 @@ describe("internal WebGL2 scene runtime", () => {
 
     expect(() => runtime.render([mesh], camera()))
       .toThrow("Mesh geometry upload")
-    expect(gl.spies.deleteBuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.deleteBuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.deleteVertexArray).toHaveBeenCalledOnce()
 
     runtime.render([mesh], camera())
     expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(2)
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(4)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(4)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(6)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(6)
     expect(gl.spies.drawElements).toHaveBeenCalledOnce()
     runtime.dispose()
   })
@@ -159,8 +173,8 @@ describe("internal WebGL2 scene runtime", () => {
 
     runtime.render([mesh], camera())
     expect(gl.spies.createVertexArray).toHaveBeenCalledOnce()
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(2)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(6)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(9)
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(2)
     runtime.dispose()
   })
@@ -171,11 +185,11 @@ describe("internal WebGL2 scene runtime", () => {
     canvas.height = 120
     const gl = createRecordingWebGL2Context(canvas)
     const runtime = new WebGL2SceneRuntime(gl.context)
-    const near = new Mesh({ geometry: triangle(), color: [0, 1, 0, 1] })
+    const near = new Mesh({ geometry: triangle(), material: unlit([0, 1, 0, 1]) })
     const far = new Mesh({
       geometry: triangle(),
       modelMatrix: translationMatrix4(0, 0, -1),
-      color: [1, 0, 0, 1],
+      material: unlit([1, 0, 0, 1]),
     })
 
     runtime.render([near, far], camera())
@@ -209,10 +223,82 @@ describe("internal WebGL2 scene runtime", () => {
 
     expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
     expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(2)
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(6)
     expect(gl.spies.deleteProgram).not.toHaveBeenCalled()
     runtime.dispose()
     expect(gl.spies.deleteProgram).toHaveBeenCalledOnce()
     expect(() => runtime.render([mesh], camera())).toThrow("has been disposed")
+  })
+
+  it("renders explicit normals through reusable opaque Lambert resources", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const mesh = new Mesh({
+      geometry: litTriangle(),
+      material: new LambertMaterial({ color: [0.4, 0.7, 0.9, 1] }),
+    })
+    const ambient = new AmbientLight({ intensity: 0.3 })
+    const key = new DirectionalLight({
+      directionToLight: [0, 0, 2],
+      color: [1, 0.9, 0.8],
+      intensity: 0.8,
+    })
+
+    runtime.render([mesh], camera(), [ambient, key])
+    mesh.setMaterial(new LambertMaterial({ color: [0.5, 0.8, 1, 1] }))
+    key.setIntensity(0.6)
+    runtime.render([mesh], camera(), [ambient, key])
+
+    expect(gl.spies.createProgram).toHaveBeenCalledOnce()
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(3)
+    expect(gl.spies.uniformMatrix3fv).toHaveBeenCalledTimes(2)
+    expect(gl.spies.uniform3fv).toHaveBeenCalled()
+    expect(gl.spies.uniform1i).toHaveBeenLastCalledWith(expect.anything(), 1)
+    runtime.dispose()
+  })
+
+  it("rejects incomplete Lambert CPU state before committing Mesh changes", () => {
+    expect(() => new Mesh({
+      geometry: triangle(),
+      material: new LambertMaterial(),
+    })).toThrow("requires normals")
+    expect(() => new Mesh({
+      geometry: {
+        ...triangle(),
+        normals: [1e-46, 0, 0, 0, 0, 1, 0, 0, 1],
+      },
+    })).toThrow("must remain non-zero in Float32 range")
+    const mesh = new Mesh({ geometry: litTriangle() })
+    mesh.setMaterial(new LambertMaterial())
+    expect(() => mesh.setGeometry(triangle())).toThrow("requires normals")
+    expect(mesh.copyGeometrySnapshot().normals).toBeDefined()
+    const singular = identityMatrix4()
+    singular[0] = 0
+    expect(() => mesh.setModelMatrix(singular))
+      .toThrow("invertible linear part")
+    const unstable = identityMatrix4()
+    unstable[0] = 1e-40
+    expect(() => mesh.setModelMatrix(unstable)).toThrow("exceeds Float32 range")
+    expect(mesh.getModelMatrix()).toEqual(identityMatrix4())
+    expect(() => new UnlitMaterial({ color: [1, 1, 1, 0.5] }))
+      .toThrow("alpha must be 1")
+    expect(() => mesh.setMaterial({
+      kind: "lambert",
+      color: [1, 1, 1, 1],
+    } as never)).toThrow("must be an UnlitMaterial or LambertMaterial")
+  })
+
+  it("derives an inverse-transpose normal matrix for non-uniform scale", () => {
+    const model = identityMatrix4()
+    model[0] = 2
+    model[5] = 3
+    model[10] = 4
+    expect(normalMatrix3FromMatrix4(model)).toEqual(new Float32Array([
+      0.5, 0, 0,
+      0, 1 / 3, 0,
+      0, 0, 0.25,
+    ]))
   })
 })

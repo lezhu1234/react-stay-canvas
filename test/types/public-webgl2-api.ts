@@ -1,9 +1,13 @@
 import {
+  AmbientLight,
+  DirectionalLight,
+  LambertMaterial,
   Mesh,
   PerspectiveCamera,
   StayWebGLChild,
   type StayTools,
   type StayWebGLSceneFragment,
+  type WebGL2LayerConfig,
   translationMatrix4,
 } from "react-stay-canvas"
 
@@ -14,11 +18,18 @@ camera.setProjection(Math.PI / 3, 0.1, 20)
 const mesh = new Mesh({
   geometry: {
     positions: [-0.8, -0.8, 0, 0.8, -0.8, 0, 0, 0.8, 0],
+    normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
     indices: [0, 1, 2],
   },
-  color: [0.2, 0.5, 0.9, 1],
+  material: new LambertMaterial({ color: [0.2, 0.5, 0.9, 1] }),
 })
 mesh.setModelMatrix(translationMatrix4(0.2, 0, 0))
+mesh.setMaterial(new LambertMaterial({ color: [0.3, 0.6, 1, 1] }))
+
+const ambient = new AmbientLight({ color: [0.9, 0.95, 1], intensity: 0.3 })
+const key = new DirectionalLight({ directionToLight: [0, 0, 1], intensity: 0.8 })
+const layer: WebGL2LayerConfig = { backend: "webgl2", camera, lights: [ambient, key] }
+key.setDirectionToLight([0.2, 0.4, 1])
 
 declare const tools: StayTools
 const child: StayWebGLChild = tools.webgl.appendChild({
@@ -38,5 +49,6 @@ import { WebGL2LayerRuntime } from "react-stay-canvas"
 
 void camera
 void child
+void layer
 void WebGL2SceneRuntime
 void WebGL2LayerRuntime

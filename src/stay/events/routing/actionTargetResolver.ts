@@ -17,6 +17,7 @@ import {
   type GestureFamily,
 } from "../gesturePhases"
 import { createActionEventEnvelope } from "./actionEventEnvelope"
+import type { PointerTargetPicker } from "./pointerTargetPicker"
 
 type Store = Map<string, any>
 
@@ -45,6 +46,7 @@ export type TargetResolverContext = {
   rootChild: StayInstantChild
   store: Store
   stateStore: Store
+  pointerTargets: PointerTargetPicker<StayInstantChild>
   select: (
     selector: string | SelectorFunc,
     sortBy?: ChildSortFunction
@@ -245,24 +247,14 @@ export class ActionTargetResolver {
     if (!coordinates || !coordinateFrame) return undefined
 
     return this.context
-      .select(registration.selector, registration.sortBy)
-      .filter((child) => this.containsPointer(child, coordinates, coordinateFrame))
+      .pointerTargets.hits(
+        this.context.select(registration.selector, registration.sortBy),
+        coordinates,
+        coordinateFrame
+      )
       .find((child) =>
         this.acceptsTarget(child, eventName, sourceEvent, eventDefinition, originEvent)
       )
-  }
-
-  private containsPointer(
-    child: StayInstantChild,
-    coordinates: PointerCoordinates,
-    coordinateFrame: CoordinateFrame
-  ) {
-    if (child === this.context.rootChild) {
-      const { x, y } = coordinates.view
-      const { width, height } = coordinateFrame.viewBounds
-      return x >= 0 && y >= 0 && x <= width && y <= height
-    }
-    return child.containsPointer(coordinates.content)
   }
 
   private targetIfAccepted<T extends string>(

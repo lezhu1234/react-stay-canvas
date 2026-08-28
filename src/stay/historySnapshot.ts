@@ -1,5 +1,6 @@
 import { InstantShape } from "../shapes/instantShape"
 import { StayInstantChild } from "./children/stayInstantChild"
+import type { ChildHistoryRuntime, ChildIdentity } from "./children/runtimeContracts"
 import { StepProps } from "./types"
 import { snapshotShapeMap } from "./shapeMapSnapshot"
 import type { ChildPlacementSnapshot } from "../types/transform"
@@ -24,15 +25,30 @@ export function captureHistoryChild(child: StayInstantChild): HistoryChildSnapsh
   }
 }
 
+export const stayInstantChildHistory: ChildHistoryRuntime<
+  StayInstantChild,
+  HistoryChildSnapshot
+> = {
+  participates: (child) => child.participatesInHistory,
+  capture: captureHistoryChild,
+}
+
+export function captureChildHistory<TChild extends ChildIdentity, TSnapshot>(
+  children: Iterable<TChild>,
+  runtime: ChildHistoryRuntime<TChild, TSnapshot>
+): Map<string, TSnapshot> {
+  const snapshots = new Map<string, TSnapshot>()
+  for (const child of children) {
+    if (!runtime.participates(child)) continue
+    snapshots.set(child.id, runtime.capture(child))
+  }
+  return snapshots
+}
+
 export function captureHistoryChildren(
   children: Iterable<StayInstantChild>
 ): Map<string, HistoryChildSnapshot> {
-  const snapshots = new Map<string, HistoryChildSnapshot>()
-  for (const child of children) {
-    if (!child.participatesInHistory) continue
-    snapshots.set(child.id, captureHistoryChild(child))
-  }
-  return snapshots
+  return captureChildHistory(children, stayInstantChildHistory)
 }
 
 export function materializeHistoryShapes(

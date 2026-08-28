@@ -30,10 +30,11 @@ import { fitRect, numberAlmostEqual } from "../utils/geometry"
 import { infixExpressionParser } from "../utils/selectors"
 import { StayAnimatedChild } from "./children/stayAnimatedChild"
 import { StayInstantChild } from "./children/stayInstantChild"
+import { stayInstantChildPointHits } from "./children/stayInstantChildRuntime"
 import {
-  captureHistoryChild,
   diffHistoryChild,
   materializeHistoryShapes,
+  stayInstantChildHistory,
 } from "./historySnapshot"
 import { captureScene, materializeSceneChild } from "./sceneTransfer"
 import { normalizeManualActions } from "./events/input/manualActionAdapter"
@@ -154,12 +155,17 @@ export function stayTools(this: Stay<any>): StayTools {
       const steps = [...this.unLogedChildrenIds]
         // A removed child is absent from the store, so it remains eligible here;
         // its prior snapshot determines the remove step.
-        .filter((id) => this.getChildById(id)?.participatesInHistory ?? true)
+        .filter((id) => {
+          const child = this.getChildById(id)
+          return child ? stayInstantChildHistory.participates(child) : true
+        })
         .map((id) => {
           const child = this.getChildById(id)
           return diffHistoryChild(
             this.historyChildren.get(id),
-            child?.participatesInHistory ? captureHistoryChild(child) : undefined
+            child && stayInstantChildHistory.participates(child)
+              ? stayInstantChildHistory.capture(child)
+              : undefined
           )
         })
         .filter((o) => o) as StepProps[]
@@ -352,7 +358,7 @@ export function stayTools(this: Stay<any>): StayTools {
       // Only history-participating children are tracked for undo/redo. `child` is
       // still the live instance here, so the check is reliable even though after
       // removal getChildById()/the degraded snapshot clone no longer could be.
-      if (child.participatesInHistory) {
+      if (stayInstantChildHistory.participates(child)) {
         this.unLogedChildrenIds.add(child.id)
       }
       return new Promise<void>((resolve) => {
@@ -437,7 +443,7 @@ export function stayTools(this: Stay<any>): StayTools {
       )
 
       let hitChildren: StayInstantChild[] = selectorChildren.filter((c: StayInstantChild) =>
-        c.containsPointer(point)
+        stayInstantChildPointHits.contains(c, point)
       )
 
       if (!withRoot) {

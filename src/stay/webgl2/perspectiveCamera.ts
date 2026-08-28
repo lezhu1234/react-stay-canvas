@@ -1,0 +1,77 @@
+import {
+  lookAtMatrix4,
+  multiplyMatrix4,
+  perspectiveMatrix4,
+  type Matrix4,
+  type Vector3,
+} from "./math3D"
+
+function copyVector(vector: Vector3, name: string): Vector3 {
+  const copied: [number, number, number] = [vector[0], vector[1], vector[2]]
+  copied.forEach((value, index) => {
+    if (!Number.isFinite(value)) throw new TypeError(`${name}[${index}] must be finite`)
+  })
+  return copied
+}
+
+/** @internal CPU-authoritative perspective camera for the WebGL2 scene kernel. */
+export class PerspectiveCamera {
+  #position: Vector3
+  #target: Vector3
+  #up: Vector3
+  #verticalFieldOfView: number
+  #near: number
+  #far: number
+
+  constructor({
+    position,
+    target,
+    up = [0, 1, 0],
+    verticalFieldOfView = Math.PI / 3,
+    near = 0.1,
+    far = 1000,
+  }: {
+    position: Vector3
+    target: Vector3
+    up?: Vector3
+    verticalFieldOfView?: number
+    near?: number
+    far?: number
+  }) {
+    this.#position = copyVector(position, "camera position")
+    this.#target = copyVector(target, "camera target")
+    this.#up = copyVector(up, "camera up")
+    this.#verticalFieldOfView = verticalFieldOfView
+    this.#near = near
+    this.#far = far
+    this.getViewProjection(1)
+  }
+
+  setPose(position: Vector3, target: Vector3, up: Vector3 = this.#up) {
+    const nextPosition = copyVector(position, "camera position")
+    const nextTarget = copyVector(target, "camera target")
+    const nextUp = copyVector(up, "camera up")
+    lookAtMatrix4(nextPosition, nextTarget, nextUp)
+    this.#position = nextPosition
+    this.#target = nextTarget
+    this.#up = nextUp
+  }
+
+  setProjection(verticalFieldOfView: number, near: number, far: number) {
+    perspectiveMatrix4(verticalFieldOfView, 1, near, far)
+    this.#verticalFieldOfView = verticalFieldOfView
+    this.#near = near
+    this.#far = far
+  }
+
+  getViewProjection(aspect: number): Matrix4 {
+    const projection = perspectiveMatrix4(
+      this.#verticalFieldOfView,
+      aspect,
+      this.#near,
+      this.#far
+    )
+    const view = lookAtMatrix4(this.#position, this.#target, this.#up)
+    return multiplyMatrix4(projection, view)
+  }
+}

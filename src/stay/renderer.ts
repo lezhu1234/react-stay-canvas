@@ -85,11 +85,12 @@ export class Renderer {
             layerIndex,
             frame.visibleContentArea
           )
+          children.forEach((child) => child.layerDraw(layerIndex))
           updatedChilds.push(...plan.updatedChildren)
           executeCanvas2DRenderPlan({
             context,
             items: plan.items,
-            now,
+            getNow: () => now,
             width: this.root.width,
             height: this.root.height,
           })

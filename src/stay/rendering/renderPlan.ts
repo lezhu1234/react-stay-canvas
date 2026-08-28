@@ -22,14 +22,13 @@ export interface LayerRenderPlan {
 export function createLayerRenderPlan(
   children: readonly StayInstantChild[],
   layerIndex: number,
-  visibleContentArea: Rect
+  visibleContentArea?: Rect
 ): LayerRenderPlan {
   const collectedItems: RenderItem[] = []
   const updatedChildren: UpdatedChildShapes[] = []
 
   for (const child of children) {
     const shapes = child.getShapes(layerIndex)
-    child.layerDraw(layerIndex)
 
     if (shapes.length > 0) {
       updatedChildren.push({ child, shapes })
@@ -44,9 +43,11 @@ export function createLayerRenderPlan(
     }
   }
 
-  const items = collectedItems
-    .filter(({ child, shape }) =>
+  const visibleItems = visibleContentArea
+    ? collectedItems.filter(({ child, shape }) =>
       hasIntersection(child.getShapeBound(shape), visibleContentArea))
+    : collectedItems
+  const items = visibleItems
     .sort((first, second) =>
       first.shape.zIndex - second.shape.zIndex || first.ordinal - second.ordinal)
 

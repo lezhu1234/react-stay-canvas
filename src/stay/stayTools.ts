@@ -37,6 +37,8 @@ import {
 } from "./historySnapshot"
 import { captureScene, materializeSceneChild } from "./sceneTransfer"
 import { normalizeManualActions } from "./events/input/manualActionAdapter"
+import { executeCanvas2DRenderPlan } from "./rendering/canvas2DExecutor"
+import { createLayerRenderPlan } from "./rendering/renderPlan"
 import {
   areaPlacementMatrix,
   invertMatrix2D,
@@ -44,19 +46,6 @@ import {
 } from "./transforms/affine2D"
 import Stay from "./stay"
 import { StepProps } from "./types"
-
-interface ChildShape {
-  child: StayInstantChild
-  shape: InstantShape
-}
-
-function collectChildShapes(
-  child: StayInstantChild,
-  layerNumber: number
-): ChildShape[] {
-  return Array.from({ length: layerNumber }, (_, layer) =>
-    child.getShapes(layer).map((shape) => ({ child, shape }))).flat()
-}
 
 function placeImportedGeometry(
   child: StayInstantChild,
@@ -590,29 +579,21 @@ export function stayTools(this: Stay<any>): StayTools {
 
       const layerNumber = this.root.layers.length
       return withChildrenAtTime(children, progress, () => {
-        const shapes = children
-          .flatMap((child) => collectChildShapes(child, layerNumber))
-          .sort((first, second) =>
-            first.shape.layer - second.shape.layer || first.shape.zIndex - second.shape.zIndex)
+        const items = Array.from(
+          { length: layerNumber },
+          (_, layerIndex) => createLayerRenderPlan(children, layerIndex).items
+        ).flat()
 
         tempCtx.save()
         try {
           prepareRegionContext(tempCtx, area, targetSize)
-          shapes.forEach(({ child, shape }) => {
-            const { a, b, c, d, e, f } = child.getTransformMatrix()
-            tempCtx.save()
-            try {
-              tempCtx.transform(a, b, c, d, e, f)
-              shape.draw({
-                context: tempCtx,
-                now: Date.now(),
-                width: this.width,
-                height: this.height,
-                forchDraw: true,
-              })
-            } finally {
-              tempCtx.restore()
-            }
+          executeCanvas2DRenderPlan({
+            context: tempCtx,
+            items,
+            getNow: Date.now,
+            width: this.width,
+            height: this.height,
+            forceDraw: true,
           })
         } finally {
           tempCtx.restore()

@@ -2,11 +2,28 @@ import type { InstantShape } from "../../shapes/instantShape"
 import type { Rect } from "../../types/geometry"
 import { hasIntersection } from "../../utils/geometry"
 import type { StayInstantChild } from "../children/stayInstantChild"
+import type { FiniteProjectiveMapping } from "../transforms/projective2D"
+
+export interface ProjectiveMesh {
+  readonly columns: number
+  readonly rows: number
+}
+
+export interface ProjectiveRenderProjection {
+  readonly mapping: FiniteProjectiveMapping
+  readonly mesh: ProjectiveMesh
+}
+
+export interface ResolveProjectiveRenderProjection {
+  (child: StayInstantChild, shape: InstantShape):
+    ProjectiveRenderProjection | undefined
+}
 
 export interface RenderItem {
   readonly child: StayInstantChild
   readonly shape: InstantShape
   readonly ordinal: number
+  readonly projection?: ProjectiveRenderProjection
 }
 
 export interface UpdatedChildShapes {
@@ -22,7 +39,8 @@ export interface LayerRenderPlan {
 export function createLayerRenderPlan(
   children: readonly StayInstantChild[],
   layerIndex: number,
-  visibleContentArea?: Rect
+  visibleContentArea?: Rect,
+  resolveProjection?: ResolveProjectiveRenderProjection
 ): LayerRenderPlan {
   const collectedItems: RenderItem[] = []
   const updatedChildren: UpdatedChildShapes[] = []
@@ -39,13 +57,16 @@ export function createLayerRenderPlan(
         child,
         shape,
         ordinal: collectedItems.length,
+        projection: resolveProjection?.(child, shape),
       })
     }
   }
 
   const visibleItems = visibleContentArea
-    ? collectedItems.filter(({ child, shape }) =>
-      hasIntersection(child.getShapeBound(shape), visibleContentArea))
+    ? collectedItems.filter(({ child, shape, projection }) => hasIntersection(
+      projection?.mapping.contentBounds ?? child.getShapeBound(shape),
+      visibleContentArea
+    ))
     : collectedItems
   const items = visibleItems
     .sort((first, second) =>

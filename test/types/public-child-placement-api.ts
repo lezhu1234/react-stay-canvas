@@ -1,14 +1,17 @@
 import {
+  projectivePlacementFromQuad,
   Rectangle,
   type ChildPlacement,
   type ChildPlacementSnapshot,
   type ProjectiveMatrix2D,
   type StayInstantChild,
   type StayTools,
+  type ViewPoint,
 } from "react-stay-canvas"
 
 declare const tools: StayTools
 declare const child: StayInstantChild
+declare const viewPoint: ViewPoint
 
 const projectiveMatrix: ProjectiveMatrix2D = {
   m00: 1, m01: 0, m02: 20,
@@ -21,6 +24,25 @@ const projective: ChildPlacement = {
   matrix: projectiveMatrix,
   domain: { x: 0, y: 0, width: 100, height: 80 },
 }
+const projectiveFromQuad: ChildPlacement = projectivePlacementFromQuad(
+  { x: 0, y: 0, width: 100, height: 80 },
+  {
+    topLeft: { x: 20, y: 10 },
+    topRight: { x: 140, y: 20 },
+    bottomRight: { x: 130, y: 110 },
+    bottomLeft: { x: 10, y: 100 },
+  }
+)
+projectivePlacementFromQuad(
+  { x: 0, y: 0, width: 100, height: 80 },
+  {
+    // @ts-expect-error Projective target corners are Content points, not View points.
+    topLeft: viewPoint,
+    topRight: { x: 140, y: 20 },
+    bottomRight: { x: 130, y: 110 },
+    bottomLeft: { x: 10, y: 100 },
+  }
+)
 
 tools.appendChild({
   className: "affine",
@@ -45,3 +67,4 @@ child.setTransform({ x: 10 })
 child.transform
 
 void snapshot
+void projectiveFromQuad

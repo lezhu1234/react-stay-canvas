@@ -78,19 +78,21 @@ const content = local && plane.toContentPoint(local)
 
 `x`、`y`、`origin`、缩放、旋转和倾斜共同定义非破坏性的仿射 placement。旋转和倾斜使用角度制。矩阵按 `translate(x, y) · translate(origin) · rotate · skew · scale · translate(-origin)` 组合。`scaleX`、`scaleY` 默认是 `1`，其余值默认是 `0`。
 
-高级仿射调用方可以传 `{ type: "affine", matrix: { a, b, c, d, e, f } }`。透视平面使用一份 projective 矩阵及其有限局部域：
+高级仿射调用方可以传 `{ type: "affine", matrix: { a, b, c, d, e, f } }`。透视平面可以把有限局部矩形映射到四个具名的 Content 顶点：
 
 ```ts
-plane.setPlacement({
-  type: "projective",
-  matrix: {
-    m00: 1, m01: 0, m02: 24,
-    m10: 0, m11: 1, m12: 18,
-    m20: 0.003, m21: -0.001, m22: 1,
-  },
-  domain: { x: 0, y: 0, width: 320, height: 180 },
-})
+plane.setPlacement(projectivePlacementFromQuad(
+  { x: 0, y: 0, width: 320, height: 180 },
+  {
+    topLeft: { x: 24, y: 18 },
+    topRight: { x: 350, y: 42 },
+    bottomRight: { x: 332, y: 210 },
+    bottomLeft: { x: 12, y: 232 },
+  }
+))
 ```
+
+`projectivePlacementFromQuad()` 返回与 `appendChild()`、`createChild()`、`setPlacement()` 相同的公开 `{ type: "projective", matrix, domain }` placement；已经持有单应矩阵的调用方仍可直接传原始 placement。四个顶点按顺时针具名，工具只负责构造并验证有限映射，不替应用决定绘制或交互行为。
 
 projective domain 必须有限、宽高为正，并始终位于齐次地平线同一侧；域外点映射为 `undefined`。`child.placement` 返回带判别字段的快照；`setPlacement()` 完整替换 placement，不合并字段。绘制、边界、命中、工具查询、事件路由、历史、场景传输和区域截图都读取同一份值。`e.point` 继续使用 Content。
 

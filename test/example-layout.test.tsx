@@ -24,8 +24,11 @@ import MotionStudioExample from "../example/src/examples/integrated/MotionStudio
 import {
   createPlaneDefinitions,
   expandRangeToAspect,
-  projectPlanePoint,
 } from "../example/src/examples/simple/CoordinateStack"
+import {
+  createFiniteProjectiveMapping,
+  mapProjectiveLocalToContentPoint,
+} from "../src/stay/transforms/projective2D"
 import CoordinatesExample from "../example/src/examples/simple/CoordinatesExample"
 import {
   clippedRectEdges,
@@ -88,31 +91,40 @@ afterEach(() => {
 
 describe("Example Canvas workspace", () => {
   it("projects coordinate planes toward a vertical perspective vanishing direction", () => {
-    const width = 240
-    const height = 180
-    const nearTop = projectPlanePoint({ x: 0, y: 0 }, width, height)
-    const nearBottom = projectPlanePoint({ x: 0, y: height }, width, height)
-    const farTop = projectPlanePoint({ x: width, y: 0 }, width, height)
-    const farBottom = projectPlanePoint({ x: width, y: height }, width, height)
-    const center = projectPlanePoint({ x: width / 2, y: height / 2 }, width, height)
+    const plane = createPlaneDefinitions(728, 180).client
+    expect(plane.placement.type).toBe("projective")
+    if (plane.placement.type !== "projective") return
+    const mapping = createFiniteProjectiveMapping(
+      plane.placement.matrix,
+      plane.placement.domain,
+    )
+    const nearTop = mapProjectiveLocalToContentPoint(mapping, { x: 0, y: 0 })!
+    const nearBottom = mapProjectiveLocalToContentPoint(mapping, { x: 0, y: plane.height })!
+    const farTop = mapProjectiveLocalToContentPoint(mapping, { x: plane.width, y: 0 })!
+    const farBottom = mapProjectiveLocalToContentPoint(mapping, {
+      x: plane.width,
+      y: plane.height,
+    })!
 
     expect(nearBottom.y - nearTop.y).toBeGreaterThan(farBottom.y - farTop.y)
     expect(nearTop.y).toBeLessThan(farTop.y)
     expect(nearBottom.y).toBeGreaterThan(farBottom.y)
-    expect(center).toEqual({ x: width / 2, y: height / 2 })
+    expect(plane.placement.matrix.m20).not.toBe(0)
   })
 
   it("fits the projected plane bounds inside a height-constrained stack", () => {
     const canvasHeight = 80
     const plane = createPlaneDefinitions(728, canvasHeight).client
-    const top = projectPlanePoint({ x: 0, y: 0 }, plane.width, plane.height)
-    const bottom = projectPlanePoint({ x: 0, y: plane.height }, plane.width, plane.height)
-    const offsetY = plane.placement.type === "affine"
-      ? plane.placement.y ?? 0
-      : 0
+    expect(plane.placement.type).toBe("projective")
+    if (plane.placement.type !== "projective") return
+    const mapping = createFiniteProjectiveMapping(
+      plane.placement.matrix,
+      plane.placement.domain,
+    )
 
-    expect(offsetY + top.y).toBeGreaterThanOrEqual(0)
-    expect(offsetY + bottom.y).toBeLessThanOrEqual(canvasHeight)
+    expect(mapping.contentBounds.y).toBeGreaterThanOrEqual(-Number.EPSILON)
+    expect(mapping.contentBounds.y + mapping.contentBounds.height)
+      .toBeLessThanOrEqual(canvasHeight + Number.EPSILON)
   })
 
   it("defines a bounded Content scene and connects all corresponding plane corners", () => {
@@ -582,6 +594,52 @@ describe("Example Canvas workspace", () => {
         .toBe("9, -31 / 40%")
     } finally {
       globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
+
+  it("keeps reporting pointer samples outside the finite coordinate planes", () => {
+    const restorePointerEvents = installPointerEvents()
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    try {
+      act(() => {
+        root?.render(<I18nProvider><CoordinatesExample /></I18nProvider>)
+      })
+
+      const liveLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")
+      const top = liveLayers[liveLayers.length - 1]
+      const surface = { left: 20, top: 30, width: top.width * 0.8, height: top.height * 0.8 }
+      const clientRect = {
+        ...surface,
+        bottom: surface.top + surface.height,
+        right: surface.left + surface.width,
+        x: surface.left,
+        y: surface.top,
+        toJSON: () => ({}),
+      } as DOMRect
+      liveLayers.forEach((layer) => {
+        vi.spyOn(layer, "getBoundingClientRect").mockReturnValue(clientRect)
+      })
+      const outside = {
+        x: clientRect.right + 80,
+        y: clientRect.bottom + 60,
+      }
+
+      act(() => {
+        top.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }))
+        top.dispatchEvent(pointer("pointerdown", clientRect.left + 40, clientRect.top + 40, {
+          button: 0,
+          buttons: 1,
+        }))
+        top.dispatchEvent(pointer("pointermove", outside.x, outside.y, { buttons: 1 }))
+      })
+
+      expect(container.querySelector(".coordinate-flow-client strong")?.textContent)
+        .toBe(`${outside.x}, ${outside.y}`)
+    } finally {
+      restorePointerEvents()
     }
   })
 

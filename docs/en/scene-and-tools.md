@@ -78,19 +78,21 @@ const content = local && plane.toContentPoint(local)
 
 `x`, `y`, `origin`, scale, rotation, and skew define one non-destructive affine placement. Rotation and skew use degrees. The matrix is composed as `translate(x, y) · translate(origin) · rotate · skew · scale · translate(-origin)`. `scaleX` and `scaleY` default to `1`; all other values default to `0`.
 
-Advanced affine callers may pass `{ type: "affine", matrix: { a, b, c, d, e, f } }`. For a perspective plane, use one projective matrix and its finite local domain:
+Advanced affine callers may pass `{ type: "affine", matrix: { a, b, c, d, e, f } }`. For a perspective plane, map its finite local rectangle to four named Content corners:
 
 ```ts
-plane.setPlacement({
-  type: "projective",
-  matrix: {
-    m00: 1, m01: 0, m02: 24,
-    m10: 0, m11: 1, m12: 18,
-    m20: 0.003, m21: -0.001, m22: 1,
-  },
-  domain: { x: 0, y: 0, width: 320, height: 180 },
-})
+plane.setPlacement(projectivePlacementFromQuad(
+  { x: 0, y: 0, width: 320, height: 180 },
+  {
+    topLeft: { x: 24, y: 18 },
+    topRight: { x: 350, y: 42 },
+    bottomRight: { x: 332, y: 210 },
+    bottomLeft: { x: 12, y: 232 },
+  }
+))
 ```
+
+`projectivePlacementFromQuad()` returns the same public `{ type: "projective", matrix, domain }` placement accepted by `appendChild()`, `createChild()`, and `setPlacement()`; callers that already own a homography may pass that raw placement directly. Corners are named in clockwise order so the helper can validate the finite mapping without making rendering or interaction decisions for the application.
 
 The projective domain must be finite, positive, and remain on one side of the homogeneous horizon. Points outside it map to `undefined`. `child.placement` returns a discriminated snapshot; `setPlacement()` replaces the complete placement rather than merging fields. Rendering, bounds, hit testing, tool queries, event routing, history, scene transfer, and region capture all read that same value. `e.point` remains in Content.
 

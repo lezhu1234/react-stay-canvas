@@ -64,6 +64,8 @@
 
 `child.setPlacement(placement)` 替换完整 placement。`child.placement` 返回快照；`child.toLocalPoint(contentPoint)` 与 `child.toContentPoint(localPoint)` 显式跨越局部边界，projective 域外返回 `undefined`。矩阵必须有限且可逆。静态 placement 会进入历史和场景传输；当前尚不支持动画 placement 插值。
 
+`projectivePlacementFromQuad(domain, quad)` 根据有限局部矩形以及具名的 `topLeft`、`topRight`、`bottomRight`、`bottomLeft` Content 顶点构造这份 projective placement。非有限、退化或跨越地平线的映射会被拒绝；已经持有单应矩阵的调用方仍可使用原始矩阵形式。
+
 ### 非破坏性视口
 
 `tools.viewport` 改变 Content 在 View 中的显示位置，不修改 Child/Shape 几何，也不产生历史记录：

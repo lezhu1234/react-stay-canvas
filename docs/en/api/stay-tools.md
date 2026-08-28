@@ -64,6 +64,8 @@ The package root also exports `ClientPoint`, `ViewPoint`, `ContentPoint`, `ViewV
 
 `child.setPlacement(placement)` replaces the complete placement. `child.placement` returns a snapshot; `child.toLocalPoint(contentPoint)` and `child.toContentPoint(localPoint)` cross the local boundary explicitly and return `undefined` outside a projective domain. Matrices must be finite and invertible. Static placement participates in history and scene transfer; animated placement interpolation is not yet supported.
 
+`projectivePlacementFromQuad(domain, quad)` constructs that projective placement from a finite local rectangle and named `topLeft`, `topRight`, `bottomRight`, and `bottomLeft` Content corners. It rejects non-finite, degenerate, or horizon-crossing mappings; raw matrices remain available for callers that already own the homography.
+
 ### Non-destructive viewport
 
 `tools.viewport` changes how Content is displayed in the View without mutating Child/Shape geometry or writing history:
@@ -80,7 +82,7 @@ The package root also exports `ClientPoint`, `ViewPoint`, `ContentPoint`, `ViewV
 
 The projection is `View = Content × scale + (x, y)`. `fit()` is an explicit one-shot operation: it does not select Children and is not rerun after append, import, or resize. Configured scale limits take precedence over fitting, while the requested bounds remain centered. Bounds may have zero width or zero height, but not both. Every method synchronously returns the new read-only snapshot; the Renderer uses one coordinate snapshot to repaint all dirty layers on the next frame.
 
-The package root exports two stateless rectangle helpers. `unionRects(rects)` returns the axis-aligned union or `undefined` for an empty iterable and preserves the input rectangle type. `fitRect(source, target)` returns the uniform scale and centered rectangle while preserving the target rectangle type. This keeps known View/Content brands intact through helper composition. Viewport fitting and region capture share this calculation; applications remain responsible for choosing which Child bounds represent their business scene.
+The package root also exports two stateless rectangle helpers. `unionRects(rects)` returns the axis-aligned union or `undefined` for an empty iterable and preserves the input rectangle type. `fitRect(source, target)` returns the uniform scale and centered rectangle while preserving the target rectangle type. This keeps known View/Content brands intact through helper composition. Viewport fitting and region capture share this calculation; applications remain responsible for choosing which Child bounds represent their business scene.
 
 ### Destructive scene transforms
 

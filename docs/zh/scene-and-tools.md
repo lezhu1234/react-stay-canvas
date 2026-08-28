@@ -52,14 +52,15 @@ if (bounds) tools.viewport.fit(bounds, { padding: 32 })
 
 库负责几何和 viewport 计算；哪些 Child 属于业务场景、何时触发适配，仍由应用决定。
 
-## 不改写几何地变换单个 Child
+## 不改写几何地放置单个 Child
 
-多 Shape 对象需要共享一套局部坐标时，可以在创建时传入语义化 transform：
+每个 Child 只拥有一份局部坐标到 Content 的 `placement`。仿射 placement 可以使用语义字段：
 
 ```ts
 const plane = tools.appendChild({
   className: "plane",
-  transform: {
+  placement: {
+    type: "affine",
     x: 180,
     y: 96,
     rotation: -6,
@@ -70,18 +71,30 @@ const plane = tools.appendChild({
   shape: [background, ...gridLines, label],
 })
 
-plane.setTransform({ x: 220, y: 120, rotation: 12 })
+plane.setPlacement({ type: "affine", x: 220, y: 120, rotation: 12 })
 const local = plane.toLocalPoint(e.point)
-const content = plane.toContentPoint(local)
+const content = local && plane.toContentPoint(local)
 ```
 
-`x`、`y`、`origin`、缩放、旋转和倾斜共同定义从局部空间到 Content 的非破坏性变换。旋转和倾斜使用角度制。语义矩阵按 `translate(x, y) · translate(origin) · rotate · skew · scale · translate(-origin)` 组合。`scaleX`、`scaleY` 默认是 `1`，其余值默认是 `0`。
+`x`、`y`、`origin`、缩放、旋转和倾斜共同定义非破坏性的仿射 placement。旋转和倾斜使用角度制。矩阵按 `translate(x, y) · translate(origin) · rotate · skew · scale · translate(-origin)` 组合。`scaleX`、`scaleY` 默认是 `1`，其余值默认是 `0`。
 
-高级调用方可以不使用语义字段，直接传 `{ matrix: { a, b, c, d, e, f } }`。原始矩阵遵循 Canvas 2D 约定；它与语义字段互斥。非有限值或不可逆矩阵会直接抛错。
+高级仿射调用方可以传 `{ type: "affine", matrix: { a, b, c, d, e, f } }`。透视平面使用一份 projective 矩阵及其有限局部域：
 
-`child.transform` 返回解析后的矩阵快照。`setTransform()` 每次替换完整变换，不会与上一次字段合并。`getBound()`、`containsPointer()`、工具查询、事件目标解析、绘制和区域截图都使用同一矩阵。`e.point` 继续使用 Content，因此普通交互不需要额外坐标字段。
+```ts
+plane.setPlacement({
+  type: "projective",
+  matrix: {
+    m00: 1, m01: 0, m02: 24,
+    m10: 0, m11: 1, m12: 18,
+    m20: 0.003, m21: -0.001, m22: 1,
+  },
+  domain: { x: 0, y: 0, width: 320, height: 180 },
+})
+```
 
-静态 Child 的 transform 变更会进入下一次 `log()` 事务。Animated Child 可以拥有一个静态 Child transform，但当前契约不包含 transform 关键帧或 transform 插值。
+projective domain 必须有限、宽高为正，并始终位于齐次地平线同一侧；域外点映射为 `undefined`。`child.placement` 返回带判别字段的快照；`setPlacement()` 完整替换 placement，不合并字段。绘制、边界、命中、工具查询、事件路由、历史、场景传输和区域截图都读取同一份值。`e.point` 继续使用 Content。
+
+静态 placement 变更会进入下一次 `log()` 事务。Animated Child 可以使用一份静态 placement，但当前不包含 placement 关键帧或插值。
 
 ## selector 查询
 
@@ -177,7 +190,7 @@ tools.redo()
 
 边界规则：
 
-- `appendChild()`、`removeChild()`、正常 Shape 变更和 `child.setTransform()` 都会把静态 Child 标记为待记录；
+- `appendChild()`、`removeChild()`、正常 Shape 变更和 `child.setPlacement()` 都会把静态 Child 标记为待记录；
 - `log()` 把从上一次快照到当前状态的变化组成一个历史项；
 - `resetHistory()` 清空 undo/redo，并把当前静态场景设为基线；
 - 多个变更后只调用一次 `log()`，它们会成为同一个撤销单位；
@@ -203,7 +216,7 @@ targetTools.importChildren(scene, {
 })
 ```
 
-目标区域与源区域必须保持相同宽高比，否则会抛出 `area not match`。每个导出 Child 片段包含 `sourceId`、`className`、`shapes` 和解析后的局部到 Content `transform`。导入会创建新的运行时 Child id；`sourceId` 只用于关联导入对象与源对象。
+目标区域与源区域必须保持相同宽高比，否则会抛出 `area not match`。每个导出 Child 片段包含 `sourceId`、`className`、`shapes` 和解析后的局部到 Content `placement`。导入会创建新的运行时 Child id；`sourceId` 只用于关联导入对象与源对象。
 
 这是场景传输路径，不是序列化格式。公共 Shape 状态和库拥有的可变样式值会被独立捕获；`shapeStore` 中的任意值仍然共享，因为库无法推断它们的所有权。Animated Child 只提供当前渲染投影，不传输时间线。
 

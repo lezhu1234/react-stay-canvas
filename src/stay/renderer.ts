@@ -3,6 +3,7 @@ import type { DrawReturn, StayDrawProps } from "../types/tools"
 import { StayInstantChild } from "./children/stayInstantChild"
 import { CoordinateSystem } from "./coordinates/coordinateSystem"
 import { executeCanvas2DRenderPlan } from "./rendering/canvas2DExecutor"
+import { resolveCanvas2DProjectiveQuality } from "./rendering/canvas2DProjectiveQuality"
 import { createLayerRenderPlan } from "./rendering/renderPlan"
 
 interface DrawLayer {
@@ -93,6 +94,21 @@ export class Renderer {
             getNow: () => now,
             width: this.root.width,
             height: this.root.height,
+            getProjectiveQuality: ({ projection }) => {
+              if (!projection) {
+                throw new Error("projective quality requires a projective RenderItem")
+              }
+              const layer = this.root.layers[layerIndex]
+              return resolveCanvas2DProjectiveQuality({
+                mapping: projection.mapping,
+                outputWidth: layer.width,
+                outputHeight: layer.height,
+                contentScaleX:
+                  layer.width / this.root.width * frame.contentToView.scale,
+                contentScaleY:
+                  layer.height / this.root.height * frame.contentToView.scale,
+              })
+            },
           })
         })
       }

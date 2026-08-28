@@ -5,7 +5,7 @@ import {
   Polygon,
   StayCanvas,
   StayText,
-  type ChildTransform,
+  type ChildPlacement,
   type Coordinate,
   type Rect,
   type StayInstantChild,
@@ -47,7 +47,7 @@ type PlaneDefinition = {
   labelX: number
   labelY: number
   layer: number
-  transform: ChildTransform
+  placement: ChildPlacement
   fill: ReturnType<typeof rgba>
   stroke: ReturnType<typeof rgba>
 }
@@ -97,7 +97,7 @@ export function projectPlanePoint(
   width: number,
   height: number,
 ): Coordinate {
-  // Child transforms stay affine; this display-only warp adds depth without changing coordinate ownership.
+  // This affine placement remains separate from the display-only depth warp.
   const horizontalProgress = point.x / Math.max(1, width)
   const verticalScale = PLANE_NEAR_SCALE
     + (PLANE_FAR_SCALE - PLANE_NEAR_SCALE) * horizontalProgress
@@ -160,7 +160,7 @@ export function createPlaneDefinitions(width: number, height: number): Record<Pl
       labelX: x,
       labelY,
       layer: index,
-      transform: { x, y: planeY },
+      placement: { type: "affine", x, y: planeY },
       ...planePalette[name],
     }
   }
@@ -305,8 +305,8 @@ function updateCornerLinks(
   visible = true,
 ) {
   correspondingRectCorners(fromRect, toRect).forEach(({ from, to }, index) => {
-    const start = fromPlane.child.toContentPoint(projectPoint(fromPlane, from))
-    const end = toPlane.child.toContentPoint(projectPoint(toPlane, to))
+    const start = fromPlane.child.toContentPoint(projectPoint(fromPlane, from))!
+    const end = toPlane.child.toContentPoint(projectPoint(toPlane, to))!
     lines[index].update({
       x1: start.x,
       y1: start.y,
@@ -526,7 +526,7 @@ function createPlaneRuntime(
   })
   const child = tools.appendChild({
     className: `coordinate-plane-${name}`,
-    transform: plane.transform,
+    placement: plane.placement,
     shape: [
       shadow,
       frame,
@@ -642,7 +642,7 @@ export function CoordinateStack({
         )
       }
       updateShapeProjection(plane, localShape)
-      points[name] = plane.child.toContentPoint(projectedPoint)
+      points[name] = plane.child.toContentPoint(projectedPoint)!
     }
 
     const clientViewActive = mappingFocus === "view-client"

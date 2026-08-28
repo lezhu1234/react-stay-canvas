@@ -107,7 +107,9 @@ describe("Example Canvas workspace", () => {
     const plane = createPlaneDefinitions(728, canvasHeight).client
     const top = projectPlanePoint({ x: 0, y: 0 }, plane.width, plane.height)
     const bottom = projectPlanePoint({ x: 0, y: plane.height }, plane.width, plane.height)
-    const offsetY = plane.transform.y ?? 0
+    const offsetY = plane.placement.type === "affine"
+      ? plane.placement.y ?? 0
+      : 0
 
     expect(offsetY + top.y).toBeGreaterThanOrEqual(0)
     expect(offsetY + bottom.y).toBeLessThanOrEqual(canvasHeight)

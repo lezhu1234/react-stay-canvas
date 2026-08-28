@@ -38,12 +38,16 @@ import {
 import { captureScene, materializeSceneChild } from "./sceneTransfer"
 import { normalizeManualActions } from "./events/input/manualActionAdapter"
 import { executeCanvas2DRenderPlan } from "./rendering/canvas2DExecutor"
+import { resolveCanvas2DProjectiveQuality } from "./rendering/canvas2DProjectiveQuality"
 import { createLayerRenderPlan } from "./rendering/renderPlan"
 import {
   areaPlacementMatrix,
   invertMatrix2D,
-  multiplyMatrix2D,
 } from "./transforms/affine2D"
+import {
+  copyChildPlacementInput,
+  placeChildPlacement,
+} from "./placements/childPlacement"
 import Stay from "./stay"
 import { StepProps } from "./types"
 
@@ -109,11 +113,11 @@ export function stayTools(this: Stay<any>): StayTools {
         afterDrawCallback,
       })
     },
-    createChild: ({ id, className, transform }: CreateChildProps) => {
+    createChild: ({ id, className, placement }: CreateChildProps) => {
       const child = new StayAnimatedChild({
         id,
         className,
-        transform,
+        placement,
         canvas: this.root,
       })
       this.pushToChildren(child)
@@ -186,7 +190,7 @@ export function stayTools(this: Stay<any>): StayTools {
             id: stepChild.id,
             shape: materializeHistoryShapes(stepChild.shape),
             className: stepChild.className,
-            transform: { matrix: stepChild.transform },
+            placement: copyChildPlacementInput(stepChild.placement),
           })
         } else if (step.action === "remove") {
           this.tools.removeChild(stepChild.id)
@@ -196,7 +200,7 @@ export function stayTools(this: Stay<any>): StayTools {
 
           child.update({
             shape: materializeHistoryShapes(stepChild.shape),
-            transform: stepChild.transform,
+            placement: stepChild.placement,
           })
         }
       })
@@ -231,17 +235,17 @@ export function stayTools(this: Stay<any>): StayTools {
             id: stepChild.id,
             shape: materializeHistoryShapes(stepChild.shape),
             className: stepChild.className,
-            transform: { matrix: stepChild.transform },
+            placement: copyChildPlacementInput(stepChild.placement),
           })
         } else if (step.action === "update") {
-          if (!stepChild.beforeShape || !stepChild.beforeTransform) {
+          if (!stepChild.beforeShape || !stepChild.beforePlacement) {
             throw new Error("update history step requires before state")
           }
 
           this.getChildById(stepChild.id)!.update({
             className: stepChild.beforeName || stepChild.className,
             shape: materializeHistoryShapes(stepChild.beforeShape),
-            transform: stepChild.beforeTransform,
+            placement: stepChild.beforePlacement,
           })
           // this.tools.updateChild({
           //   child: this.getChildById(stepChild.id)!,
@@ -319,13 +323,13 @@ export function stayTools(this: Stay<any>): StayTools {
       id,
       className,
       shape,
-      transform,
+      placement,
     }: AppendChildProps<T>) => {
       const child = new StayInstantChild<T>({
         id,
         className,
         shape,
-        transform,
+        placement,
         canvas: this.root,
         onShapeChange: (childId) => this.markHistoryChildChanged(childId),
       })
@@ -544,17 +548,17 @@ export function stayTools(this: Stay<any>): StayTools {
           scale,
           { x: targetArea.x, y: targetArea.y }
         )
-        importedChild.setTransform({
-          matrix: multiplyMatrix2D(
-            multiplyMatrix2D(placement, fragment.transform),
-            inversePlacement
-          ),
-        })
+        const importedPlacement = placeChildPlacement(
+          fragment.placement,
+          placement,
+          inversePlacement
+        )
+        importedChild.setPlacement(copyChildPlacementInput(importedPlacement))
         this.tools.appendChild({
           id: importedChild.id,
           shape: importedChild.shapeMap,
           className: importedChild.className,
-          transform: { matrix: importedChild.transform },
+          placement: copyChildPlacementInput(importedChild.placement),
         })
       })
     },
@@ -594,6 +598,18 @@ export function stayTools(this: Stay<any>): StayTools {
             width: this.width,
             height: this.height,
             forceDraw: true,
+            getProjectiveQuality: ({ projection }) => {
+              if (!projection) {
+                throw new Error("projective quality requires a projective RenderItem")
+              }
+              return resolveCanvas2DProjectiveQuality({
+                mapping: projection.mapping,
+                outputWidth: tempCanvas.width,
+                outputHeight: tempCanvas.height,
+                contentScaleX: targetSize.width / area.width,
+                contentScaleY: targetSize.height / area.height,
+              })
+            },
           })
         } finally {
           tempCtx.restore()

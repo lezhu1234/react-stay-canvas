@@ -52,7 +52,7 @@ Shape 的 `layer` 从 0 开始。负索引会从末层换算，例如 `-1` 表�
 
 ### recreateOnResize
 
-默认 `false` 时，有效的 width/height 变化会直接调整现有运行时。Canvas DOM、`StayTools`、Child、Shape、transform、历史、状态、listener 和 viewport 状态都保留原来的身份与值。Content 几何不会自动缩放、移动或重新布局：缩小时只会裁掉更多 Content，扩大后会显示更多 Content。Root 的命中边界跟随新的 View 尺寸，而 Root Shape 表示的 Content 边界保持不变。
+默认 `false` 时，有效的 width/height 变化会直接调整现有运行时。Canvas DOM、`StayTools`、Child、Shape、placement、历史、状态、listener 和 viewport 状态都保留原来的身份与值。Content 几何不会自动缩放、移动或重新布局：缩小时只会裁掉更多 Content，扩大后会显示更多 Content。Root 的命中边界跟随新的 View 尺寸，而 Root Shape 表示的 Content 边界保持不变。
 
 resize 会重设每个原生 Canvas 的位图，然后重新调用各层最初的 context setter，使其恢复自己负责的 context 状态。所有层都会使用新的 `ShapeDrawProps.width/height` 重绘。若 resize 时存在活动 Pointer Session，运行时会先用旧坐标帧中的最后一个点取消该会话，并给出 `cancelReason: "resize"`。
 

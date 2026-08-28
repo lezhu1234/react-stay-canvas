@@ -9,7 +9,7 @@ import type { valueof } from "./common"
 import type { ContentPoint } from "./coordinates"
 import type { Area, PointType, Size } from "./geometry"
 import type { DrawActionsValuesType } from "./shapes"
-import type { ChildTransform, Matrix2D } from "./transform"
+import type { ChildPlacement, ChildPlacementSnapshot } from "./transform"
 
 export type StayChildren = Record<string, StayInstantChild>
 
@@ -17,13 +17,13 @@ export interface AppendChildProps<T> {
   id?: string
   shape: T | T[] | Map<string, T>
   className: string
-  transform?: ChildTransform
+  placement?: ChildPlacement
 }
 
 export interface CreateChildProps {
   id?: string
   className: string
-  transform?: ChildTransform
+  placement?: ChildPlacement
 }
 
 export type updateChildProps<T extends StayInstantChild = StayInstantChild> = {
@@ -60,7 +60,7 @@ export interface SceneChildFragment<T extends InstantShape = InstantShape> {
   sourceId: string
   className: string
   shapes: Map<string, T>
-  transform: Matrix2D
+  placement: ChildPlacementSnapshot
 }
 
 export interface SceneFragment {
@@ -76,14 +76,14 @@ export interface StayInstantChildUpdateProps<T extends InstantShape> {
   id?: string
   className?: string
   shape?: T | T[] | Map<string, T>
-  transform?: Matrix2D
+  placement?: ChildPlacementSnapshot
 }
 
 export interface StayInstantChildProps<T extends InstantShape> {
   id?: string
   className: string
   shape: T | T[] | Map<string, T>
-  transform?: ChildTransform
+  placement?: ChildPlacement
   canvas: Canvas
   onShapeChange?: (childId: string) => void
 }
@@ -91,7 +91,7 @@ export interface StayInstantChildProps<T extends InstantShape> {
 export interface StayAnimatedChildProps<T extends AnimatedShape> {
   id?: string
   className: string
-  transform?: ChildTransform
+  placement?: ChildPlacement
   canvas: Canvas
 }
 

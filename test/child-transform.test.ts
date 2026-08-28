@@ -6,12 +6,14 @@ import { createStage, md } from "./helpers/stage"
 
 const blue = { r: 20, g: 90, b: 220, a: 1 }
 
-function closePoint(point: { x: number; y: number }, expected: { x: number; y: number }) {
+function closePoint(point: { x: number; y: number } | undefined, expected: { x: number; y: number }) {
+  expect(point).toBeDefined()
+  if (!point) return
   expect(point.x).toBeCloseTo(expected.x)
   expect(point.y).toBeCloseTo(expected.y)
 }
 
-describe("Child Transform2D", () => {
+describe("Child placement", () => {
   it("maps one Child between local and Content coordinates without mutating Shape geometry", () => {
     const { stage } = createStage({ width: 240, height: 180, layers: 1 })
     const shape = new Rectangle({
@@ -24,7 +26,7 @@ describe("Child Transform2D", () => {
     const child = stage.tools.appendChild({
       className: "plane",
       shape,
-      transform: { x: 100, y: 50, rotation: 90 },
+      placement: { type: "affine", x: 100, y: 50, rotation: 90 },
     })
 
     closePoint(child.toContentPoint({ x: 0, y: 0 }), { x: 100, y: 50 })
@@ -43,33 +45,188 @@ describe("Child Transform2D", () => {
     stage.destroy()
   })
 
+  it("uses one projective placement for mapping, rendering, hit testing, bounds, and history", () => {
+    const { stage } = createStage({ width: 160, height: 120, layers: 1 })
+    const matrix = {
+      m00: 1, m01: 0, m02: 20,
+      m10: 0, m11: 1, m12: 20,
+      m20: 0.005, m21: 0, m22: 1,
+    }
+    const child = stage.tools.appendChild({
+      className: "projective-plane",
+      shape: new Rectangle({
+        x: 0,
+        y: 0,
+        width: 80,
+        height: 60,
+        fillConfig: { color: blue },
+      }),
+      placement: {
+        type: "projective",
+        matrix,
+        domain: { x: 0, y: 0, width: 80, height: 60 },
+      },
+    })
+    stage.tools.log()
+
+    const content = child.toContentPoint({ x: 40, y: 30 })
+    closePoint(content, { x: 50, y: 50 / 1.2 })
+    expect(content && child.toLocalPoint(content)).toMatchObject({ x: 40, y: 30 })
+    expect(child.toContentPoint({ x: 81, y: 30 })).toBeUndefined()
+    expect(child.containsPointer(content!)).toBe(true)
+    expect(child.getBound()).toMatchObject({
+      x: expect.any(Number),
+      y: expect.any(Number),
+      width: expect.any(Number),
+      height: expect.any(Number),
+    })
+
+    stage.draw({ now: 0 })
+    expect(stage.root.contexts[0].getImageData(
+      Math.round(content!.x),
+      Math.round(content!.y),
+      1,
+      1
+    ).data[3]).toBeGreaterThan(0)
+
+    child.setPlacement({ type: "affine", x: 90, y: 30 })
+    stage.tools.log()
+    stage.tools.undo()
+    expect(child.placement).toEqual({
+      type: "projective",
+      matrix,
+      domain: { x: 0, y: 0, width: 80, height: 60 },
+    })
+    stage.tools.redo()
+    expect(child.placement).toEqual({
+      type: "affine",
+      matrix: { a: 1, b: 0, c: 0, d: 1, e: 90, f: 30 },
+    })
+    stage.destroy()
+  })
+
+  it("resolves later Child placement changes at the synchronous draw boundary", () => {
+    const { stage } = createStage({ width: 180, height: 150, layers: 1 })
+    const affineToProjective = stage.tools.appendChild({
+      className: "affine-to-projective",
+      shape: new Rectangle({
+        x: 0, y: 0, width: 20, height: 20, zIndex: 1,
+        fillConfig: { color: blue },
+      }),
+      placement: { type: "affine", x: 140, y: 10 },
+    })
+    const projectiveToAffine = stage.tools.appendChild({
+      className: "projective-to-affine",
+      shape: new Rectangle({
+        x: 0, y: 0, width: 20, height: 20, zIndex: 2,
+        fillConfig: { color: blue },
+      }),
+      placement: {
+        type: "projective",
+        matrix: {
+          m00: 1, m01: 0, m02: 20,
+          m10: 0, m11: 1, m12: 60,
+          m20: 0.002, m21: 0, m22: 1,
+        },
+        domain: { x: 0, y: 0, width: 20, height: 20 },
+      },
+    })
+    const projectiveToProjective = stage.tools.appendChild({
+      className: "projective-to-projective",
+      shape: new Rectangle({
+        x: 0, y: 0, width: 20, height: 20, zIndex: 3,
+        fillConfig: { color: blue },
+      }),
+      placement: {
+        type: "projective",
+        matrix: {
+          m00: 1, m01: 0, m02: 20,
+          m10: 0, m11: 1, m12: 110,
+          m20: 0.002, m21: 0, m22: 1,
+        },
+        domain: { x: 0, y: 0, width: 20, height: 20 },
+      },
+    })
+    stage.tools.appendChild({
+      className: "mutator",
+      shape: new Rectangle({
+        x: 0, y: 0, width: 2, height: 2, zIndex: 0,
+        stateDrawFuncMap: {
+          default: {
+            afterDraw: () => {
+              affineToProjective.setPlacement({
+                type: "projective",
+                matrix: {
+                  m00: 1, m01: 0, m02: 20,
+                  m10: 0, m11: 1, m12: 10,
+                  m20: 0.002, m21: 0, m22: 1,
+                },
+                domain: { x: 0, y: 0, width: 20, height: 20 },
+              })
+              projectiveToAffine.setPlacement({ type: "affine", x: 100, y: 60 })
+              projectiveToProjective.setPlacement({
+                type: "projective",
+                matrix: {
+                  m00: 1, m01: 0, m02: 100,
+                  m10: 0, m11: 1, m12: 110,
+                  m20: 0.002, m21: 0, m22: 1,
+                },
+                domain: { x: 0, y: 0, width: 20, height: 20 },
+              })
+            },
+          },
+        },
+      }),
+    })
+
+    stage.draw({ now: 0 })
+    const context = stage.root.contexts[0]
+    expect(context.getImageData(25, 15, 1, 1).data[3]).toBeGreaterThan(0)
+    expect(context.getImageData(105, 65, 1, 1).data[3]).toBeGreaterThan(0)
+    expect(context.getImageData(105, 115, 1, 1).data[3]).toBeGreaterThan(0)
+    expect(context.getImageData(145, 15, 1, 1).data[3]).toBe(0)
+    expect(context.getImageData(25, 65, 1, 1).data[3]).toBe(0)
+    expect(context.getImageData(25, 115, 1, 1).data[3]).toBe(0)
+    stage.destroy()
+  })
+
   it("uses the documented semantic order and exposes only matrix snapshots", () => {
     const { stage } = createStage({ layers: 1 })
     const child = stage.tools.appendChild({
       className: "plane",
       shape: new Rectangle({ x: 0, y: 0, width: 20, height: 10 }),
-      transform: { x: 30, y: 40, rotation: 90, scaleX: 2, origin: { x: 10, y: 5 } },
+      placement: {
+        type: "affine",
+        x: 30,
+        y: 40,
+        rotation: 90,
+        scaleX: 2,
+        origin: { x: 10, y: 5 },
+      },
     })
 
     closePoint(child.toContentPoint({ x: 10, y: 5 }), { x: 40, y: 45 })
     closePoint(child.toContentPoint({ x: 20, y: 5 }), { x: 40, y: 65 })
 
-    const snapshot = child.transform as { e: number }
-    snapshot.e = 999
+    const snapshot = child.placement
+    expect(snapshot.type).toBe("affine")
+    if (snapshot.type === "affine") {
+      ;(snapshot.matrix as { e: number }).e = 999
+    }
     closePoint(child.toContentPoint({ x: 10, y: 5 }), { x: 40, y: 45 })
 
-    child.setTransform({ rotation: 90 })
+    child.setPlacement({ type: "affine", rotation: 90 })
     closePoint(child.toContentPoint({ x: 10, y: 5 }), { x: -5, y: 10 })
     stage.destroy()
   })
 
-  it("routes real pointer targets through the inverse Child transform", () => {
+  it("routes real pointer targets through the inverse Child placement", () => {
     const { stage, top } = createStage({ width: 240, height: 180 })
     const callback = vi.fn()
     const child = stage.tools.appendChild({
       className: "plane",
       shape: new Rectangle({ x: 0, y: 0, width: 30, height: 20 }),
-      transform: { x: 80, y: 40, rotation: 30, skewX: -12 },
+      placement: { type: "affine", x: 80, y: 40, rotation: 30, skewX: -12 },
     })
     stage.registerEvent({
       name: "press",
@@ -90,12 +247,12 @@ describe("Child Transform2D", () => {
     stage.destroy()
   })
 
-  it("interprets destructive movement in Content coordinates for transformed Children", () => {
+  it("interprets destructive movement in Content coordinates for affine Children", () => {
     const { stage } = createStage({ layers: 1 })
     const child = stage.tools.appendChild({
       className: "plane",
       shape: new Rectangle({ x: 0, y: 0, width: 20, height: 10 }),
-      transform: { rotation: 90 },
+      placement: { type: "affine", rotation: 90 },
     })
     const before = child.toContentPoint(child.shape.getCenterPoint())
 
@@ -107,7 +264,7 @@ describe("Child Transform2D", () => {
     stage.destroy()
   })
 
-  it("records Transform changes in history without changing Shape snapshots", () => {
+  it("records placement changes in history without changing Shape snapshots", () => {
     const { stage } = createStage({ layers: 1 })
     const child = stage.tools.appendChild({
       className: "plane",
@@ -115,23 +272,26 @@ describe("Child Transform2D", () => {
     })
     stage.tools.log()
 
-    child.setTransform({ x: 60, y: 25, rotation: 15 })
-    const changed = child.transform
+    child.setPlacement({ type: "affine", x: 60, y: 25, rotation: 15 })
+    const changed = child.placement
     stage.tools.log()
     stage.tools.undo()
 
-    expect(child.transform).toEqual({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 })
+    expect(child.placement).toEqual({
+      type: "affine",
+      matrix: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+    })
     expect(child.shape).toMatchObject({ x: 10, y: 20, width: 30, height: 40 })
     stage.tools.redo()
-    expect(child.transform).toEqual(changed)
+    expect(child.placement).toEqual(changed)
     stage.destroy()
   })
 
-  it("applies one static transform to an Animated Child projection", () => {
+  it("applies one static placement to an Animated Child projection", () => {
     const { stage } = createStage({ width: 180, height: 140, layers: 1 })
     const child = stage.tools.createChild({
       className: "animated-plane",
-      transform: { x: 70, y: 35, rotation: 90 },
+      placement: { type: "affine", x: 70, y: 35, rotation: 90 },
     })
     child.appendDefaultFrame(new Rectangle({
       x: 0,
@@ -150,7 +310,7 @@ describe("Child Transform2D", () => {
     stage.destroy()
   })
 
-  it("preserves transformed visual geometry across scaled scene import and region capture", async () => {
+  it("preserves affine visual geometry across scaled scene import and region capture", async () => {
     const source = createStage({ width: 200, height: 200, layers: 1 })
     const child = source.stage.tools.appendChild({
       className: "plane",
@@ -161,13 +321,19 @@ describe("Child Transform2D", () => {
         height: 20,
         fillConfig: { color: blue },
       }),
-      transform: { x: 45, y: 10, rotation: 25, scaleY: 0.8 },
+      placement: {
+        type: "affine",
+        x: 45,
+        y: 10,
+        rotation: 25,
+        scaleY: 0.8,
+      },
     })
     const scene = source.stage.tools.exportChildren({
       children: [child],
       area: { x: 0, y: 0, width: 100, height: 100 },
     })
-    expect(scene.children[0].transform).toEqual(child.transform)
+    expect(scene.children[0].placement).toEqual(child.placement)
 
     const target = createStage({ width: 400, height: 400, layers: 1 })
     target.stage.tools.importChildren(scene, { x: 100, y: 50, width: 200, height: 200 })
@@ -195,30 +361,99 @@ describe("Child Transform2D", () => {
     target.stage.destroy()
   })
 
-  it("rejects non-invertible semantic and raw transforms", () => {
+  it("preserves projective placement across movement, scene transfer, and region capture", async () => {
+    const source = createStage({ width: 180, height: 140, layers: 1 })
+    const child = source.stage.tools.appendChild({
+      className: "projective-plane",
+      shape: new Rectangle({
+        x: 0,
+        y: 0,
+        width: 80,
+        height: 60,
+        fillConfig: { color: blue },
+      }),
+      placement: {
+        type: "projective",
+        matrix: {
+          m00: 1, m01: 0, m02: 20,
+          m10: 0, m11: 1, m12: 20,
+          m20: 0.005, m21: 0, m22: 1,
+        },
+        domain: { x: 0, y: 0, width: 80, height: 60 },
+      },
+    })
+    const beforeMove = child.toContentPoint({ x: 40, y: 30 })!
+    child.moveInit()
+    child.move(12, -7)
+    closePoint(child.toContentPoint({ x: 40, y: 30 }), {
+      x: beforeMove.x + 12,
+      y: beforeMove.y - 7,
+    })
+
+    const scene = source.stage.tools.exportChildren({
+      children: [child],
+      area: { x: 0, y: 0, width: 100, height: 100 },
+    })
+    const payloadPlacement = structuredClone(scene.children[0].placement)
+    const target = createStage({ width: 400, height: 400, layers: 1 })
+    target.stage.tools.importChildren(scene, {
+      x: 100,
+      y: 50,
+      width: 200,
+      height: 200,
+    })
+    const imported = target.stage.tools.getChildBySelector(".projective-plane")!
+    expect(imported.placement.type).toBe("projective")
+    closePoint(imported.toContentPoint({ x: 180, y: 110 }), {
+      x: child.toContentPoint({ x: 40, y: 30 })!.x * 2 + 100,
+      y: child.toContentPoint({ x: 40, y: 30 })!.y * 2 + 50,
+    })
+    expect(scene.children[0].placement).toEqual(payloadPlacement)
+
+    const capture = await source.stage.tools.regionToTargetCanvas({
+      area: { x: 0, y: 0, width: 180, height: 140 },
+      children: [child],
+    })
+    const visible = child.toContentPoint({ x: 40, y: 30 })!
+    expect(capture.getContext("2d")?.getImageData(
+      Math.round(visible.x),
+      Math.round(visible.y),
+      1,
+      1
+    ).data[3]).toBeGreaterThan(0)
+
+    source.stage.destroy()
+    target.stage.destroy()
+  })
+
+  it("rejects non-invertible semantic and raw affine placements", () => {
     const { stage } = createStage({ layers: 1 })
     expect(() => stage.tools.appendChild({
       className: "invalid",
       shape: new Rectangle({ x: 0, y: 0, width: 10, height: 10 }),
-      transform: { scaleX: 0 },
-    })).toThrow("transform matrix must be invertible")
+      placement: { type: "affine", scaleX: 0 },
+    })).toThrow("affine placement matrix must be invertible")
     expect(() => stage.tools.appendChild({
       className: "invalid",
       shape: new Rectangle({ x: 0, y: 0, width: 10, height: 10 }),
-      transform: { matrix: { a: 1, b: 0, c: 1, d: 0, e: 0, f: 0 } },
-    })).toThrow("transform matrix must be invertible")
+      placement: {
+        type: "affine",
+        matrix: { a: 1, b: 0, c: 1, d: 0, e: 0, f: 0 },
+      },
+    })).toThrow("affine placement matrix must be invertible")
     expect(() => stage.tools.appendChild({
       className: "invalid",
       shape: new Rectangle({ x: 0, y: 0, width: 10, height: 10 }),
-      transform: { x: Number.NaN },
-    })).toThrow("transform.x must be finite")
+      placement: { type: "affine", x: Number.NaN },
+    })).toThrow("placement.x must be finite")
     expect(() => stage.tools.appendChild({
       className: "invalid",
       shape: new Rectangle({ x: 0, y: 0, width: 10, height: 10 }),
-      transform: {
+      placement: {
+        type: "affine",
         matrix: { a: Number.MIN_VALUE, b: 0, c: 0, d: 1, e: 0, f: 0 },
       },
-    })).toThrow("transform matrix must be invertible")
+    })).toThrow("affine placement matrix must be invertible")
     stage.destroy()
   })
 })

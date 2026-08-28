@@ -1,5 +1,9 @@
 import type { DrawCanvasContext } from "../../types/canvas"
-import type { RenderItem } from "./renderPlan"
+import {
+  resolveRenderItemProjection,
+  type ProjectiveMesh,
+  type RenderItem,
+} from "./renderPlan"
 import { executeCanvas2DProjectiveItem } from "./projectiveCanvas2D"
 
 interface Canvas2DRenderProps {
@@ -9,7 +13,10 @@ interface Canvas2DRenderProps {
   readonly width: number
   readonly height: number
   readonly forceDraw?: boolean
-  readonly getProjectiveRasterScale?: (item: RenderItem) => number
+  readonly getProjectiveQuality?: (item: RenderItem) => {
+    readonly mesh: ProjectiveMesh
+    readonly rasterScale: number
+  }
 }
 
 export function executeCanvas2DRenderPlan({
@@ -19,19 +26,23 @@ export function executeCanvas2DRenderPlan({
   width,
   height,
   forceDraw,
-  getProjectiveRasterScale,
+  getProjectiveQuality,
 }: Canvas2DRenderProps) {
   for (const item of items) {
-    const { child, shape, projection } = item
+    const { child, shape } = item
+    const projection = resolveRenderItemProjection(item)
     if (projection) {
-      if (!getProjectiveRasterScale) {
-        throw new Error("projective Canvas2D rendering requires an explicit raster scale")
+      if (!getProjectiveQuality) {
+        throw new Error("projective Canvas2D rendering requires explicit quality")
       }
+      const projectiveItem = { ...item, projection }
+      const quality = getProjectiveQuality(projectiveItem)
       executeCanvas2DProjectiveItem({
         context,
         shape,
         projection,
-        rasterScale: getProjectiveRasterScale(item),
+        rasterScale: quality.rasterScale,
+        mesh: quality.mesh,
         now: getNow(),
         width,
         height,
@@ -42,7 +53,7 @@ export function executeCanvas2DRenderPlan({
 
     // Resolve at execution time to retain the current synchronous callback
     // contract: an earlier Shape may update a later Child before it is drawn.
-    const { a, b, c, d, e, f } = child.getTransformMatrix()
+    const { a, b, c, d, e, f } = child.getAffinePlacementMatrix()
     context.save()
     try {
       context.transform(a, b, c, d, e, f)

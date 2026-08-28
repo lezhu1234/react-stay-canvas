@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import {
   containsProjectiveLocalPoint,
@@ -47,6 +47,25 @@ function scaleMatrix(
 }
 
 describe("finite projective mapping", () => {
+  it("does not require the exact projective runtime for affine-only use", async () => {
+    vi.stubGlobal("BigInt", undefined)
+    try {
+      const { resolveChildPlacement } = await import(
+        "../src/stay/placements/childPlacement"
+      )
+      expect(resolveChildPlacement({ type: "affine", x: 12 }).snapshot).toEqual({
+        type: "affine",
+        matrix: { a: 1, b: 0, c: 0, d: 1, e: 12, f: 0 },
+      })
+      expect(() => createFiniteProjectiveMapping(
+        perspective,
+        { x: 0, y: 0, width: 20, height: 10 }
+      )).toThrow("projective placement requires BigInt")
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it("maps local points to Content and back through an invertible homography", () => {
     const transform = createFiniteProjectiveMapping(
       perspective,

@@ -52,14 +52,15 @@ if (bounds) tools.viewport.fit(bounds, { padding: 32 })
 
 The library performs the geometry and viewport calculation, while the application decides which Children count as scene content and when fitting should run.
 
-## Transform one Child without rewriting geometry
+## Place one Child without rewriting geometry
 
-Pass a semantic transform when a multi-Shape object needs one shared local coordinate system:
+Every Child owns one local-to-Content `placement`. An affine placement accepts semantic fields:
 
 ```ts
 const plane = tools.appendChild({
   className: "plane",
-  transform: {
+  placement: {
+    type: "affine",
     x: 180,
     y: 96,
     rotation: -6,
@@ -70,18 +71,30 @@ const plane = tools.appendChild({
   shape: [background, ...gridLines, label],
 })
 
-plane.setTransform({ x: 220, y: 120, rotation: 12 })
+plane.setPlacement({ type: "affine", x: 220, y: 120, rotation: 12 })
 const local = plane.toLocalPoint(e.point)
-const content = plane.toContentPoint(local)
+const content = local && plane.toContentPoint(local)
 ```
 
-`x`, `y`, `origin`, scale, rotation, and skew define one non-destructive local-to-Content transform. Rotation and skew use degrees. The semantic matrix is composed as `translate(x, y) · translate(origin) · rotate · skew · scale · translate(-origin)`. `scaleX` and `scaleY` default to `1`; all other values default to `0`.
+`x`, `y`, `origin`, scale, rotation, and skew define one non-destructive affine placement. Rotation and skew use degrees. The matrix is composed as `translate(x, y) · translate(origin) · rotate · skew · scale · translate(-origin)`. `scaleX` and `scaleY` default to `1`; all other values default to `0`.
 
-Advanced callers may pass `{ matrix: { a, b, c, d, e, f } }` instead of semantic fields. The raw matrix follows the native Canvas 2D convention. Semantic fields and `matrix` are mutually exclusive, and non-finite or non-invertible transforms throw.
+Advanced affine callers may pass `{ type: "affine", matrix: { a, b, c, d, e, f } }`. For a perspective plane, use one projective matrix and its finite local domain:
 
-`child.transform` returns the resolved matrix snapshot. `setTransform()` replaces the complete transform; it does not merge fields with the previous call. `getBound()`, `containsPointer()`, tool queries, event target routing, rendering, and region capture all use this matrix. `e.point` remains in Content, so ordinary interactions do not gain another required coordinate field.
+```ts
+plane.setPlacement({
+  type: "projective",
+  matrix: {
+    m00: 1, m01: 0, m02: 24,
+    m10: 0, m11: 1, m12: 18,
+    m20: 0.003, m21: -0.001, m22: 1,
+  },
+  domain: { x: 0, y: 0, width: 320, height: 180 },
+})
+```
 
-Static Child transform changes participate in the next `log()` transaction. Animated Children may use one static Child transform, but transform keyframes and transform interpolation are not part of the current contract.
+The projective domain must be finite, positive, and remain on one side of the homogeneous horizon. Points outside it map to `undefined`. `child.placement` returns a discriminated snapshot; `setPlacement()` replaces the complete placement rather than merging fields. Rendering, bounds, hit testing, tool queries, event routing, history, scene transfer, and region capture all read that same value. `e.point` remains in Content.
+
+Static placement changes participate in the next `log()` transaction. Animated Children may use one static placement, but placement keyframes and interpolation are not part of the current contract.
 
 ## Selector queries
 
@@ -177,7 +190,7 @@ For an initialized editor, call `resetHistory()` after loading non-undoable back
 
 The transaction boundaries are:
 
-- `appendChild()`, `removeChild()`, normal Shape mutations, and `child.setTransform()` mark static Children as pending history changes;
+- `appendChild()`, `removeChild()`, normal Shape mutations, and `child.setPlacement()` mark static Children as pending history changes;
 - `log()` groups changes since the previous snapshot into one history item;
 - `resetHistory()` clears undo/redo and makes the current static scene the baseline;
 - several mutations followed by one `log()` become one undo unit;
@@ -203,7 +216,7 @@ targetTools.importChildren(scene, {
 })
 ```
 
-Source and target areas must have the same aspect ratio or the method throws `area not match`. Each exported Child fragment contains `sourceId`, `className`, `shapes`, and its resolved local-to-Content `transform`. Import creates a new runtime Child id; use `sourceId` only to correlate imported objects with their source objects.
+Source and target areas must have the same aspect ratio or the method throws `area not match`. Each exported Child fragment contains `sourceId`, `className`, `shapes`, and its resolved local-to-Content `placement`. Import creates a new runtime Child id; use `sourceId` only to correlate imported objects with their source objects.
 
 This is a scene-transfer path, not a serialization format. Common Shape state and library-owned mutable style values are captured independently. Arbitrary values inside `shapeStore` remain shared because the library cannot infer their ownership. Animated Children contribute their current rendered projection, not their timeline.
 

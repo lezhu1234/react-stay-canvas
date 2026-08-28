@@ -1,8 +1,11 @@
 import type { InstantShape } from "../../shapes/instantShape"
 import type { DrawCanvasContext } from "../../types/canvas"
 import type { PointType } from "../../types/geometry"
-import type { ProjectiveMatrix2D } from "../transforms/projective2D"
-import type { ProjectiveRenderProjection } from "./renderPlan"
+import type { ProjectiveMatrix2D } from "../../types/transform"
+import type {
+  ProjectiveMesh,
+  ProjectiveRenderProjection,
+} from "./renderPlan"
 import {
   positiveFinite,
   positiveInteger,
@@ -14,6 +17,7 @@ interface ProjectiveDrawProps {
   readonly context: DrawCanvasContext
   readonly shape: InstantShape
   readonly projection: ProjectiveRenderProjection
+  readonly mesh: ProjectiveMesh
   readonly rasterScale: number
   readonly now: number
   readonly width: number
@@ -137,13 +141,14 @@ function drawProjectedMesh(
   context: DrawCanvasContext,
   surface: CanvasImageSource,
   projection: ProjectiveRenderProjection,
+  mesh: ProjectiveMesh,
   rasterScale: number
 ) {
   // Mesh density is deliberately supplied by the render caller. Canvas2D only
   // performs the requested affine triangle approximation; it does not invent a
   // viewport- or backend-specific projective error tolerance.
-  const columns = positiveInteger(projection.mesh.columns, "projective mesh columns")
-  const rows = positiveInteger(projection.mesh.rows, "projective mesh rows")
+  const columns = positiveInteger(mesh.columns, "projective mesh columns")
+  const rows = positiveInteger(mesh.rows, "projective mesh rows")
   const { localDomain, localToContent } = projection.mapping
   const localPoint = (column: number, row: number) => ({
     x: localDomain.x + localDomain.width * column / columns,
@@ -188,8 +193,14 @@ function drawProjectedMesh(
 
 export function executeCanvas2DProjectiveItem(props: ProjectiveDrawProps) {
   const rasterScale = positiveFinite(props.rasterScale, "projective raster scale")
-  positiveInteger(props.projection.mesh.columns, "projective mesh columns")
-  positiveInteger(props.projection.mesh.rows, "projective mesh rows")
+  positiveInteger(props.mesh.columns, "projective mesh columns")
+  positiveInteger(props.mesh.rows, "projective mesh rows")
   const surface = rasterizeShape({ ...props, rasterScale })
-  drawProjectedMesh(props.context, surface, props.projection, rasterScale)
+  drawProjectedMesh(
+    props.context,
+    surface,
+    props.projection,
+    props.mesh,
+    rasterScale
+  )
 }

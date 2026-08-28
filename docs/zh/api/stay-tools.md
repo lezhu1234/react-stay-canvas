@@ -8,7 +8,7 @@
 
 | 方法 | 签名摘要 | 说明 |
 | --- | --- | --- |
-| `appendChild` | `({ id?, className, shape, transform? }) => StayInstantChild` | 添加静态 Child；shape 可为单个、数组或 Map |
+| `appendChild` | `({ id?, className, shape, placement? }) => StayInstantChild` | 添加静态 Child；shape 可为单个、数组或 Map |
 | `removeChild` | `(childId) => Promise<void> \| void` | 删除 Child；root 不可删除 |
 | `hasChild` | `(id) => boolean` | 按 id 判断存在 |
 | `getChildrenWithoutRoot` | `() => StayInstantChild[]` | 返回应用 Child |
@@ -58,11 +58,11 @@
 
 `tools.coordinates` 使用调用时的最新 viewport。事件中的 `e.point` 则是该次输入采样时固定下来的 Content 点；即使较早的 Listener 在同轮事件中改变 viewport，后续 Listener 看到的 `e.point` 也不会改变。
 
-### 非破坏性 Child 变换
+### 非破坏性 Child placement
 
-`appendChild()` 和 `createChild()` 可接收语义化 `{ x, y, rotation, scaleX, scaleY, skewX, skewY, origin }` transform，也可以使用高级原始 `{ matrix: { a, b, c, d, e, f } }`。旋转和倾斜使用角度制。该变换把 Child 局部 Shape 几何映射到 Content，不修改 Shape 属性。
+`appendChild()` 和 `createChild()` 接收一份可选的判别式 placement。`{ type: "affine", x, y, rotation, scaleX, scaleY, skewX, skewY, origin }` 是语义形式；`{ type: "affine", matrix: { a, b, c, d, e, f } }` 是原始矩阵形式；`{ type: "projective", matrix: { m00, ..., m22 }, domain }` 定义有限透视平面。
 
-`child.setTransform(transform)` 替换完整变换。`child.transform` 返回解析后的矩阵快照；`child.toLocalPoint(contentPoint)` 与 `child.toContentPoint(localPoint)` 用于显式跨越局部边界。矩阵必须是有限且可逆的。静态 transform 会进入历史和场景传输；当前尚不支持动画 transform 插值。
+`child.setPlacement(placement)` 替换完整 placement。`child.placement` 返回快照；`child.toLocalPoint(contentPoint)` 与 `child.toContentPoint(localPoint)` 显式跨越局部边界，projective 域外返回 `undefined`。矩阵必须有限且可逆。静态 placement 会进入历史和场景传输；当前尚不支持动画 placement 插值。
 
 ### 非破坏性视口
 
@@ -108,7 +108,7 @@
 
 | 方法 | 签名摘要 | 说明 |
 | --- | --- | --- |
-| `createChild` | `({ id?, className, transform? }) => StayAnimatedChild` | 创建带可选静态 transform 的动画 Child |
+| `createChild` | `({ id?, className, placement? }) => StayAnimatedChild` | 创建带可选静态 placement 的动画 Child |
 | `progress` | `({ timeMs, bound?, beforeDrawCallback?, afterDrawCallback? }) => DrawReturn` | 推进所有动画 Child 并立即绘制 |
 
 `DrawReturn`：
@@ -131,7 +131,7 @@ interface DrawReturn {
 | `importChildren(scene, targetArea?)` | 等比例实例化片段，并生成新的运行时 id |
 | `regionToTargetCanvas({ area, targetSize?, children, progress? })` | 把区域等比居中绘制到新的 HTMLCanvasElement；可无副作用截取动画帧 |
 
-`CaptureSceneProps` 是导出参数；`SceneFragment` 包含 `area`，以及带 `sourceId`、`className`、`shapes`、`transform` 的 Child 片段。`sourceId` 只作为关联元数据，不会复用为导入 Child 的 id。
+`CaptureSceneProps` 是导出参数；`SceneFragment` 包含 `area`，以及带 `sourceId`、`className`、`shapes`、`placement` 的 Child 片段。`sourceId` 只作为关联元数据，不会复用为导入 Child 的 id。
 
 场景传输会捕获公共 Shape 状态并隔离库拥有的样式容器。Animated Child 只捕获当前投影，不作为时间线序列化格式。
 

@@ -12,7 +12,11 @@ import {
   resolveProjectiveRasterSpec,
   type ProjectiveRasterSpec,
 } from "./projectiveRaster"
-import type { ProjectiveRenderProjection, RenderItem } from "./renderPlan"
+import {
+  resolveRenderItemProjection,
+  type ProjectiveRenderProjection,
+  type RenderItem,
+} from "./renderPlan"
 import { rasterizeWebGLAffineBatch } from "./webGLAffineBatch"
 
 interface WebGLRenderProps {
@@ -32,14 +36,6 @@ interface PreparedProjectiveItem {
   readonly raster: ProjectiveRasterSpec
   readonly vertices: Float32Array
 }
-
-interface PreparedAffineBatch {
-  readonly kind: "affine"
-  readonly items: readonly RenderItem[]
-  readonly requiresSourceOver: boolean
-}
-
-type PreparedCommand = PreparedProjectiveItem | PreparedAffineBatch
 
 interface WebGLResources {
   readonly program: WebGLProgram
@@ -331,13 +327,15 @@ function deleteResources(
 }
 
 function prepareProjectiveItem(
-  item: RenderItem & { readonly projection: ProjectiveRenderProjection },
+  item: RenderItem,
+  projection: ProjectiveRenderProjection,
   maxTextureSize: number,
   props: WebGLRenderProps
 ): PreparedProjectiveItem {
+  const projectiveItem = { ...item, projection }
   const raster = resolveProjectiveRasterSpec(
-    item.projection.mapping,
-    props.getProjectiveRasterScale(item)
+    projection.mapping,
+    props.getProjectiveRasterScale(projectiveItem)
   )
   if (raster.width > maxTextureSize || raster.height > maxTextureSize) {
     throw new RangeError(
@@ -346,10 +344,10 @@ function prepareProjectiveItem(
   }
   return {
     kind: "projective",
-    item,
+    item: projectiveItem,
     raster,
     vertices: createProjectiveClipVertices(
-      item.projection,
+      projection,
       raster,
       props.width,
       props.height,
@@ -358,63 +356,65 @@ function prepareProjectiveItem(
   }
 }
 
-function prepareCommands(props: WebGLRenderProps): PreparedCommand[] {
+interface InitialPlanValidation {
+  readonly maxTextureSize: number
+  readonly preparedProjectiveItems: ReadonlyMap<RenderItem, PreparedProjectiveItem>
+  readonly requiresSourceOver: boolean
+}
+
+function assertAffineRasterWithinTextureLimit(
+  context: WebGLRenderingContext,
+  maxTextureSize: number
+) {
+  const rasterWidth = positiveInteger(
+    context.drawingBufferWidth,
+    "WebGL affine batch raster width"
+  )
+  const rasterHeight = positiveInteger(
+    context.drawingBufferHeight,
+    "WebGL affine batch raster height"
+  )
+  if (rasterWidth > maxTextureSize || rasterHeight > maxTextureSize) {
+    throw new RangeError(
+      `affine batch raster ${rasterWidth}x${rasterHeight} exceeds WebGL texture limit ${maxTextureSize}`
+    )
+  }
+}
+
+function validateInitialPlan(props: WebGLRenderProps): InitialPlanValidation {
   const { context, items, width, height } = props
   const maxTextureSize = context.getParameter(context.MAX_TEXTURE_SIZE) as number
   positiveFinite(maxTextureSize, "WebGL maximum texture size")
   positiveFinite(width, "WebGL logical width")
   positiveFinite(height, "WebGL logical height")
 
-  const hasProjectiveItems = items.some(({ projection }) => Boolean(projection))
-  if (hasProjectiveItems) {
+  const hasStableProjectiveItems = items.some(({ projection }) => Boolean(projection))
+  if (hasStableProjectiveItems) {
     // Once a projective item splits affine drawing into intermediate passes,
     // destination-dependent composition can no longer observe one shared 2D
     // destination. Reject it before drawing rather than changing its meaning.
     items.forEach(({ shape }) => assertProjectiveShapeCanRasterize(shape))
   }
 
-  const commands: PreparedCommand[] = []
-  let affineItems: RenderItem[] = []
-  const flushAffineItems = () => {
-    if (affineItems.length === 0) return
-    commands.push({
-      kind: "affine",
-      items: affineItems,
-      requiresSourceOver: hasProjectiveItems,
-    })
-    affineItems = []
-  }
-
-  for (const item of items) {
-    if (!item.projection) {
-      affineItems.push(item)
-      continue
-    }
-    flushAffineItems()
-    commands.push(prepareProjectiveItem(
-      item as PreparedProjectiveItem["item"],
-      maxTextureSize,
-      props
-    ))
-  }
-  flushAffineItems()
-
-  if (commands.some(({ kind }) => kind === "affine")) {
-    const rasterWidth = positiveInteger(
-      context.drawingBufferWidth,
-      "WebGL affine batch raster width"
+  const preparedProjectiveItems = new Map<RenderItem, PreparedProjectiveItem>()
+  items.forEach((item) => {
+    if (!item.projection) return
+    preparedProjectiveItems.set(
+      item,
+      prepareProjectiveItem(item, item.projection, maxTextureSize, props)
     )
-    const rasterHeight = positiveInteger(
-      context.drawingBufferHeight,
-      "WebGL affine batch raster height"
-    )
-    if (rasterWidth > maxTextureSize || rasterHeight > maxTextureSize) {
-      throw new RangeError(
-        `affine batch raster ${rasterWidth}x${rasterHeight} exceeds WebGL texture limit ${maxTextureSize}`
-      )
-    }
+  })
+
+  // Only the first item's current kind is authoritative before callbacks run.
+  // Later Child-owned placements are resolved at their own draw boundaries.
+  if (items[0] && !resolveRenderItemProjection(items[0])) {
+    assertAffineRasterWithinTextureLimit(context, maxTextureSize)
   }
-  return commands
+  return {
+    maxTextureSize,
+    preparedProjectiveItems,
+    requiresSourceOver: hasStableProjectiveItems,
+  }
 }
 
 function clearTarget(context: WebGLRenderingContext) {
@@ -516,31 +516,26 @@ function drawProjectiveItem(
   uploadAndDraw(context, resources, vertices, surface, "projective draw")
 }
 
-function drawAffineBatch(
+function prepareAffineBatchSurface(
   context: WebGLRenderingContext,
-  resources: WebGLResources,
-  prepared: PreparedAffineBatch,
+  items: readonly RenderItem[],
+  requiresSourceOver: boolean,
+  maxTextureSize: number,
   props: WebGLRenderProps
 ) {
-  const surface = rasterizeWebGLAffineBatch({
+  assertAffineRasterWithinTextureLimit(context, maxTextureSize)
+  return rasterizeWebGLAffineBatch({
     targetCanvas: context.canvas,
     rasterWidth: context.drawingBufferWidth,
     rasterHeight: context.drawingBufferHeight,
     logicalWidth: props.width,
     logicalHeight: props.height,
     contentToView: props.contentToView,
-    items: prepared.items,
-    requiresSourceOver: prepared.requiresSourceOver,
+    items,
+    requiresSourceOver,
     getNow: props.getNow,
     forceDraw: props.forceDraw,
   })
-  uploadAndDraw(
-    context,
-    resources,
-    FULL_SURFACE_VERTICES,
-    surface,
-    "affine batch draw"
-  )
 }
 
 /**
@@ -554,8 +549,8 @@ export function executeWebGLRenderPlan(props: WebGLRenderProps) {
   const { context } = props
   assertContextAvailable(context)
   assertNoWebGLError(context, "pass start")
-  const commands = prepareCommands(props)
-  if (commands.length === 0) {
+  const initialPlan = validateInitialPlan(props)
+  if (props.items.length === 0) {
     clearTarget(context)
     assertNoWebGLError(context, "empty projective pass")
     return
@@ -564,13 +559,61 @@ export function executeWebGLRenderPlan(props: WebGLRenderProps) {
   const resources = createResources(context)
   try {
     configurePass(context, resources)
-    commands.forEach((command) => {
-      if (command.kind === "affine") {
-        drawAffineBatch(context, resources, command, props)
-      } else {
-        drawProjectiveItem(context, resources, command, props)
+    let index = 0
+    let projectiveSeen = false
+    while (index < props.items.length) {
+      const item = props.items[index]
+      const projection = resolveRenderItemProjection(item)
+      if (projection) {
+        assertProjectiveShapeCanRasterize(item.shape)
+        const cached = initialPlan.preparedProjectiveItems.get(item)
+        const prepared = cached?.item.projection.mapping === projection.mapping
+          ? cached
+          : prepareProjectiveItem(
+              item,
+              projection,
+              initialPlan.maxTextureSize,
+              props
+            )
+        drawProjectiveItem(context, resources, prepared, props)
+        projectiveSeen = true
+        index += 1
+        continue
       }
-    })
+
+      // Pass the whole remaining run to the rasterizer. It resolves every
+      // later Child only after earlier Shape callbacks have completed and
+      // stops at the first projective boundary actually realized.
+      const candidates = props.items.slice(index)
+      const requiresSourceOver = initialPlan.requiresSourceOver ||
+        projectiveSeen
+      const affineBatch = prepareAffineBatchSurface(
+        context,
+        candidates,
+        requiresSourceOver,
+        initialPlan.maxTextureSize,
+        props
+      )
+      if (affineBatch.consumed === 0) continue
+
+      const nextIndex = index + affineBatch.consumed
+      const realizedProjectiveBoundary = !requiresSourceOver &&
+        nextIndex < props.items.length &&
+        Boolean(resolveRenderItemProjection(props.items[nextIndex]))
+      if (realizedProjectiveBoundary && !affineBatch.consumedAllSourceOver) {
+        throw new RangeError(
+          "projective rendering currently supports source-over Shapes"
+        )
+      }
+      uploadAndDraw(
+        context,
+        resources,
+        FULL_SURFACE_VERTICES,
+        affineBatch.canvas,
+        "affine batch draw"
+      )
+      index = nextIndex
+    }
     assertContextAvailable(context)
   } finally {
     deleteResources(context, resources)

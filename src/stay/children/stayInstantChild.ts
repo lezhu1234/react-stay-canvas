@@ -5,18 +5,26 @@ import type {
 } from "../../types/children"
 import type { ContentPoint } from "../../types/coordinates"
 import type { Area, PointType, Rect } from "../../types/geometry"
-import type { ChildTransform, Matrix2D } from "../../types/transform"
+import type {
+  ChildPlacement,
+  ChildPlacementSnapshot,
+  Matrix2D,
+} from "../../types/transform"
 import { uuid4 } from "../../utils/identifiers"
 import { parseLayer } from "../../utils/stage"
+import { mapVector } from "../transforms/affine2D"
 import {
-  copyMatrix2D,
-  invertMatrix2D,
-  mapPoint,
-  mapRect,
-  mapVector,
-  matrix2DEquals,
-  resolveChildTransform,
-} from "../transforms/affine2D"
+  childPlacementEquals,
+  copyChildPlacement,
+  placementShapeBound,
+  placementToContentPoint,
+  placementToLocalPoint,
+  resolveChildPlacement,
+  restoreChildPlacement,
+  scaleProjectivePlacement,
+  translateProjectivePlacement,
+  type ChildPlacementRuntime,
+} from "../placements/childPlacement"
 import { SetShapeChildCurrentTime } from "../types"
 
 import { Canvas } from "../../canvas"
@@ -28,8 +36,8 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   shapeMap: Map<string, T>
   canvas: Canvas
   readonly #onChange?: (childId: string) => void
-  #transform: Matrix2D
-  #inverseTransform: Matrix2D
+  #placement: ChildPlacementRuntime
+  #moveStartPlacement?: Extract<ChildPlacementSnapshot, { type: "projective" }>
   protected updatedLayers = new Set<number>()
 
   //   history
@@ -37,7 +45,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     id,
     className,
     shape,
-    transform,
+    placement,
     canvas,
     onShapeChange,
   }: StayInstantChildProps<T>) {
@@ -45,8 +53,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     this.className = className
     this.canvas = canvas
     this.#onChange = onShapeChange
-    this.#transform = resolveChildTransform(transform)
-    this.#inverseTransform = invertMatrix2D(this.#transform)
+    this.#placement = resolveChildPlacement(placement)
     this.shapeMap = this.assignShapes(shape)
   }
 
@@ -62,34 +69,47 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     return this.shape
   }
 
-  get transform(): Readonly<Matrix2D> {
-    return copyMatrix2D(this.#transform)
+  get placement(): ChildPlacementSnapshot {
+    return copyChildPlacement(this.#placement.snapshot)
   }
 
-  /** @internal Returns the immutable runtime matrix without allocating a public snapshot. */
-  getTransformMatrix(): Readonly<Matrix2D> {
-    return this.#transform
+  /** @internal Returns the affine matrix used by an affine RenderItem. */
+  getAffinePlacementMatrix(): Readonly<Matrix2D> {
+    if (this.#placement.type !== "affine") {
+      throw new Error("projective Child requires a projective RenderItem")
+    }
+    return this.#placement.snapshot.matrix
   }
 
-  setTransform(transform: ChildTransform) {
-    this.replaceTransform(resolveChildTransform(transform), true)
+  /** @internal Returns the projective mapping owned by this Child, if any. */
+  getProjectiveMapping() {
+    return this.#placement.type === "projective"
+      ? this.#placement.mapping
+      : undefined
+  }
+
+  setPlacement(placement: ChildPlacement) {
+    this.replacePlacement(resolveChildPlacement(placement), true)
     return this
   }
 
-  toContentPoint(point: PointType): ContentPoint {
-    return mapPoint(this.#transform, point)
+  toContentPoint(point: PointType): ContentPoint | undefined {
+    return placementToContentPoint(this.#placement, point)
   }
 
-  toLocalPoint(point: ContentPoint): PointType {
-    return mapPoint(this.#inverseTransform, point)
+  toLocalPoint(point: ContentPoint): PointType | undefined {
+    return placementToLocalPoint(this.#placement, point)
   }
 
   private toLocalVector(vector: PointType): PointType {
-    return mapVector(this.#inverseTransform, vector)
+    if (this.#placement.type !== "affine") {
+      throw new Error("projective placement does not have a uniform local vector")
+    }
+    return mapVector(this.#placement.inverse, vector)
   }
 
   getShapeBound(shape: T): Rect {
-    return mapRect(this.#transform, shape.getBound())
+    return placementShapeBound(this.#placement, shape.getBound())
   }
 
   getBound(): Rect {
@@ -113,6 +133,14 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   }
 
   move(offsetX: number, offsetY: number) {
+    if (this.#placement.type === "projective") {
+      const start = this.#moveStartPlacement ?? this.#placement.snapshot
+      this.replacePlacement(
+        restoreChildPlacement(translateProjectivePlacement(start, offsetX, offsetY)),
+        true
+      )
+      return
+    }
     const localOffset = this.toLocalVector({ x: offsetX, y: offsetY })
     this.shapeMap.forEach((shape) => {
       shape.move(...shape.applyMove(localOffset.x, localOffset.y))
@@ -120,13 +148,31 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   }
 
   zoom(deltaY: number, center: PointType) {
-    const localCenter = this.toLocalPoint(center)
+    if (this.#placement.type === "projective") {
+      this.replacePlacement(
+        restoreChildPlacement(scaleProjectivePlacement(
+          this.#placement.snapshot,
+          1 + deltaY * -0.001,
+          center
+        )),
+        true
+      )
+      return
+    }
+    const localCenter = this.toLocalPoint(center)!
     this.shapeMap.forEach((shape) => {
       shape.zoom(shape._zoom(deltaY, localCenter))
     })
   }
 
   moveInit() {
+    if (this.#placement.type === "projective") {
+      this.#moveStartPlacement = copyChildPlacement(
+        this.#placement.snapshot
+      ) as Extract<ChildPlacementSnapshot, { type: "projective" }>
+      return
+    }
+    this.#moveStartPlacement = undefined
     this.shapeMap.forEach((shape) => {
       shape.moveInit()
     })
@@ -165,6 +211,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
 
   containsPointer(point: ContentPoint): boolean {
     const localPoint = this.toLocalPoint(point)
+    if (!localPoint) return false
     for (const shape of this.shapeMap.values()) {
       if (shape.contains(localPoint)) return true
     }
@@ -178,6 +225,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   inArea(area: Area) {
     for (const shape of this.shapeMap.values()) {
       const center = this.toContentPoint(shape.getCenterPoint())
+      if (!center) continue
 
       if (
         center.x >= area.x &&
@@ -243,20 +291,21 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
    * go through the normal per-shape dirty-tracking. Consumers should mutate the
    * shape instead — `child.shape.update({ ... })` — which repaints correctly.
    */
-  update({ id, className, shape, transform }: StayInstantChildUpdateProps<T>) {
+  update({ id, className, shape, placement }: StayInstantChildUpdateProps<T>) {
     this.id = id ?? this.id
     this.className = className ?? this.className
     this.shapeMap = shape ? this.assignShapes(shape) : this.shapeMap
-    if (transform) {
-      this.replaceTransform(resolveChildTransform({ matrix: transform }), false)
+    if (placement) {
+      this.replacePlacement(restoreChildPlacement(placement), false)
     }
     // `shape` is now a getter derived from shapeMap — nothing else to assign.
   }
 
-  private replaceTransform(transform: Matrix2D, notify: boolean) {
-    if (matrix2DEquals(this.#transform, transform)) return
-    this.#transform = transform
-    this.#inverseTransform = invertMatrix2D(transform)
+  private replacePlacement(placement: ChildPlacementRuntime, notify: boolean) {
+    const before = this.#placement.snapshot
+    const after = placement.snapshot
+    if (childPlacementEquals(before, after)) return
+    this.#placement = placement
     this.getLayers().forEach((layer) => this.updatedLayers.add(layer))
     if (notify) this.#onChange?.(this.id)
   }

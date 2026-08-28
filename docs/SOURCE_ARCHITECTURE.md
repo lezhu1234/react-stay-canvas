@@ -82,17 +82,25 @@ mixed. Legacy
 `move`/`zoom`/`reset` tools remain destructive geometry operations and must not be used as a
 viewport implementation.
 
-## Child transform ownership
+## Child placement ownership
 
-`StayInstantChild` owns one invertible local-to-Content affine matrix. Shapes retain local geometry;
-the Renderer composes the Child matrix after the shared Content-to-View frame inside a per-Shape
-save/restore boundary. Culling maps Shape bounds into Content, while point hits map Content input
-through the inverse Child matrix before calling Shape `contains()`.
+`StayInstantChild` owns exactly one local-to-Content placement: affine or projective. Shapes retain
+local geometry. Affine rendering composes the Child matrix after the shared Content-to-View frame;
+projective rendering rasterizes the finite local domain and consumes the same mapping through the
+RenderPlan. Culling maps Shape bounds into Content, while point hits use the placement inverse before
+calling Shape `contains()`.
 
-`stay/transforms/affine2D.ts` is the single owner of matrix validation, composition, inversion, and
-point/vector/bounds mapping. History snapshots and scene fragments store the resolved matrix rather
-than duplicating semantic transform fields. Layer remains a paint-pass choice and never owns a
-coordinate transform.
+`stay/placements/childPlacement.ts` owns the discriminated runtime value and routes mapping,
+movement, equality, and scene placement to the affine/projective primitives. History snapshots and
+scene fragments store the resolved placement rather than duplicating semantic fields. Canvas2D mesh
+and raster quality are derived from the current output surface and do not become Child state. Layer
+remains a paint-pass choice and never owns coordinate placement.
+
+RenderPlan preserves plan-time order and culling, but a Child-owned placement is resolved again at
+the actual per-Shape draw boundary. This retains the synchronous callback contract: an earlier Shape
+may change a later Child between planning and drawing without leaving a stale affine/projective
+classification or projective matrix in either executor. Only an explicit internal projection
+resolver creates a fixed RenderItem override.
 
 ## Documentation boundary
 

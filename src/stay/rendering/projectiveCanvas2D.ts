@@ -3,6 +3,12 @@ import type { DrawCanvasContext } from "../../types/canvas"
 import type { PointType } from "../../types/geometry"
 import type { ProjectiveMatrix2D } from "../transforms/projective2D"
 import type { ProjectiveRenderProjection } from "./renderPlan"
+import {
+  positiveFinite,
+  positiveInteger,
+  rasterizeProjectiveShape,
+  resolveProjectiveRasterSpec,
+} from "./projectiveRaster"
 
 interface ProjectiveDrawProps {
   readonly context: DrawCanvasContext
@@ -15,51 +21,6 @@ interface ProjectiveDrawProps {
   readonly forceDraw?: boolean
 }
 
-interface RasterSurface {
-  readonly canvas: HTMLCanvasElement | OffscreenCanvas
-  readonly context: DrawCanvasContext
-}
-
-function positiveInteger(value: number, name: string) {
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new RangeError(`${name} must be a positive integer`)
-  }
-  return value
-}
-
-function positiveFinite(value: number, name: string) {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new RangeError(`${name} must be finite and greater than 0`)
-  }
-  return value
-}
-
-function createRasterSurface(
-  target: DrawCanvasContext,
-  width: number,
-  height: number
-): RasterSurface {
-  const targetCanvas = target.canvas
-  let canvas: HTMLCanvasElement | OffscreenCanvas
-  if ("ownerDocument" in targetCanvas && targetCanvas.ownerDocument) {
-    canvas = targetCanvas.ownerDocument.createElement("canvas")
-  } else if (typeof OffscreenCanvas !== "undefined") {
-    canvas = new OffscreenCanvas(width, height)
-  } else {
-    throw new Error("projective Canvas2D rendering requires a raster canvas")
-  }
-  canvas.width = width
-  canvas.height = height
-  if (canvas.width !== width || canvas.height !== height) {
-    throw new RangeError("projective raster dimensions are unsupported")
-  }
-  const context = canvas.getContext("2d") as DrawCanvasContext | null
-  if (!context) {
-    throw new Error("Unable to get projective raster 2D context")
-  }
-  return { canvas, context }
-}
-
 function rasterizeShape({
   context: target,
   shape,
@@ -70,47 +31,17 @@ function rasterizeShape({
   height,
   forceDraw,
 }: ProjectiveDrawProps) {
-  // Destination-dependent composition cannot be reproduced inside an isolated
-  // Shape raster. Keep this compatibility boundary explicit until a backend can
-  // composite the projected source against the real destination.
-  if (shape.globalConfig.gco !== "source-over") {
-    throw new RangeError(
-      "projective Canvas2D rendering currently supports source-over Shapes"
-    )
-  }
-  const { localDomain } = projection.mapping
-  const scale = positiveFinite(rasterScale, "projective raster scale")
-  const rasterWidth = positiveInteger(
-    Math.ceil(localDomain.width * scale),
-    "projective raster width"
-  )
-  const rasterHeight = positiveInteger(
-    Math.ceil(localDomain.height * scale),
-    "projective raster height"
-  )
-  const surface = createRasterSurface(target, rasterWidth, rasterHeight)
-
-  surface.context.save()
-  try {
-    surface.context.setTransform(
-      scale,
-      0,
-      0,
-      scale,
-      -localDomain.x * scale,
-      -localDomain.y * scale
-    )
-    shape.draw({
-      context: surface.context,
-      now,
-      width,
-      height,
-      forchDraw: forceDraw,
-    })
-  } finally {
-    surface.context.restore()
-  }
-  return surface.canvas
+  const spec = resolveProjectiveRasterSpec(projection.mapping, rasterScale)
+  return rasterizeProjectiveShape({
+    targetCanvas: target.canvas,
+    shape,
+    mapping: projection.mapping,
+    spec,
+    now,
+    width,
+    height,
+    forceDraw,
+  })
 }
 
 function projectPoint(

@@ -5,6 +5,10 @@ import type { ProjectiveMatrix2D } from "react-stay-canvas"
 import type { FiniteProjectiveMapping } from "react-stay-canvas"
 // @ts-expect-error ProjectiveRenderProjection is intentionally not exported.
 import type { ProjectiveRenderProjection } from "react-stay-canvas"
+// @ts-expect-error WebGL RenderPlan execution remains an internal backend slice.
+import { executeWebGLRenderPlan } from "react-stay-canvas"
 
 export type InternalProjectiveTypes =
   ProjectiveMatrix2D | FiniteProjectiveMapping | ProjectiveRenderProjection
+
+export const internalWebGLExecutor = executeWebGLRenderPlan

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react"
 import {
   Circle,
+  type CanvasLayerConfig,
   type InstantShape,
   Line,
   Polygon,
@@ -37,6 +38,15 @@ const PLANE_GRID_ROWS = 5
 const PLANE_NEAR_SCALE = 1.32
 const PLANE_FAR_SCALE = 1.08
 const PLANE_WIDTH_SCALES = [1.08, 0.96, 0.96] as const
+const PROJECTIVE_WEBGL_LAYERS: CanvasLayerConfig[] = Array.from(
+  { length: 3 },
+  () => ({
+    backend: "webgl",
+    // The example explicitly opts into restoration. The library reports the
+    // native lifecycle and never chooses a Canvas2D fallback on its behalf.
+    onContextLost: (event: WebGLContextEvent) => event.preventDefault(),
+  })
+)
 
 type PlaneName = "client" | "view" | "content"
 
@@ -772,8 +782,12 @@ export function CoordinateStack({
 
   return (
     <section aria-label={text("Three coordinate planes", "三层坐标空间")} className={`coordinate-stack-exhibit coordinate-focus-${mappingFocus}`}>
-      <CanvasSurface className="coordinate-stack-surface" shrinkToViewport>
-        <StayCanvas className="demo-canvas coordinate-stack-canvas" focusOnInit={false} height={STACK_HEIGHT} layers={3} mounted={mounted} width={STACK_WIDTH} />
+      <CanvasSurface
+        className="coordinate-stack-surface"
+        shrinkToViewport
+        viewportLabel="WEBGL · PROJECTIVE"
+      >
+        <StayCanvas className="demo-canvas coordinate-stack-canvas" focusOnInit={false} height={STACK_HEIGHT} layers={PROJECTIVE_WEBGL_LAYERS} mounted={mounted} width={STACK_WIDTH} />
       </CanvasSurface>
     </section>
   )

@@ -12,26 +12,26 @@ import React, {
 
 import * as PredefinedEventList from "./predefinedEvents"
 import Stay, { createStay } from "./stay/stay"
-import type { ContextLayerSetFunction } from "./types/canvas"
+import type { CanvasLayerConfig, ContextLayerSetFunction } from "./types/canvas"
 import type { StayCanvasProps, StayCanvasRefType } from "./types/component"
 import type { PredefinedEventName } from "./types/events"
 
 const defaultContextLayerSetFunction: ContextLayerSetFunction = (canvas) =>
   canvas.getContext("2d")
 
-function resolveContextLayerSetFunctions(
-  layers: number | ContextLayerSetFunction[]
-): ContextLayerSetFunction[] {
-  const contextSetters =
+function resolveLayerConfigs(
+  layers: number | CanvasLayerConfig[]
+): CanvasLayerConfig[] {
+  const configs =
     typeof layers === "number"
       ? Array(layers).fill(defaultContextLayerSetFunction)
       : layers
 
-  if (contextSetters.length < 1) {
+  if (configs.length < 1) {
     throw new Error("layers must be greater than 0")
   }
 
-  return contextSetters
+  return configs
 }
 
 const StayCanvas = forwardRef(
@@ -52,8 +52,8 @@ const StayCanvas = forwardRef(
     ref: Ref<StayCanvasRefType>
   ) => {
     const initialized = useRef(false)
-    const contextLayerSetFunctionList = resolveContextLayerSetFunctions(layers)
-    const layerCount = contextLayerSetFunctionList.length
+    const layerConfigs = resolveLayerConfigs(layers)
+    const layerCount = layerConfigs.length
     const activeLayerCount = useRef(layerCount)
     activeLayerCount.current = layerCount
 
@@ -104,7 +104,7 @@ const StayCanvas = forwardRef(
       const activeCanvasLayers = getActiveCanvasLayers()
       const nextStay = createStay(
         activeCanvasLayers,
-        contextLayerSetFunctionList,
+        layerConfigs,
         width,
         height,
         passive,

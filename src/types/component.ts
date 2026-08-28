@@ -1,5 +1,5 @@
 import type { Rectangle } from "../shapes/rectangle"
-import type { ContextLayerSetFunction } from "./canvas"
+import type { CanvasLayerConfig } from "./canvas"
 import type { Dict } from "./common"
 import type {
   EventProps,
@@ -27,7 +27,7 @@ export interface StayCanvasProps<EventName extends string = string> {
   className?: string
   width?: number
   height?: number
-  layers?: number | ContextLayerSetFunction[]
+  layers?: number | CanvasLayerConfig[]
   eventList?: EventProps<EventName>[]
   listenerList?: (
     | ListenerProps

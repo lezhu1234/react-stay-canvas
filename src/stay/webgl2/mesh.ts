@@ -66,6 +66,7 @@ export class Mesh {
   #geometryRevision = 0
   #modelMatrix: Matrix4
   #color: MeshColor
+  readonly #changeListeners = new Set<() => void>()
 
   constructor({
     geometry,
@@ -88,14 +89,17 @@ export class Mesh {
     this.#positions = copied.positions
     this.#indices = copied.indices
     this.#geometryRevision += 1
+    this.#notifyChange()
   }
 
   setModelMatrix(modelMatrix: ArrayLike<number>) {
     this.#modelMatrix = copyMatrix4(modelMatrix, "Mesh model matrix")
+    this.#notifyChange()
   }
 
   setColor(color: MeshColor) {
     this.#color = copyColor(color)
+    this.#notifyChange()
   }
 
   get geometryRevision() {
@@ -117,5 +121,15 @@ export class Mesh {
 
   getColor(): MeshColor {
     return [...this.#color]
+  }
+
+  /** @internal Lets the owning Child translate CPU mutations into layer dirtiness. */
+  subscribeChanges(listener: () => void) {
+    this.#changeListeners.add(listener)
+    return () => this.#changeListeners.delete(listener)
+  }
+
+  #notifyChange() {
+    this.#changeListeners.forEach((listener) => listener())
   }
 }

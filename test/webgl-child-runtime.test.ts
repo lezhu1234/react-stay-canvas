@@ -64,8 +64,8 @@ describe("internal Stay WebGL Child runtime", () => {
       className: "plane",
       layer: 1,
       meshes: [firstMesh],
-      onChange,
     })
+    child.installRuntime({ onChange })
 
     expect([...stayWebGLChildLayers.dirtyLayers(child)]).toEqual([1])
     stayWebGLChildLayers.drawn(child, 1)

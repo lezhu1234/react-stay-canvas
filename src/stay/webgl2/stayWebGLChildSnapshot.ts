@@ -10,6 +10,7 @@ export interface WebGLMeshSnapshot {
 }
 
 export interface StayWebGLChildSnapshot {
+  readonly kind: "webgl2"
   readonly id: string
   readonly className: string
   readonly layer: number
@@ -21,6 +22,10 @@ export interface StayWebGLSceneChildFragment {
   readonly className: string
   readonly layer: number
   readonly meshes: readonly WebGLMeshSnapshot[]
+}
+
+export interface StayWebGLSceneFragment {
+  readonly children: readonly StayWebGLSceneChildFragment[]
 }
 
 function captureMesh(mesh: Mesh): WebGLMeshSnapshot {
@@ -44,10 +49,17 @@ function materializeMesh(snapshot: WebGLMeshSnapshot) {
   })
 }
 
+export function materializeWebGLSnapshotMeshes(
+  snapshots: readonly WebGLMeshSnapshot[]
+) {
+  return snapshots.map(materializeMesh)
+}
+
 export function captureStayWebGLChildSnapshot(
   child: StayWebGLChild
 ): StayWebGLChildSnapshot {
   return {
+    kind: "webgl2",
     id: child.id,
     className: child.className,
     layer: child.layer,
@@ -59,13 +71,14 @@ export function restoreStayWebGLChildSnapshot(
   snapshot: StayWebGLChildSnapshot,
   onChange?: (childId: string) => void
 ) {
-  return new StayWebGLChild({
+  const child = new StayWebGLChild({
     id: snapshot.id,
     className: snapshot.className,
     layer: snapshot.layer,
-    meshes: snapshot.meshes.map(materializeMesh),
-    onChange,
+    meshes: materializeWebGLSnapshotMeshes(snapshot.meshes),
   })
+  if (onChange) child.installRuntime({ onChange })
+  return child
 }
 
 export function captureStayWebGLSceneChild(
@@ -80,14 +93,21 @@ export function captureStayWebGLSceneChild(
   }
 }
 
+export function captureStayWebGLScene(
+  children: readonly StayWebGLChild[]
+): StayWebGLSceneFragment {
+  return { children: children.map(captureStayWebGLSceneChild) }
+}
+
 export function materializeStayWebGLSceneChild(
   fragment: StayWebGLSceneChildFragment,
   onChange?: (childId: string) => void
 ) {
-  return new StayWebGLChild({
+  const child = new StayWebGLChild({
     className: fragment.className,
     layer: fragment.layer,
-    meshes: fragment.meshes.map(materializeMesh),
-    onChange,
+    meshes: materializeWebGLSnapshotMeshes(fragment.meshes),
   })
+  if (onChange) child.installRuntime({ onChange })
+  return child
 }

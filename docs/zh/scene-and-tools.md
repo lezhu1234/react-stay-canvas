@@ -193,11 +193,13 @@ tools.redo()
 边界规则：
 
 - `appendChild()`、`removeChild()`、正常 Shape 变更和 `child.setPlacement()` 都会把静态 Child 标记为待记录；
+- `tools.webgl.appendChild()`、`tools.webgl.removeChild()` 与 Mesh geometry/model/color 变更进入同一待记录集合和事务；
 - `log()` 把从上一次快照到当前状态的变化组成一个历史项；
 - `resetHistory()` 清空 undo/redo，并把当前静态场景设为基线；
 - 多个变更后只调用一次 `log()`，它们会成为同一个撤销单位；
 - `undo()` 后再记录新操作，会截断旧的 redo 尾部；
 - 动画 Child 不进入历史，移除后也不会被 undo 恢复；
+- camera 变更仍属于显示状态，不进入历史；
 - `undo()` 和 `redo()` 会恢复当时的 Canvas state。
 
 ## 在 Canvas 之间复制场景
@@ -225,6 +227,17 @@ targetTools.importChildren(scene, {
 `importChildren()` 会先实例化新的 Shape，再对它们执行 move/zoom，因此可以把同一个 exported payload 重复导入不同 Canvas 或目标区域，输入数据不会被修改。
 
 如果 `exportChildren()` 省略 `area`，会使用源 Canvas 的 root 边界。如果 `importChildren()` 省略目标区域，会使用目标 Canvas 的 root 边界。
+
+原生 Mesh 场景使用独立且保持所有权的传输入口：
+
+```ts
+const fragment = sourceTools.webgl.exportChildren(
+  sourceTools.webgl.getChildrenBySelector(".plane"),
+)
+const imported = targetTools.webgl.importChildren(fragment)
+```
+
+每个导入的 Child 都会获得新 id，以及独立的 Mesh geometry、model matrix 和 color。目标 WebGL2 layer config 继续拥有自己的 camera，camera state 不会被传输。Mesh geometry 已经位于原生场景 world space，因此该传输没有二维 `area` 或 Child placement。
 
 ## 把区域渲染到独立 Canvas
 

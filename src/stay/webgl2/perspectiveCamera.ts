@@ -14,7 +14,7 @@ function copyVector(vector: Vector3, name: string): Vector3 {
   return copied
 }
 
-/** @internal CPU-authoritative perspective camera for the WebGL2 scene kernel. */
+/** CPU-authoritative perspective camera for a WebGL2 layer. */
 export class PerspectiveCamera {
   #position: Vector3
   #target: Vector3
@@ -22,6 +22,7 @@ export class PerspectiveCamera {
   #verticalFieldOfView: number
   #near: number
   #far: number
+  readonly #changeListeners = new Set<() => void>()
 
   constructor({
     position,
@@ -55,6 +56,7 @@ export class PerspectiveCamera {
     this.#position = nextPosition
     this.#target = nextTarget
     this.#up = nextUp
+    this.#notifyChange()
   }
 
   setProjection(verticalFieldOfView: number, near: number, far: number) {
@@ -62,6 +64,7 @@ export class PerspectiveCamera {
     this.#verticalFieldOfView = verticalFieldOfView
     this.#near = near
     this.#far = far
+    this.#notifyChange()
   }
 
   getViewProjection(aspect: number): Matrix4 {
@@ -73,5 +76,15 @@ export class PerspectiveCamera {
     )
     const view = lookAtMatrix4(this.#position, this.#target, this.#up)
     return multiplyMatrix4(projection, view)
+  }
+
+  /** @internal Lets the owning layer translate camera mutations into dirtiness. */
+  subscribeChanges(listener: () => void) {
+    this.#changeListeners.add(listener)
+    return () => this.#changeListeners.delete(listener)
+  }
+
+  #notifyChange() {
+    this.#changeListeners.forEach((listener) => listener())
   }
 }

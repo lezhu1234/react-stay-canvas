@@ -226,7 +226,10 @@ export abstract class InstantShape {
     fillConfig,
   }: ShapeProps) {
     const previousLayer = this.layer
-    this.layer = layer ?? this.layer
+    const nextLayer = layer ?? this.layer
+    this.layer = this.parent
+      ? this.parent.resolveChildShapeLayer(nextLayer, this)
+      : nextLayer
     this.zIndex = zIndex ?? this.zIndex
     this.zoomY = zoomY ?? this.zoomY
     this.zoomCenter = zoomCenter ?? this.zoomCenter

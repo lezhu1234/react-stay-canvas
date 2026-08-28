@@ -3,9 +3,9 @@
 import { Canvas2DLayerRuntime } from "react-stay-canvas"
 // @ts-expect-error Unowned context cleanup is an internal Canvas compatibility path.
 import { clearUnownedCanvas2DContext } from "react-stay-canvas"
-// @ts-expect-error WebGLLayerRuntime is an internal backend owner.
-import { WebGLLayerRuntime } from "react-stay-canvas"
+// @ts-expect-error WebGL2LayerRuntime is an internal backend owner.
+import { WebGL2LayerRuntime } from "react-stay-canvas"
 
 export const internalCanvas2DLayerRuntime = Canvas2DLayerRuntime
 export const internalCanvas2DClear = clearUnownedCanvas2DContext
-export const internalWebGLLayerRuntime = WebGLLayerRuntime
+export const internalWebGL2LayerRuntime = WebGL2LayerRuntime

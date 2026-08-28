@@ -22,6 +22,7 @@ src/types/
 ├── shapes.ts
 ├── transform.ts
 ├── tools.ts
+├── webgl.ts
 └── index.ts
 ```
 
@@ -101,6 +102,25 @@ the actual per-Shape draw boundary. This retains the synchronous callback contra
 may change a later Child between planning and drawing without leaving a stale affine/projective
 classification or projective matrix in either executor. Only an explicit internal projection
 resolver creates a fixed RenderItem override.
+
+## Native WebGL2 ownership
+
+One heterogeneous `ChildrenStore` owns Canvas2D and WebGL2 Child identities. Backend-specific
+selector helpers narrow candidates before invoking user callbacks; the shared layer scheduler and
+History transaction dispatch through the Child runtime seam. Canvas2D pointer targeting remains
+Shape-specific until the native scene has a raycast contract, but it continues to use the same
+ActionRouter, EventRuntime, Listener registry, state stores, and DOM input adapter.
+
+`StayWebGLChild` owns ordered CPU `Mesh` state on one WebGL2 layer. `PerspectiveCamera` belongs to
+that layer's public configuration. `WebGL2LayerRuntime` owns context loss/restoration and one
+`WebGL2SceneRuntime`; the scene runtime owns only derived program/VAO/buffer caches. Resize retains
+live cache objects when the resolver returns the same context. Context restoration forgets invalid
+handles and lazily reconstructs them from CPU Mesh/Camera state.
+
+The native backend does not consume Shape RenderPlans, Canvas2D raster surfaces, projective Shape
+placements, or Shape `zIndex`. Depth is authoritative inside a WebGL2 layer. Mesh history and scene
+transfer deep-copy CPU state; Camera state is display configuration and is neither historical nor
+transferred.
 
 ## Documentation boundary
 

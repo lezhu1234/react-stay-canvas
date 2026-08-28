@@ -4,12 +4,12 @@ import type {
   ContextLayerSetFunction,
 } from "../../types/canvas"
 import { Canvas2DLayerRuntime } from "./canvas2DLayerRuntime"
-import { WebGLLayerRuntime } from "./webGLLayerRuntime"
+import { WebGL2LayerRuntime } from "./webGL2LayerRuntime"
 
 const defaultCanvas2DContext: ContextLayerSetFunction = (canvas) =>
   canvas.getContext("2d")
 
-export type LayerRuntime = Canvas2DLayerRuntime | WebGLLayerRuntime
+export type LayerRuntime = Canvas2DLayerRuntime | WebGL2LayerRuntime
 
 function canvas2DContext(config: ContextLayerSetFunction | Canvas2DLayerConfig) {
   return typeof config === "function"
@@ -30,8 +30,8 @@ export function createLayerRuntime(
   if (config?.backend === "canvas2d") {
     return new Canvas2DLayerRuntime(element, canvas2DContext(config), index)
   }
-  if (config?.backend === "webgl") {
-    return new WebGLLayerRuntime(element, config, index, invalidate)
+  if (config?.backend === "webgl2") {
+    return new WebGL2LayerRuntime(element, config, index, invalidate)
   }
   throw new Error(`Unsupported Canvas backend for layer ${index}`)
 }

@@ -38,7 +38,7 @@ Three boundaries make the rest of the library easier to understand:
 - creates the instance's `StayTools` API;
 - optionally recreates the runtime after size changes and always cleans it up when the component is recreated or unmounts.
 
-Its `width` and `height` define the scene coordinate space. `layers` controls the number of overlapping native `<canvas>` elements and may explicitly select Canvas2D or WebGL for each one. Canvas2D is the default; WebGL is an opt-in rendering backend, not a separate scene model.
+Its `width` and `height` define the scene coordinate space. `layers` controls the number of overlapping native `<canvas>` elements and may explicitly select Canvas2D or WebGL2 for each one. Canvas2D is the default; WebGL2 is an opt-in native Mesh scene with a required camera.
 
 Scene content is not represented by React children. Populate and update it through `StayTools` and Child or Shape methods from `mounted`, Listener callbacks, and application commands.
 
@@ -116,7 +116,7 @@ A Shape on a lower layer cannot cover a Shape on a higher layer, regardless of i
 
 Every Shape in a multi-Shape Child may use a different layer. A diagram can therefore keep edges on a lower layer and nodes above them while still grouping each node's rectangle and label into one Child.
 
-Each native layer has one backend owner. Canvas2D and WebGL consume the same per-layer Shape order; choosing WebGL does not change Child placement, hit testing, history, transfer, or capture semantics. WebGL context loss pauses only that layer and never triggers an implicit Canvas2D fallback.
+Each native layer has one backend owner. Canvas2D layers consume Shape RenderPlans; WebGL2 layers consume `StayWebGLChild` Meshes through one camera and a persistent GPU cache. Both Child families share one identity store, selector engine, dirty scheduler, History transaction, state, and scene-transfer ownership. They do not share geometry or ordering: Shape `zIndex` is Canvas2D-only, while native depth decides WebGL2 visibility. WebGL2 context loss pauses only that layer and never triggers an implicit Canvas2D fallback.
 
 ## `StayTools`: operations for one instance
 

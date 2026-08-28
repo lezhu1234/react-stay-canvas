@@ -1,11 +1,13 @@
+import type { PerspectiveCamera } from "../stay/webgl2/perspectiveCamera"
+
 export type DrawCanvasContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
 export interface ContextLayerSetFunction {
   (layer: HTMLCanvasElement): DrawCanvasContext | null
 }
 
-export interface WebGLContextLayerSetFunction {
-  (layer: HTMLCanvasElement): WebGLRenderingContext | null
+export interface WebGL2ContextLayerSetFunction {
+  (layer: HTMLCanvasElement): WebGL2RenderingContext | null
 }
 
 export interface Canvas2DLayerConfig {
@@ -13,9 +15,10 @@ export interface Canvas2DLayerConfig {
   readonly context?: ContextLayerSetFunction
 }
 
-export interface WebGLLayerConfig {
-  readonly backend: "webgl"
-  readonly context?: WebGLContextLayerSetFunction
+export interface WebGL2LayerConfig {
+  readonly backend: "webgl2"
+  readonly camera: PerspectiveCamera
+  readonly context?: WebGL2ContextLayerSetFunction
   readonly onContextLost?: (event: WebGLContextEvent) => void
   readonly onContextRestored?: (event: WebGLContextEvent) => void
 }
@@ -27,4 +30,4 @@ export interface WebGLLayerConfig {
 export type CanvasLayerConfig =
   | ContextLayerSetFunction
   | Canvas2DLayerConfig
-  | WebGLLayerConfig
+  | WebGL2LayerConfig

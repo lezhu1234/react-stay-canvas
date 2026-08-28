@@ -2,7 +2,7 @@
 
 [中文](../../zh/api/stay-tools.md) · [Scenes and tools guide](../scene-and-tools.md)
 
-`StayTools` is the unified `BasicTools & InstantTools & AnimatedTools` interface. Every Canvas has static, animated, and history tools at the same time; there is no runtime mode to select.
+`StayTools` combines `BasicTools`, `InstantTools`, `AnimatedTools`, and the native `webgl` namespace. Every Canvas has static, animated, history, and native-scene tools at the same time; there is no runtime mode to select.
 
 ## Children and queries
 
@@ -27,6 +27,22 @@
 | `returnFirst` | `false` | Return at most the first sorted match |
 | `sortBy` | — | Hit-result ordering |
 | `withRoot` | `true` | Whether root may be returned |
+
+## Native WebGL2 scene
+
+`tools.webgl` manages native Mesh children in the same instance and identity store as Canvas2D Children. A `StayWebGLChild` owns an ordered Mesh list on one WebGL2 layer; its Mesh geometry, model matrix, and color are CPU-authoritative and mutations invalidate that layer.
+
+| Method | Meaning |
+| --- | --- |
+| `webgl.appendChild({ id?, className, layer, meshes? })` | Add one native Mesh Child to a configured WebGL2 layer |
+| `webgl.removeChild(id)` | Remove the native Child and release its subscriptions/GPU cache entries |
+| `webgl.hasChild(id)` / `getChildById(id)` | Query native identity without mixing it into Shape-only helpers |
+| `webgl.getChildBySelector(selector)` | Return the first native selector match |
+| `webgl.getChildrenBySelector(selector, sortBy?)` | Query native Children using the shared selector language |
+| `webgl.exportChildren(children)` | Capture deep-owned CPU Mesh fragments with source ids |
+| `webgl.importChildren(fragment)` | Materialize new Child ids and independent Mesh state |
+
+`Mesh`, `PerspectiveCamera`, `StayWebGLChild`, and the minimal Matrix4 helpers are exported from the package root. GPU programs, VAOs, buffers, shaders, and layer runtimes remain internal. WebGL2 Child picking/raycast, lights, materials, shadows, and Canvas capture are not part of this surface yet.
 
 ## State and display
 
@@ -99,12 +115,12 @@ These legacy methods directly mutate Child/Shape coordinates. They are batch geo
 
 | Method | Meaning |
 | --- | --- |
-| `log()` | Commit pending static-Child diffs, including Shape mutations, as one history item |
+| `log()` | Commit pending static-Child diffs, including Shape or Mesh mutations, as one history item |
 | `undo()` | Undo one item; logs when none remain |
 | `redo()` | Redo one item; logs when none remain |
 | `resetHistory()` | Clear undo/redo and use the current static scene as the new baseline |
 
-Animated Children do not participate in history. See [Scenes and tools: History transactions](../scene-and-tools.md#history-transactions) for boundaries and examples.
+Canvas2D and WebGL2 static Children participate in the same History transaction and id namespace. Camera changes are display state and are not recorded. Animated Children do not participate in history. See [Scenes and tools: History transactions](../scene-and-tools.md#history-transactions) for boundaries and examples.
 
 ## Animation
 
@@ -136,6 +152,8 @@ interface DrawReturn {
 `CaptureSceneProps` is the export input. `SceneFragment` contains an `area` and Child fragments with `sourceId`, `className`, `shapes`, and `placement`. `sourceId` is correlation metadata; it is not reused as the imported Child id.
 
 Scene transfer captures common Shape state and independently owned style containers. It intentionally captures only the current projection of an Animated Child and is not a timeline serialization format.
+
+Native Mesh transfer is separate because it has no 2D area/placement transform: use `tools.webgl.exportChildren()` and `tools.webgl.importChildren()`. Camera state is owned by the target layer config and is not included.
 
 ## Actions and Listeners
 

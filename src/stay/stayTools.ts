@@ -29,12 +29,15 @@ import { assert } from "../utils/assertions"
 import { fitRect, numberAlmostEqual } from "../utils/geometry"
 import { infixExpressionParser } from "../utils/selectors"
 import { StayAnimatedChild } from "./children/stayAnimatedChild"
+import { isStayInstantChild, isStayWebGLChild } from "./children/stayChild"
 import { StayInstantChild } from "./children/stayInstantChild"
 import { stayInstantChildPointHits } from "./children/stayInstantChildRuntime"
 import {
   diffHistoryChild,
   materializeHistoryShapes,
   stayInstantChildHistory,
+  captureHistoryChildren,
+  type StayHistoryChildSnapshot,
 } from "./historySnapshot"
 import { captureScene, materializeSceneChild } from "./sceneTransfer"
 import { normalizeManualActions } from "./events/input/manualActionAdapter"
@@ -50,7 +53,9 @@ import {
   placeChildPlacement,
 } from "./placements/childPlacement"
 import Stay from "./stay"
-import { StepProps } from "./types"
+import type { StepProps } from "./types"
+import { createStayWebGLTools } from "./stayWebGLTools"
+import { materializeWebGLSnapshotMeshes } from "./webgl2/stayWebGLChildSnapshot"
 
 function placeImportedGeometry(
   child: StayInstantChild,
@@ -104,6 +109,45 @@ function prepareRegionContext(
 
 // One factory, one unified tool surface. Every stage gets all tools.
 export function stayTools(this: Stay<any>): StayTools {
+  const webglTools = createStayWebGLTools.call(this)
+
+  const appendHistoryChild = (snapshot: StayHistoryChildSnapshot) => {
+    if (snapshot.kind === "canvas2d") {
+      return this.tools.appendChild({
+        id: snapshot.id,
+        shape: materializeHistoryShapes(snapshot.shape),
+        className: snapshot.className,
+        placement: snapshot.placement,
+      })
+    }
+    return webglTools.appendChild({
+      id: snapshot.id,
+      className: snapshot.className,
+      layer: snapshot.layer,
+      meshes: materializeWebGLSnapshotMeshes(snapshot.meshes),
+    })
+  }
+
+  const applyHistoryChild = (snapshot: StayHistoryChildSnapshot) => {
+    const child = this.children.get(snapshot.id)
+    if (!child) throw new Error(`History Child ${snapshot.id} is missing`)
+    if (snapshot.kind === "canvas2d" && isStayInstantChild(child)) {
+      child.update({
+        className: snapshot.className,
+        shape: materializeHistoryShapes(snapshot.shape),
+        placement: snapshot.placement,
+      })
+      return
+    }
+    if (snapshot.kind === "webgl2" && isStayWebGLChild(child)) {
+      child.setClassName(snapshot.className)
+      child.setLayer(snapshot.layer)
+      child.setMeshes(materializeWebGLSnapshotMeshes(snapshot.meshes))
+      return
+    }
+    throw new Error(`History Child ${snapshot.id} changed backend`)
+  }
+
   const animatedTools = {
     progress: ({ timeMs: time, bound, beforeDrawCallback, afterDrawCallback }: ProgressProps) => {
       this.updateChildrenTime({ time, bound })
@@ -156,19 +200,20 @@ export function stayTools(this: Stay<any>): StayTools {
         // A removed child is absent from the store, so it remains eligible here;
         // its prior snapshot determines the remove step.
         .filter((id) => {
-          const child = this.getChildById(id)
-          return child ? stayInstantChildHistory.participates(child) : true
+          const child = this.children.get(id)
+          if (!child) return true
+          return isStayInstantChild(child)
+            ? stayInstantChildHistory.participates(child)
+            : true
         })
         .map((id) => {
-          const child = this.getChildById(id)
+          const child = this.children.get(id)
           return diffHistoryChild(
             this.historyChildren.get(id),
-            child && stayInstantChildHistory.participates(child)
-              ? stayInstantChildHistory.capture(child)
-              : undefined
+            child ? captureHistoryChildren([child]).get(id) : undefined
           )
         })
-        .filter((o) => o) as StepProps[]
+        .filter((step): step is StepProps<StayHistoryChildSnapshot> => Boolean(step))
       if (steps.length === 0) {
         this.snapshotChildren()
         return
@@ -190,24 +235,12 @@ export function stayTools(this: Stay<any>): StayTools {
       })
 
       stepItem.steps.forEach((step) => {
-        const stepChild = step.child
         if (step.action === "append") {
-          this.tools.appendChild({
-            id: stepChild.id,
-            shape: materializeHistoryShapes(stepChild.shape),
-            className: stepChild.className,
-            placement: copyChildPlacementInput(stepChild.placement),
-          })
+          appendHistoryChild(step.child)
         } else if (step.action === "remove") {
-          this.tools.removeChild(stepChild.id)
+          this.removeChildById(step.child.id)
         } else if (step.action === "update") {
-          assert(stepChild.beforeShape)
-          const child = this.findChildById(stepChild.id)!
-
-          child.update({
-            shape: materializeHistoryShapes(stepChild.shape),
-            placement: stepChild.placement,
-          })
+          applyHistoryChild(step.child)
         }
       })
 
@@ -232,32 +265,13 @@ export function stayTools(this: Stay<any>): StayTools {
       const stepItem = this.stack[this.stackIndex]
 
       stepItem.steps.forEach((step) => {
-        const stepChild = step.child
-
         if (step.action === "append") {
-          this.tools.removeChild(stepChild.id)
+          this.removeChildById(step.child.id)
         } else if (step.action === "remove") {
-          this.tools.appendChild({
-            id: stepChild.id,
-            shape: materializeHistoryShapes(stepChild.shape),
-            className: stepChild.className,
-            placement: copyChildPlacementInput(stepChild.placement),
-          })
+          appendHistoryChild(step.child)
         } else if (step.action === "update") {
-          if (!stepChild.beforeShape || !stepChild.beforePlacement) {
-            throw new Error("update history step requires before state")
-          }
-
-          this.getChildById(stepChild.id)!.update({
-            className: stepChild.beforeName || stepChild.className,
-            shape: materializeHistoryShapes(stepChild.beforeShape),
-            placement: stepChild.beforePlacement,
-          })
-          // this.tools.updateChild({
-          //   child: this.getChildById(stepChild.id)!,
-          //   className: stepChild.beforeName || stepChild.className,
-          //   shape: stepChild.beforeShape!,
-          // })
+          if (!step.before) throw new Error("update history step requires before state")
+          applyHistoryChild(step.before)
         }
       })
       this.tools.switchState(stepItem.state)
@@ -331,6 +345,9 @@ export function stayTools(this: Stay<any>): StayTools {
       shape,
       placement,
     }: AppendChildProps<T>) => {
+      if (id && this.children.has(id)) {
+        throw new Error(`Child id ${id} already exists`)
+      }
       const child = new StayInstantChild<T>({
         id,
         className,
@@ -643,5 +660,6 @@ export function stayTools(this: Stay<any>): StayTools {
     ...stayTools,
     ...instantTools,
     ...animatedTools,
+    webgl: webglTools,
   }
 }

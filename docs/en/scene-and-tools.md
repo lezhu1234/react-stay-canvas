@@ -193,11 +193,13 @@ For an initialized editor, call `resetHistory()` after loading non-undoable back
 The transaction boundaries are:
 
 - `appendChild()`, `removeChild()`, normal Shape mutations, and `child.setPlacement()` mark static Children as pending history changes;
+- `tools.webgl.appendChild()`, `tools.webgl.removeChild()`, and Mesh geometry/model/color mutations enter the same pending set and transaction;
 - `log()` groups changes since the previous snapshot into one history item;
 - `resetHistory()` clears undo/redo and makes the current static scene the baseline;
 - several mutations followed by one `log()` become one undo unit;
 - recording a new operation after `undo()` truncates the previous redo tail;
 - animated Children never enter history and removing one cannot be undone;
+- camera changes remain display state and are not recorded;
 - `undo()` and `redo()` also restore the Canvas state captured with the item.
 
 ## Copy a scene between Canvases
@@ -225,6 +227,17 @@ This is a scene-transfer path, not a serialization format. Common Shape state an
 `importChildren()` materializes fresh Shapes before moving and zooming them. The same exported payload can therefore be imported repeatedly into different Canvases or target areas without mutating the input data.
 
 When `exportChildren()` omits `area`, it uses the source root bounds. When `importChildren()` omits its target area, it uses the target root bounds.
+
+Native Mesh scenes use their separate ownership-preserving transfer surface:
+
+```ts
+const fragment = sourceTools.webgl.exportChildren(
+  sourceTools.webgl.getChildrenBySelector(".plane"),
+)
+const imported = targetTools.webgl.importChildren(fragment)
+```
+
+Each imported Child receives a new id and independent Mesh geometry, model matrices, and colors. The target WebGL2 layer config continues to own its camera; camera state is not transferred. Mesh transfer has no 2D `area` or Child placement because its geometry already lives in the native scene's world space.
 
 ## Render a region to a standalone Canvas
 

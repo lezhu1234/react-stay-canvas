@@ -1,18 +1,18 @@
 import { Canvas } from "../canvas"
 import type { DrawReturn, StayDrawProps } from "../types/tools"
-import { StayInstantChild } from "./children/stayInstantChild"
-import { stayInstantChildLayers } from "./children/stayInstantChildRuntime"
+import {
+  isStayInstantChild,
+  isStayWebGLChild,
+  type StayChild,
+  stayChildLayers,
+} from "./children/stayChild"
 import {
   CoordinateSystem,
   type CoordinateFrame,
 } from "./coordinates/coordinateSystem"
 import { executeCanvas2DRenderPlan } from "./rendering/canvas2DExecutor"
 import { resolveCanvas2DProjectiveQuality } from "./rendering/canvas2DProjectiveQuality"
-import {
-  createLayerRenderPlan,
-  type LayerRenderPlan,
-} from "./rendering/renderPlan"
-import { executeWebGLRenderPlan } from "./rendering/webGLExecutor"
+import { createLayerRenderPlan } from "./rendering/renderPlan"
 import { ChildLayerScheduler } from "./rendering/childLayerScheduler"
 
 interface DrawLayer {
@@ -28,11 +28,11 @@ export class Renderer {
   #nextTick: (() => void)[] = []
   #running = false
   #lastRenderedCoordinateRevision = -1
-  readonly #childLayers = new ChildLayerScheduler(stayInstantChildLayers)
+  readonly #childLayers = new ChildLayerScheduler(stayChildLayers)
 
   constructor(
     private readonly root: Canvas,
-    private readonly getRenderChildren: () => StayInstantChild[],
+    private readonly getRenderChildren: () => StayChild[],
     private readonly coordinates: CoordinateSystem
   ) {
     this.#layers = root.layers.map(() => ({ forceUpdate: false }))
@@ -59,8 +59,10 @@ export class Renderer {
 
     const frame = this.coordinates.getFrame(this.root.getSurfaceMetrics())
     const viewportChanged = frame.revision !== this.#lastRenderedCoordinateRevision
-    const dirtyLayers = this.#layers.map((layer) => {
-      const dirty = viewportChanged || layer.forceUpdate
+    const dirtyLayers = this.#layers.map((layer, layerIndex) => {
+      const dirty = layer.forceUpdate || (
+        viewportChanged && this.root.getLayerBackend(layerIndex) === "canvas2d"
+      )
       layer.forceUpdate = false
       return dirty
     })
@@ -79,14 +81,34 @@ export class Renderer {
         }
 
         updatedLayers.push(layerIndex)
-        const plan = createLayerRenderPlan(
-          children,
-          layerIndex,
-          frame.visibleContentArea
-        )
+        if (this.root.getLayerBackend(layerIndex) === "webgl2") {
+          const canvas2DChild = children
+            .filter(isStayInstantChild)
+            .find((child) => stayChildLayers.occupiedLayers(child).has(layerIndex))
+          if (canvas2DChild) {
+            throw new Error(`Canvas2D Child ${canvas2DChild.id} cannot target layer ${layerIndex}`)
+          }
+          const meshes = children
+            .filter(isStayWebGLChild)
+            .filter((child) => child.layer === layerIndex)
+            .flatMap((child) => [...child.meshes])
+          this.root.renderWebGL2Layer(layerIndex, meshes)
+        } else {
+          const webGLChild = children
+            .filter(isStayWebGLChild)
+            .find((child) => child.layer === layerIndex)
+          if (webGLChild) {
+            throw new Error(`WebGL Child ${webGLChild.id} cannot target layer ${layerIndex}`)
+          }
+          const plan = createLayerRenderPlan(
+            children.filter(isStayInstantChild),
+            layerIndex,
+            frame.visibleContentArea
+          )
+          updatedChilds.push(...plan.updatedChildren)
+          this.#drawCanvas2DLayer(layerIndex, frame, plan.items, now)
+        }
         this.#childLayers.acknowledgeLayer(children, layerIndex)
-        updatedChilds.push(...plan.updatedChildren)
-        this.#drawLayer(layerIndex, frame, plan, now)
       }
       this.#lastRenderedCoordinateRevision = frame.revision
     } catch (error) {
@@ -103,10 +125,10 @@ export class Renderer {
     return { updatedLayers, updatedChilds }
   }
 
-  #drawLayer(
+  #drawCanvas2DLayer(
     layerIndex: number,
     frame: CoordinateFrame,
-    plan: LayerRenderPlan,
+    items: ReturnType<typeof createLayerRenderPlan>["items"],
     now: number
   ) {
     const quality = (mapping: Parameters<typeof resolveCanvas2DProjectiveQuality>[0]["mapping"]) => {
@@ -122,28 +144,10 @@ export class Renderer {
       })
     }
 
-    if (this.root.getLayerBackend(layerIndex) === "webgl") {
-      executeWebGLRenderPlan({
-        context: this.root.getWebGLContext(layerIndex),
-        items: plan.items,
-        getNow: () => now,
-        width: this.root.width,
-        height: this.root.height,
-        contentToView: frame.contentToView,
-        getProjectiveRasterScale: ({ projection }) => {
-          if (!projection) {
-            throw new Error("projective quality requires a projective RenderItem")
-          }
-          return quality(projection.mapping).rasterScale
-        },
-      })
-      return
-    }
-
     this.root.withLayerFrame(layerIndex, frame.contentToView, (context) => {
       executeCanvas2DRenderPlan({
         context,
-        items: plan.items,
+        items,
         getNow: () => now,
         width: this.root.width,
         height: this.root.height,

@@ -5,10 +5,11 @@
 ```ts
 import {
   StayCanvas,
+  PerspectiveCamera,
   type CanvasLayerConfig,
   type StayCanvasProps,
   type StayCanvasRefType,
-  type WebGLLayerConfig,
+  type WebGL2LayerConfig,
 } from "react-stay-canvas"
 ```
 
@@ -20,7 +21,7 @@ import {
 | --- | --- | --- | --- |
 | `width` | `number` | `500` | CSS 尺寸和 View 逻辑宽度，必须大于 0 |
 | `height` | `number` | `500` | CSS 尺寸和 View 逻辑高度，必须大于 0 |
-| `layers` | `number \| CanvasLayerConfig[]` | `2` | Canvas 层数，或逐层指定 Canvas2D/WebGL 配置 |
+| `layers` | `number \| CanvasLayerConfig[]` | `2` | Canvas 层数，或逐层指定 Canvas2D/WebGL2 配置 |
 | `className` | `string` | `""` | 外层 `<div>` 的 className |
 | `eventList` | `EventProps[]` | `[]` | 初始化时注册的 Event 定义 |
 | `listenerList` | `ListenerProps[]` | `[]` | 初始化时注册的 Listener |
@@ -38,29 +39,29 @@ import {
 <StayCanvas width={720} height={420} layers={3} />
 ```
 
-原有的函数数组形式会为每个数组项创建一个 Canvas，并把该 Canvas 传给对应函数；函数必须返回可用的 2D 绘制 context。判别式 descriptor 可以显式选择 backend，也可以和原有函数混用：
+原有的函数数组形式会为每个数组项创建一个 Canvas，并把该 Canvas 传给对应函数；函数必须返回可用的 2D 绘制 context。判别式 descriptor 可以显式选择 backend，也可以和原有函数混用。原生 WebGL2 图层必须拥有一台 CPU Camera：
 
 ```tsx
 <StayCanvas
   layers={[
     { backend: "canvas2d" },
     {
-      backend: "webgl",
-      context: (canvas) => canvas.getContext("webgl", { alpha: true }),
-      onContextLost: (event) => event.preventDefault(),
-      onContextRestored: () => console.info("WebGL layer restored"),
+      backend: "webgl2",
+      camera: new PerspectiveCamera({ position: [0, 0, 3], target: [0, 0, 0] }),
+      context: (canvas) => canvas.getContext("webgl2", { alpha: true, depth: true }),
+      onContextRestored: () => console.info("WebGL2 layer restored"),
     },
   ]}
 />
 ```
 
-Canvas2D 仍是默认 backend。WebGL 必须显式 opt-in，并消费同一份全序 RenderPlan，因此同层 affine 与 projective Shape 的 `zIndex` 顺序不变。Shape 仍使用原有 Canvas2D 绘制合同；WebGL backend 会先栅格化连续 affine 批次和有限 projective Shape，再按原顺序合成。当前只要一次 pass 包含 projective 内容，其中全部 Shape 就必须使用 `source-over`。
+Canvas2D 仍是默认 backend。WebGL2 是显式 opt-in 的原生 Mesh 场景，不再是 Shape 栅格后端。Mesh Child 通过 `tools.webgl.appendChild()` 添加；Canvas2D Shape 只能进入 Canvas2D 图层，`StayWebGLChild` 则只占用一个 WebGL2 图层。原生场景内由 Mesh 深度决定遮挡，Shape `zIndex` 不跨 backend 比较。
 
-backend 失败不会被隐藏。WebGL 创建失败、绘制期间 context loss、不支持的合成模式、无效 projective 几何和纹理尺寸超限都不会自动回退到 Canvas2D。WebGL context 丢失后，该层暂停绘制直到原生 context 恢复。`onContextLost` 收到可取消的原生事件；应用希望浏览器恢复 context 时，应在这里调用 `preventDefault()`。恢复后运行时会重新解析配置的 context，先把该层标记为需要重绘，再调用 `onContextRestored`。
+backend 失败不会被隐藏。WebGL2 创建失败、绘制期间 context loss、无效 Mesh 状态和 GPU 上传失败都不会自动回退到 Canvas2D。WebGL2 context 丢失后，该层暂停绘制。Layer runtime 默认阻止原生 loss event，以便浏览器恢复它拥有的 context；`onContextLost` 只负责观察，不承担恢复所有权。恢复后运行时会丢弃失效 GPU handle，从 CPU Mesh 状态懒重建，标脏该层，再调用 `onContextRestored`。
 
 数组至少需要一项。普通 React rerender 中替换 descriptor 不会迁移已存在的运行时；backend 或生命周期回调变化时应调用 `reCreate()`。
 
-Shape 的 `layer` 从 0 开始。负索引会从末层换算，例如 `-1` 表示最后一层；正索引大于等于 layer 数量，或换算后仍为负数，都会抛出 `layer is out of range`。
+Shape 的 `layer` 从 0 开始，并且只能指向 Canvas2D 图层。负 Shape layer 会从末层换算，例如 `-1` 表示最后一层。`StayWebGLChild.layer` 必须是非负的 WebGL2 图层索引；backend 不匹配或越界会同步失败。
 
 ### eventList 与 listenerList 的生命周期
 
@@ -76,7 +77,7 @@ Shape 的 `layer` 从 0 开始。负索引会从末层换算，例如 `-1` 表�
 
 默认 `false` 时，有效的 width/height 变化会直接调整现有运行时。Canvas DOM、`StayTools`、Child、Shape、placement、历史、状态、listener 和 viewport 状态都保留原来的身份与值。Content 几何不会自动缩放、移动或重新布局：缩小时只会裁掉更多 Content，扩大后会显示更多 Content。Root 的命中边界跟随新的 View 尺寸，而 Root Shape 表示的 Content 边界保持不变。
 
-resize 会重设每个原生 Canvas 的位图，然后重新调用各层最初的 context resolver，使其恢复自己负责的 context 状态。所有可绘制层都会使用新的 `ShapeDrawProps.width/height` 重绘。若 resize 时存在活动 Pointer Session，运行时会先用旧坐标帧中的最后一个点取消该会话，并给出 `cancelReason: "resize"`。
+resize 会重设每个原生 Canvas 的位图，然后重新调用各层最初的 context resolver。Canvas2D 图层会使用新的 `ShapeDrawProps.width/height` 重绘；WebGL2 图层保留仍有效的 program/buffer cache，并在下一次脏帧使用新的 drawing-buffer aspect。若 resize 时存在活动 Pointer Session，运行时会先用旧坐标帧中的最后一个点取消该会话，并给出 `cancelReason: "resize"`。
 
 设为 `recreateOnResize={true}` 后，每次有效尺寸变化会改为销毁旧实例、创建新实例并再次调用 `mounted`。只应在应用明确需要重新创建或布局整个场景时使用；此前的运行时和 Child 引用随后失效。
 

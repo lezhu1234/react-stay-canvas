@@ -7,7 +7,6 @@ import type {
 } from "../../types/animation"
 import type { StayAnimatedChildProps } from "../../types/children"
 import { uuid4 } from "../../utils/identifiers"
-import { parseLayer } from "../../utils/stage"
 import { StayInstantChild } from "./stayInstantChild"
 import { Canvas } from "../../canvas"
 import { SetShapeChildCurrentTime } from "../types"
@@ -167,7 +166,7 @@ export class StayAnimatedChild<
   }
 
   onChildShapeChange(shape: T, _previousLayer: number) {
-    shape.layer = parseLayer(this.canvas.layers, shape.layer)
+    shape.layer = this.resolveChildShapeLayer(shape.layer, shape)
     console.warn("change property of AnimatedShape may cause unexpected behavior")
   }
 
@@ -326,9 +325,14 @@ export class StayAnimatedChild<
       throw new Error("slice must contain at least one keyframe")
     }
 
-    frames.forEach((frame) => this.checkShape(frame))
+    const previousLayers = frames.map(({ layer }) => layer)
+    const resolvedLayers = frames.map((frame) => {
+      this.checkShape(frame)
+      return this.resolveChildShapeLayer(frame.layer, frame)
+    })
     const previousParents = frames.map(({ parent }) => parent)
-    frames.forEach((frame) => {
+    frames.forEach((frame, index) => {
+      frame.layer = resolvedLayers[index]
       frame.parent = this
     })
     try {
@@ -337,12 +341,14 @@ export class StayAnimatedChild<
         const otherSlices = new Map(this.shapeFramesMap)
         otherSlices.delete(name)
         const zeroShape = this.checkShape(frames[0]._zeroShape(otherSlices) as T)
+        zeroShape.layer = this.resolveChildShapeLayer(zeroShape.layer, zeroShape)
         zeroShape.parent = this
         compiledFrames.unshift(zeroShape)
       }
       return compiledFrames
     } catch (error) {
       frames.forEach((frame, index) => {
+        frame.layer = previousLayers[index]
         frame.parent = previousParents[index]
       })
       throw error
@@ -362,6 +368,7 @@ export class StayAnimatedChild<
       this.shapeFramesMap.set(name, this.compileSlice(name, [shape], prependZeroShape))
     } else {
       this.checkShape(shape)
+      shape.layer = this.resolveChildShapeLayer(shape.layer, shape)
       shape.parent = this
       shapeFrames.push(shape)
     }

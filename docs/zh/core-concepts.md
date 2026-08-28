@@ -38,7 +38,7 @@ React application
 - 创建当前实例的 `StayTools`；
 - 按配置在尺寸变化后重建运行时，并在主动重建或卸载时统一清理旧实例。
 
-`StayCanvas` 的 `width` 和 `height` 决定场景坐标空间。`layers` 决定实际创建多少个叠放的 `<canvas>`，也可以逐层显式选择 Canvas2D 或 WebGL。Canvas2D 是默认值；WebGL 是 opt-in 绘制 backend，不是另一套场景模型。
+`StayCanvas` 的 `width` 和 `height` 决定场景坐标空间。`layers` 决定实际创建多少个叠放的 `<canvas>`，也可以逐层显式选择 Canvas2D 或 WebGL2。Canvas2D 是默认值；WebGL2 是必须配置 Camera 的 opt-in 原生 Mesh 场景。
 
 场景内容不是 React 子节点。应在 `mounted`、Listener 回调或应用操作中通过 `StayTools` 和 Child/Shape 方法修改场景。
 
@@ -116,7 +116,7 @@ Child placement 把其中全部 Shape 从同一个局部对象映射到 Content�
 
 多 Shape Child 中的每个 Shape 都可以选择不同图层。例如连线图编辑器可以让边显示在底层、节点显示在上层，同时仍把节点矩形和文字组织成一个 Child。
 
-每个原生图层只有一个 backend 所有者。Canvas2D 与 WebGL 消费相同的逐层 Shape 顺序；选择 WebGL 不会改变 Child placement、命中、历史、传输或截图语义。WebGL context loss 只暂停对应图层，也不会触发隐式 Canvas2D fallback。
+每个原生图层只有一个 backend 所有者。Canvas2D 图层消费 Shape RenderPlan；WebGL2 图层通过一台 Camera 和持久 GPU cache 消费 `StayWebGLChild` Mesh。两类 Child 共享同一份 identity store、selector、脏层调度、History 事务、state 和场景传输所有权，但不共享几何与排序：Shape `zIndex` 只属于 Canvas2D，WebGL2 由原生 depth 决定遮挡。WebGL2 context loss 只暂停对应图层，也不会触发隐式 Canvas2D fallback。
 
 ## `StayTools`：当前实例的操作入口
 

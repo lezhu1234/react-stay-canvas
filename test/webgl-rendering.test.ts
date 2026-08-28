@@ -257,7 +257,184 @@ describe("internal WebGL projective RenderPlan executor", () => {
     stage.destroy()
   })
 
-  it("rejects unsupported plans and capabilities before allocating GPU resources", () => {
+  it("batches consecutive affine items without changing mixed RenderPlan order", () => {
+    const { stage, layers } = createStage({ width: 200, height: 120, layers: 1 })
+    const order: string[] = []
+    const append = (name: string, zIndex: number) => stage.tools.appendChild({
+      className: name,
+      transform: name === "affine-2" ? { x: 15, y: 7 } : undefined,
+      shape: new Rectangle({
+        x: 0, y: 0, width: 80, height: 60, zIndex,
+        fillConfig: { color: { r: 40, g: 90, b: 180, a: 1 } },
+        stateDrawFuncMap: {
+          default: {
+            fill({ context }) {
+              context.fillRect(this.x, this.y, this.width, this.height)
+            },
+            afterDraw: () => order.push(name),
+          },
+        },
+      }),
+    })
+    const children = [
+      append("projected-2", 5),
+      append("affine-2", 4),
+      append("affine-1", 1),
+      append("projected-1", 3),
+      append("affine-middle", 2),
+    ]
+    const plan = createLayerRenderPlan(
+      children,
+      0,
+      undefined,
+      (child) => child.className.startsWith("projected")
+        ? { mapping: perspectivePlane(), mesh: { columns: 4, rows: 3 } }
+        : undefined
+    )
+    const gl = createRecordingContext(layers[0])
+
+    executeWebGLRenderPlan({
+      context: gl.context,
+      items: plan.items,
+      getNow: () => 42,
+      width: 200,
+      height: 120,
+      contentToView: { offsetX: 8, offsetY: 6, scale: 1.25 },
+      getProjectiveRasterScale: () => 2,
+      forceDraw: true,
+    })
+
+    expect(order).toEqual([
+      "affine-1",
+      "affine-middle",
+      "projected-1",
+      "affine-2",
+      "projected-2",
+    ])
+    // Two contiguous affine runs and two projective items become four ordered
+    // texture draws, while the first two affine Shapes share one raster.
+    expect(gl.spies.texImage2D).toHaveBeenCalledTimes(4)
+    expect(gl.spies.drawElements).toHaveBeenCalledTimes(4)
+    const firstAffineSurface = gl.spies.texImage2D.mock.calls[0][5] as HTMLCanvasElement
+    const secondAffineSurface = gl.spies.texImage2D.mock.calls[2][5] as HTMLCanvasElement
+    expect(firstAffineSurface.getContext("2d")!.getImageData(10, 10, 1, 1).data[3])
+      .toBeGreaterThan(0)
+    expect(secondAffineSurface.getContext("2d")!.getImageData(30, 20, 1, 1).data[3])
+      .toBeGreaterThan(0)
+    stage.destroy()
+  })
+
+  it("preserves Canvas2D composition inside an affine-only WebGL batch", () => {
+    const { stage, layers } = createStage({ width: 200, height: 120, layers: 1 })
+    const first = stage.tools.appendChild({
+      className: "source",
+      shape: new Rectangle({ x: 0, y: 0, width: 80, height: 60, zIndex: 1 }),
+    })
+    const second = stage.tools.appendChild({
+      className: "mask",
+      shape: new Rectangle({
+        x: 20, y: 10, width: 20, height: 20, zIndex: 2,
+        globalConfig: { gco: "destination-out" },
+      }),
+    })
+    const gl = createRecordingContext(layers[0])
+
+    executeWebGLRenderPlan({
+      context: gl.context,
+      items: createLayerRenderPlan([first, second], 0).items,
+      getNow: () => 0,
+      width: 200,
+      height: 120,
+      contentToView: identityFrame,
+      getProjectiveRasterScale: () => 1,
+      forceDraw: true,
+    })
+
+    expect(gl.spies.texImage2D).toHaveBeenCalledOnce()
+    expect(gl.spies.drawElements).toHaveBeenCalledOnce()
+    stage.destroy()
+  })
+
+  it("rejects mixed destination-dependent composition before allocating GPU resources", () => {
+    const { stage, layers } = createStage({ width: 200, height: 120, layers: 1 })
+    const projected = stage.tools.appendChild({
+      className: "projected",
+      shape: new Rectangle({ x: 0, y: 0, width: 80, height: 60 }),
+    })
+    const mask = stage.tools.appendChild({
+      className: "mask",
+      shape: new Rectangle({
+        x: 20, y: 10, width: 20, height: 20,
+        globalConfig: { gco: "destination-out" },
+      }),
+    })
+    const plan = createLayerRenderPlan(
+      [projected, mask], 0, undefined,
+      (child) => child === projected
+        ? { mapping: perspectivePlane(), mesh: { columns: 2, rows: 2 } }
+        : undefined
+    )
+    const gl = createRecordingContext(layers[0])
+
+    expect(() => executeWebGLRenderPlan({
+      context: gl.context,
+      items: plan.items,
+      getNow: () => 0,
+      width: 200,
+      height: 120,
+      contentToView: identityFrame,
+      getProjectiveRasterScale: () => 1,
+      forceDraw: true,
+    })).toThrow("currently supports source-over Shapes")
+    expect(gl.spies.createShader).not.toHaveBeenCalled()
+    stage.destroy()
+  })
+
+  it("rejects a later affine item made destination-dependent during mixed drawing", () => {
+    const { stage, layers } = createStage({ width: 200, height: 120, layers: 1 })
+    const affine = stage.tools.appendChild({
+      className: "affine",
+      shape: new Rectangle({ x: 0, y: 0, width: 80, height: 60, zIndex: 2 }),
+    })
+    const projected = stage.tools.appendChild({
+      className: "projected",
+      shape: new Rectangle({
+        x: 0, y: 0, width: 80, height: 60, zIndex: 1,
+        stateDrawFuncMap: {
+          default: {
+            afterDraw: () => {
+              affine.shape.globalConfig.gco = "destination-out"
+            },
+          },
+        },
+      }),
+    })
+    const plan = createLayerRenderPlan(
+      [affine, projected], 0, undefined,
+      (child) => child === projected
+        ? { mapping: perspectivePlane(), mesh: { columns: 2, rows: 2 } }
+        : undefined
+    )
+    const gl = createRecordingContext(layers[0])
+
+    expect(() => executeWebGLRenderPlan({
+      context: gl.context,
+      items: plan.items,
+      getNow: () => 0,
+      width: 200,
+      height: 120,
+      contentToView: identityFrame,
+      getProjectiveRasterScale: () => 1,
+      forceDraw: true,
+    })).toThrow("currently supports source-over Shapes")
+    expect(gl.spies.texImage2D).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteBuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.deleteProgram).toHaveBeenCalledOnce()
+    stage.destroy()
+  })
+
+  it("rejects oversized affine and projective rasters before allocating GPU resources", () => {
     const { stage, layers } = createStage({ width: 200, height: 120, layers: 1 })
     const child = stage.tools.appendChild({
       className: "affine",
@@ -276,7 +453,7 @@ describe("internal WebGL projective RenderPlan executor", () => {
     }
 
     expect(() => executeWebGLRenderPlan({ ...props, items: affinePlan.items }))
-      .toThrow("requires every RenderItem to have a projection")
+      .toThrow("affine batch raster 200x120 exceeds WebGL texture limit 64")
     expect(gl.spies.createShader).not.toHaveBeenCalled()
 
     const projectedPlan = createLayerRenderPlan(
@@ -321,6 +498,37 @@ describe("internal WebGL projective RenderPlan executor", () => {
       forceDraw: true,
     })).toThrow(failure)
     expect(gl.spies.drawElements).not.toHaveBeenCalled()
+    expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteBuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.deleteProgram).toHaveBeenCalledOnce()
+    stage.destroy()
+  })
+
+  it("cleans transient resources when affine batch drawing fails", () => {
+    const { stage, layers } = createStage({ width: 200, height: 120, layers: 1 })
+    const failure = new Error("WebGL affine Shape failed")
+    const child = stage.tools.appendChild({
+      className: "affine",
+      shape: new Rectangle({
+        x: 0, y: 0, width: 80, height: 60,
+        stateDrawFuncMap: {
+          default: { commonDraw: () => { throw failure } },
+        },
+      }),
+    })
+    const gl = createRecordingContext(layers[0])
+
+    expect(() => executeWebGLRenderPlan({
+      context: gl.context,
+      items: createLayerRenderPlan([child], 0).items,
+      getNow: () => 0,
+      width: 200,
+      height: 120,
+      contentToView: identityFrame,
+      getProjectiveRasterScale: () => 1,
+      forceDraw: true,
+    })).toThrow(failure)
+    expect(gl.spies.texImage2D).not.toHaveBeenCalled()
     expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
     expect(gl.spies.deleteBuffer).toHaveBeenCalledTimes(2)
     expect(gl.spies.deleteProgram).toHaveBeenCalledOnce()

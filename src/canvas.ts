@@ -1,24 +1,31 @@
-import type { ContextLayerSetFunction, DrawCanvasContext } from "./types/canvas"
+import type {
+  CanvasLayerConfig,
+  DrawCanvasContext,
+} from "./types/canvas"
 import type { ViewPoint } from "./types/coordinates"
 import type { Rect } from "./types/geometry"
 import type { SurfaceMetrics } from "./stay/coordinates/coordinateSystem"
+import { clearUnownedCanvas2DContext } from "./stay/rendering/canvas2DLayerRuntime"
 import {
-  Canvas2DLayerRuntime,
-  clearUnownedCanvas2DContext,
-} from "./stay/rendering/canvas2DLayerRuntime"
+  createLayerRuntime,
+  type LayerRuntime,
+} from "./stay/rendering/layerRuntime"
+
+type CanvasRenderContext = DrawCanvasContext | WebGLRenderingContext
 
 export class Canvas {
-  contexts: DrawCanvasContext[]
+  contexts: CanvasRenderContext[]
   height: number
   layers: HTMLCanvasElement[]
   status: string
   width: number
   bound: Rect
-  private readonly layerRuntimes: Canvas2DLayerRuntime[]
+  private readonly layerRuntimes: LayerRuntime[]
+  private layerInvalidationListener?: (layerIndex: number) => void
 
   constructor(
     layers: HTMLCanvasElement[],
-    contextLayerSetFunctionList: ContextLayerSetFunction[],
+    layerConfigs: CanvasLayerConfig[],
     width: number,
     height: number
   ) {
@@ -26,12 +33,24 @@ export class Canvas {
       throw new Error("Canvas must have at least one layer")
     }
     this.layers = layers
-    this.layerRuntimes = layers.map((layer, index) =>
-      new Canvas2DLayerRuntime(
-        layer,
-        contextLayerSetFunctionList[index],
-        index
-      ))
+    if (layerConfigs.length !== layers.length) {
+      throw new Error("Canvas layer configuration count must match its elements")
+    }
+    const layerRuntimes: LayerRuntime[] = []
+    try {
+      layers.forEach((layer, index) => {
+        layerRuntimes.push(createLayerRuntime(
+          layer,
+          layerConfigs[index],
+          index,
+          () => this.layerInvalidationListener?.(index)
+        ))
+      })
+    } catch (error) {
+      layerRuntimes.forEach((layer) => layer.destroy())
+      throw error
+    }
+    this.layerRuntimes = layerRuntimes
     this.width = width
     this.height = height
     this.status = "default"
@@ -44,7 +63,12 @@ export class Canvas {
       height: this.height,
     }
 
-    this.init()
+    try {
+      this.init()
+    } catch (error) {
+      this.layerRuntimes.forEach((layer) => layer.destroy())
+      throw error
+    }
   }
 
   get x(): number {
@@ -66,7 +90,7 @@ export class Canvas {
 
   public clear(context: DrawCanvasContext) {
     const layerRuntime = this.layerRuntimes[this.contexts.indexOf(context)]
-    if (layerRuntime) {
+    if (layerRuntime?.backend === "canvas2d") {
       layerRuntime.clear(context)
       return
     }
@@ -95,13 +119,37 @@ export class Canvas {
     transform: { offsetX: number; offsetY: number; scale: number },
     draw: (context: DrawCanvasContext) => void
   ) {
-    this.layerRuntimes[layerIndex].withFrame(
-      this.contexts[layerIndex],
+    const runtime = this.layerRuntimes[layerIndex]
+    if (runtime.backend !== "canvas2d") {
+      throw new Error(`Layer ${layerIndex} is not a Canvas2D layer`)
+    }
+    runtime.withFrame(
+      runtime.context,
       this.width,
       this.height,
       transform,
       draw
     )
+  }
+
+  getLayerBackend(layerIndex: number) {
+    return this.layerRuntimes[layerIndex].backend
+  }
+
+  getWebGLContext(layerIndex: number) {
+    const runtime = this.layerRuntimes[layerIndex]
+    if (runtime.backend !== "webgl") {
+      throw new Error(`Layer ${layerIndex} is not a WebGL layer`)
+    }
+    return runtime.context
+  }
+
+  isLayerDrawable(layerIndex: number) {
+    return this.layerRuntimes[layerIndex].isDrawable()
+  }
+
+  setLayerInvalidationListener(listener: (layerIndex: number) => void) {
+    this.layerInvalidationListener = listener
   }
 
   init() {
@@ -119,6 +167,11 @@ export class Canvas {
     // every configured context again after sizing so custom setters can
     // restore the state they own without recreating the Stay runtime.
     this.contexts = this.layerRuntimes.map((layer) => layer.resolveContext())
+  }
+
+  destroy() {
+    this.layerInvalidationListener = undefined
+    this.layerRuntimes.forEach((layer) => layer.destroy())
   }
 }
 

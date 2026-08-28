@@ -5,8 +5,10 @@
 ```ts
 import {
   StayCanvas,
+  type CanvasLayerConfig,
   type StayCanvasProps,
   type StayCanvasRefType,
+  type WebGLLayerConfig,
 } from "react-stay-canvas"
 ```
 
@@ -18,7 +20,7 @@ import {
 | --- | --- | --- | --- |
 | `width` | `number` | `500` | CSS 尺寸和 View 逻辑宽度，必须大于 0 |
 | `height` | `number` | `500` | CSS 尺寸和 View 逻辑高度，必须大于 0 |
-| `layers` | `number \| ContextLayerSetFunction[]` | `2` | Canvas 层数，或每层对应一个自定义 2D context setter |
+| `layers` | `number \| CanvasLayerConfig[]` | `2` | Canvas 层数，或逐层指定 Canvas2D/WebGL 配置 |
 | `className` | `string` | `""` | 外层 `<div>` 的 className |
 | `eventList` | `EventProps[]` | `[]` | 初始化时注册的 Event 定义 |
 | `listenerList` | `ListenerProps[]` | `[]` | 初始化时注册的 Listener |
@@ -36,7 +38,27 @@ import {
 <StayCanvas width={720} height={420} layers={3} />
 ```
 
-函数数组形式会为每个数组项创建一个 Canvas，并把该 Canvas 传给对应函数。数组至少需要一个函数，并且每个函数都必须返回可用的 2D 绘制 context。
+原有的函数数组形式会为每个数组项创建一个 Canvas，并把该 Canvas 传给对应函数；函数必须返回可用的 2D 绘制 context。判别式 descriptor 可以显式选择 backend，也可以和原有函数混用：
+
+```tsx
+<StayCanvas
+  layers={[
+    { backend: "canvas2d" },
+    {
+      backend: "webgl",
+      context: (canvas) => canvas.getContext("webgl", { alpha: true }),
+      onContextLost: (event) => event.preventDefault(),
+      onContextRestored: () => console.info("WebGL layer restored"),
+    },
+  ]}
+/>
+```
+
+Canvas2D 仍是默认 backend。WebGL 必须显式 opt-in，并消费同一份全序 RenderPlan，因此同层 affine 与 projective Shape 的 `zIndex` 顺序不变。Shape 仍使用原有 Canvas2D 绘制合同；WebGL backend 会先栅格化连续 affine 批次和有限 projective Shape，再按原顺序合成。当前只要一次 pass 包含 projective 内容，其中全部 Shape 就必须使用 `source-over`。
+
+backend 失败不会被隐藏。WebGL 创建失败、绘制期间 context loss、不支持的合成模式、无效 projective 几何和纹理尺寸超限都不会自动回退到 Canvas2D。WebGL context 丢失后，该层暂停绘制直到原生 context 恢复。`onContextLost` 收到可取消的原生事件；应用希望浏览器恢复 context 时，应在这里调用 `preventDefault()`。恢复后运行时会重新解析配置的 context，先把该层标记为需要重绘，再调用 `onContextRestored`。
+
+数组至少需要一项。普通 React rerender 中替换 descriptor 不会迁移已存在的运行时；backend 或生命周期回调变化时应调用 `reCreate()`。
 
 Shape 的 `layer` 从 0 开始。负索引会从末层换算，例如 `-1` 表示最后一层；正索引大于等于 layer 数量，或换算后仍为负数，都会抛出 `layer is out of range`。
 
@@ -54,7 +76,7 @@ Shape 的 `layer` 从 0 开始。负索引会从末层换算，例如 `-1` 表�
 
 默认 `false` 时，有效的 width/height 变化会直接调整现有运行时。Canvas DOM、`StayTools`、Child、Shape、placement、历史、状态、listener 和 viewport 状态都保留原来的身份与值。Content 几何不会自动缩放、移动或重新布局：缩小时只会裁掉更多 Content，扩大后会显示更多 Content。Root 的命中边界跟随新的 View 尺寸，而 Root Shape 表示的 Content 边界保持不变。
 
-resize 会重设每个原生 Canvas 的位图，然后重新调用各层最初的 context setter，使其恢复自己负责的 context 状态。所有层都会使用新的 `ShapeDrawProps.width/height` 重绘。若 resize 时存在活动 Pointer Session，运行时会先用旧坐标帧中的最后一个点取消该会话，并给出 `cancelReason: "resize"`。
+resize 会重设每个原生 Canvas 的位图，然后重新调用各层最初的 context resolver，使其恢复自己负责的 context 状态。所有可绘制层都会使用新的 `ShapeDrawProps.width/height` 重绘。若 resize 时存在活动 Pointer Session，运行时会先用旧坐标帧中的最后一个点取消该会话，并给出 `cancelReason: "resize"`。
 
 设为 `recreateOnResize={true}` 后，每次有效尺寸变化会改为销毁旧实例、创建新实例并再次调用 `mounted`。只应在应用明确需要重新创建或布局整个场景时使用；此前的运行时和 Child 引用随后失效。
 

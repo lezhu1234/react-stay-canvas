@@ -1,10 +1,17 @@
 import { Canvas } from "../canvas"
 import type { DrawReturn, StayDrawProps } from "../types/tools"
 import { StayInstantChild } from "./children/stayInstantChild"
-import { CoordinateSystem } from "./coordinates/coordinateSystem"
+import {
+  CoordinateSystem,
+  type CoordinateFrame,
+} from "./coordinates/coordinateSystem"
 import { executeCanvas2DRenderPlan } from "./rendering/canvas2DExecutor"
 import { resolveCanvas2DProjectiveQuality } from "./rendering/canvas2DProjectiveQuality"
-import { createLayerRenderPlan } from "./rendering/renderPlan"
+import {
+  createLayerRenderPlan,
+  type LayerRenderPlan,
+} from "./rendering/renderPlan"
+import { executeWebGLRenderPlan } from "./rendering/webGLExecutor"
 
 interface DrawLayer {
   forceUpdate: boolean
@@ -74,43 +81,19 @@ export class Renderer {
       for (let layerIndex = 0; layerIndex < childrenInlayer.length; layerIndex++) {
         const { updateCurrentLayer } = childrenInlayer[layerIndex]
 
-        if (!updateCurrentLayer) {
+        if (!updateCurrentLayer || !this.root.isLayerDrawable(layerIndex)) {
           continue
         }
 
         updatedLayers.push(layerIndex)
-
-        this.root.withLayerFrame(layerIndex, frame.contentToView, (context) => {
-          const plan = createLayerRenderPlan(
-            children,
-            layerIndex,
-            frame.visibleContentArea
-          )
-          children.forEach((child) => child.layerDraw(layerIndex))
-          updatedChilds.push(...plan.updatedChildren)
-          executeCanvas2DRenderPlan({
-            context,
-            items: plan.items,
-            getNow: () => now,
-            width: this.root.width,
-            height: this.root.height,
-            getProjectiveQuality: ({ projection }) => {
-              if (!projection) {
-                throw new Error("projective quality requires a projective RenderItem")
-              }
-              const layer = this.root.layers[layerIndex]
-              return resolveCanvas2DProjectiveQuality({
-                mapping: projection.mapping,
-                outputWidth: layer.width,
-                outputHeight: layer.height,
-                contentScaleX:
-                  layer.width / this.root.width * frame.contentToView.scale,
-                contentScaleY:
-                  layer.height / this.root.height * frame.contentToView.scale,
-              })
-            },
-          })
-        })
+        const plan = createLayerRenderPlan(
+          children,
+          layerIndex,
+          frame.visibleContentArea
+        )
+        children.forEach((child) => child.layerDraw(layerIndex))
+        updatedChilds.push(...plan.updatedChildren)
+        this.#drawLayer(layerIndex, frame, plan, now)
       }
       this.#lastRenderedCoordinateRevision = frame.revision
     } catch (error) {
@@ -125,6 +108,60 @@ export class Renderer {
     this.#drainNextTick()
 
     return { updatedLayers, updatedChilds }
+  }
+
+  #drawLayer(
+    layerIndex: number,
+    frame: CoordinateFrame,
+    plan: LayerRenderPlan,
+    now: number
+  ) {
+    const quality = (mapping: Parameters<typeof resolveCanvas2DProjectiveQuality>[0]["mapping"]) => {
+      const layer = this.root.layers[layerIndex]
+      return resolveCanvas2DProjectiveQuality({
+        mapping,
+        outputWidth: layer.width,
+        outputHeight: layer.height,
+        contentScaleX:
+          layer.width / this.root.width * frame.contentToView.scale,
+        contentScaleY:
+          layer.height / this.root.height * frame.contentToView.scale,
+      })
+    }
+
+    if (this.root.getLayerBackend(layerIndex) === "webgl") {
+      executeWebGLRenderPlan({
+        context: this.root.getWebGLContext(layerIndex),
+        items: plan.items,
+        getNow: () => now,
+        width: this.root.width,
+        height: this.root.height,
+        contentToView: frame.contentToView,
+        getProjectiveRasterScale: ({ projection }) => {
+          if (!projection) {
+            throw new Error("projective quality requires a projective RenderItem")
+          }
+          return quality(projection.mapping).rasterScale
+        },
+      })
+      return
+    }
+
+    this.root.withLayerFrame(layerIndex, frame.contentToView, (context) => {
+      executeCanvas2DRenderPlan({
+        context,
+        items: plan.items,
+        getNow: () => now,
+        width: this.root.width,
+        height: this.root.height,
+        getProjectiveQuality: ({ projection }) => {
+          if (!projection) {
+            throw new Error("projective quality requires a projective RenderItem")
+          }
+          return quality(projection.mapping)
+        },
+      })
+    })
   }
 
   // The continuous render loop. Incremental: draw() only repaints dirty layers,
@@ -149,7 +186,15 @@ export class Renderer {
     if (!this.#running) return
 
     this.#frameId = undefined
-    this.draw({ now: Date.now() })
+    try {
+      this.draw({ now: Date.now() })
+    } catch (error) {
+      // A failed frame has no scheduled successor. Keep the lifecycle state
+      // honest so an explicit invalidation such as WebGL context restoration
+      // can start a fresh loop after the error has propagated.
+      this.#running = false
+      throw error
+    }
     if (!this.#running) return
 
     this.#frameId = window.requestAnimationFrame(() => this.#runFrame())

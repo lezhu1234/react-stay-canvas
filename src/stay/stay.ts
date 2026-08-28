@@ -3,7 +3,7 @@ import { Root } from "../shapes/root"
 import { InstantShape } from "../shapes/instantShape"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
-import type { ContextLayerSetFunction } from "../types/canvas"
+import type { CanvasLayerConfig } from "../types/canvas"
 import type { SelectorFunc } from "../types/children"
 import type { EventProps, ListenerNamePayloadPair, ListenerProps } from "../types/events"
 import type { DrawReturn, StayDrawProps, StayTools, ViewportOptions } from "../types/tools"
@@ -100,6 +100,10 @@ class Stay<EventName extends string> {
       () => this.children.values().filter((child) => child.id !== this.rootId),
       this.coordinates
     )
+    this.root.setLayerInvalidationListener((layerIndex) => {
+      this.renderer.forceUpdateLayer(layerIndex)
+      this.renderer.start()
+    })
     this.eventRuntime = new EventRuntime({
       canvas: this.root,
       coordinates: this.coordinates,
@@ -177,6 +181,7 @@ class Stay<EventName extends string> {
   destroy() {
     this.eventDispatcher.destroy()
     this.renderer.stop()
+    this.root.destroy()
     this.eventRuntime.clearEvents()
     this.actionRouter.clearListeners()
   }
@@ -281,14 +286,14 @@ class Stay<EventName extends string> {
 // dimensions" — used by both StayCanvas and the test harness so they can't drift.
 export function createStay(
   canvasLayers: HTMLCanvasElement[],
-  contextLayerSetFunctionList: ContextLayerSetFunction[],
+  layerConfigs: CanvasLayerConfig[],
   width: number,
   height: number,
   passive: boolean,
   viewportOptions?: ViewportOptions
 ): Stay<string> {
   return new Stay(
-    new Canvas(canvasLayers, contextLayerSetFunctionList, width, height),
+    new Canvas(canvasLayers, layerConfigs, width, height),
     passive,
     viewportOptions
   )

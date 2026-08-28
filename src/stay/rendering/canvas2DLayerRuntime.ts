@@ -2,6 +2,7 @@ import type {
   ContextLayerSetFunction,
   DrawCanvasContext,
 } from "../../types/canvas"
+import { resizeLayerSurface } from "./layerSurface"
 
 interface ContentToViewFrame {
   readonly offsetX: number
@@ -25,6 +26,7 @@ function clearContext(
 
 /** @internal Owns the Canvas2D lifecycle of one existing HTML canvas layer. */
 export class Canvas2DLayerRuntime {
+  readonly backend = "canvas2d"
   context!: DrawCanvasContext
 
   constructor(
@@ -34,12 +36,14 @@ export class Canvas2DLayerRuntime {
   ) {}
 
   resizeBackingStore(width: number, height: number) {
-    const dpr = window.devicePixelRatio || 1
-    this.element.width = Math.round(width * dpr)
-    this.element.height = Math.round(height * dpr)
-    this.element.style.width = `${width}px`
-    this.element.style.height = `${height}px`
+    resizeLayerSurface(this.element, width, height)
   }
+
+  isDrawable() {
+    return true
+  }
+
+  destroy() {}
 
   resolveContext() {
     const context = this.resolveConfiguredContext(this.element)

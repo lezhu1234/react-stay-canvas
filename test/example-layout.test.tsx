@@ -43,6 +43,7 @@ import {
 import { type ExampleDefinition } from "../example/src/examples/types"
 import { I18nProvider } from "../example/src/i18n"
 import { installPointerEvents, pointer } from "./helpers/pointer"
+import { createRecordingWebGLContext } from "./helpers/webgl"
 
 vi.stubGlobal("OffscreenCanvas", class {
   constructor(public width: number, public height: number) {}
@@ -56,6 +57,7 @@ let originalClientHeight: PropertyDescriptor | undefined
 let originalClientWidth: PropertyDescriptor | undefined
 let viewportHeight = 480
 let viewportWidth = 920
+let webGLContexts = new Map<HTMLCanvasElement, ReturnType<typeof createRecordingWebGLContext>>()
 
 beforeEach(() => {
   ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
@@ -64,6 +66,24 @@ beforeEach(() => {
   window.cancelAnimationFrame = () => {}
   viewportHeight = 480
   viewportWidth = 920
+  webGLContexts = new Map()
+  const nativeGetContext = HTMLCanvasElement.prototype.getContext
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
+    this: HTMLCanvasElement,
+    contextId: string,
+    ...args: unknown[]
+  ) {
+    if (contextId === "webgl") {
+      let recording = webGLContexts.get(this)
+      if (!recording) {
+        recording = createRecordingWebGLContext(this)
+        webGLContexts.set(this, recording)
+      }
+      return recording.context
+    }
+    return (nativeGetContext as (...parameters: unknown[]) => unknown)
+      .call(this, contextId, ...args)
+  } as typeof HTMLCanvasElement.prototype.getContext)
   originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight")
   originalClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth")
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
@@ -386,6 +406,8 @@ describe("Example Canvas workspace", () => {
       .toContain("Live Canvas")
     expect(workspace?.querySelector(".coordinate-live-exhibit .canvas-viewport-label")?.textContent)
       .toBe("CLIENT DOM · 80% × 80%")
+    expect(workspace?.querySelector(".coordinate-stack-exhibit .canvas-viewport-label")?.textContent)
+      .toBe("WEBGL · PROJECTIVE")
     expect(container.querySelector(".coordinate-hero")?.textContent).toContain("One point,")
     expect(container.querySelector(".coordinate-hero")?.textContent).toContain("three spaces.")
     expect(workspace?.querySelector(".coordinate-live-heading")?.textContent).toContain("CLIENT SPACE")
@@ -402,8 +424,7 @@ describe("Example Canvas workspace", () => {
     expect(displayTransform?.style.transform).toBe("translate(0px, 0px) scale(0.8, 0.8)")
 
     stackLayers?.forEach((canvas) => {
-      const pixels = canvas.getContext("2d")?.getImageData(0, 0, canvas.width, canvas.height).data
-      expect(pixels?.some((value, index) => index % 4 === 3 && value > 0)).toBe(true)
+      expect(webGLContexts.get(canvas)?.spies.drawElements).toHaveBeenCalled()
     })
 
     const flow = container.querySelector(".coordinate-flow")
@@ -514,7 +535,9 @@ describe("Example Canvas workspace", () => {
       resetView?.click()
     })
 
-    const contentPlaneBeforeZoom = stackLayers?.[2].toDataURL()
+    const contentPlaneDrawsBeforeZoom = stackLayers?.[2]
+      ? webGLContexts.get(stackLayers[2])?.spies.drawElements.mock.calls.length
+      : undefined
     const zoomIn = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
       .find((button) => button.textContent === "zoom in")
     act(() => zoomIn?.click())
@@ -525,7 +548,8 @@ describe("Example Canvas workspace", () => {
     expect(proofValue("View projection")).toContain("228×144")
     expect(proofValue("Client footprint")).not.toBe(clientFootprint)
     expect(proofValue("Visible Content window")).not.toBe(visibleWindow)
-    expect(stackLayers?.[2].toDataURL()).not.toBe(contentPlaneBeforeZoom)
+    expect(webGLContexts.get(stackLayers![2])?.spies.drawElements.mock.calls.length)
+      .toBeGreaterThan(contentPlaneDrawsBeforeZoom ?? 0)
 
     const reset = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
       .find((button) => button.textContent === "reset")

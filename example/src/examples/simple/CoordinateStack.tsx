@@ -63,7 +63,6 @@ type PlaneDefinition = {
   placement: ChildPlacement
   fill: ReturnType<typeof rgba>
   stroke: ReturnType<typeof rgba>
-  glow: ReturnType<typeof rgba>
 }
 
 type QuadPoints = [Coordinate, Coordinate, Coordinate, Coordinate]
@@ -71,11 +70,7 @@ type QuadPoints = [Coordinate, Coordinate, Coordinate, Coordinate]
 type PlaneRuntime = PlaneDefinition & {
   child: StayInstantChild
   frame: Polygon
-  glassLight: Polygon
-  glassShade: Polygon
-  ambientShadow: Polygon
-  contactShadow: Polygon
-  floorGlow: Polygon
+  shadow: Polygon
   title: StayText
   dimension: StayText
   dot: Circle
@@ -97,19 +92,16 @@ type StackRuntime = {
 
 const planePalette = {
   client: {
-    fill: rgba(227, 226, 219, 0.16),
-    stroke: rgba(104, 113, 111, 0.76),
-    glow: rgba(225, 142, 111, 0.22),
+    fill: rgba(111, 190, 229, 0.045),
+    stroke: rgba(74, 163, 214, 0.68),
   },
   view: {
-    fill: rgba(75, 126, 230, 0.12),
-    stroke: rgba(54, 105, 221, 0.84),
-    glow: rgba(76, 127, 232, 0.24),
+    fill: rgba(132, 186, 103, 0.055),
+    stroke: rgba(70, 143, 77, 0.72),
   },
   content: {
-    fill: rgba(62, 153, 117, 0.11),
-    stroke: rgba(44, 137, 91, 0.84),
-    glow: rgba(50, 153, 111, 0.24),
+    fill: rgba(166, 137, 216, 0.05),
+    stroke: rgba(137, 105, 197, 0.68),
   },
 } as const
 
@@ -424,70 +416,6 @@ function createPlaneRuntime(
     fillConfig: { color: plane.fill },
     strokeConfig: { color: plane.stroke, lineWidth: 1.25 },
   })
-  const glassShade = new Polygon({
-    points: [
-      { x: plane.width * 0.38, y: 0 },
-      { x: plane.width, y: 0 },
-      { x: plane.width, y: plane.height },
-      { x: plane.width * 0.18, y: plane.height },
-    ],
-    layer: plane.layer,
-    zIndex: 1,
-    filter: "blur(7px)",
-    fillConfig: { color: { ...plane.stroke, a: 0.065 } },
-    strokeConfig: { color: rgba(39, 51, 67, 0), lineWidth: 0 },
-  })
-  const glassLight = new Polygon({
-    points: [
-      { x: 0, y: 0 },
-      { x: plane.width * 0.72, y: 0 },
-      { x: plane.width * 0.38, y: plane.height },
-      { x: 0, y: plane.height },
-    ],
-    layer: plane.layer,
-    zIndex: 2,
-    filter: "blur(5px)",
-    fillConfig: { color: rgba(255, 255, 255, 0.2) },
-    strokeConfig: { color: rgba(255, 255, 255, 0), lineWidth: 0 },
-  })
-  const refractionEdges = [
-    new Line({
-      x1: 1,
-      y1: 1,
-      x2: plane.width - 1,
-      y2: 1,
-      layer: plane.layer,
-      zIndex: 4,
-      strokeConfig: { color: rgba(255, 255, 255, 0.78), lineWidth: 1.15 },
-    }),
-    new Line({
-      x1: 1,
-      y1: 1,
-      x2: 1,
-      y2: plane.height - 1,
-      layer: plane.layer,
-      zIndex: 4,
-      strokeConfig: { color: rgba(255, 255, 255, 0.64), lineWidth: 1.05 },
-    }),
-    new Line({
-      x1: 1,
-      y1: plane.height - 1,
-      x2: plane.width - 1,
-      y2: plane.height - 1,
-      layer: plane.layer,
-      zIndex: 4,
-      strokeConfig: { color: { ...plane.stroke, a: 0.36 }, lineWidth: 2 },
-    }),
-    new Line({
-      x1: plane.width - 1,
-      y1: 1,
-      x2: plane.width - 1,
-      y2: plane.height - 1,
-      layer: plane.layer,
-      zIndex: 4,
-      strokeConfig: { color: { ...plane.stroke, a: 0.28 }, lineWidth: 1.7 },
-    }),
-  ]
   const axisColor = rgba(78, 89, 104, 0.24)
   const xAxis = new Line({
     x1: 12,
@@ -594,9 +522,6 @@ function createPlaneRuntime(
     placement: plane.placement,
     shape: [
       frame,
-      glassShade,
-      glassLight,
-      ...refractionEdges,
       ...gridX,
       ...gridY,
       xAxis,
@@ -619,37 +544,14 @@ function createPlaneRuntime(
     height: plane.height,
   }).map((point) => {
     const projected = planeContentPoint({ child }, point)
-    return { x: projected.x + 7, y: projected.y + 12 }
+    return { x: projected.x + 4, y: projected.y + 7 }
   }) as QuadPoints
-  const ambientShadow = new Polygon({
+  const shadow = new Polygon({
     points: shadowPoints,
     layer: plane.layer,
-    zIndex: -4,
-    filter: "blur(18px)",
-    fillConfig: { color: { ...plane.stroke, a: 0.12 } },
-    strokeConfig: { color: rgba(39, 51, 67, 0), lineWidth: 0 },
-  })
-  const contactShadow = new Polygon({
-    points: shadowPoints.map((point) => ({ x: point.x - 3, y: point.y - 5 })),
-    layer: plane.layer,
-    zIndex: -3,
-    filter: "blur(5px)",
-    fillConfig: { color: rgba(33, 49, 45, 0.13) },
-    strokeConfig: { color: rgba(39, 51, 67, 0), lineWidth: 0 },
-  })
-  const bottomLeft = planeContentPoint({ child }, { x: 0, y: plane.height })
-  const bottomRight = planeContentPoint({ child }, { x: plane.width, y: plane.height })
-  const floorGlow = new Polygon({
-    points: [
-      { x: bottomLeft.x - 3, y: bottomLeft.y + 2 },
-      { x: bottomRight.x + 3, y: bottomRight.y + 2 },
-      { x: bottomRight.x + 12, y: bottomRight.y + 27 },
-      { x: bottomLeft.x - 12, y: bottomLeft.y + 27 },
-    ],
-    layer: plane.layer,
-    zIndex: -5,
-    filter: "blur(13px)",
-    fillConfig: { color: plane.glow },
+    zIndex: -2,
+    filter: "blur(9px)",
+    fillConfig: { color: { ...plane.stroke, a: 0.1 } },
     strokeConfig: { color: rgba(39, 51, 67, 0), lineWidth: 0 },
   })
   const dot = new Circle({
@@ -672,16 +574,12 @@ function createPlaneRuntime(
     fillConfig: { color: colors.orange },
   })
   return {
-    overlays: [floorGlow, ambientShadow, contactShadow, dot, value, title, dimension],
+    overlays: [shadow, dot, value, title, dimension],
     runtime: {
       ...plane,
       child,
       frame,
-      glassLight,
-      glassShade,
-      ambientShadow,
-      contactShadow,
-      floorGlow,
+      shadow,
       title,
       dimension,
       dot,
@@ -731,20 +629,8 @@ export function CoordinateStack({
         fillConfig: { color: { ...plane.fill, a: isActive ? plane.fill.a : plane.fill.a * 0.72 } },
         strokeConfig: { color: { ...plane.stroke, a: isActive ? plane.stroke.a : plane.stroke.a * 0.68 }, lineWidth: isActive ? 1.35 : 1 },
       })
-      plane.glassLight.update({
-        fillConfig: { color: rgba(255, 255, 255, isActive ? 0.22 : 0.14) },
-      })
-      plane.glassShade.update({
-        fillConfig: { color: { ...plane.stroke, a: isActive ? 0.075 : 0.045 } },
-      })
-      plane.ambientShadow.update({
-        fillConfig: { color: { ...plane.stroke, a: isActive ? 0.13 : 0.075 } },
-      })
-      plane.contactShadow.update({
-        fillConfig: { color: rgba(33, 49, 45, isActive ? 0.14 : 0.085) },
-      })
-      plane.floorGlow.update({
-        fillConfig: { color: { ...plane.glow, a: isActive ? plane.glow.a : plane.glow.a * 0.55 } },
+      plane.shadow.update({
+        fillConfig: { color: { ...plane.stroke, a: isActive ? 0.12 : 0.065 } },
       })
       plane.title.update({ fillConfig: { color: { ...plane.stroke, a: isActive ? 1 : 0.68 } } })
       plane.dimension.update({

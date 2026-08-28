@@ -109,6 +109,8 @@ describe("public native WebGL2 layer backend", () => {
     stage.draw({ now: 1 })
     key.setDirectionToLight([0.4, 0.2, 1])
     expect(stage.draw({ now: 2 }).updatedLayers).toEqual([0])
+    key.setShadow({ target: [0, 0, 0], width: 6, height: 4 })
+    expect(stage.draw({ now: 2.5 }).updatedLayers).toEqual([0])
     ambient.setIntensity(0.45)
     expect(stage.draw({ now: 3 }).updatedLayers).toEqual([0])
     expect(gl?.spies.bufferData).toHaveBeenCalledTimes(3)
@@ -192,7 +194,11 @@ describe("public native WebGL2 layer backend", () => {
       }
     }
     const source = createStage({ layers: [config()] }).stage
-    const mesh = new Mesh({ geometry: triangle(), material: unlit([0.2, 0.5, 0.9, 1]) })
+    const mesh = new Mesh({
+      geometry: triangle(),
+      material: unlit([0.2, 0.5, 0.9, 1]),
+      castShadow: true,
+    })
     const child = source.tools.webgl.appendChild({
       id: "native-history",
       className: "native",
@@ -201,6 +207,8 @@ describe("public native WebGL2 layer backend", () => {
     })
     source.tools.log()
     mesh.setMaterial(unlit([0.9, 0.2, 0.1, 1]))
+    mesh.setCastShadow(false)
+    mesh.setReceiveShadow(true)
     child.setClassName("native:edited")
     source.tools.log()
 
@@ -208,15 +216,21 @@ describe("public native WebGL2 layer backend", () => {
     expect(source.tools.webgl.getChildById(child.id)).toBe(child)
     expect(child.className).toBe("native")
     expect(child.meshes[0].getMaterial()).toEqual(unlit([0.2, 0.5, 0.9, 1]))
+    expect(child.meshes[0].castShadow).toBe(true)
+    expect(child.meshes[0].receiveShadow).toBe(false)
     source.tools.redo()
     expect(child.className).toBe("native:edited")
     expect(child.meshes[0].getMaterial()).toEqual(unlit([0.9, 0.2, 0.1, 1]))
+    expect(child.meshes[0].castShadow).toBe(false)
+    expect(child.meshes[0].receiveShadow).toBe(true)
 
     const fragment = source.tools.webgl.exportChildren([child])
     const target = createStage({ layers: [config()] }).stage
     const [imported] = target.tools.webgl.importChildren(fragment)
     expect(imported.id).not.toBe(child.id)
     expect(imported.className).toBe(child.className)
+    expect(imported.meshes[0].castShadow).toBe(false)
+    expect(imported.meshes[0].receiveShadow).toBe(true)
     imported.meshes[0].setMaterial(unlit([0, 1, 0, 1]))
     expect(child.meshes[0].getMaterial()).toEqual(unlit([0.9, 0.2, 0.1, 1]))
   })
@@ -401,6 +415,14 @@ describe("public native WebGL2 layer backend", () => {
         directionToLight: [0, 0, 1],
       })),
     }] })).toThrow("supports at most 4 directional lights")
+    expect(() => createStage({ layers: [{
+      backend: "webgl2",
+      camera: camera(),
+      lights: [
+        new DirectionalLight({ directionToLight: [0.2, 0.4, 1], shadow: {} }),
+        new DirectionalLight({ directionToLight: [-0.2, 0.4, 1], shadow: {} }),
+      ],
+    }] })).toThrow("at most one shadow-casting directional light")
 
     const first = document.createElement("canvas")
     const second = document.createElement("canvas")

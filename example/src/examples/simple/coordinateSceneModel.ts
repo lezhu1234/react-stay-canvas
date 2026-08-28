@@ -219,6 +219,22 @@ export function createPlaneBasis(
   }
 }
 
+export function backdropMeshGeometry(
+  canvasWidth: number,
+  canvasHeight: number,
+  depth = 6.25,
+): MeshGeometryInput {
+  const points = [
+    worldPointFromCanvas({ x: 0, y: 0 }, depth, canvasWidth, canvasHeight),
+    worldPointFromCanvas({ x: canvasWidth, y: 0 }, depth, canvasWidth, canvasHeight),
+    worldPointFromCanvas({ x: canvasWidth, y: canvasHeight }, depth, canvasWidth, canvasHeight),
+    worldPointFromCanvas({ x: 0, y: canvasHeight }, depth, canvasWidth, canvasHeight),
+  ]
+  const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
+  appendQuad(builder, points, [0, 0, 1])
+  return builder
+}
+
 export function planeWorldPoint(
   plane: PlaneDefinition,
   basis: PlaneBasis,

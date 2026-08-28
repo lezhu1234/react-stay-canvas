@@ -126,16 +126,22 @@ export class Mesh {
   #geometryRevision = 0
   #modelMatrix: Matrix4
   #material: MeshMaterial
+  #castShadow: boolean
+  #receiveShadow: boolean
   readonly #changeListeners = new Set<() => void>()
 
   constructor({
     geometry,
     modelMatrix = identityMatrix4(),
     material,
+    castShadow = false,
+    receiveShadow = false,
   }: {
     geometry: MeshGeometryInput
     modelMatrix?: ArrayLike<number>
     material?: MeshMaterial
+    castShadow?: boolean
+    receiveShadow?: boolean
   }) {
     const copied = copyGeometry(geometry)
     const copiedMaterial = copyMeshMaterial(material ?? new UnlitMaterial())
@@ -147,6 +153,8 @@ export class Mesh {
     this.#localBoundsCenter = copied.localBoundsCenter
     this.#modelMatrix = copiedModelMatrix
     this.#material = copiedMaterial
+    this.#castShadow = copyBoolean(castShadow, "Mesh castShadow")
+    this.#receiveShadow = copyBoolean(receiveShadow, "Mesh receiveShadow")
   }
 
   setGeometry(geometry: MeshGeometryInput) {
@@ -193,6 +201,28 @@ export class Mesh {
     if (materialsEqual(this.#material, copied)) return
     this.#material = copied
     this.#notifyChange()
+  }
+
+  setCastShadow(castShadow: boolean) {
+    const next = copyBoolean(castShadow, "Mesh castShadow")
+    if (this.#castShadow === next) return
+    this.#castShadow = next
+    this.#notifyChange()
+  }
+
+  setReceiveShadow(receiveShadow: boolean) {
+    const next = copyBoolean(receiveShadow, "Mesh receiveShadow")
+    if (this.#receiveShadow === next) return
+    this.#receiveShadow = next
+    this.#notifyChange()
+  }
+
+  get castShadow() {
+    return this.#castShadow
+  }
+
+  get receiveShadow() {
+    return this.#receiveShadow
   }
 
   get geometryRevision() {
@@ -245,6 +275,11 @@ export class Mesh {
       indices: this.#indices,
     }
   }
+}
+
+function copyBoolean(value: boolean, name: string) {
+  if (typeof value !== "boolean") throw new TypeError(`${name} must be a boolean`)
+  return value
 }
 
 function optionalArrayValuesEqual(

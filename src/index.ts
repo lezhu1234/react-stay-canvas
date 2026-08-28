@@ -28,6 +28,8 @@ export { AmbientLight, DirectionalLight } from "./stay/webgl2/light"
 export type {
   AmbientLightProps,
   DirectionalLightProps,
+  DirectionalShadow,
+  DirectionalShadowProps,
   LightColor,
   WebGLLight,
 } from "./stay/webgl2/light"

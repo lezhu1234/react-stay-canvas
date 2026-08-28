@@ -1,4 +1,6 @@
 import {
+  DirectionalLight,
+  directionalLightShadowViewProjection,
   webGL2DirectionalLightLimit,
   type WebGLLight,
 } from "./light"
@@ -13,6 +15,12 @@ import {
   type MeshMaterial,
 } from "./material"
 import { PerspectiveCamera } from "./perspectiveCamera"
+import {
+  createShadowMapResources,
+  createShadowPipeline,
+  type ShadowMapResources,
+  type ShadowPipelineResources,
+} from "./shadowResources"
 
 interface UnlitPipelineResources {
   readonly kind: "unlit"
@@ -32,6 +40,11 @@ interface LambertPipelineResources {
   readonly directionalLightCountLocation: WebGLUniformLocation
   readonly directionToLightsLocation: WebGLUniformLocation
   readonly directionalLightColorsLocation: WebGLUniformLocation
+  readonly shadowLightIndexLocation: WebGLUniformLocation
+  readonly shadowViewProjectionLocation: WebGLUniformLocation
+  readonly shadowMapLocation: WebGLUniformLocation
+  readonly shadowBiasLocation: WebGLUniformLocation
+  readonly receiveShadowLocation: WebGLUniformLocation
 }
 
 interface GlassPipelineResources {
@@ -46,6 +59,11 @@ interface GlassPipelineResources {
   readonly directionToLightsLocation: WebGLUniformLocation
   readonly directionalLightColorsLocation: WebGLUniformLocation
   readonly cameraPositionLocation: WebGLUniformLocation
+  readonly shadowLightIndexLocation: WebGLUniformLocation
+  readonly shadowViewProjectionLocation: WebGLUniformLocation
+  readonly shadowMapLocation: WebGLUniformLocation
+  readonly shadowBiasLocation: WebGLUniformLocation
+  readonly receiveShadowLocation: WebGLUniformLocation
 }
 
 type LitPipelineResources = LambertPipelineResources | GlassPipelineResources
@@ -65,6 +83,13 @@ interface LightingSnapshot {
   readonly directionToLights: Float32Array
   readonly directionalColors: Float32Array
   readonly directionalCount: number
+}
+
+interface ShadowFrame {
+  readonly lightIndex: number
+  readonly lightViewProjection: Matrix4
+  readonly bias: number
+  readonly resources: ShadowMapResources
 }
 
 interface DrawItem {
@@ -93,10 +118,13 @@ uniform mat4 u_view_projection;
 uniform mat4 u_model;
 uniform mat3 u_normal_matrix;
 out vec3 world_normal;
+out vec3 world_position;
 
 void main() {
-  gl_Position = u_view_projection * u_model * vec4(a_position, 1.0);
+  vec4 world = u_model * vec4(a_position, 1.0);
+  gl_Position = u_view_projection * world;
   world_normal = normalize(u_normal_matrix * a_normal);
+  world_position = world.xyz;
 }
 `
 
@@ -127,6 +155,36 @@ void main() {
 }
 `
 
+const SHADOW_FRAGMENT_INPUTS = `
+uniform int u_shadow_light_index;
+uniform mat4 u_shadow_view_projection;
+uniform sampler2D u_shadow_map;
+uniform float u_shadow_bias;
+uniform bool u_receive_shadow;
+in vec3 world_position;
+
+float shadow_visibility() {
+  if (!u_receive_shadow || u_shadow_light_index < 0) return 1.0;
+  vec4 light_clip = u_shadow_view_projection * vec4(world_position, 1.0);
+  vec3 shadow_coordinate = light_clip.xyz / light_clip.w * 0.5 + 0.5;
+  if (shadow_coordinate.x < 0.0 || shadow_coordinate.x > 1.0
+      || shadow_coordinate.y < 0.0 || shadow_coordinate.y > 1.0
+      || shadow_coordinate.z < 0.0 || shadow_coordinate.z > 1.0) return 1.0;
+  vec2 texel = 1.0 / vec2(textureSize(u_shadow_map, 0));
+  float visible = 0.0;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      float stored_depth = texture(
+        u_shadow_map,
+        shadow_coordinate.xy + vec2(float(x), float(y)) * texel
+      ).r;
+      visible += shadow_coordinate.z - u_shadow_bias <= stored_depth ? 1.0 : 0.0;
+    }
+  }
+  return visible / 9.0;
+}
+`
+
 const LAMBERT_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 #define MAX_DIRECTIONAL_LIGHTS ${webGL2DirectionalLightLimit}
@@ -137,6 +195,7 @@ uniform vec3 u_direction_to_lights[MAX_DIRECTIONAL_LIGHTS];
 uniform vec3 u_directional_light_colors[MAX_DIRECTIONAL_LIGHTS];
 in vec3 world_normal;
 out vec4 output_color;
+${SHADOW_FRAGMENT_INPUTS}
 
 void main() {
   vec3 normal = normalize(world_normal);
@@ -145,7 +204,8 @@ void main() {
   for (int index = 0; index < MAX_DIRECTIONAL_LIGHTS; index++) {
     if (index >= u_directional_light_count) break;
     float diffuse = max(dot(normal, u_direction_to_lights[index]), 0.0);
-    illumination += u_directional_light_colors[index] * diffuse;
+    float visibility = index == u_shadow_light_index ? shadow_visibility() : 1.0;
+    illumination += u_directional_light_colors[index] * diffuse * visibility;
   }
   output_color = vec4(u_color.rgb * illumination, 1.0);
 }
@@ -161,8 +221,8 @@ uniform vec3 u_direction_to_lights[MAX_DIRECTIONAL_LIGHTS];
 uniform vec3 u_directional_light_colors[MAX_DIRECTIONAL_LIGHTS];
 uniform vec3 u_camera_position;
 in vec3 world_normal;
-in vec3 world_position;
 out vec4 output_color;
+${SHADOW_FRAGMENT_INPUTS}
 
 void main() {
   vec3 normal = normalize(world_normal);
@@ -171,7 +231,8 @@ void main() {
   for (int index = 0; index < MAX_DIRECTIONAL_LIGHTS; index++) {
     if (index >= u_directional_light_count) break;
     float diffuse = max(dot(normal, u_direction_to_lights[index]), 0.0);
-    illumination += u_directional_light_colors[index] * diffuse;
+    float visibility = index == u_shadow_light_index ? shadow_visibility() : 1.0;
+    illumination += u_directional_light_colors[index] * diffuse * visibility;
   }
   vec3 view_direction = normalize(u_camera_position - world_position);
   float fresnel = pow(1.0 - abs(dot(normal, view_direction)), 3.0);
@@ -294,6 +355,15 @@ function createPipeline(
         program,
         "u_directional_light_colors[0]"
       ),
+      shadowLightIndexLocation: requireUniform(context, program, "u_shadow_light_index"),
+      shadowViewProjectionLocation: requireUniform(
+        context,
+        program,
+        "u_shadow_view_projection"
+      ),
+      shadowMapLocation: requireUniform(context, program, "u_shadow_map"),
+      shadowBiasLocation: requireUniform(context, program, "u_shadow_bias"),
+      receiveShadowLocation: requireUniform(context, program, "u_receive_shadow"),
     }
     if (kind === "lambert") return { kind, ...litPipeline }
     return {
@@ -309,6 +379,7 @@ function createPipeline(
     if (fragmentShader) context.deleteShader(fragmentShader)
   }
 }
+
 
 function requireBuffer(context: WebGL2RenderingContext, name: string) {
   const buffer = context.createBuffer()
@@ -424,6 +495,24 @@ function lightingSnapshot(lights: readonly WebGLLight[]): LightingSnapshot {
   }
 }
 
+function findShadowLight(lights: readonly WebGLLight[]) {
+  let directionalIndex = 0
+  let found: { light: DirectionalLight; lightIndex: number } | undefined
+  lights.forEach((light) => {
+    if (light.kind !== "directional") return
+    if (light.getShadow()) {
+      if (found) {
+        throw new RangeError(
+          "WebGL2 rendering supports at most one shadow-casting directional light"
+        )
+      }
+      found = { light, lightIndex: directionalIndex }
+    }
+    directionalIndex += 1
+  })
+  return found
+}
+
 function viewDepth(mesh: Mesh, viewMatrix: Matrix4) {
   const center = mesh.getWorldBoundsCenter()
   return viewMatrix[2] * center[0]
@@ -463,6 +552,8 @@ export class WebGL2SceneRuntime {
   #context: WebGL2RenderingContext
   readonly #pipelines = new Map<MeshMaterial["kind"], PipelineResources>()
   readonly #meshes = new Map<Mesh, MeshResources>()
+  #shadowPipeline?: ShadowPipelineResources
+  #shadowMap?: ShadowMapResources
   #disposed = false
 
   constructor(context: WebGL2RenderingContext) {
@@ -487,12 +578,15 @@ export class WebGL2SceneRuntime {
     }
 
     this.#pruneMeshResources(new Set(meshes))
-    this.#configureFrame(width, height)
+    const shadowLight = findShadowLight(lights)
     if (meshes.length === 0) {
+      this.#configureFrame(width, height)
       assertNoWebGLError(context, "empty frame")
       return
     }
 
+    const shadow = this.#renderShadowPass(meshes, shadowLight)
+    this.#configureFrame(width, height)
     const viewProjection = camera.getViewProjection(width / height)
     const queues = buildRenderQueues(meshes, camera)
     let lighting: LightingSnapshot | undefined
@@ -504,7 +598,7 @@ export class WebGL2SceneRuntime {
         activePipeline = pipeline
         if (pipeline.kind !== "unlit") {
           lighting ??= lightingSnapshot(lights)
-          this.#applyLitFrameUniforms(pipeline, viewProjection, lighting)
+          this.#applyLitFrameUniforms(pipeline, viewProjection, lighting, shadow)
           if (pipeline.kind === "glass") {
             context.uniform3fv(
               pipeline.cameraPositionLocation,
@@ -529,6 +623,10 @@ export class WebGL2SceneRuntime {
           pipeline.normalMatrixLocation,
           false,
           normalMatrix3FromMatrix4(model)
+        )
+        context.uniform1i(
+          pipeline.receiveShadowLocation,
+          shadow && mesh.receiveShadow ? 1 : 0
         )
       }
       context.uniform4fv(pipeline.colorLocation, new Float32Array(material.color))
@@ -606,6 +704,66 @@ export class WebGL2SceneRuntime {
     context.depthMask(false)
   }
 
+  #renderShadowPass(
+    meshes: readonly Mesh[],
+    selected: ReturnType<typeof findShadowLight>
+  ): ShadowFrame | undefined {
+    if (!selected) return undefined
+    const casters = meshes.filter((mesh) => mesh.castShadow)
+    const hasLitReceiver = meshes.some((mesh) =>
+      mesh.receiveShadow && mesh.getMaterial().kind !== "unlit")
+    if (casters.length === 0 || !hasLitReceiver) {
+      return undefined
+    }
+    const shadow = selected.light.getShadow()
+    const lightViewProjection = directionalLightShadowViewProjection(selected.light)
+    if (!shadow || !lightViewProjection) return undefined
+    const resources = this.#shadowMapResources(shadow.mapSize)
+    const pipeline = this.#shadowPipelineResources()
+    const context = this.#context
+    context.bindFramebuffer(context.FRAMEBUFFER, resources.framebuffer)
+    context.viewport(0, 0, shadow.mapSize, shadow.mapSize)
+    context.colorMask(false, false, false, false)
+    context.disable(context.BLEND)
+    context.enable(context.DEPTH_TEST)
+    context.depthFunc(context.LEQUAL)
+    context.depthMask(true)
+    context.clearDepth(1)
+    context.clear(context.DEPTH_BUFFER_BIT)
+    context.useProgram(pipeline.program)
+    try {
+      casters.forEach((mesh) => {
+        const meshResources = this.#meshResources(mesh)
+        uploadChangedGeometry(context, mesh, meshResources)
+        context.bindVertexArray(meshResources.vertexArray)
+        context.uniformMatrix4fv(
+          pipeline.modelLightViewProjectionLocation,
+          false,
+          multiplyMatrix4(lightViewProjection, mesh.getModelMatrix())
+        )
+        context.drawElements(
+          context.TRIANGLES,
+          meshResources.indexCount,
+          context.UNSIGNED_SHORT,
+          0
+        )
+      })
+      assertNoWebGLError(context, "shadow pass")
+      return {
+        lightIndex: selected.lightIndex,
+        lightViewProjection,
+        bias: shadow.bias,
+        resources,
+      }
+    } finally {
+      context.bindVertexArray(null)
+      context.useProgram(null)
+      context.bindFramebuffer(context.FRAMEBUFFER, null)
+      context.colorMask(true, true, true, true)
+      context.depthMask(true)
+    }
+  }
+
   #pipeline(kind: MeshMaterial["kind"]) {
     const existing = this.#pipelines.get(kind)
     if (existing) return existing
@@ -617,7 +775,8 @@ export class WebGL2SceneRuntime {
   #applyLitFrameUniforms(
     pipeline: LitPipelineResources,
     viewProjection: Matrix4,
-    lighting: LightingSnapshot
+    lighting: LightingSnapshot,
+    shadow?: ShadowFrame
   ) {
     const context = this.#context
     context.uniformMatrix4fv(pipeline.viewProjectionLocation, false, viewProjection)
@@ -628,6 +787,32 @@ export class WebGL2SceneRuntime {
       pipeline.directionalLightColorsLocation,
       lighting.directionalColors
     )
+    context.uniform1i(pipeline.shadowLightIndexLocation, shadow?.lightIndex ?? -1)
+    context.uniform1f(pipeline.shadowBiasLocation, shadow?.bias ?? 0)
+    context.uniform1i(pipeline.shadowMapLocation, 0)
+    if (shadow) {
+      context.uniformMatrix4fv(
+        pipeline.shadowViewProjectionLocation,
+        false,
+        shadow.lightViewProjection
+      )
+      context.activeTexture(context.TEXTURE0)
+      context.bindTexture(context.TEXTURE_2D, shadow.resources.depthTexture)
+    }
+  }
+
+  #shadowPipelineResources() {
+    this.#shadowPipeline ??= createShadowPipeline(this.#context)
+    return this.#shadowPipeline
+  }
+
+  #shadowMapResources(mapSize: number) {
+    if (this.#shadowMap?.mapSize === mapSize) return this.#shadowMap
+    if (this.#shadowMap) this.#deleteShadowMap(this.#shadowMap)
+    this.#shadowMap = undefined
+    const created = createShadowMapResources(this.#context, mapSize)
+    this.#shadowMap = created
+    return created
   }
 
   #meshResources(mesh: Mesh) {
@@ -653,15 +838,26 @@ export class WebGL2SceneRuntime {
     this.#context.deleteVertexArray(resources.vertexArray)
   }
 
+  #deleteShadowMap(resources: ShadowMapResources) {
+    this.#context.deleteFramebuffer(resources.framebuffer)
+    this.#context.deleteTexture(resources.depthTexture)
+  }
+
   #deleteResources() {
     this.#meshes.forEach((resources) => this.#deleteMeshResources(resources))
     this.#meshes.clear()
     this.#pipelines.forEach((pipeline) => this.#context.deleteProgram(pipeline.program))
     this.#pipelines.clear()
+    if (this.#shadowPipeline) this.#context.deleteProgram(this.#shadowPipeline.program)
+    if (this.#shadowMap) this.#deleteShadowMap(this.#shadowMap)
+    this.#shadowPipeline = undefined
+    this.#shadowMap = undefined
   }
 
   #forgetResources() {
     this.#meshes.clear()
     this.#pipelines.clear()
+    this.#shadowPipeline = undefined
+    this.#shadowMap = undefined
   }
 }

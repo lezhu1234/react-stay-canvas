@@ -52,7 +52,11 @@ import {
       camera: new PerspectiveCamera({ position: [0, 0, 3], target: [0, 0, 0] }),
       lights: [
         new AmbientLight({ intensity: 0.25 }),
-        new DirectionalLight({ directionToLight: [0, 0, 1], intensity: 0.8 }),
+        new DirectionalLight({
+          directionToLight: [0.2, 0.4, 1],
+          intensity: 0.8,
+          shadow: { target: [0, 0, 0], width: 6, height: 4, near: 0.1, far: 20 },
+        }),
       ],
       context: (canvas) => canvas.getContext("webgl2", { alpha: true, depth: true }),
       onContextRestored: () => console.info("WebGL2 layer restored"),
@@ -63,7 +67,7 @@ import {
 
 Canvas2D 仍是默认 backend。WebGL2 是显式 opt-in 的原生 Mesh 场景，不再是 Shape 栅格后端。Mesh Child 通过 `tools.webgl.appendChild()` 添加；Canvas2D Shape 只能进入 Canvas2D 图层，`StayWebGLChild` 则只占用一个 WebGL2 图层。不透明 Mesh 的可见性由 depth 决定；Glass Mesh 保持 depth test，并在 opaque pass 后稳定地从远到近排序。Shape `zIndex` 不跨 backend 比较。
 
-`lights` 是可选的图层显示状态。`AmbientLight`、`DirectionalLight` 的修改与 Camera 修改一样，只会标脏拥有它们的 WebGL2 图层；它们不进入 Child History 或场景传输。一个图层当前最多接受四个方向光。`directionToLight` 表示从表面指向光源的 world-space 向量，Light 会把它归一化。
+`lights` 是可选的图层显示状态。`AmbientLight`、`DirectionalLight` 的修改与 Camera 修改一样，只会标脏拥有它们的 WebGL2 图层；它们不进入 Child History 或场景传输。一个图层当前最多接受四个方向光和一张方向光 shadow map。`directionToLight` 表示从表面指向光源的 world-space 向量，Light 会把它归一化。方向光阴影使用显式正交相机（`target`、`up`、`distance`、`width`、`height`、`near`、`far`）以及 `mapSize`、`bias`；核心不会自动 fit scene。只修改灯光或阴影相机时会复用 Mesh geometry upload；shadow GPU 资源只在 map size、context 或 layer 生命周期变化时重建。
 
 backend 失败不会被隐藏。WebGL2 创建失败、绘制期间 context loss、无效 Mesh 状态和 GPU 上传失败都不会自动回退到 Canvas2D。WebGL2 context 丢失后，该层暂停绘制。Layer runtime 默认阻止原生 loss event，以便浏览器恢复它拥有的 context；`onContextLost` 只负责观察，不承担恢复所有权。恢复后运行时会丢弃失效 GPU handle，从 CPU Mesh 状态懒重建，标脏该层，再调用 `onContextRestored`。
 

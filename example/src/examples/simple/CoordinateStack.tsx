@@ -5,6 +5,7 @@ import {
   type CanvasLayerConfig,
   DirectionalLight,
   GlassMaterial,
+  LambertMaterial,
   Line,
   Mesh,
   StayCanvas,
@@ -32,6 +33,7 @@ import {
 } from "./coordinateLabModel"
 import {
   createCoordinateCamera,
+  backdropMeshGeometry,
   createPlaneBasis,
   createPlaneDefinitions,
   dashedSegments,
@@ -213,14 +215,17 @@ function createPlaneRuntime(
   const frameFill = new Mesh({
     geometry: rectMeshGeometry(plane, basis, planeRect, 0),
     material: glassMaterial(plane.fill),
+    receiveShadow: true,
   })
   const frameEdges = new Mesh({
     geometry: lineMeshGeometry(plane, basis, frameSegments(plane.width, plane.height), 1.25, 0.002),
     material: unlitMaterial(plane.stroke),
+    castShadow: true,
   })
   const grid = new Mesh({
     geometry: lineMeshGeometry(plane, basis, gridSegments(plane), 1, 0.003),
     material: unlitMaterial({ ...plane.stroke, a: 0.1 }),
+    castShadow: true,
   })
   const axes = new Mesh({
     geometry: lineMeshGeometry(plane, basis, [
@@ -228,9 +233,10 @@ function createPlaneRuntime(
       { x1: 12, y1: 20, x2: 12, y2: plane.height - 12 },
     ], 1, 0.004),
     material: unlitMaterial(axisColor),
+    castShadow: true,
   })
-  const shapeFill = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.13)) })
-  const shapeEdges = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.9)) })
+  const shapeFill = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.13)), castShadow: true })
+  const shapeEdges = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.9)), castShadow: true })
   const canvasDomEdges = name === "client" ? new Mesh({
     geometry: emptyMeshGeometry(),
     material: unlitMaterial(rgba(74, 163, 214, 0.64)),
@@ -430,6 +436,16 @@ export function CoordinateStack({
       directionToLight: [-0.45, 0.7, 1],
       color: [1, 0.96, 0.88],
       intensity: 0.34,
+      shadow: {
+        target: [0, 0, -5.3],
+        distance: 7,
+        width: 9,
+        height: 6,
+        near: 0.1,
+        far: 16,
+        mapSize: 1024,
+        bias: 0.0015,
+      },
     }),
   ], [])
   const layers = useMemo<CanvasLayerConfig[]>(() => [
@@ -567,7 +583,11 @@ export function CoordinateStack({
     const definitions = createPlaneDefinitions(canvasArea.width, canvasArea.height)
     const planeNames: PlaneName[] = ["client", "view", "content"]
     const planes = {} as Record<PlaneName, PlaneRuntime>
-    const meshes: Mesh[] = []
+    const meshes: Mesh[] = [new Mesh({
+      geometry: backdropMeshGeometry(canvasArea.width, canvasArea.height),
+      material: new LambertMaterial({ color: [0.96, 0.975, 0.965, 1] }),
+      receiveShadow: true,
+    })]
     const overlays: Array<Circle | Line | StayText> = []
 
     planeNames.forEach((name) => {

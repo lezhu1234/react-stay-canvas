@@ -118,6 +118,10 @@ public display configuration. `WebGL2LayerRuntime` subscribes their CPU mutation
 live cache objects when the resolver returns the same context. Context restoration forgets invalid
 handles and lazily reconstructs them from CPU Mesh/Camera/Light state. Geometry normals share the
 Mesh geometry revision; material, light, model, and camera changes never upload geometry buffers.
+Directional shadow camera state remains Light-owned, while per-Mesh cast/receive flags participate
+in History and scene transfer. One persistent depth texture/framebuffer is derived per shadowed
+layer and recreated only for a map-size or context-lifecycle change; the core never auto-fits the
+explicit orthographic shadow frustum to scene content.
 
 Each native frame derives two queues from the same ordered CPU Mesh list. Opaque Meshes draw first
 with depth writes. Glass Meshes remain depth-tested, disable depth writes, use premultiplied-alpha

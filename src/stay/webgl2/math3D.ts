@@ -125,6 +125,31 @@ export function perspectiveMatrix4(
   ], "camera perspective matrix")
 }
 
+export function orthographicMatrix4(
+  width: number,
+  height: number,
+  near: number,
+  far: number
+): Matrix4 {
+  finite(width, "camera width")
+  finite(height, "camera height")
+  finite(near, "camera near plane")
+  finite(far, "camera far plane")
+  if (width <= 0 || height <= 0) {
+    throw new RangeError("camera width and height must be greater than 0")
+  }
+  if (near <= 0 || far <= near) {
+    throw new RangeError("camera far plane must be greater than its positive near plane")
+  }
+  const depth = near - far
+  return copyMatrix4([
+    2 / width, 0, 0, 0,
+    0, 2 / height, 0, 0,
+    0, 0, 2 / depth, 0,
+    0, 0, (far + near) / depth, 1,
+  ], "camera orthographic matrix")
+}
+
 function subtract(first: Vector3, second: Vector3): Vector3 {
   return [first[0] - second[0], first[1] - second[1], first[2] - second[2]]
 }

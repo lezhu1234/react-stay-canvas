@@ -433,6 +433,7 @@ export default function CoordinatesExample() {
             <CanvasSurface
               canvasDisplayTransform={cssDisplay}
               className="coordinate-live-surface"
+              fitInitialDisplayTransformToViewport
               shrinkToViewport
               viewportLabel={`CLIENT DOM · ${Math.round(cssDisplay.scaleX * 100)}% × ${Math.round(cssDisplay.scaleY * 100)}%`}
             >

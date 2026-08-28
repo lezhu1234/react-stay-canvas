@@ -1089,12 +1089,14 @@ input:focus-visible {
 }
 
 .coordinate-live-surface .canvas-viewport-label {
-  padding: 7px 9px;
+  padding: 8px 15px;
   border-color: rgba(66, 111, 232, 0.25);
   border-radius: 999px;
   background: rgba(249, 250, 247, 0.8);
   box-shadow: 0 10px 24px rgba(39, 51, 67, 0.08);
   backdrop-filter: blur(12px);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .coordinate-console {

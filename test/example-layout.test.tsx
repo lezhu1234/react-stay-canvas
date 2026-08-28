@@ -406,8 +406,8 @@ describe("Example Canvas workspace", () => {
       .toContain("Live Canvas")
     expect(workspace?.querySelector(".coordinate-live-exhibit .canvas-viewport-label")?.textContent)
       .toBe("CLIENT DOM · 80% × 80%")
-    expect(workspace?.querySelector(".coordinate-stack-exhibit .canvas-viewport-label")?.textContent)
-      .toBe("WEBGL · PROJECTIVE")
+    expect(workspace?.querySelector(".coordinate-stack-exhibit .canvas-viewport-label"))
+      .toBeNull()
     expect(container.querySelector(".coordinate-hero")?.textContent).toContain("One point,")
     expect(container.querySelector(".coordinate-hero")?.textContent).toContain("three spaces.")
     expect(workspace?.querySelector(".coordinate-live-heading")?.textContent).toContain("CLIENT SPACE")
@@ -422,6 +422,8 @@ describe("Example Canvas workspace", () => {
     expect(displayTransform?.dataset.displayScaleX).toBe("0.8")
     expect(displayTransform?.dataset.displayScaleY).toBe("0.8")
     expect(displayTransform?.style.transform).toBe("translate(0px, 0px) scale(0.8, 0.8)")
+    expect(liveLayers?.[0].width).toBe(1150)
+    expect(liveLayers?.[0].height).toBe(600)
 
     stackLayers?.forEach((canvas) => {
       expect(webGLContexts.get(canvas)?.spies.drawElements).toHaveBeenCalled()
@@ -526,6 +528,8 @@ describe("Example Canvas workspace", () => {
     expect(displayTransform?.style.transform).toBe("translate(0px, 0px) scale(1, 1)")
     expect(container.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")[1])
       .toBe(canvasBeforeIdentity)
+    expect(canvasBeforeIdentity?.width).toBe(1150)
+    expect(canvasBeforeIdentity?.height).toBe(600)
     expect(proofValue("Viewport")).toBe("40, 20 / 100%")
     expect(proofValue("Content Shape geometry")).toBe(contentGeometry)
     act(() => {
@@ -601,21 +605,21 @@ describe("Example Canvas workspace", () => {
         root?.render(<I18nProvider><CoordinatesExample /></I18nProvider>)
       })
 
-      expect(container.querySelector<HTMLCanvasElement>(".coordinate-canvas canvas")?.width).toBe(920)
-      expect(container.querySelector<HTMLCanvasElement>(".coordinate-canvas canvas")?.height).toBe(480)
+      expect(container.querySelector<HTMLCanvasElement>(".coordinate-canvas canvas")?.width).toBe(1150)
+      expect(container.querySelector<HTMLCanvasElement>(".coordinate-canvas canvas")?.height).toBe(600)
 
       viewportWidth = 210
       viewportHeight = 81
       act(() => callbacks.forEach((callback) => callback([], {} as ResizeObserver)))
 
-      expect(container.querySelector<HTMLCanvasElement>(".coordinate-canvas canvas")?.width).toBe(210)
-      expect(container.querySelector<HTMLCanvasElement>(".coordinate-canvas canvas")?.height).toBe(81)
+      expect(container.querySelector<HTMLCanvasElement>(".coordinate-canvas canvas")?.width).toBe(263)
+      expect(container.querySelector<HTMLCanvasElement>(".coordinate-canvas canvas")?.height).toBe(101)
       expect(container.querySelector<HTMLCanvasElement>(".coordinate-stack-canvas canvas")?.width).toBe(210)
       expect(container.querySelector<HTMLCanvasElement>(".coordinate-stack-canvas canvas")?.height).toBe(81)
       expect([...container.querySelectorAll(".coordinate-zoom-proof dl > div")]
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
         ?.querySelector("dd")?.textContent)
-        .toBe("9, -31 / 40%")
+        .toBe("35, -21 / 40%")
     } finally {
       globalThis.ResizeObserver = originalResizeObserver
     }

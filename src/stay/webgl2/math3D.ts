@@ -60,7 +60,7 @@ export function multiplyMatrix4(first: Matrix4, second: Matrix4): Matrix4 {
 /** @internal Returns the inverse-transpose of an affine model matrix's linear part. */
 export function normalMatrix3FromMatrix4(matrix: Matrix4): Matrix3 {
   if (matrix[3] !== 0 || matrix[7] !== 0 || matrix[11] !== 0 || matrix[15] !== 1) {
-    throw new RangeError("Lambert Mesh model matrix must be affine")
+    throw new RangeError("Lit Mesh model matrix must be affine")
   }
   const a00 = matrix[0]
   const a01 = matrix[4]
@@ -76,7 +76,7 @@ export function normalMatrix3FromMatrix4(matrix: Matrix4): Matrix3 {
   const cofactor02 = a10 * a21 - a11 * a20
   const determinant = a00 * cofactor00 + a01 * cofactor01 + a02 * cofactor02
   if (!Number.isFinite(determinant) || determinant === 0) {
-    throw new RangeError("Lambert Mesh model matrix must have an invertible linear part")
+    throw new RangeError("Lit Mesh model matrix must have an invertible linear part")
   }
   const inverseDeterminant = 1 / determinant
   const values = [
@@ -92,7 +92,7 @@ export function normalMatrix3FromMatrix4(matrix: Matrix4): Matrix3 {
   ]
   const normalMatrix = new Float32Array(values)
   if (![...normalMatrix].every(Number.isFinite)) {
-    throw new RangeError("Lambert Mesh normal matrix exceeds Float32 range")
+    throw new RangeError("Lit Mesh normal matrix exceeds Float32 range")
   }
   return normalMatrix
 }

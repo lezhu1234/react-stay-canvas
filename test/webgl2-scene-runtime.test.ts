@@ -8,6 +8,7 @@ import {
 } from "../src/stay/webgl2/math3D"
 import { Mesh } from "../src/stay/webgl2/mesh"
 import {
+  GlassMaterial,
   LambertMaterial,
   UnlitMaterial,
 } from "../src/stay/webgl2/material"
@@ -205,21 +206,133 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.dispose()
   })
 
+  it("draws opaque Meshes first and stable-sorts Glass back to front", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const nearGlass = new Mesh({
+      geometry: litTriangle(),
+      material: new GlassMaterial({ color: [0.2, 0.8, 0.4, 0.24] }),
+    })
+    const opaque = new Mesh({
+      geometry: triangle(),
+      material: unlit([0.9, 0.2, 0.1, 1]),
+    })
+    const farGlass = new Mesh({
+      geometry: litTriangle(-2),
+      material: new GlassMaterial({ color: [0.2, 0.4, 0.9, 0.18] }),
+    })
+
+    runtime.render([nearGlass, opaque, farGlass], camera(), [new AmbientLight()])
+
+    expect(gl.spies.uniform4fv.mock.calls.map((call) => Array.from(call[1])))
+      .toEqual([
+        [0.9, 0.2, 0.1, 1].map(Math.fround),
+        [0.2, 0.4, 0.9, 0.18].map(Math.fround),
+        [0.2, 0.8, 0.4, 0.24].map(Math.fround),
+      ])
+    expect(gl.spies.enable).toHaveBeenCalledWith(gl.spies.BLEND)
+    expect(gl.spies.blendEquation).toHaveBeenCalledWith(gl.spies.FUNC_ADD)
+    expect(gl.spies.blendFunc)
+      .toHaveBeenCalledWith(gl.spies.ONE, gl.spies.ONE_MINUS_SRC_ALPHA)
+    expect(gl.spies.depthMask.mock.calls.map(([enabled]) => enabled))
+      .toEqual([true, false, true])
+    runtime.dispose()
+  })
+
+  it("re-sorts Glass with camera changes without rebuilding GPU resources", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const left = new Mesh({
+      geometry: litTriangle(),
+      modelMatrix: translationMatrix4(-1, 0, 0),
+      material: new GlassMaterial({ color: [1, 0, 0, 0.2] }),
+    })
+    const right = new Mesh({
+      geometry: litTriangle(),
+      modelMatrix: translationMatrix4(1, 0, 0),
+      material: new GlassMaterial({ color: [0, 0, 1, 0.2] }),
+    })
+    const sceneCamera = new PerspectiveCamera({
+      position: [3, 0, 3],
+      target: [0, 0, 0],
+      near: 0.1,
+      far: 20,
+    })
+
+    runtime.render([left, right], sceneCamera, [new AmbientLight()])
+    sceneCamera.setPose([-3, 0, 3], [0, 0, 0])
+    runtime.render([left, right], sceneCamera, [new AmbientLight()])
+
+    const colors = gl.spies.uniform4fv.mock.calls.map((call) => Array.from(call[1]))
+    expect(colors.slice(0, 2)).toEqual([
+      [1, 0, 0, 0.2].map(Math.fround),
+      [0, 0, 1, 0.2].map(Math.fround),
+    ])
+    expect(colors.slice(2)).toEqual([
+      [0, 0, 1, 0.2].map(Math.fround),
+      [1, 0, 0, 0.2].map(Math.fround),
+    ])
+    expect(gl.spies.createProgram).toHaveBeenCalledOnce()
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(6)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(6)
+    runtime.dispose()
+  })
+
+  it("preserves input order when Glass sort centers have equal view depth", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const first = new Mesh({
+      geometry: litTriangle(),
+      modelMatrix: translationMatrix4(-0.5, 0, 0),
+      material: new GlassMaterial({ color: [1, 0, 0, 0.2] }),
+    })
+    const second = new Mesh({
+      geometry: litTriangle(),
+      modelMatrix: translationMatrix4(0.5, 0, 0),
+      material: new GlassMaterial({ color: [0, 0, 1, 0.2] }),
+    })
+
+    runtime.render([second, first], camera(), [new AmbientLight()])
+
+    expect(gl.spies.uniform4fv.mock.calls.map((call) => Array.from(call[1])))
+      .toEqual([
+        [0, 0, 1, 0.2].map(Math.fround),
+        [1, 0, 0, 0.2].map(Math.fround),
+      ])
+
+    gl.spies.uniform4fv.mockClear()
+    first.setGeometry(litTriangle(-2))
+    runtime.render([second, first], camera(), [new AmbientLight()])
+    expect(gl.spies.uniform4fv.mock.calls.map((call) => Array.from(call[1])))
+      .toEqual([
+        [1, 0, 0, 0.2].map(Math.fround),
+        [0, 0, 1, 0.2].map(Math.fround),
+      ])
+    runtime.dispose()
+  })
+
   it("forgets invalid handles on restore and rebuilds from CPU Mesh state", () => {
     const canvas = document.createElement("canvas")
     canvas.width = 180
     canvas.height = 120
     const gl = createRecordingWebGL2Context(canvas)
     const runtime = new WebGL2SceneRuntime(gl.context)
-    const mesh = new Mesh({ geometry: triangle() })
+    const mesh = new Mesh({
+      geometry: litTriangle(),
+      material: new GlassMaterial(),
+    })
 
-    runtime.render([mesh], camera())
+    runtime.render([mesh], camera(), [new AmbientLight()])
     gl.setLost(true)
-    expect(() => runtime.render([mesh], camera())).toThrow("context is lost")
+    expect(() => runtime.render([mesh], camera(), [new AmbientLight()]))
+      .toThrow("context is lost")
 
     gl.setLost(false)
     runtime.restoreContext()
-    runtime.render([mesh], camera())
+    runtime.render([mesh], camera(), [new AmbientLight()])
 
     expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
     expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(2)
@@ -284,10 +397,18 @@ describe("internal WebGL2 scene runtime", () => {
     expect(mesh.getModelMatrix()).toEqual(identityMatrix4())
     expect(() => new UnlitMaterial({ color: [1, 1, 1, 0.5] }))
       .toThrow("alpha must be 1")
+    expect(() => new GlassMaterial({ color: [1, 1, 1, 1] }))
+      .toThrow("greater than 0 and less than 1")
+    expect(() => new GlassMaterial({ color: [1, 1, 1, 0] }))
+      .toThrow("greater than 0 and less than 1")
+    expect(() => new Mesh({
+      geometry: triangle(),
+      material: new GlassMaterial(),
+    })).toThrow("Lit Mesh geometry requires normals")
     expect(() => mesh.setMaterial({
       kind: "lambert",
       color: [1, 1, 1, 1],
-    } as never)).toThrow("must be an UnlitMaterial or LambertMaterial")
+    } as never)).toThrow("must be an UnlitMaterial, LambertMaterial, or GlassMaterial")
   })
 
   it("derives an inverse-transpose normal matrix for non-uniform scale", () => {

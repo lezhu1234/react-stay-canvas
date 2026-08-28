@@ -32,7 +32,7 @@
 
 `tools.webgl` manages native Mesh children in the same instance and identity store as Canvas2D Children. A `StayWebGLChild` owns an ordered Mesh list on one WebGL2 layer; its Mesh geometry, model matrix, and material are CPU-authoritative and mutations invalidate that layer.
 
-`Mesh` defaults to an opaque `UnlitMaterial`. Use explicit non-zero per-vertex normals with `LambertMaterial`; normals are copied, normalized in the shader, and transformed with the model matrix's inverse transpose. Material values are immutable, so replace one with `mesh.setMaterial()` rather than sharing mutable material state:
+`Mesh` defaults to an opaque `UnlitMaterial`. Use explicit non-zero per-vertex normals with `LambertMaterial` or `GlassMaterial`; normals are copied, normalized in the shader, and transformed with the model matrix's inverse transpose. Material values are immutable, so replace one with `mesh.setMaterial()` rather than sharing mutable material state:
 
 ```ts
 const mesh = new Mesh({
@@ -43,10 +43,16 @@ const mesh = new Mesh({
   },
   material: new LambertMaterial({ color: [0.2, 0.55, 0.9, 1] }),
 })
+
+const glass = new GlassMaterial({ color: [0.6, 0.85, 1, 0.2] })
+mesh.setMaterial(glass)
 ```
 
-Both current materials are opaque and require color alpha `1`. Transparency and glass are separate future contracts, not an interpretation of a partially transparent opaque color.
-Without any configured lights, a Lambert material renders black; add ambient or directional light explicitly instead of relying on a hidden default rig.
+`UnlitMaterial` and `LambertMaterial` are opaque and require color alpha `1`. `GlassMaterial` requires alpha strictly between `0` and `1`; it provides a lit thin-glass approximation with a view-angle edge highlight. It does not sample the scene behind the surface, so it does not yet model refraction, thickness, roughness, or physical transmission.
+
+The renderer draws opaque Meshes first. Glass Meshes keep depth testing, disable depth writes, and are stable-sorted back to front by their transformed local bounding-box center in camera view space. This is standard object-level transparency: separate non-intersecting surfaces compose predictably, while intersecting transparent Meshes and self-overlapping geometry may require geometry splitting or a future order-independent transparency path.
+
+Without any configured lights, Lambert and Glass materials render dark; add ambient or directional light explicitly instead of relying on a hidden default rig.
 
 | Method | Meaning |
 | --- | --- |
@@ -58,7 +64,7 @@ Without any configured lights, a Lambert material renders black; add ambient or 
 | `webgl.exportChildren(children)` | Capture deep-owned CPU Mesh fragments with source ids |
 | `webgl.importChildren(fragment)` | Materialize new Child ids and independent Mesh state |
 
-`Mesh`, `UnlitMaterial`, `LambertMaterial`, `AmbientLight`, `DirectionalLight`, `PerspectiveCamera`, `StayWebGLChild`, and the minimal Matrix4 helpers are exported from the package root. GPU programs, VAOs, buffers, shaders, and layer runtimes remain internal. WebGL2 Child picking/raycast, transparent materials, shadows, textures, and Canvas capture are not part of this surface yet.
+`Mesh`, `UnlitMaterial`, `LambertMaterial`, `GlassMaterial`, `AmbientLight`, `DirectionalLight`, `PerspectiveCamera`, `StayWebGLChild`, and the minimal Matrix4 helpers are exported from the package root. GPU programs, VAOs, buffers, shaders, and layer runtimes remain internal. WebGL2 Child picking/raycast, scene-color refraction, shadows, textures, order-independent transparency, and Canvas capture are not part of this surface yet.
 
 ## State and display
 

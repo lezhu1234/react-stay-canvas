@@ -8,7 +8,10 @@ import {
   type Matrix4,
 } from "./math3D"
 import { Mesh } from "./mesh"
-import type { MeshMaterial } from "./material"
+import {
+  meshMaterialIsTransparent,
+  type MeshMaterial,
+} from "./material"
 import { PerspectiveCamera } from "./perspectiveCamera"
 
 interface UnlitPipelineResources {
@@ -31,7 +34,22 @@ interface LambertPipelineResources {
   readonly directionalLightColorsLocation: WebGLUniformLocation
 }
 
-type PipelineResources = UnlitPipelineResources | LambertPipelineResources
+interface GlassPipelineResources {
+  readonly kind: "glass"
+  readonly program: WebGLProgram
+  readonly viewProjectionLocation: WebGLUniformLocation
+  readonly modelLocation: WebGLUniformLocation
+  readonly normalMatrixLocation: WebGLUniformLocation
+  readonly colorLocation: WebGLUniformLocation
+  readonly ambientLightLocation: WebGLUniformLocation
+  readonly directionalLightCountLocation: WebGLUniformLocation
+  readonly directionToLightsLocation: WebGLUniformLocation
+  readonly directionalLightColorsLocation: WebGLUniformLocation
+  readonly cameraPositionLocation: WebGLUniformLocation
+}
+
+type LitPipelineResources = LambertPipelineResources | GlassPipelineResources
+type PipelineResources = UnlitPipelineResources | LitPipelineResources
 
 interface MeshResources {
   readonly vertexArray: WebGLVertexArrayObject
@@ -47,6 +65,16 @@ interface LightingSnapshot {
   readonly directionToLights: Float32Array
   readonly directionalColors: Float32Array
   readonly directionalCount: number
+}
+
+interface DrawItem {
+  readonly mesh: Mesh
+  readonly material: MeshMaterial
+}
+
+interface TransparentDrawItem extends DrawItem {
+  readonly inputOrder: number
+  readonly viewDepth: number
 }
 
 const UNLIT_VERTEX_SHADER = `#version 300 es
@@ -69,6 +97,23 @@ out vec3 world_normal;
 void main() {
   gl_Position = u_view_projection * u_model * vec4(a_position, 1.0);
   world_normal = normalize(u_normal_matrix * a_normal);
+}
+`
+
+const GLASS_VERTEX_SHADER = `#version 300 es
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+uniform mat4 u_view_projection;
+uniform mat4 u_model;
+uniform mat3 u_normal_matrix;
+out vec3 world_normal;
+out vec3 world_position;
+
+void main() {
+  vec4 world = u_model * vec4(a_position, 1.0);
+  gl_Position = u_view_projection * world;
+  world_normal = normalize(u_normal_matrix * a_normal);
+  world_position = world.xyz;
 }
 `
 
@@ -103,6 +148,37 @@ void main() {
     illumination += u_directional_light_colors[index] * diffuse;
   }
   output_color = vec4(u_color.rgb * illumination, 1.0);
+}
+`
+
+const GLASS_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+#define MAX_DIRECTIONAL_LIGHTS ${webGL2DirectionalLightLimit}
+uniform vec4 u_color;
+uniform vec3 u_ambient_light;
+uniform int u_directional_light_count;
+uniform vec3 u_direction_to_lights[MAX_DIRECTIONAL_LIGHTS];
+uniform vec3 u_directional_light_colors[MAX_DIRECTIONAL_LIGHTS];
+uniform vec3 u_camera_position;
+in vec3 world_normal;
+in vec3 world_position;
+out vec4 output_color;
+
+void main() {
+  vec3 normal = normalize(world_normal);
+  if (!gl_FrontFacing) normal = -normal;
+  vec3 illumination = u_ambient_light;
+  for (int index = 0; index < MAX_DIRECTIONAL_LIGHTS; index++) {
+    if (index >= u_directional_light_count) break;
+    float diffuse = max(dot(normal, u_direction_to_lights[index]), 0.0);
+    illumination += u_directional_light_colors[index] * diffuse;
+  }
+  vec3 view_direction = normalize(u_camera_position - world_position);
+  float fresnel = pow(1.0 - abs(dot(normal, view_direction)), 3.0);
+  vec3 lit_tint = u_color.rgb * illumination;
+  vec3 surface_color = mix(lit_tint, vec3(1.0), fresnel * 0.42);
+  float alpha = u_color.a + (1.0 - u_color.a) * fresnel * 0.34;
+  output_color = vec4(surface_color * alpha, alpha);
 }
 `
 
@@ -159,8 +235,16 @@ function createPipeline(
   context: WebGL2RenderingContext,
   kind: MeshMaterial["kind"]
 ): PipelineResources {
-  const vertexSource = kind === "unlit" ? UNLIT_VERTEX_SHADER : LAMBERT_VERTEX_SHADER
-  const fragmentSource = kind === "unlit" ? UNLIT_FRAGMENT_SHADER : LAMBERT_FRAGMENT_SHADER
+  const vertexSource = kind === "unlit"
+    ? UNLIT_VERTEX_SHADER
+    : kind === "lambert"
+      ? LAMBERT_VERTEX_SHADER
+      : GLASS_VERTEX_SHADER
+  const fragmentSource = kind === "unlit"
+    ? UNLIT_FRAGMENT_SHADER
+    : kind === "lambert"
+      ? LAMBERT_FRAGMENT_SHADER
+      : GLASS_FRAGMENT_SHADER
   const vertexShader = compileShader(context, context.VERTEX_SHADER, vertexSource)
   let fragmentShader: WebGLShader | undefined
   let program: WebGLProgram | undefined
@@ -188,8 +272,7 @@ function createPipeline(
         ),
       }
     }
-    return {
-      kind,
+    const litPipeline = {
       program,
       colorLocation,
       viewProjectionLocation: requireUniform(context, program, "u_view_projection"),
@@ -211,6 +294,12 @@ function createPipeline(
         program,
         "u_directional_light_colors[0]"
       ),
+    }
+    if (kind === "lambert") return { kind, ...litPipeline }
+    return {
+      kind,
+      ...litPipeline,
+      cameraPositionLocation: requireUniform(context, program, "u_camera_position"),
     }
   } catch (error) {
     if (program) context.deleteProgram(program)
@@ -335,6 +424,37 @@ function lightingSnapshot(lights: readonly WebGLLight[]): LightingSnapshot {
   }
 }
 
+function viewDepth(mesh: Mesh, viewMatrix: Matrix4) {
+  const center = mesh.getWorldBoundsCenter()
+  return viewMatrix[2] * center[0]
+    + viewMatrix[6] * center[1]
+    + viewMatrix[10] * center[2]
+    + viewMatrix[14]
+}
+
+function buildRenderQueues(meshes: readonly Mesh[], camera: PerspectiveCamera) {
+  const opaque: DrawItem[] = []
+  const transparent: TransparentDrawItem[] = []
+  let viewMatrix: Matrix4 | undefined
+  meshes.forEach((mesh, inputOrder) => {
+    const material = mesh.getMaterial()
+    if (!meshMaterialIsTransparent(material)) {
+      opaque.push({ mesh, material })
+      return
+    }
+    viewMatrix ??= camera.getViewMatrix()
+    transparent.push({
+      mesh,
+      material,
+      inputOrder,
+      viewDepth: viewDepth(mesh, viewMatrix),
+    })
+  })
+  transparent.sort((first, second) =>
+    first.viewDepth - second.viewDepth || first.inputOrder - second.inputOrder)
+  return { opaque, transparent }
+}
+
 /**
  * @internal Owns one WebGL2 context's derived GPU cache. Mesh, Material, Light,
  * and Camera CPU state stay authoritative; restoration recreates handles lazily.
@@ -374,49 +494,62 @@ export class WebGL2SceneRuntime {
     }
 
     const viewProjection = camera.getViewProjection(width / height)
+    const queues = buildRenderQueues(meshes, camera)
     let lighting: LightingSnapshot | undefined
     let activePipeline: PipelineResources | undefined
-    try {
-      meshes.forEach((mesh) => {
-        const material = mesh.getMaterial()
-        const pipeline = this.#pipeline(material.kind)
-        if (pipeline !== activePipeline) {
-          context.useProgram(pipeline.program)
-          activePipeline = pipeline
-          if (pipeline.kind === "lambert") {
-            lighting ??= lightingSnapshot(lights)
-            this.#applyLambertFrameUniforms(pipeline, viewProjection, lighting)
+    const draw = ({ mesh, material }: DrawItem) => {
+      const pipeline = this.#pipeline(material.kind)
+      if (pipeline !== activePipeline) {
+        context.useProgram(pipeline.program)
+        activePipeline = pipeline
+        if (pipeline.kind !== "unlit") {
+          lighting ??= lightingSnapshot(lights)
+          this.#applyLitFrameUniforms(pipeline, viewProjection, lighting)
+          if (pipeline.kind === "glass") {
+            context.uniform3fv(
+              pipeline.cameraPositionLocation,
+              new Float32Array(camera.getPosition())
+            )
           }
         }
-        const resources = this.#meshResources(mesh)
-        uploadChangedGeometry(context, mesh, resources)
-        context.bindVertexArray(resources.vertexArray)
-        if (pipeline.kind === "unlit") {
-          context.uniformMatrix4fv(
-            pipeline.modelViewProjectionLocation,
-            false,
-            multiplyMatrix4(viewProjection, mesh.getModelMatrix())
-          )
-        } else {
-          const model = mesh.getModelMatrix()
-          context.uniformMatrix4fv(pipeline.modelLocation, false, model)
-          context.uniformMatrix3fv(
-            pipeline.normalMatrixLocation,
-            false,
-            normalMatrix3FromMatrix4(model)
-          )
-        }
-        context.uniform4fv(pipeline.colorLocation, new Float32Array(material.color))
-        context.drawElements(
-          context.TRIANGLES,
-          resources.indexCount,
-          context.UNSIGNED_SHORT,
-          0
+      }
+      const resources = this.#meshResources(mesh)
+      uploadChangedGeometry(context, mesh, resources)
+      context.bindVertexArray(resources.vertexArray)
+      if (pipeline.kind === "unlit") {
+        context.uniformMatrix4fv(
+          pipeline.modelViewProjectionLocation,
+          false,
+          multiplyMatrix4(viewProjection, mesh.getModelMatrix())
         )
-      })
+      } else {
+        const model = mesh.getModelMatrix()
+        context.uniformMatrix4fv(pipeline.modelLocation, false, model)
+        context.uniformMatrix3fv(
+          pipeline.normalMatrixLocation,
+          false,
+          normalMatrix3FromMatrix4(model)
+        )
+      }
+      context.uniform4fv(pipeline.colorLocation, new Float32Array(material.color))
+      context.drawElements(
+        context.TRIANGLES,
+        resources.indexCount,
+        context.UNSIGNED_SHORT,
+        0
+      )
+    }
+    try {
+      queues.opaque.forEach(draw)
+      if (queues.transparent.length > 0) {
+        this.#configureTransparentPass()
+        queues.transparent.forEach(draw)
+      }
       assertNoWebGLError(context, "frame draw")
       assertContextAvailable(context)
     } finally {
+      context.depthMask(true)
+      context.disable(context.BLEND)
       context.bindVertexArray(null)
       context.useProgram(null)
     }
@@ -465,6 +598,14 @@ export class WebGL2SceneRuntime {
     context.clear(context.COLOR_BUFFER_BIT | context.DEPTH_BUFFER_BIT)
   }
 
+  #configureTransparentPass() {
+    const context = this.#context
+    context.enable(context.BLEND)
+    context.blendEquation(context.FUNC_ADD)
+    context.blendFunc(context.ONE, context.ONE_MINUS_SRC_ALPHA)
+    context.depthMask(false)
+  }
+
   #pipeline(kind: MeshMaterial["kind"]) {
     const existing = this.#pipelines.get(kind)
     if (existing) return existing
@@ -473,8 +614,8 @@ export class WebGL2SceneRuntime {
     return created
   }
 
-  #applyLambertFrameUniforms(
-    pipeline: LambertPipelineResources,
+  #applyLitFrameUniforms(
+    pipeline: LitPipelineResources,
     viewProjection: Matrix4,
     lighting: LightingSnapshot
   ) {

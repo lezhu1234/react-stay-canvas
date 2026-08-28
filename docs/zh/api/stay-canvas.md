@@ -61,7 +61,7 @@ import {
 />
 ```
 
-Canvas2D 仍是默认 backend。WebGL2 是显式 opt-in 的原生 Mesh 场景，不再是 Shape 栅格后端。Mesh Child 通过 `tools.webgl.appendChild()` 添加；Canvas2D Shape 只能进入 Canvas2D 图层，`StayWebGLChild` 则只占用一个 WebGL2 图层。原生场景内由 Mesh 深度决定遮挡，Shape `zIndex` 不跨 backend 比较。
+Canvas2D 仍是默认 backend。WebGL2 是显式 opt-in 的原生 Mesh 场景，不再是 Shape 栅格后端。Mesh Child 通过 `tools.webgl.appendChild()` 添加；Canvas2D Shape 只能进入 Canvas2D 图层，`StayWebGLChild` 则只占用一个 WebGL2 图层。不透明 Mesh 的可见性由 depth 决定；Glass Mesh 保持 depth test，并在 opaque pass 后稳定地从远到近排序。Shape `zIndex` 不跨 backend 比较。
 
 `lights` 是可选的图层显示状态。`AmbientLight`、`DirectionalLight` 的修改与 Camera 修改一样，只会标脏拥有它们的 WebGL2 图层；它们不进入 Child History 或场景传输。一个图层当前最多接受四个方向光。`directionToLight` 表示从表面指向光源的 world-space 向量，Light 会把它归一化。
 

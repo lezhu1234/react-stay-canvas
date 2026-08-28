@@ -119,6 +119,13 @@ live cache objects when the resolver returns the same context. Context restorati
 handles and lazily reconstructs them from CPU Mesh/Camera/Light state. Geometry normals share the
 Mesh geometry revision; material, light, model, and camera changes never upload geometry buffers.
 
+Each native frame derives two queues from the same ordered CPU Mesh list. Opaque Meshes draw first
+with depth writes. Glass Meshes remain depth-tested, disable depth writes, use premultiplied-alpha
+blending, and stable-sort back to front by the model-transformed local AABB center in camera view
+space. That center is derived Mesh state, not a second scene transform. The current contract is
+object-level transparency; exact intersecting/self-overlapping composition and scene-color
+refraction remain outside this runtime.
+
 The native backend does not consume Shape RenderPlans, Canvas2D raster surfaces, projective Shape
 placements, or Shape `zIndex`. Depth is authoritative inside a WebGL2 layer. Mesh history and scene
 transfer deep-copy CPU geometry, normals, model matrices, and material values; Camera and Light

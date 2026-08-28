@@ -10,7 +10,7 @@ The following user-visible behavior is not reliable in the current implementatio
 - `Point.getBound()` is not implemented. Normal rendering performs bounds-based viewport culling, so appending a Point throws before it paints; it remains usable as a standalone geometry helper.
 - `StayImage` preserves explicit source-crop dimensions during construction, update, and copy, but custom `swidth` and `sheight` are not transition fields and are not preserved in interpolated timeline frames.
 - `CircleAttr.stroke`, `CircleAttr.fill`, and `StayText.decoration` are accepted by types but do not produce the corresponding stable drawing behavior. Use `strokeConfig` and `fillConfig` for Circle styling.
-- Native WebGL2 supports depth-tested indexed triangle Meshes with opaque unlit or Lambert materials, explicit vertex normals, ambient lights, and up to four directional lights per layer. Textures, transparent/glass materials, transparency ordering, shadows, and WebGL2 region capture are not yet available.
+- Native WebGL2 supports depth-tested indexed triangle Meshes, opaque unlit/Lambert materials, thin lit Glass materials, explicit vertex normals, ambient lights, and up to four directional lights per layer. Glass uses stable object-level back-to-front sorting; intersecting transparent Meshes, self-overlap, scene-color refraction, textures, shadows, order-independent transparency, and WebGL2 region capture are not yet available.
 
 ## Animation and history
 

@@ -345,3 +345,7 @@ export function meshColor(color: ReturnType<typeof rgba>): MeshColor {
     1,
   ]
 }
+
+export function transparentMeshColor(color: ReturnType<typeof rgba>): MeshColor {
+  return [color.r / 255, color.g / 255, color.b / 255, color.a]
+}

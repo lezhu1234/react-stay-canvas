@@ -78,6 +78,16 @@ export class PerspectiveCamera {
     return multiplyMatrix4(projection, view)
   }
 
+  /** @internal Provides one view matrix for transparent sorting during a frame. */
+  getViewMatrix(): Matrix4 {
+    return lookAtMatrix4(this.#position, this.#target, this.#up)
+  }
+
+  /** @internal Provides the camera world position to view-dependent materials. */
+  getPosition(): Vector3 {
+    return [...this.#position]
+  }
+
   /** @internal Lets the owning layer translate camera mutations into dirtiness. */
   subscribeChanges(listener: () => void) {
     this.#changeListeners.add(listener)

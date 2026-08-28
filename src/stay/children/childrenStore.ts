@@ -1,28 +1,29 @@
-import type { SelectorFunc } from "../../types/children"
 import { infixExpressionParser } from "../../utils/selectors"
-import { StayInstantChild } from "./stayInstantChild"
+import type { ChildIdentity } from "./runtimeContracts"
+
+type ChildSelector<TChild> = (child: TChild) => boolean
 
 // Owns the child map and all lookup / selector queries. Extracted from Stay so
 // "children storage" is one focused concern. Rendering side-effects (marking a
 // removed child's layers dirty) stay with the caller, since they belong to the
 // renderer, not the store.
-export class ChildrenStore {
-  #children = new Map<string, StayInstantChild>()
+export class ChildrenStore<TChild extends ChildIdentity> {
+  #children = new Map<string, TChild>()
 
-  add(child: StayInstantChild) {
+  add(child: TChild) {
     this.#children.set(child.id, child)
   }
 
-  get(id: string): StayInstantChild | undefined {
+  get(id: string): TChild | undefined {
     return this.#children.get(id)
   }
 
   // The raw map (read-mostly). Callers iterate via `.values()` / `.forEach`.
-  get map(): Map<string, StayInstantChild> {
+  get map(): Map<string, TChild> {
     return this.#children
   }
 
-  values(): StayInstantChild[] {
+  values(): TChild[] {
     return [...this.#children.values()]
   }
 
@@ -31,23 +32,23 @@ export class ChildrenStore {
   }
 
   // Removes and returns the child so the caller can dirty its layers.
-  delete(id: string): StayInstantChild | undefined {
+  delete(id: string): TChild | undefined {
     const child = this.#children.get(id)
     if (child) this.#children.delete(id)
     return child
   }
 
-  filter(predicate: (child: StayInstantChild) => boolean): StayInstantChild[] {
+  filter(predicate: ChildSelector<TChild>): TChild[] {
     return this.values().filter(predicate)
   }
 
-  findByClassName(className: string): StayInstantChild[] {
+  findByClassName(className: string): TChild[] {
     return this.filter(
       (child) => child.className.split(":")[0] === className || child.className === className
     )
   }
 
-  findBySimpleSelector(selector: string): StayInstantChild[] {
+  findBySimpleSelector(selector: string): TChild[] {
     if (selector.startsWith(".")) {
       return this.findByClassName(selector.slice(1))
     } else if (selector.startsWith("#")) {
@@ -57,14 +58,14 @@ export class ChildrenStore {
     throw new Error("selector must start with . or #")
   }
 
-  bySelector(selector?: string | SelectorFunc): StayInstantChild[] {
+  bySelector(selector?: string | ChildSelector<TChild>): TChild[] {
     const fullSet = this.values()
     if (!selector) {
       return fullSet
     }
     return typeof selector === "function"
       ? fullSet.filter((child) => selector(child))
-      : infixExpressionParser<StayInstantChild>({
+      : infixExpressionParser<TChild>({
           selector,
           fullSet,
           elemntEqualFunc: (a, b) => a.id === b.id,

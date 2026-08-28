@@ -1,6 +1,7 @@
 import { Canvas } from "../canvas"
 import type { DrawReturn, StayDrawProps } from "../types/tools"
 import { StayInstantChild } from "./children/stayInstantChild"
+import { stayInstantChildLayers } from "./children/stayInstantChildRuntime"
 import {
   CoordinateSystem,
   type CoordinateFrame,
@@ -12,6 +13,7 @@ import {
   type LayerRenderPlan,
 } from "./rendering/renderPlan"
 import { executeWebGLRenderPlan } from "./rendering/webGLExecutor"
+import { ChildLayerScheduler } from "./rendering/childLayerScheduler"
 
 interface DrawLayer {
   forceUpdate: boolean
@@ -26,6 +28,7 @@ export class Renderer {
   #nextTick: (() => void)[] = []
   #running = false
   #lastRenderedCoordinateRevision = -1
+  readonly #childLayers = new ChildLayerScheduler(stayInstantChildLayers)
 
   constructor(
     private readonly root: Canvas,
@@ -52,36 +55,26 @@ export class Renderer {
   // Repaints only the layers flagged dirty (own forceUpdate, or a child's
   // updatedLayers), clearing + redrawing each such layer's own canvas.
   draw({ now = Date.now(), beforeDrawCallback, afterDrawCallback }: StayDrawProps): DrawReturn {
-    interface ChildLayer {
-      updateCurrentLayer: boolean
-    }
-
     beforeDrawCallback?.()
 
     const frame = this.coordinates.getFrame(this.root.getSurfaceMetrics())
     const viewportChanged = frame.revision !== this.#lastRenderedCoordinateRevision
-    const childrenInlayer: ChildLayer[] = this.#layers.map((layer) => {
-      const childInLayer = { updateCurrentLayer: viewportChanged || layer.forceUpdate }
+    const dirtyLayers = this.#layers.map((layer) => {
+      const dirty = viewportChanged || layer.forceUpdate
       layer.forceUpdate = false
-      return childInLayer
+      return dirty
     })
 
     const children = this.getRenderChildren()
 
-    children.forEach((child) => {
-      child.getUpdatedLayers().forEach((layer) => {
-        childrenInlayer[layer].updateCurrentLayer = true
-      })
-    })
+    this.#childLayers.collectDirtyLayers(children, dirtyLayers)
 
     const updatedLayers: number[] = []
     const updatedChilds: DrawReturn["updatedChilds"] = []
 
     try {
-      for (let layerIndex = 0; layerIndex < childrenInlayer.length; layerIndex++) {
-        const { updateCurrentLayer } = childrenInlayer[layerIndex]
-
-        if (!updateCurrentLayer || !this.root.isLayerDrawable(layerIndex)) {
+      for (let layerIndex = 0; layerIndex < dirtyLayers.length; layerIndex++) {
+        if (!dirtyLayers[layerIndex] || !this.root.isLayerDrawable(layerIndex)) {
           continue
         }
 
@@ -91,7 +84,7 @@ export class Renderer {
           layerIndex,
           frame.visibleContentArea
         )
-        children.forEach((child) => child.layerDraw(layerIndex))
+        this.#childLayers.acknowledgeLayer(children, layerIndex)
         updatedChilds.push(...plan.updatedChildren)
         this.#drawLayer(layerIndex, frame, plan, now)
       }

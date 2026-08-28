@@ -18,9 +18,11 @@ import { uuid4 } from "../utils/identifiers"
 
 import { ChildrenStore } from "./children/childrenStore"
 import { StayInstantChild } from "./children/stayInstantChild"
+import { stayInstantChildLayers } from "./children/stayInstantChildRuntime"
 import { CoordinateSystem } from "./coordinates/coordinateSystem"
 import { EventDispatcher } from "./events/input/eventDispatcher"
 import { ActionRouter } from "./events/routing/actionRouter"
+import { createCanvas2DPointerTargetPicker } from "./events/routing/pointerTargetPicker"
 import { EventRuntime } from "./events/runtime/eventRuntime"
 import { History } from "./history"
 import { captureHistoryChildren, HistoryChildSnapshot } from "./historySnapshot"
@@ -29,7 +31,7 @@ import { stayTools } from "./stayTools"
 import { SetShapeChildCurrentTime, StackItem } from "./types"
 
 class Stay<EventName extends string> {
-  readonly children = new ChildrenStore()
+  readonly children = new ChildrenStore<StayInstantChild>()
   readonly coordinates: CoordinateSystem
   actionRouter: ActionRouter<EventName>
   eventRuntime: EventRuntime<EventName>
@@ -91,6 +93,7 @@ class Stay<EventName extends string> {
         rootChild: this.rootChild,
         store: this.store,
         stateStore: this.stateStore,
+        pointerTargets: createCanvas2DPointerTargetPicker(this.rootChild),
         select: (selector, sortBy) => this.tools.getChildrenBySelector(selector, sortBy),
       },
     })
@@ -254,7 +257,7 @@ class Stay<EventName extends string> {
   removeChildById(id: string) {
     const child = this.children.delete(id)
     if (child) {
-      child.getLayers().forEach((layer) => {
+      stayInstantChildLayers.occupiedLayers(child).forEach((layer) => {
         this.forceUpdateLayer(layer)
       })
     }

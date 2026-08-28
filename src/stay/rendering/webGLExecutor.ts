@@ -13,6 +13,7 @@ import {
   type ProjectiveRasterSpec,
 } from "./projectiveRaster"
 import type { ProjectiveRenderProjection, RenderItem } from "./renderPlan"
+import { rasterizeWebGLAffineBatch } from "./webGLAffineBatch"
 
 interface WebGLRenderProps {
   readonly context: WebGLRenderingContext
@@ -25,11 +26,20 @@ interface WebGLRenderProps {
   readonly forceDraw?: boolean
 }
 
-interface PreparedItem {
+interface PreparedProjectiveItem {
+  readonly kind: "projective"
   readonly item: RenderItem & { readonly projection: ProjectiveRenderProjection }
   readonly raster: ProjectiveRasterSpec
   readonly vertices: Float32Array
 }
+
+interface PreparedAffineBatch {
+  readonly kind: "affine"
+  readonly items: readonly RenderItem[]
+  readonly requiresSourceOver: boolean
+}
+
+type PreparedCommand = PreparedProjectiveItem | PreparedAffineBatch
 
 interface WebGLResources {
   readonly program: WebGLProgram
@@ -63,6 +73,12 @@ void main() {
 `
 
 const QUAD_INDICES = new Uint16Array([0, 1, 2, 0, 2, 3])
+const FULL_SURFACE_VERTICES = new Float32Array([
+  -1, 1, 1, 0, 1,
+  1, 1, 1, 1, 1,
+  1, -1, 1, 1, 0,
+  -1, -1, 1, 0, 0,
+])
 
 function finite(value: number, name: string) {
   if (!Number.isFinite(value)) throw new TypeError(`${name} must be finite`)
@@ -314,44 +330,91 @@ function deleteResources(
   context.deleteProgram(resources.program)
 }
 
-function prepareItems({
-  context,
-  items,
-  width,
-  height,
-  contentToView,
-  getProjectiveRasterScale,
-}: WebGLRenderProps): PreparedItem[] {
+function prepareProjectiveItem(
+  item: RenderItem & { readonly projection: ProjectiveRenderProjection },
+  maxTextureSize: number,
+  props: WebGLRenderProps
+): PreparedProjectiveItem {
+  const raster = resolveProjectiveRasterSpec(
+    item.projection.mapping,
+    props.getProjectiveRasterScale(item)
+  )
+  if (raster.width > maxTextureSize || raster.height > maxTextureSize) {
+    throw new RangeError(
+      `projective raster ${raster.width}x${raster.height} exceeds WebGL texture limit ${maxTextureSize}`
+    )
+  }
+  return {
+    kind: "projective",
+    item,
+    raster,
+    vertices: createProjectiveClipVertices(
+      item.projection,
+      raster,
+      props.width,
+      props.height,
+      props.contentToView
+    ),
+  }
+}
+
+function prepareCommands(props: WebGLRenderProps): PreparedCommand[] {
+  const { context, items, width, height } = props
   const maxTextureSize = context.getParameter(context.MAX_TEXTURE_SIZE) as number
   positiveFinite(maxTextureSize, "WebGL maximum texture size")
-  return items.map((item) => {
+  positiveFinite(width, "WebGL logical width")
+  positiveFinite(height, "WebGL logical height")
+
+  const hasProjectiveItems = items.some(({ projection }) => Boolean(projection))
+  if (hasProjectiveItems) {
+    // Once a projective item splits affine drawing into intermediate passes,
+    // destination-dependent composition can no longer observe one shared 2D
+    // destination. Reject it before drawing rather than changing its meaning.
+    items.forEach(({ shape }) => assertProjectiveShapeCanRasterize(shape))
+  }
+
+  const commands: PreparedCommand[] = []
+  let affineItems: RenderItem[] = []
+  const flushAffineItems = () => {
+    if (affineItems.length === 0) return
+    commands.push({
+      kind: "affine",
+      items: affineItems,
+      requiresSourceOver: hasProjectiveItems,
+    })
+    affineItems = []
+  }
+
+  for (const item of items) {
     if (!item.projection) {
-      throw new RangeError(
-        "WebGL projective rendering requires every RenderItem to have a projection"
-      )
+      affineItems.push(item)
+      continue
     }
-    assertProjectiveShapeCanRasterize(item.shape)
-    const raster = resolveProjectiveRasterSpec(
-      item.projection.mapping,
-      getProjectiveRasterScale(item)
+    flushAffineItems()
+    commands.push(prepareProjectiveItem(
+      item as PreparedProjectiveItem["item"],
+      maxTextureSize,
+      props
+    ))
+  }
+  flushAffineItems()
+
+  if (commands.some(({ kind }) => kind === "affine")) {
+    const rasterWidth = positiveInteger(
+      context.drawingBufferWidth,
+      "WebGL affine batch raster width"
     )
-    if (raster.width > maxTextureSize || raster.height > maxTextureSize) {
+    const rasterHeight = positiveInteger(
+      context.drawingBufferHeight,
+      "WebGL affine batch raster height"
+    )
+    if (rasterWidth > maxTextureSize || rasterHeight > maxTextureSize) {
       throw new RangeError(
-        `projective raster ${raster.width}x${raster.height} exceeds WebGL texture limit ${maxTextureSize}`
+        `affine batch raster ${rasterWidth}x${rasterHeight} exceeds WebGL texture limit ${maxTextureSize}`
       )
     }
-    return {
-      item: item as PreparedItem["item"],
-      raster,
-      vertices: createProjectiveClipVertices(
-        item.projection,
-        raster,
-        width,
-        height,
-        contentToView
-      ),
-    }
-  })
+  }
+  return commands
 }
 
 function clearTarget(context: WebGLRenderingContext) {
@@ -411,10 +474,32 @@ function configurePass(
   context.uniform1i(resources.samplerLocation, 0)
 }
 
-function drawPreparedItem(
+function uploadAndDraw(
   context: WebGLRenderingContext,
   resources: WebGLResources,
-  prepared: PreparedItem,
+  vertices: Float32Array,
+  surface: HTMLCanvasElement | OffscreenCanvas,
+  operation: string
+) {
+  context.bindBuffer(context.ARRAY_BUFFER, resources.vertexBuffer)
+  context.bufferData(context.ARRAY_BUFFER, vertices, context.STREAM_DRAW)
+  context.bindTexture(context.TEXTURE_2D, resources.texture)
+  context.texImage2D(
+    context.TEXTURE_2D,
+    0,
+    context.RGBA,
+    context.RGBA,
+    context.UNSIGNED_BYTE,
+    surface
+  )
+  context.drawElements(context.TRIANGLES, QUAD_INDICES.length, context.UNSIGNED_SHORT, 0)
+  assertNoWebGLError(context, operation)
+}
+
+function drawProjectiveItem(
+  context: WebGLRenderingContext,
+  resources: WebGLResources,
+  prepared: PreparedProjectiveItem,
   props: WebGLRenderProps
 ) {
   const { item, raster, vertices } = prepared
@@ -428,23 +513,40 @@ function drawPreparedItem(
     height: props.height,
     forceDraw: props.forceDraw,
   })
-  context.bindBuffer(context.ARRAY_BUFFER, resources.vertexBuffer)
-  context.bufferData(context.ARRAY_BUFFER, vertices, context.STREAM_DRAW)
-  context.bindTexture(context.TEXTURE_2D, resources.texture)
-  context.texImage2D(
-    context.TEXTURE_2D,
-    0,
-    context.RGBA,
-    context.RGBA,
-    context.UNSIGNED_BYTE,
-    surface
+  uploadAndDraw(context, resources, vertices, surface, "projective draw")
+}
+
+function drawAffineBatch(
+  context: WebGLRenderingContext,
+  resources: WebGLResources,
+  prepared: PreparedAffineBatch,
+  props: WebGLRenderProps
+) {
+  const surface = rasterizeWebGLAffineBatch({
+    targetCanvas: context.canvas,
+    rasterWidth: context.drawingBufferWidth,
+    rasterHeight: context.drawingBufferHeight,
+    logicalWidth: props.width,
+    logicalHeight: props.height,
+    contentToView: props.contentToView,
+    items: prepared.items,
+    requiresSourceOver: prepared.requiresSourceOver,
+    getNow: props.getNow,
+    forceDraw: props.forceDraw,
+  })
+  uploadAndDraw(
+    context,
+    resources,
+    FULL_SURFACE_VERTICES,
+    surface,
+    "affine batch draw"
   )
-  context.drawElements(context.TRIANGLES, QUAD_INDICES.length, context.UNSIGNED_SHORT, 0)
-  assertNoWebGLError(context, "projective draw")
 }
 
 /**
- * @internal Executes one projective-only RenderPlan pass. The caller owns the
+ * @internal Executes one affine/projective RenderPlan pass in global item
+ * order. Consecutive affine items share a transparent full-surface raster; a
+ * projective item remains its own finite-domain raster. The caller owns the
  * WebGL context and its loss/restore events; this function owns no persistent
  * state and releases every GPU resource it creates before returning.
  */
@@ -452,8 +554,8 @@ export function executeWebGLRenderPlan(props: WebGLRenderProps) {
   const { context } = props
   assertContextAvailable(context)
   assertNoWebGLError(context, "pass start")
-  const items = prepareItems(props)
-  if (items.length === 0) {
+  const commands = prepareCommands(props)
+  if (commands.length === 0) {
     clearTarget(context)
     assertNoWebGLError(context, "empty projective pass")
     return
@@ -462,7 +564,13 @@ export function executeWebGLRenderPlan(props: WebGLRenderProps) {
   const resources = createResources(context)
   try {
     configurePass(context, resources)
-    items.forEach((item) => drawPreparedItem(context, resources, item, props))
+    commands.forEach((command) => {
+      if (command.kind === "affine") {
+        drawAffineBatch(context, resources, command, props)
+      } else {
+        drawProjectiveItem(context, resources, command, props)
+      }
+    })
     assertContextAvailable(context)
   } finally {
     deleteResources(context, resources)

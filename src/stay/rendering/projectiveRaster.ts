@@ -61,7 +61,8 @@ export function assertProjectiveShapeCanRasterize(shape: InstantShape) {
   }
 }
 
-function createRasterSurface(
+/** @internal Creates a same-document 2D surface for an isolated render pass. */
+export function createRasterSurface(
   targetCanvas: HTMLCanvasElement | OffscreenCanvas,
   width: number,
   height: number

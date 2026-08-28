@@ -24,6 +24,7 @@ import type {
 } from "./coordinates"
 import type { Area, PointType } from "./geometry"
 import type { ManualTriggerEvents } from "./manualActions"
+import type { StayWebGLTools } from "./webgl"
 
 export interface StayDrawProps {
   now?: number
@@ -31,7 +32,9 @@ export interface StayDrawProps {
   afterDrawCallback?: (canvas: Canvas) => void
 }
 
-export type StayTools = BasicTools & InstantTools & AnimatedTools
+export type StayTools = BasicTools & InstantTools & AnimatedTools & {
+  readonly webgl: StayWebGLTools
+}
 
 export interface ViewportState {
   x: number

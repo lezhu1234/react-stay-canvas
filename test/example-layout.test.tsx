@@ -43,7 +43,7 @@ import {
 import { type ExampleDefinition } from "../example/src/examples/types"
 import { I18nProvider } from "../example/src/i18n"
 import { installPointerEvents, pointer } from "./helpers/pointer"
-import { createRecordingWebGLContext } from "./helpers/webgl"
+import { createRecordingWebGL2Context } from "./helpers/webgl"
 
 vi.stubGlobal("OffscreenCanvas", class {
   constructor(public width: number, public height: number) {}
@@ -57,7 +57,7 @@ let originalClientHeight: PropertyDescriptor | undefined
 let originalClientWidth: PropertyDescriptor | undefined
 let viewportHeight = 480
 let viewportWidth = 920
-let webGLContexts = new Map<HTMLCanvasElement, ReturnType<typeof createRecordingWebGLContext>>()
+let webGL2Contexts = new Map<HTMLCanvasElement, ReturnType<typeof createRecordingWebGL2Context>>()
 
 beforeEach(() => {
   ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
@@ -66,18 +66,18 @@ beforeEach(() => {
   window.cancelAnimationFrame = () => {}
   viewportHeight = 480
   viewportWidth = 920
-  webGLContexts = new Map()
+  webGL2Contexts = new Map()
   const nativeGetContext = HTMLCanvasElement.prototype.getContext
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
     this: HTMLCanvasElement,
     contextId: string,
     ...args: unknown[]
   ) {
-    if (contextId === "webgl") {
-      let recording = webGLContexts.get(this)
+    if (contextId === "webgl2") {
+      let recording = webGL2Contexts.get(this)
       if (!recording) {
-        recording = createRecordingWebGLContext(this)
-        webGLContexts.set(this, recording)
+        recording = createRecordingWebGL2Context(this)
+        webGL2Contexts.set(this, recording)
       }
       return recording.context
     }
@@ -400,7 +400,7 @@ describe("Example Canvas workspace", () => {
     const liveLayers = workspace?.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")
     expect(workspace?.querySelectorAll(":scope > section")).toHaveLength(2)
     expect(stackCard?.classList.contains("coordinate-focus-view-client")).toBe(true)
-    expect(stackLayers).toHaveLength(3)
+    expect(stackLayers).toHaveLength(2)
     expect(liveLayers).toHaveLength(2)
     expect(workspace?.querySelector(".coordinate-live-exhibit .coordinate-live-heading")?.textContent)
       .toContain("Live Canvas")
@@ -425,9 +425,8 @@ describe("Example Canvas workspace", () => {
     expect(liveLayers?.[0].width).toBe(1150)
     expect(liveLayers?.[0].height).toBe(600)
 
-    stackLayers?.forEach((canvas) => {
-      expect(webGLContexts.get(canvas)?.spies.drawElements).toHaveBeenCalled()
-    })
+    expect(webGL2Contexts.get(stackLayers![0])?.spies.drawElements).toHaveBeenCalled()
+    expect(webGL2Contexts.has(stackLayers![1])).toBe(false)
 
     const flow = container.querySelector(".coordinate-flow")
     expect(flow?.textContent).toContain("Coordinates")
@@ -539,8 +538,8 @@ describe("Example Canvas workspace", () => {
       resetView?.click()
     })
 
-    const contentPlaneDrawsBeforeZoom = stackLayers?.[2]
-      ? webGLContexts.get(stackLayers[2])?.spies.drawElements.mock.calls.length
+    const contentPlaneDrawsBeforeZoom = stackLayers?.[0]
+      ? webGL2Contexts.get(stackLayers[0])?.spies.drawElements.mock.calls.length
       : undefined
     const zoomIn = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
       .find((button) => button.textContent === "zoom in")
@@ -552,7 +551,7 @@ describe("Example Canvas workspace", () => {
     expect(proofValue("View projection")).toContain("228×144")
     expect(proofValue("Client footprint")).not.toBe(clientFootprint)
     expect(proofValue("Visible Content window")).not.toBe(visibleWindow)
-    expect(webGLContexts.get(stackLayers![2])?.spies.drawElements.mock.calls.length)
+    expect(webGL2Contexts.get(stackLayers![0])?.spies.drawElements.mock.calls.length)
       .toBeGreaterThan(contentPlaneDrawsBeforeZoom ?? 0)
 
     const reset = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]

@@ -1,91 +1,216 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest"
 
-import { projectivePlacementFromQuad, Rectangle } from "react-stay-canvas"
+import {
+  Mesh,
+  PerspectiveCamera,
+  Rectangle,
+  Root,
+  type WebGL2LayerConfig,
+} from "react-stay-canvas"
 import { Canvas } from "../src/canvas"
-import type { WebGLLayerConfig } from "../src/types/canvas"
 import { createStage } from "./helpers/stage"
-import { createRecordingWebGLContext } from "./helpers/webgl"
+import { createRecordingWebGL2Context } from "./helpers/webgl"
 
-describe("public WebGL layer backend", () => {
-  it("dispatches one mixed RenderPlan through an explicitly configured WebGL layer", () => {
-    let gl: ReturnType<typeof createRecordingWebGLContext> | undefined
+const triangle = () => ({
+  positions: [-0.8, -0.8, 0, 0.8, -0.8, 0, 0, 0.8, 0],
+  indices: [0, 1, 2],
+})
+
+const camera = () => new PerspectiveCamera({
+  position: [0, 0, 3],
+  target: [0, 0, 0],
+  near: 0.1,
+  far: 20,
+})
+
+describe("public native WebGL2 layer backend", () => {
+  it("renders Mesh children with persistent GPU resources", () => {
+    let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
+    const sceneCamera = camera()
     const { stage, layers } = createStage({
       width: 240,
       height: 160,
       layers: [{
-        backend: "webgl",
+        backend: "webgl2",
+        camera: sceneCamera,
         context: (canvas) => {
-          gl = createRecordingWebGLContext(canvas)
+          gl ??= createRecordingWebGL2Context(canvas)
           return gl.context
         },
       }],
     })
-    stage.tools.appendChild({
-      className: "affine",
-      shape: new Rectangle({ x: 8, y: 10, width: 40, height: 30 }),
-    })
-    stage.tools.appendChild({
-      className: "projective",
-      shape: new Rectangle({ x: 0, y: 0, width: 80, height: 60 }),
-      placement: projectivePlacementFromQuad(
-        { x: 0, y: 0, width: 80, height: 60 },
-        {
-          topLeft: { x: 70, y: 20 },
-          topRight: { x: 190, y: 34 },
-          bottomRight: { x: 175, y: 130 },
-          bottomLeft: { x: 58, y: 112 },
-        }
-      ),
-    })
+    const mesh = new Mesh({ geometry: triangle(), color: [0.2, 0.5, 0.9, 1] })
+    stage.tools.webgl.appendChild({ className: "native-plane", layer: 0, meshes: [mesh] })
 
-    const result = stage.draw({ now: 1 })
-
-    expect(result.updatedLayers).toEqual([0])
-    expect(stage.root.getLayerBackend(0)).toBe("webgl")
+    expect(stage.draw({ now: 1 }).updatedLayers).toEqual([0])
+    expect(stage.root.getLayerBackend(0)).toBe("webgl2")
     expect(stage.root.contexts[0]).toBe(gl?.context)
-    expect(gl?.spies.drawElements).toHaveBeenCalledTimes(2)
-    expect(gl?.spies.texImage2D).toHaveBeenCalledTimes(2)
-    expect(layers[0].style.width).toBe("240px")
-    expect(layers[0].style.height).toBe("160px")
+    expect(gl?.spies.drawElements).toHaveBeenCalledOnce()
+    expect(gl?.spies.texImage2D).not.toHaveBeenCalled()
+    expect(gl?.spies.createProgram).toHaveBeenCalledOnce()
+    expect(gl?.spies.createBuffer).toHaveBeenCalledTimes(2)
+    expect(gl?.spies.createVertexArray).toHaveBeenCalledOnce()
+
+    mesh.setColor([0.9, 0.3, 0.2, 1])
+    expect(stage.draw({ now: 2 }).updatedLayers).toEqual([0])
+    expect(gl?.spies.createProgram).toHaveBeenCalledOnce()
+    expect(gl?.spies.createBuffer).toHaveBeenCalledTimes(2)
+    expect(gl?.spies.bufferData).toHaveBeenCalledTimes(2)
+
+    sceneCamera.setPose([0.2, 0, 3], [0, 0, 0])
+    expect(stage.draw({ now: 3 }).updatedLayers).toEqual([0])
+    stage.resize(320, 180)
+    expect(stage.draw({ now: 4 }).updatedLayers).toEqual([0])
+    expect(gl?.spies.createProgram).toHaveBeenCalledOnce()
+    expect(layers[0].style.width).toBe("320px")
+    expect(layers[0].style.height).toBe("180px")
   })
 
-  it("lets the caller choose restoration while pausing and invalidating the lost layer", () => {
-    let gl: ReturnType<typeof createRecordingWebGLContext> | undefined
-    const onContextLost = vi.fn((event: WebGLContextEvent) => event.preventDefault())
+  it("rejects Children assigned to the wrong backend or layer", () => {
+    let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
+    const { stage } = createStage({
+      layers: [
+        { backend: "canvas2d" },
+        {
+          backend: "webgl2",
+          camera: camera(),
+          context: (canvas) => {
+            gl ??= createRecordingWebGL2Context(canvas)
+            return gl.context
+          },
+        },
+      ],
+    })
+
+    const rejectedShape = new Rectangle({ x: 0, y: 0, width: 10, height: 10, layer: 1 })
+    expect(() => stage.tools.appendChild({
+      className: "wrong-shape",
+      shape: rejectedShape,
+    })).toThrow("Canvas2D Child")
+    expect(rejectedShape.parent).toBeUndefined()
+
+    const rejectedRoot = new Root({ x: 0, y: 0, width: 10, height: 10, layer: 1 })
+    expect(() => stage.tools.appendChild({
+      className: "user-root-shape",
+      shape: rejectedRoot,
+    })).toThrow("Canvas2D Child")
+    expect(rejectedRoot.parent).toBeUndefined()
+
+    const acceptedShape = new Rectangle({ x: 0, y: 0, width: 10, height: 10, layer: 0 })
+    stage.tools.appendChild({ className: "shape", shape: acceptedShape })
+    expect(() => acceptedShape.update({ layer: 1 })).toThrow("Canvas2D Child")
+    expect(acceptedShape.layer).toBe(0)
+
+    const animated = stage.tools.createChild({ className: "animated-shape" })
+    const rejectedFrame = new Rectangle({ x: 0, y: 0, width: 10, height: 10, layer: 1 })
+    expect(() => animated.appendKeyFrame("shape", rejectedFrame)).toThrow("Canvas2D Child")
+    expect(rejectedFrame.parent).toBeUndefined()
+
+    const aliasedFrame = new Rectangle({ x: 0, y: 0, width: 10, height: 10, layer: -2 })
+    const laterRejectedFrame = new Rectangle({ x: 0, y: 0, width: 10, height: 10, layer: 1 })
+    expect(() => animated.replaceSlice("shape", [aliasedFrame, laterRejectedFrame]))
+      .toThrow("Canvas2D Child")
+    expect(aliasedFrame.layer).toBe(-2)
+    expect(aliasedFrame.parent).toBeUndefined()
+    expect(() => stage.tools.webgl.appendChild({
+      className: "wrong-mesh",
+      layer: 0,
+      meshes: [new Mesh({ geometry: triangle() })],
+    })).toThrow("cannot target layer 0")
+
+    const child = stage.tools.webgl.appendChild({
+      className: "native",
+      layer: 1,
+      meshes: [new Mesh({ geometry: triangle() })],
+    })
+    expect(() => child.setLayer(2)).toThrow("cannot target layer 2")
+    expect(child.layer).toBe(1)
+  })
+
+  it("uses shared History and deep-owned scene transfer", () => {
+    const config = () => {
+      let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
+      return {
+        backend: "webgl2" as const,
+        camera: camera(),
+        context: (canvas: HTMLCanvasElement) => {
+          gl ??= createRecordingWebGL2Context(canvas)
+          return gl.context
+        },
+      }
+    }
+    const source = createStage({ layers: [config()] }).stage
+    const mesh = new Mesh({ geometry: triangle(), color: [0.2, 0.5, 0.9, 1] })
+    const child = source.tools.webgl.appendChild({
+      id: "native-history",
+      className: "native",
+      layer: 0,
+      meshes: [mesh],
+    })
+    source.tools.log()
+    mesh.setColor([0.9, 0.2, 0.1, 1])
+    child.setClassName("native:edited")
+    source.tools.log()
+
+    source.tools.undo()
+    expect(source.tools.webgl.getChildById(child.id)).toBe(child)
+    expect(child.className).toBe("native")
+    expect(child.meshes[0].getColor()).toEqual([0.2, 0.5, 0.9, 1])
+    source.tools.redo()
+    expect(child.className).toBe("native:edited")
+    expect(child.meshes[0].getColor()).toEqual([0.9, 0.2, 0.1, 1])
+
+    const fragment = source.tools.webgl.exportChildren([child])
+    const target = createStage({ layers: [config()] }).stage
+    const [imported] = target.tools.webgl.importChildren(fragment)
+    expect(imported.id).not.toBe(child.id)
+    expect(imported.className).toBe(child.className)
+    imported.meshes[0].setColor([0, 1, 0, 1])
+    expect(child.meshes[0].getColor()).toEqual([0.9, 0.2, 0.1, 1])
+  })
+
+  it("pauses on context loss and rebuilds resources after restore", () => {
+    let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
+    const onContextLost = vi.fn()
     const onContextRestored = vi.fn()
-    const config: WebGLLayerConfig = {
-      backend: "webgl",
+    const config: WebGL2LayerConfig = {
+      backend: "webgl2",
+      camera: camera(),
       context: (canvas) => {
-        gl ??= createRecordingWebGLContext(canvas)
+        gl ??= createRecordingWebGL2Context(canvas)
         return gl.context
       },
       onContextLost,
       onContextRestored,
     }
     const { stage, layers } = createStage({ layers: [config] })
-    const child = stage.tools.appendChild({
-      className: "shape",
-      shape: new Rectangle({ x: 10, y: 12, width: 40, height: 30 }),
+    const child = stage.tools.webgl.appendChild({
+      className: "native",
+      layer: 0,
+      meshes: [new Mesh({ geometry: triangle() })],
     })
     stage.draw({ now: 1 })
-    const drawsBeforeLoss = gl!.spies.drawElements.mock.calls.length
+    const programsBeforeLoss = gl!.spies.createProgram.mock.calls.length
 
     gl!.setLost(true)
     const lost = new Event("webglcontextlost", { cancelable: true })
     layers[0].dispatchEvent(lost)
-    child.shape.update({ x: 24 })
-
-    expect(lost.defaultPrevented).toBe(true)
-    expect(onContextLost).toHaveBeenCalledOnce()
+    child.meshes[0].setColor([1, 0, 0, 1])
     expect(stage.draw({ now: 2 }).updatedLayers).toEqual([])
-    expect(gl!.spies.drawElements).toHaveBeenCalledTimes(drawsBeforeLoss)
+    expect(lost.defaultPrevented).toBe(true)
 
     gl!.setLost(false)
     layers[0].dispatchEvent(new Event("webglcontextrestored"))
-    expect(onContextRestored).toHaveBeenCalledOnce()
     expect(stage.draw({ now: 3 }).updatedLayers).toEqual([0])
-    expect(gl!.spies.drawElements.mock.calls.length).toBeGreaterThan(drawsBeforeLoss)
+    expect(gl!.spies.createProgram).toHaveBeenCalledTimes(programsBeforeLoss + 1)
+    expect(onContextLost).toHaveBeenCalledOnce()
+    expect(onContextRestored).toHaveBeenCalledOnce()
+
+    stage.tools.webgl.removeChild(child.id)
+    stage.draw({ now: 4 })
+    expect(gl!.spies.deleteBuffer).toHaveBeenCalledTimes(2)
+    expect(gl!.spies.deleteVertexArray).toHaveBeenCalledOnce()
 
     stage.destroy()
     layers[0].dispatchEvent(new Event("webglcontextlost", { cancelable: true }))
@@ -94,33 +219,36 @@ describe("public WebGL layer backend", () => {
     expect(onContextRestored).toHaveBeenCalledOnce()
   })
 
-  it("restarts the render loop when a context lost during a pass is restored", () => {
+  it("restarts a failed render loop after native context restoration", () => {
     const frames: FrameRequestCallback[] = []
-    let gl: ReturnType<typeof createRecordingWebGLContext> | undefined
+    let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
     const { stage, layers } = createStage({
       layers: [{
-        backend: "webgl",
+        backend: "webgl2",
+        camera: camera(),
         context: (canvas) => {
-          gl ??= createRecordingWebGLContext(canvas)
+          gl ??= createRecordingWebGL2Context(canvas)
           return gl.context
         },
-        onContextLost: (event) => event.preventDefault(),
       }],
       raf: (callback) => {
         frames.push(callback)
         return frames.length
       },
     })
-    stage.tools.appendChild({
-      className: "shape",
-      shape: new Rectangle({ x: 10, y: 12, width: 40, height: 30 }),
+    stage.tools.webgl.appendChild({
+      className: "native",
+      layer: 0,
+      meshes: [new Mesh({ geometry: triangle() })],
     })
     gl!.spies.drawElements.mockImplementationOnce(() => gl!.setLost(true))
 
     const failedFrame = frames.shift()!
     expect(() => failedFrame(16)).toThrow("context is lost")
     const drawsBeforeRestore = gl!.spies.drawElements.mock.calls.length
-    layers[0].dispatchEvent(new Event("webglcontextlost", { cancelable: true }))
+    const lost = new Event("webglcontextlost", { cancelable: true })
+    layers[0].dispatchEvent(lost)
+    expect(lost.defaultPrevented).toBe(true)
     gl!.setLost(false)
     layers[0].dispatchEvent(new Event("webglcontextrestored"))
 
@@ -128,13 +256,93 @@ describe("public WebGL layer backend", () => {
     expect(frames.length).toBeGreaterThan(0)
   })
 
-  it("fails initialization instead of silently falling back to Canvas2D", () => {
-    expect(() => createStage({
-      layers: [{ backend: "webgl", context: () => null }],
-    })).toThrow("Unable to get WebGL context for layer 0")
-    expect(() => createStage({
-      layers: [{ backend: "webgpu" } as never],
-    })).toThrow("Unsupported Canvas backend for layer 0")
+  it("keeps a layer paused when context restoration fails", () => {
+    let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
+    let contextRequests = 0
+    const { stage, layers } = createStage({
+      layers: [{
+        backend: "webgl2",
+        camera: camera(),
+        context: (canvas) => {
+          contextRequests += 1
+          gl ??= createRecordingWebGL2Context(canvas)
+          return contextRequests === 1 ? gl.context : null
+        },
+      }],
+    })
+    const mesh = new Mesh({ geometry: triangle() })
+    stage.tools.webgl.appendChild({ className: "native", layer: 0, meshes: [mesh] })
+    stage.draw({ now: 1 })
+
+    gl!.setLost(true)
+    layers[0].dispatchEvent(new Event("webglcontextlost", { cancelable: true }))
+    mesh.setColor([1, 0, 0, 1])
+    gl!.setLost(false)
+    const errors: Error[] = []
+    const captureError = (event: ErrorEvent) => {
+      event.preventDefault()
+      errors.push(event.error)
+    }
+    window.addEventListener("error", captureError, { once: true })
+    layers[0].dispatchEvent(new Event("webglcontextrestored"))
+
+    expect(errors[0]?.message).toContain("Unable to get WebGL2 context")
+    expect(stage.draw({ now: 2 }).updatedLayers).toEqual([])
+  })
+
+  it("shares identity, state, listener, and DOM input infrastructure", () => {
+    let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
+    const { stage, top } = createStage({
+      layers: [{
+        backend: "webgl2",
+        camera: camera(),
+        context: (canvas) => {
+          gl ??= createRecordingWebGL2Context(canvas)
+          return gl.context
+        },
+      }],
+    })
+    const callback = vi.fn()
+    stage.addEventListener({
+      name: "root-input",
+      selector: ".stay-canvas",
+      event: "mousedown",
+      state: "editing",
+      callback,
+    })
+    stage.tools.switchState("editing")
+    stage.tools.webgl.appendChild({
+      id: "shared-id",
+      className: "native",
+      layer: 0,
+      meshes: [new Mesh({ geometry: triangle() })],
+    })
+    expect(() => stage.tools.appendChild({
+      id: "shared-id",
+      className: "shape",
+      shape: new Rectangle({ x: 0, y: 0, width: 10, height: 10 }),
+    })).toThrow("already exists")
+
+    top.dispatchEvent(new MouseEvent("mousedown", {
+      clientX: 20,
+      clientY: 20,
+      button: 0,
+      bubbles: true,
+    }))
+    expect(callback).toHaveBeenCalledOnce()
+    expect(stage.state).toBe("editing")
+  })
+
+  it("fails WebGL2 initialization without fallback and cleans partial layers", () => {
+    const failedConfig: WebGL2LayerConfig = {
+      backend: "webgl2",
+      camera: camera(),
+      context: () => null,
+    }
+    expect(() => createStage({ layers: [failedConfig] }))
+      .toThrow("Unable to get WebGL2 context for layer 0")
+    expect(() => createStage({ layers: [{ backend: "webgpu" } as never] }))
+      .toThrow("Unsupported Canvas backend for layer 0")
 
     const first = document.createElement("canvas")
     const second = document.createElement("canvas")
@@ -143,8 +351,9 @@ describe("public WebGL layer backend", () => {
       [first, second],
       [
         {
-          backend: "webgl",
-          context: (canvas) => createRecordingWebGLContext(canvas).context,
+          backend: "webgl2",
+          camera: camera(),
+          context: (canvas) => createRecordingWebGL2Context(canvas).context,
           onContextLost,
         },
         { backend: "webgpu" } as never,
@@ -153,24 +362,6 @@ describe("public WebGL layer backend", () => {
       80
     )).toThrow("Unsupported Canvas backend for layer 1")
     first.dispatchEvent(new Event("webglcontextlost", { cancelable: true }))
-    expect(onContextLost).not.toHaveBeenCalled()
-
-    const third = document.createElement("canvas")
-    const fourth = document.createElement("canvas")
-    expect(() => new Canvas(
-      [third, fourth],
-      [
-        {
-          backend: "webgl",
-          context: (canvas) => createRecordingWebGLContext(canvas).context,
-          onContextLost,
-        },
-        () => null,
-      ],
-      100,
-      80
-    )).toThrow("Unable to get drawing context for layer 1")
-    third.dispatchEvent(new Event("webglcontextlost", { cancelable: true }))
     expect(onContextLost).not.toHaveBeenCalled()
   })
 })

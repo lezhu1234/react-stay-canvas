@@ -59,7 +59,18 @@ function copyColor(color: MeshColor): MeshColor {
   return copied
 }
 
-/** @internal CPU-authoritative geometry and draw state for one WebGL2 mesh. */
+function arrayValuesEqual(
+  first: ArrayLike<number>,
+  second: ArrayLike<number>
+) {
+  if (first.length !== second.length) return false
+  for (let index = 0; index < first.length; index++) {
+    if (first[index] !== second[index]) return false
+  }
+  return true
+}
+
+/** CPU-authoritative geometry and draw state for one WebGL2 mesh. */
 export class Mesh {
   #positions: Float32Array
   #indices: Uint16Array
@@ -86,6 +97,10 @@ export class Mesh {
 
   setGeometry(geometry: MeshGeometryInput) {
     const copied = copyGeometry(geometry)
+    if (
+      arrayValuesEqual(this.#positions, copied.positions)
+      && arrayValuesEqual(this.#indices, copied.indices)
+    ) return
     this.#positions = copied.positions
     this.#indices = copied.indices
     this.#geometryRevision += 1
@@ -93,12 +108,16 @@ export class Mesh {
   }
 
   setModelMatrix(modelMatrix: ArrayLike<number>) {
-    this.#modelMatrix = copyMatrix4(modelMatrix, "Mesh model matrix")
+    const copied = copyMatrix4(modelMatrix, "Mesh model matrix")
+    if (arrayValuesEqual(this.#modelMatrix, copied)) return
+    this.#modelMatrix = copied
     this.#notifyChange()
   }
 
   setColor(color: MeshColor) {
-    this.#color = copyColor(color)
+    const copied = copyColor(color)
+    if (arrayValuesEqual(this.#color, copied)) return
+    this.#color = copied
     this.#notifyChange()
   }
 

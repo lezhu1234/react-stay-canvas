@@ -1,0 +1,42 @@
+import {
+  Mesh,
+  PerspectiveCamera,
+  StayWebGLChild,
+  type StayTools,
+  type StayWebGLSceneFragment,
+  translationMatrix4,
+} from "react-stay-canvas"
+
+const camera = new PerspectiveCamera({ position: [0, 0, 3], target: [0, 0, 0] })
+camera.setPose([0.2, 0, 3], [0, 0, 0])
+camera.setProjection(Math.PI / 3, 0.1, 20)
+
+const mesh = new Mesh({
+  geometry: {
+    positions: [-0.8, -0.8, 0, 0.8, -0.8, 0, 0, 0.8, 0],
+    indices: [0, 1, 2],
+  },
+  color: [0.2, 0.5, 0.9, 1],
+})
+mesh.setModelMatrix(translationMatrix4(0.2, 0, 0))
+
+declare const tools: StayTools
+const child: StayWebGLChild = tools.webgl.appendChild({
+  className: "plane",
+  layer: 0,
+  meshes: [mesh],
+})
+const matches: StayWebGLChild[] = tools.webgl.getChildrenBySelector(".plane")
+const fragment: StayWebGLSceneFragment = tools.webgl.exportChildren(matches)
+tools.webgl.importChildren(fragment)
+tools.log()
+
+// @ts-expect-error WebGL2SceneRuntime remains an internal GPU cache owner.
+import { WebGL2SceneRuntime } from "react-stay-canvas"
+// @ts-expect-error WebGL2LayerRuntime remains an internal Canvas owner.
+import { WebGL2LayerRuntime } from "react-stay-canvas"
+
+void camera
+void child
+void WebGL2SceneRuntime
+void WebGL2LayerRuntime

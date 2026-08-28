@@ -42,24 +42,27 @@ export class ChildrenStore<TChild extends ChildIdentity> {
     return this.values().filter(predicate)
   }
 
-  findByClassName(className: string): TChild[] {
-    return this.filter(
+  findByClassName(className: string, candidates = this.values()): TChild[] {
+    return candidates.filter(
       (child) => child.className.split(":")[0] === className || child.className === className
     )
   }
 
-  findBySimpleSelector(selector: string): TChild[] {
+  findBySimpleSelector(selector: string, candidates = this.values()): TChild[] {
     if (selector.startsWith(".")) {
-      return this.findByClassName(selector.slice(1))
+      return this.findByClassName(selector.slice(1), candidates)
     } else if (selector.startsWith("#")) {
       const child = this.get(selector.slice(1))
-      return child ? [child] : []
+      return child && candidates.includes(child) ? [child] : []
     }
     throw new Error("selector must start with . or #")
   }
 
-  bySelector(selector?: string | ChildSelector<TChild>): TChild[] {
-    const fullSet = this.values()
+  bySelector(
+    selector?: string | ChildSelector<TChild>,
+    candidates = this.values()
+  ): TChild[] {
+    const fullSet = [...candidates]
     if (!selector) {
       return fullSet
     }
@@ -69,7 +72,7 @@ export class ChildrenStore<TChild extends ChildIdentity> {
           selector,
           fullSet,
           elemntEqualFunc: (a, b) => a.id === b.id,
-          selectorConvertFunc: (s) => this.findBySimpleSelector(s),
+          selectorConvertFunc: (s) => this.findBySimpleSelector(s, fullSet),
         })
   }
 }

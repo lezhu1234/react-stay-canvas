@@ -10,8 +10,9 @@ import {
   createLayerRuntime,
   type LayerRuntime,
 } from "./stay/rendering/layerRuntime"
+import type { Mesh } from "./stay/webgl2/mesh"
 
-type CanvasRenderContext = DrawCanvasContext | WebGLRenderingContext
+type CanvasRenderContext = DrawCanvasContext | WebGL2RenderingContext
 
 export class Canvas {
   contexts: CanvasRenderContext[]
@@ -136,12 +137,12 @@ export class Canvas {
     return this.layerRuntimes[layerIndex].backend
   }
 
-  getWebGLContext(layerIndex: number) {
+  renderWebGL2Layer(layerIndex: number, meshes: readonly Mesh[]) {
     const runtime = this.layerRuntimes[layerIndex]
-    if (runtime.backend !== "webgl") {
-      throw new Error(`Layer ${layerIndex} is not a WebGL layer`)
+    if (runtime.backend !== "webgl2") {
+      throw new Error(`Layer ${layerIndex} is not a WebGL2 layer`)
     }
-    return runtime.context
+    runtime.render(meshes)
   }
 
   isLayerDrawable(layerIndex: number) {

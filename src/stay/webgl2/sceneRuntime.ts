@@ -215,7 +215,7 @@ export class WebGL2SceneRuntime {
           false,
           multiplyMatrix4(viewProjection, mesh.getModelMatrix())
         )
-        context.uniform4fv(pipeline.colorLocation, mesh.getColor())
+        context.uniform4fv(pipeline.colorLocation, new Float32Array(mesh.getColor()))
         context.drawElements(
           context.TRIANGLES,
           resources.indexCount,

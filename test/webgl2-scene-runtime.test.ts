@@ -98,6 +98,27 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.deleteProgram).toHaveBeenCalledOnce()
   })
 
+  it("does not invalidate or upload equal CPU state", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const mesh = new Mesh({ geometry: triangle(), color: [0, 1, 0, 1] })
+    const changes: number[] = []
+    mesh.subscribeChanges(() => changes.push(mesh.geometryRevision))
+
+    runtime.render([mesh], camera())
+    mesh.setGeometry(triangle())
+    mesh.setModelMatrix(identityMatrix4())
+    mesh.setColor([0, 1, 0, 1])
+    runtime.render([mesh], camera())
+
+    expect(changes).toEqual([])
+    expect(mesh.geometryRevision).toBe(0)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(2)
+    expect(gl.spies.drawElements).toHaveBeenCalledTimes(2)
+    runtime.dispose()
+  })
+
   it("discards a failed initial upload and retries from CPU geometry", () => {
     const canvas = document.createElement("canvas")
     const gl = createRecordingWebGL2Context(canvas)

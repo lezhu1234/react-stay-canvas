@@ -10,6 +10,7 @@
 - `Point.getBound()` 尚未实现。正常渲染会先按边界判断 viewport，因此追加 Point 会在绘制前抛错；它仍可单独作为几何工具使用。
 - `StayImage` 会在构造、更新和复制时保留显式源裁剪尺寸，但自定义 `swidth`、`sheight` 尚未纳入 transition，时间线插值帧不会保留它们。
 - 类型接受 `CircleAttr.stroke`、`CircleAttr.fill` 和 `StayText.decoration`，但它们不会产生对应的稳定绘制效果。Circle 样式请使用 `strokeConfig` 和 `fillConfig`。
+- 原生 WebGL2 当前支持带 depth 的纯色索引三角形 Mesh；灯光、材质、纹理、透明排序、阴影和 WebGL2 区域截图尚未提供。
 
 ## 动画与历史
 
@@ -20,8 +21,10 @@
 ## 场景操作
 
 - `reset()` 在场景移动后不能可靠执行逆变换，因为它会复用旧的移动快照。不要把它当成“恢复初始状态”的稳定入口。
+- `tools.viewport` 和二维 Child placement 不会移动 WebGL2 Camera；Camera pose/projection 是显式的图层显示状态。
 
 ## 事件与目标
 
 - 默认目标 comparator 不提供稳定排序保证。指针目标重叠时请传入 `sortBy`。
 - 公开 Event trigger 类型包含 `"frame"`，但当前 renderer 不会通过 `EventRuntime` 发出 frame action。
+- WebGL2 Canvas 上的 DOM 与 root action 仍可用，但在原生 raycast 加入前，`StayWebGLChild` 不是指针 target。

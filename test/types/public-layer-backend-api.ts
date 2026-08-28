@@ -1,12 +1,15 @@
 import {
   type CanvasLayerConfig,
+  PerspectiveCamera,
   type StayCanvasProps,
-  type WebGLLayerConfig,
+  type WebGL2LayerConfig,
 } from "react-stay-canvas"
 
-const webgl: WebGLLayerConfig = {
-  backend: "webgl",
-  context: (canvas) => canvas.getContext("webgl", { alpha: true }),
+const camera = new PerspectiveCamera({ position: [0, 0, 3], target: [0, 0, 0] })
+const webgl: WebGL2LayerConfig = {
+  backend: "webgl2",
+  camera,
+  context: (canvas) => canvas.getContext("webgl2", { alpha: true }),
   onContextLost: (event) => event.preventDefault(),
   onContextRestored: () => {},
 }
@@ -19,8 +22,8 @@ const layers: CanvasLayerConfig[] = [
 
 const props: StayCanvasProps = { layers }
 
-// @ts-expect-error A WebGL layer resolver must return a WebGL context.
-const invalidWebGL: WebGLLayerConfig = { backend: "webgl", context: (canvas) => canvas.getContext("2d") }
+// @ts-expect-error A WebGL2 layer resolver must return a WebGL2 context.
+const invalidWebGL: WebGL2LayerConfig = { backend: "webgl2", camera, context: (canvas) => canvas.getContext("2d") }
 // @ts-expect-error Backends are explicit and closed to supported values.
 const invalidBackend: CanvasLayerConfig = { backend: "webgpu" }
 

@@ -197,9 +197,14 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     }
     const shapeMap = convertToShapeMap(shape)
 
+    const normalizedLayers = new Map<T, number>()
     shapeMap.forEach((shape) => {
+      normalizedLayers.set(shape, this.resolveChildShapeLayer(shape.layer, shape))
+    })
+
+    shapeMap.forEach((shape) => {
+      shape.layer = normalizedLayers.get(shape)!
       shape.parent = this
-      shape.layer = parseLayer(this.canvas.layers, shape.layer)
       // Mark the shape's layer dirty so an appended (or replaced) child paints on
       // the next draw — without this, appendChild alone never renders until the
       // shape is later mutated. See onChildShapeChange for the per-update path.
@@ -207,6 +212,15 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     })
 
     return shapeMap
+  }
+
+  /** @internal Validates and normalizes a Shape layer before state is committed. */
+  resolveChildShapeLayer(layer: number | undefined, _shape?: InstantShape) {
+    const normalized = parseLayer(this.canvas.layers, layer)
+    if (this.canvas.getLayerBackend(normalized) !== "canvas2d") {
+      throw new Error(`Canvas2D Child ${this.id} cannot target layer ${normalized}`)
+    }
+    return normalized
   }
 
   containsPointer(point: ContentPoint): boolean {
@@ -246,7 +260,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   }
 
   onChildShapeChange(shape: T, previousLayer: number) {
-    shape.layer = parseLayer(this.canvas.layers, shape.layer)
+    shape.layer = this.resolveChildShapeLayer(shape.layer, shape)
     this.updatedLayers.add(previousLayer)
     this.updatedLayers.add(shape.layer)
     this.#onChange?.(this.id)

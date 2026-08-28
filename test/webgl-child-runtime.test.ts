@@ -4,7 +4,7 @@ import { ChildrenStore } from "../src/stay/children/childrenStore"
 import { captureChildHistory } from "../src/stay/historySnapshot"
 import { identityMatrix4, translationMatrix4 } from "../src/stay/webgl2/math3D"
 import { Mesh } from "../src/stay/webgl2/mesh"
-import { LambertMaterial, UnlitMaterial } from "../src/stay/webgl2/material"
+import { GlassMaterial, LambertMaterial, UnlitMaterial } from "../src/stay/webgl2/material"
 import { StayWebGLChild } from "../src/stay/webgl2/stayWebGLChild"
 import {
   stayWebGLChildHistory,
@@ -153,6 +153,31 @@ describe("internal Stay WebGL Child runtime", () => {
     expect(original.meshes[0].getMaterial()).toEqual(material([0.1, 0.2, 0.3, 1]))
     original.destroy()
     imported.destroy()
+  })
+
+  it("captures and materializes Glass without sharing material state", () => {
+    const original = new StayWebGLChild({
+      id: "glass-source",
+      className: "glass-plane",
+      layer: 0,
+      meshes: [new Mesh({
+        geometry: { ...triangle(), normals },
+        material: new GlassMaterial({ color: [0.2, 0.7, 0.9, 0.22] }),
+      })],
+    })
+    const snapshot = captureStayWebGLChildSnapshot(original)
+    expect(snapshot.meshes[0].material).toEqual({
+      kind: "glass",
+      color: [0.2, 0.7, 0.9, 0.22],
+    })
+
+    const restored = restoreStayWebGLChildSnapshot(snapshot)
+    restored.meshes[0].setMaterial(new GlassMaterial({ color: [1, 1, 1, 0.4] }))
+    expect(original.meshes[0].getMaterial()).toEqual(
+      new GlassMaterial({ color: [0.2, 0.7, 0.9, 0.22] })
+    )
+    original.destroy()
+    restored.destroy()
   })
 
   it("rejects invalid ownership inputs before subscribing to Mesh state", () => {

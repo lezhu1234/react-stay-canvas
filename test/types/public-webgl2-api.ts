@@ -1,6 +1,7 @@
 import {
   AmbientLight,
   DirectionalLight,
+  GlassMaterial,
   LambertMaterial,
   Mesh,
   PerspectiveCamera,
@@ -25,6 +26,7 @@ const mesh = new Mesh({
 })
 mesh.setModelMatrix(translationMatrix4(0.2, 0, 0))
 mesh.setMaterial(new LambertMaterial({ color: [0.3, 0.6, 1, 1] }))
+mesh.setMaterial(new GlassMaterial({ color: [0.6, 0.85, 1, 0.2] }))
 
 const ambient = new AmbientLight({ color: [0.9, 0.95, 1], intensity: 0.3 })
 const key = new DirectionalLight({ directionToLight: [0, 0, 1], intensity: 0.8 })

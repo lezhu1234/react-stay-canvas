@@ -4,7 +4,7 @@ import {
   Circle,
   type CanvasLayerConfig,
   DirectionalLight,
-  LambertMaterial,
+  GlassMaterial,
   Line,
   Mesh,
   StayCanvas,
@@ -43,6 +43,7 @@ import {
   PLANE_GRID_ROWS,
   projectPlanePoint,
   rectMeshGeometry,
+  transparentMeshColor,
   type PlaneBasis,
   type PlaneDefinition,
   type PlaneName,
@@ -58,8 +59,8 @@ const OVERLAY_LAYER = 1
 
 const unlitMaterial = (color: ReturnType<typeof rgba>) =>
   new UnlitMaterial({ color: meshColor(color) })
-const lambertMaterial = (color: ReturnType<typeof rgba>) =>
-  new LambertMaterial({ color: meshColor(color) })
+const glassMaterial = (color: ReturnType<typeof rgba>) =>
+  new GlassMaterial({ color: transparentMeshColor(color) })
 
 export type CoordinateMappingFocus = "view-client" | "content-view"
 
@@ -211,7 +212,7 @@ function createPlaneRuntime(
 
   const frameFill = new Mesh({
     geometry: rectMeshGeometry(plane, basis, planeRect, 0),
-    material: lambertMaterial(plane.fill),
+    material: glassMaterial(plane.fill),
   })
   const frameEdges = new Mesh({
     geometry: lineMeshGeometry(plane, basis, frameSegments(plane.width, plane.height), 1.25, 0.002),
@@ -461,7 +462,7 @@ export function CoordinateStack({
       const isActive = planeIsActive(name, mappingFocus)
 
       if (materialFocusChanged) {
-        plane.meshes.frameFill.setMaterial(lambertMaterial({
+        plane.meshes.frameFill.setMaterial(glassMaterial({
           ...plane.fill,
           a: isActive ? plane.fill.a : plane.fill.a * 0.72,
         }))

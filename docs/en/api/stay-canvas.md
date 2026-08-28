@@ -61,7 +61,7 @@ The legacy function-array form creates one Canvas per entry and calls the corres
 />
 ```
 
-Canvas2D remains the default. A WebGL2 layer is an opt-in native Mesh scene, not a Shape raster backend. Add Mesh children with `tools.webgl.appendChild()`; Canvas2D Shapes may target only Canvas2D layers, while a `StayWebGLChild` targets exactly one WebGL2 layer. Mesh depth is authoritative inside the native scene, so Shape `zIndex` does not cross backend boundaries.
+Canvas2D remains the default. A WebGL2 layer is an opt-in native Mesh scene, not a Shape raster backend. Add Mesh children with `tools.webgl.appendChild()`; Canvas2D Shapes may target only Canvas2D layers, while a `StayWebGLChild` targets exactly one WebGL2 layer. Opaque Mesh visibility is depth-authoritative; Glass Meshes keep depth testing and stable-sort back to front after the opaque pass. Shape `zIndex` does not cross backend boundaries.
 
 `lights` is optional layer display state. `AmbientLight` and `DirectionalLight` mutations invalidate only their owning WebGL2 layers, as camera mutations do; neither is included in Child History or scene transfer. One layer currently accepts up to four directional lights. `directionToLight` is a world-space vector from the surface toward the light and is normalized by the Light.
 

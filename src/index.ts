@@ -12,10 +12,12 @@ export type {
   MeshGeometrySnapshot,
 } from "./stay/webgl2/mesh"
 export {
+  GlassMaterial,
   LambertMaterial,
   UnlitMaterial,
 } from "./stay/webgl2/material"
 export type {
+  GlassMaterialProps,
   LambertMaterialProps,
   MeshColor,
   MeshMaterial,

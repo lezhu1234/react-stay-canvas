@@ -32,7 +32,7 @@
 
 `tools.webgl` 在同一实例、同一 identity store 中管理原生 Mesh Child。一个 `StayWebGLChild` 在一个 WebGL2 图层上拥有有序 Mesh 列表；Mesh 几何、模型矩阵与材质以 CPU 状态为准，修改后会标脏对应图层。
 
-`Mesh` 默认使用不透明的 `UnlitMaterial`。`LambertMaterial` 要求显式非零的逐顶点 normals；法线会被复制、在 shader 中归一化，并通过 model matrix 的逆转置进行变换。Material 是不可变值，更新时使用 `mesh.setMaterial()` 替换，不共享可变材质状态：
+`Mesh` 默认使用不透明的 `UnlitMaterial`。`LambertMaterial` 与 `GlassMaterial` 要求显式非零的逐顶点 normals；法线会被复制、在 shader 中归一化，并通过 model matrix 的逆转置进行变换。Material 是不可变值，更新时使用 `mesh.setMaterial()` 替换，不共享可变材质状态：
 
 ```ts
 const mesh = new Mesh({
@@ -43,10 +43,16 @@ const mesh = new Mesh({
   },
   material: new LambertMaterial({ color: [0.2, 0.55, 0.9, 1] }),
 })
+
+const glass = new GlassMaterial({ color: [0.6, 0.85, 1, 0.2] })
+mesh.setMaterial(glass)
 ```
 
-当前两种材质都不透明，color alpha 必须为 `1`。透明与玻璃会使用独立合同，不把不透明材质上的半透明颜色解释成透明渲染。
-未配置任何 Light 时 Lambert 材质会呈现黑色；请显式添加环境光或方向光，不依赖隐藏的默认灯组。
+`UnlitMaterial` 与 `LambertMaterial` 都不透明，color alpha 必须为 `1`。`GlassMaterial` 的 alpha 必须严格位于 `0` 与 `1` 之间；它提供带光照和视角边缘高光的薄层玻璃近似。它不会采样表面后的场景，因此暂不模拟折射、厚度、粗糙度或物理透射。
+
+renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 depth write，再按局部包围盒中心变换到相机 view space 后的深度稳定地从远到近绘制。这是行业常用的对象级透明方案：彼此分离、不相交的表面能稳定合成；相交透明 Mesh 和自身重叠几何仍可能需要拆分 geometry，或等待后续 order-independent transparency。
+
+未配置任何 Light 时 Lambert 与 Glass 材质都会偏暗；请显式添加环境光或方向光，不依赖隐藏的默认灯组。
 
 | 方法 | 说明 |
 | --- | --- |
@@ -58,7 +64,7 @@ const mesh = new Mesh({
 | `webgl.exportChildren(children)` | 捕获带 source id、深度隔离的 CPU Mesh 片段 |
 | `webgl.importChildren(fragment)` | 生成新的 Child id 与独立 Mesh 状态 |
 
-包入口导出 `Mesh`、`UnlitMaterial`、`LambertMaterial`、`AmbientLight`、`DirectionalLight`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、透明材质、阴影、纹理和 Canvas 截图暂不属于这个接口。
+包入口导出 `Mesh`、`UnlitMaterial`、`LambertMaterial`、`GlassMaterial`、`AmbientLight`、`DirectionalLight`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、scene-color 折射、阴影、纹理、order-independent transparency 和 Canvas 截图暂不属于这个接口。
 
 ## 状态与显示
 

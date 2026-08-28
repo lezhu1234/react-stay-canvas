@@ -6,7 +6,9 @@ import {
 } from "./math3D"
 import {
   copyMeshMaterial,
+  GlassMaterial,
   LambertMaterial,
+  meshMaterialUsesLighting,
   UnlitMaterial,
   type MeshMaterial,
 } from "./material"
@@ -79,7 +81,29 @@ function copyGeometry(input: MeshGeometryInput) {
     }
     indices[index] = value
   }
-  return { positions, normals, indices }
+  return { positions, normals, indices, localBoundsCenter: geometryBoundsCenter(positions) }
+}
+
+function geometryBoundsCenter(positions: Float32Array) {
+  let minimumX = positions[0]
+  let minimumY = positions[1]
+  let minimumZ = positions[2]
+  let maximumX = positions[0]
+  let maximumY = positions[1]
+  let maximumZ = positions[2]
+  for (let index = 3; index < positions.length; index += 3) {
+    minimumX = Math.min(minimumX, positions[index])
+    minimumY = Math.min(minimumY, positions[index + 1])
+    minimumZ = Math.min(minimumZ, positions[index + 2])
+    maximumX = Math.max(maximumX, positions[index])
+    maximumY = Math.max(maximumY, positions[index + 1])
+    maximumZ = Math.max(maximumZ, positions[index + 2])
+  }
+  return new Float32Array([
+    (minimumX + maximumX) / 2,
+    (minimumY + maximumY) / 2,
+    (minimumZ + maximumZ) / 2,
+  ])
 }
 
 function arrayValuesEqual(
@@ -98,6 +122,7 @@ export class Mesh {
   #positions: Float32Array
   #normals?: Float32Array
   #indices: Uint16Array
+  #localBoundsCenter: Float32Array
   #geometryRevision = 0
   #modelMatrix: Matrix4
   #material: MeshMaterial
@@ -119,6 +144,7 @@ export class Mesh {
     this.#positions = copied.positions
     this.#normals = copied.normals
     this.#indices = copied.indices
+    this.#localBoundsCenter = copied.localBoundsCenter
     this.#modelMatrix = copiedModelMatrix
     this.#material = copiedMaterial
   }
@@ -139,6 +165,7 @@ export class Mesh {
     this.#positions = copied.positions
     this.#normals = copied.normals
     this.#indices = copied.indices
+    this.#localBoundsCenter = copied.localBoundsCenter
     this.#geometryRevision += 1
     this.#notifyChange()
   }
@@ -153,8 +180,12 @@ export class Mesh {
   }
 
   setMaterial(material: MeshMaterial) {
-    if (!(material instanceof UnlitMaterial) && !(material instanceof LambertMaterial)) {
-      throw new TypeError("Mesh material must be an UnlitMaterial or LambertMaterial")
+    if (!(material instanceof UnlitMaterial)
+        && !(material instanceof LambertMaterial)
+        && !(material instanceof GlassMaterial)) {
+      throw new TypeError(
+        "Mesh material must be an UnlitMaterial, LambertMaterial, or GlassMaterial"
+      )
     }
     if (materialsEqual(this.#material, material)) return
     const copied = copyMeshMaterial(material)
@@ -184,6 +215,17 @@ export class Mesh {
 
   getMaterial(): MeshMaterial {
     return copyMeshMaterial(this.#material)
+  }
+
+  /** @internal Returns the model-transformed local AABB center used for object sorting. */
+  getWorldBoundsCenter(): readonly [number, number, number] {
+    const [x, y, z] = this.#localBoundsCenter
+    const matrix = this.#modelMatrix
+    return [
+      matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12],
+      matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13],
+      matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14],
+    ]
   }
 
   /** @internal Lets the owning Child translate CPU mutations into layer dirtiness. */
@@ -238,7 +280,7 @@ function assertLitMeshState(
   modelMatrix: Matrix4,
   material: MeshMaterial
 ) {
-  if (!(material instanceof LambertMaterial)) return
-  if (!geometry.normals) throw new RangeError("Lambert Mesh geometry requires normals")
+  if (!meshMaterialUsesLighting(material)) return
+  if (!geometry.normals) throw new RangeError("Lit Mesh geometry requires normals")
   normalMatrix3FromMatrix4(modelMatrix)
 }

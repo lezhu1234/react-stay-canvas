@@ -2,14 +2,17 @@ import { InstantShape } from "../shapes/instantShape"
 import { StayInstantChild } from "./children/stayInstantChild"
 import { StepProps } from "./types"
 import { snapshotShapeMap } from "./shapeMapSnapshot"
-import type { Matrix2D } from "../types/transform"
-import { copyMatrix2D, matrix2DEquals } from "./transforms/affine2D"
+import type { ChildPlacementSnapshot } from "../types/transform"
+import {
+  childPlacementEquals,
+  copyChildPlacement,
+} from "./placements/childPlacement"
 
 export interface HistoryChildSnapshot {
   id: string
   className: string
   shape: Map<string, InstantShape>
-  transform: Matrix2D
+  placement: ChildPlacementSnapshot
 }
 
 export function captureHistoryChild(child: StayInstantChild): HistoryChildSnapshot {
@@ -17,7 +20,7 @@ export function captureHistoryChild(child: StayInstantChild): HistoryChildSnapsh
     id: child.id,
     className: child.className,
     shape: snapshotShapeMap(child.shapeMap),
-    transform: copyMatrix2D(child.transform),
+    placement: copyChildPlacement(child.placement),
   }
 }
 
@@ -43,7 +46,7 @@ function snapshotStepChild(child: HistoryChildSnapshot) {
     id: child.id,
     className: child.className,
     shape: child.shape,
-    transform: copyMatrix2D(child.transform),
+    placement: copyChildPlacement(child.placement),
   }
 }
 
@@ -128,7 +131,7 @@ export function diffHistoryChild(
   if (
     before.className === after.className &&
     shapeMapsEqual(before.shape, after.shape) &&
-    matrix2DEquals(before.transform, after.transform)
+    childPlacementEquals(before.placement, after.placement)
   ) {
     return undefined
   }
@@ -139,7 +142,7 @@ export function diffHistoryChild(
       ...snapshotStepChild(after),
       beforeName: before.className,
       beforeShape: before.shape,
-      beforeTransform: copyMatrix2D(before.transform),
+      beforePlacement: copyChildPlacement(before.placement),
     },
   }
 }

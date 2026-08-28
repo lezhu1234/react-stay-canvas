@@ -1,18 +1,7 @@
 import type { ContentPoint, ContentRect } from "../../types/coordinates"
 import type { PointType, Rect } from "../../types/geometry"
-
-/** @internal Row-major 3 x 3 matrix mapping local homogeneous points to Content. */
-export interface ProjectiveMatrix2D {
-  readonly m00: number
-  readonly m01: number
-  readonly m02: number
-  readonly m10: number
-  readonly m11: number
-  readonly m12: number
-  readonly m20: number
-  readonly m21: number
-  readonly m22: number
-}
+import type { ProjectiveMatrix2D } from "../../types/transform"
+export type { ProjectiveMatrix2D } from "../../types/transform"
 
 /**
  * @internal A projective mapping whose finite local domain never touches its
@@ -39,11 +28,29 @@ interface Dyadic {
 
 const FLOAT_BUFFER = new ArrayBuffer(8)
 const FLOAT_VIEW = new DataView(FLOAT_BUFFER)
-const BIGINT_ZERO = BigInt(0)
-const BIGINT_ONE = BigInt(1)
-const BIGINT_TWO = BigInt(2)
-const FRACTION_MASK = (BIGINT_ONE << BigInt(52)) - BIGINT_ONE
-const SIGN_MASK = BIGINT_ONE << BigInt(63)
+let BIGINT_ZERO: bigint
+let BIGINT_ONE: bigint
+let BIGINT_TWO: bigint
+let FRACTION_MASK: bigint
+let SIGN_MASK: bigint
+let exactRuntimeInitialized = false
+
+function initializeExactRuntime() {
+  if (exactRuntimeInitialized) return
+  if (typeof BigInt !== "function" ||
+      typeof FLOAT_VIEW.getBigUint64 !== "function" ||
+      typeof FLOAT_VIEW.setBigUint64 !== "function") {
+    throw new Error(
+      "projective placement requires BigInt and DataView BigUint64 support"
+    )
+  }
+  BIGINT_ZERO = BigInt(0)
+  BIGINT_ONE = BigInt(1)
+  BIGINT_TWO = BigInt(2)
+  FRACTION_MASK = (BIGINT_ONE << BigInt(52)) - BIGINT_ONE
+  SIGN_MASK = BIGINT_ONE << BigInt(63)
+  exactRuntimeInitialized = true
+}
 
 function copyMatrix(
   matrix: Readonly<ProjectiveMatrix2D>
@@ -60,6 +67,22 @@ function copyMatrix(
     m10: values[3], m11: values[4], m12: values[5],
     m20: values[6], m21: values[7], m22: values[8],
   }
+}
+
+export function multiplyProjectiveMatrix2D(
+  left: Readonly<ProjectiveMatrix2D>,
+  right: Readonly<ProjectiveMatrix2D>
+): ProjectiveMatrix2D {
+  const result = {} as ProjectiveMatrix2D
+  for (let row = 0; row < 3; row++) {
+    for (let column = 0; column < 3; column++) {
+      const key = `m${row}${column}` as keyof ProjectiveMatrix2D
+      result[key] = [0, 1, 2].reduce((sum, index) =>
+        sum + left[`m${row}${index}` as keyof ProjectiveMatrix2D] *
+          right[`m${index}${column}` as keyof ProjectiveMatrix2D], 0)
+    }
+  }
+  return result
 }
 
 function numberToDyadic(value: number): Dyadic {
@@ -441,6 +464,9 @@ export function createFiniteProjectiveMapping(
   localToContent: Readonly<ProjectiveMatrix2D>,
   localDomain: Readonly<Rect>
 ): FiniteProjectiveMapping {
+  // Keep affine-only package loading compatible with runtimes that cannot
+  // execute the exact arithmetic required by projective placement.
+  initializeExactRuntime()
   const matrix = Object.freeze(copyMatrix(localToContent))
   const domain = Object.freeze(copyDomain(localDomain))
   const projectedCorners = mapDomainCorners(matrix, domain)
@@ -470,4 +496,30 @@ export function mapProjectiveContentToLocalPoint(
   return localPoint && containsProjectiveLocalPoint(mapping, localPoint)
     ? localPoint
     : undefined
+}
+
+/** @internal Returns conservative Content bounds for the visible local part. */
+export function mapProjectiveLocalRectToContentBounds(
+  mapping: FiniteProjectiveMapping,
+  rect: Readonly<Rect>
+): ContentRect | undefined {
+  const left = Math.max(mapping.localDomain.x, rect.x)
+  const top = Math.max(mapping.localDomain.y, rect.y)
+  const right = Math.min(
+    mapping.localDomain.x + mapping.localDomain.width,
+    rect.x + rect.width
+  )
+  const bottom = Math.min(
+    mapping.localDomain.y + mapping.localDomain.height,
+    rect.y + rect.height
+  )
+  if (right < left || bottom < top) return undefined
+  const points = domainCorners({
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+  }).map((point) => mapPoint(mapping.localToContent, point))
+  if (points.some((point) => !point)) return undefined
+  return boundsOf(points as PointType[])
 }

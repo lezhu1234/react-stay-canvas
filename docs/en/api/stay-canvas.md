@@ -52,7 +52,7 @@ These lists are read when a runtime is created. A React rerender that only repla
 
 ### recreateOnResize
 
-With the default `false`, valid width and height changes resize the existing runtime. The Canvas elements, `StayTools`, Children, Shapes, transforms, history, state, listeners, and viewport state retain their identity and values. Content geometry is not scaled, moved, or laid out again: shrinking clips more Content and expanding reveals more Content. The Root hit boundary follows the new View size, while the Content boundary represented by the Root Shape remains unchanged.
+With the default `false`, valid width and height changes resize the existing runtime. The Canvas elements, `StayTools`, Children, Shapes, placements, history, state, listeners, and viewport state retain their identity and values. Content geometry is not scaled, moved, or laid out again: shrinking clips more Content and expanding reveals more Content. The Root hit boundary follows the new View size, while the Content boundary represented by the Root Shape remains unchanged.
 
 Resizing resets each native Canvas backing store, then invokes the original context setter for every layer so it can restore context-owned state. Every layer repaints with the new `ShapeDrawProps.width` and `height`. An active Pointer Session is cancelled before the surface changes, using its last point in the old coordinate frame and `cancelReason: "resize"`.
 

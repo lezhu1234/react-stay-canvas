@@ -11,7 +11,6 @@ export interface ProjectiveMesh {
 
 export interface ProjectiveRenderProjection {
   readonly mapping: FiniteProjectiveMapping
-  readonly mesh: ProjectiveMesh
 }
 
 export interface ResolveProjectiveRenderProjection {
@@ -24,6 +23,15 @@ export interface RenderItem {
   readonly shape: InstantShape
   readonly ordinal: number
   readonly projection?: ProjectiveRenderProjection
+}
+
+/** @internal Resolves Child-owned placement at the synchronous draw boundary. */
+export function resolveRenderItemProjection(
+  item: RenderItem
+): ProjectiveRenderProjection | undefined {
+  if (item.projection) return item.projection
+  const mapping = item.child.getProjectiveMapping()
+  return mapping ? { mapping } : undefined
 }
 
 export interface UpdatedChildShapes {
@@ -57,16 +65,21 @@ export function createLayerRenderPlan(
         child,
         shape,
         ordinal: collectedItems.length,
+        // Resolver-owned projections are explicit internal overrides. Normal
+        // Child placement stays live and is resolved only when the item draws.
         projection: resolveProjection?.(child, shape),
       })
     }
   }
 
   const visibleItems = visibleContentArea
-    ? collectedItems.filter(({ child, shape, projection }) => hasIntersection(
-      projection?.mapping.contentBounds ?? child.getShapeBound(shape),
-      visibleContentArea
-    ))
+    ? collectedItems.filter((item) => {
+        const projection = resolveRenderItemProjection(item)
+        return hasIntersection(
+          projection?.mapping.contentBounds ?? item.child.getShapeBound(item.shape),
+          visibleContentArea
+        )
+      })
     : collectedItems
   const items = visibleItems
     .sort((first, second) =>

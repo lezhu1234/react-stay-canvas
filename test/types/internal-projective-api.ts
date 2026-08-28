@@ -1,6 +1,5 @@
-// The projective model remains internal until a renderer proves its public contract.
-// @ts-expect-error ProjectiveMatrix2D is intentionally not exported by the package.
-import type { ProjectiveMatrix2D } from "react-stay-canvas"
+// Runtime mappings and backend executors remain internal. Public callers own
+// only the projective placement matrix and domain.
 // @ts-expect-error FiniteProjectiveMapping is intentionally not exported by the package.
 import type { FiniteProjectiveMapping } from "react-stay-canvas"
 // @ts-expect-error ProjectiveRenderProjection is intentionally not exported.
@@ -11,7 +10,7 @@ import { executeWebGLRenderPlan } from "react-stay-canvas"
 import { rasterizeWebGLAffineBatch } from "react-stay-canvas"
 
 export type InternalProjectiveTypes =
-  ProjectiveMatrix2D | FiniteProjectiveMapping | ProjectiveRenderProjection
+  FiniteProjectiveMapping | ProjectiveRenderProjection
 
 export const internalWebGLExecutor = executeWebGLRenderPlan
 export const internalWebGLAffineBatch = rasterizeWebGLAffineBatch

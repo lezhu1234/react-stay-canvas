@@ -15,7 +15,7 @@
 | `shape` | `T` | `shapeMap` 中的第一个 Shape |
 | `shapeMap` | `Map<string, T>` | 当前 Child 的全部 Shape |
 | `canvas` | `Canvas` | 所属 Canvas 运行时 |
-| `transform` | `Readonly<Matrix2D>` | 已解析的 Child 局部坐标到 Content 坐标仿射矩阵快照 |
+| `placement` | `ChildPlacementSnapshot` | 已解析的 affine 或 projective 局部到 Content placement 快照 |
 | `participatesInHistory` | `boolean` | 静态 Child 为 `true` |
 
 ### 常用方法
@@ -24,12 +24,12 @@
 | --- | --- | --- |
 | `getShape()` | `T` | 等同于 `shape` |
 | `getBound()` | `Rect` | 合并全部 Shape 边界 |
-| `getShapeBound(shape)` | `Rect` | 单个 Shape 变换后的 Content 坐标边界 |
+| `getShapeBound(shape)` | `Rect` | 单个 Shape 放置后的保守 Content 坐标边界 |
 | `containsPointer(point)` | `boolean` | 任一 Shape 命中即为 true |
 | `inArea(area)` | `boolean` | 任一 Shape 中心在区域内即为 true |
-| `setTransform(transform)` | `this` | 完整替换语义化或原始仿射变换 |
-| `toLocalPoint(point)` | `PointType` | 将 Content 坐标点映射为 Child 局部坐标 |
-| `toContentPoint(point)` | `PointType` | 将 Child 局部坐标点映射为 Content 坐标 |
+| `setPlacement(placement)` | `this` | 完整替换 affine 或 projective placement |
+| `toLocalPoint(point)` | `PointType \| undefined` | 把 Content 点映射进有限 Child 局部域 |
+| `toContentPoint(point)` | `PointType \| undefined` | 把有限 Child 局部域映射到 Content |
 | `moveInit()` | `void` | 保存连续移动的起点 |
 | `move(offsetX, offsetY)` | `void` | 按 Content 坐标向量破坏性移动全部 Shape |
 | `zoom(deltaY, center)` | `void` | 围绕 Content 坐标中心破坏性缩放全部 Shape |
@@ -38,9 +38,9 @@
 
 `update(...)` 是历史恢复使用的内部替换原语。应用更新应调用 `child.shape.update(...)` 或从 `shapeMap` 取出具体 Shape 后调用它的 `update(...)`。
 
-Shape 几何始终保留在 Child 局部坐标中；绘制、边界、命中、区域查询、历史、场景传输和区域捕获会统一应用 Child 变换。`setTransform()` 会完整替换而不是合并旧变换；语义化 rotation 和 skew 使用角度。也可传入 `{ matrix: { a, b, c, d, e, f } }` 原始矩阵。非有限值或不可逆矩阵会抛错，因为局部命中需要逆矩阵。
+Shape 几何始终保留在 Child 局部坐标中；绘制、边界、命中、区域查询、历史、场景传输和区域捕获统一应用同一份 placement。affine placement 支持语义字段或 Canvas 兼容原始矩阵；projective placement 包含 3×3 矩阵和有限正面积 local domain，且 domain 不能接触或跨越齐次地平线。非有限值或不可逆矩阵会抛错，因为局部命中需要逆映射。
 
-`transform` getter 返回快照，修改返回对象不会改变 Child。动画 Child 可以使用同一个静态变换，但当前还不支持变换关键帧和插值。
+`placement` getter 返回判别式快照，修改返回对象不会改变 Child。动画 Child 可以使用同一份静态 placement，但当前还不支持 placement 关键帧和插值。
 
 Child 是绑定 Canvas 的运行时实体，不提供复制操作。需要捕获并重复实例化场景时，使用 `exportChildren()` 和 `importChildren()`。
 

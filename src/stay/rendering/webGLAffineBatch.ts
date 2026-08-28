@@ -4,7 +4,10 @@ import {
   assertProjectiveShapeCanRasterize,
   createRasterSurface,
 } from "./projectiveRaster"
-import type { RenderItem } from "./renderPlan"
+import {
+  resolveRenderItemProjection,
+  type RenderItem,
+} from "./renderPlan"
 
 interface WebGLAffineBatchProps {
   readonly targetCanvas: HTMLCanvasElement | OffscreenCanvas
@@ -19,7 +22,11 @@ interface WebGLAffineBatchProps {
   readonly forceDraw?: boolean
 }
 
-/** @internal Renders one consecutive affine run into a transparent layer-sized texture. */
+/**
+ * @internal Renders the affine prefix of one candidate run. A synchronous
+ * callback may turn a later Child projective, so the returned count—not the
+ * candidate length—owns the execution boundary.
+ */
 export function rasterizeWebGLAffineBatch({
   targetCanvas,
   rasterWidth,
@@ -46,7 +53,11 @@ export function rasterizeWebGLAffineBatch({
       backingScaleX * contentToView.offsetX,
       backingScaleY * contentToView.offsetY
     )
+    let consumed = 0
+    let consumedAllSourceOver = true
     for (const item of items) {
+      if (resolveRenderItemProjection(item)) break
+      const usesSourceOver = item.shape.globalConfig.gco === "source-over"
       // Earlier Shape callbacks may mutate later Shape state synchronously.
       // Recheck at the exact execution boundary so a mixed pass never applies
       // destination-dependent composition inside an isolated affine texture.
@@ -59,9 +70,11 @@ export function rasterizeWebGLAffineBatch({
         height: logicalHeight,
         forceDraw,
       })
+      consumed += 1
+      consumedAllSourceOver &&= usesSourceOver
     }
+    return { canvas: surface.canvas, consumed, consumedAllSourceOver }
   } finally {
     surface.context.restore()
   }
-  return surface.canvas
 }

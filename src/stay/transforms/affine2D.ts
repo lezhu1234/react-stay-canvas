@@ -1,5 +1,9 @@
 import type { PointType, Rect } from "../../types/geometry"
-import type { ChildTransform, Matrix2D } from "../../types/transform"
+import type {
+  Matrix2D,
+  MatrixAffineChildPlacement,
+  SemanticAffineChildPlacement,
+} from "../../types/transform"
 
 const DEGREES_TO_RADIANS = Math.PI / 180
 function finite(value: number, name: string) {
@@ -69,34 +73,36 @@ function scaleMatrix(x: number, y: number): Matrix2D {
 
 function validateMatrix(matrix: Readonly<Matrix2D>): Matrix2D {
   const result = {
-    a: finite(matrix.a, "transform.matrix.a"),
-    b: finite(matrix.b, "transform.matrix.b"),
-    c: finite(matrix.c, "transform.matrix.c"),
-    d: finite(matrix.d, "transform.matrix.d"),
-    e: finite(matrix.e, "transform.matrix.e"),
-    f: finite(matrix.f, "transform.matrix.f"),
+    a: finite(matrix.a, "placement.matrix.a"),
+    b: finite(matrix.b, "placement.matrix.b"),
+    c: finite(matrix.c, "placement.matrix.c"),
+    d: finite(matrix.d, "placement.matrix.d"),
+    e: finite(matrix.e, "placement.matrix.e"),
+    f: finite(matrix.f, "placement.matrix.f"),
   }
   const determinant = result.a * result.d - result.b * result.c
   if (!Number.isFinite(determinant) || determinant === 0) {
-    throw new RangeError("transform matrix must be invertible")
+    throw new RangeError("affine placement matrix must be invertible")
   }
   return result
 }
 
-export function resolveChildTransform(transform: ChildTransform = {}): Matrix2D {
-  if ("matrix" in transform && transform.matrix) {
-    return validateMatrix(transform.matrix)
+export function resolveAffinePlacement(
+  placement: SemanticAffineChildPlacement | MatrixAffineChildPlacement
+): Matrix2D {
+  if ("matrix" in placement && placement.matrix) {
+    return validateMatrix(placement.matrix)
   }
 
-  const x = finite(transform.x ?? 0, "transform.x")
-  const y = finite(transform.y ?? 0, "transform.y")
-  const rotation = finite(transform.rotation ?? 0, "transform.rotation")
-  const scaleX = finite(transform.scaleX ?? 1, "transform.scaleX")
-  const scaleY = finite(transform.scaleY ?? 1, "transform.scaleY")
-  const skewX = finite(transform.skewX ?? 0, "transform.skewX")
-  const skewY = finite(transform.skewY ?? 0, "transform.skewY")
-  const originX = finite(transform.origin?.x ?? 0, "transform.origin.x")
-  const originY = finite(transform.origin?.y ?? 0, "transform.origin.y")
+  const x = finite(placement.x ?? 0, "placement.x")
+  const y = finite(placement.y ?? 0, "placement.y")
+  const rotation = finite(placement.rotation ?? 0, "placement.rotation")
+  const scaleX = finite(placement.scaleX ?? 1, "placement.scaleX")
+  const scaleY = finite(placement.scaleY ?? 1, "placement.scaleY")
+  const skewX = finite(placement.skewX ?? 0, "placement.skewX")
+  const skewY = finite(placement.skewY ?? 0, "placement.skewY")
+  const originX = finite(placement.origin?.x ?? 0, "placement.origin.x")
+  const originY = finite(placement.origin?.y ?? 0, "placement.origin.y")
 
   const matrices = [
     translationMatrix(x, y),
@@ -114,7 +120,7 @@ export function resolveChildTransform(transform: ChildTransform = {}): Matrix2D 
 export function invertMatrix2D(matrix: Readonly<Matrix2D>): Matrix2D {
   const determinant = matrix.a * matrix.d - matrix.b * matrix.c
   if (!Number.isFinite(determinant) || determinant === 0) {
-    throw new RangeError("transform matrix must be invertible")
+    throw new RangeError("affine placement matrix must be invertible")
   }
   const inverse = {
     a: matrix.d / determinant,
@@ -125,7 +131,7 @@ export function invertMatrix2D(matrix: Readonly<Matrix2D>): Matrix2D {
     f: (matrix.b * matrix.e - matrix.a * matrix.f) / determinant,
   }
   if (Object.values(inverse).some((value) => !Number.isFinite(value))) {
-    throw new RangeError("transform matrix must be invertible")
+    throw new RangeError("affine placement matrix must be invertible")
   }
   return inverse
 }

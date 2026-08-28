@@ -161,7 +161,7 @@ describe("internal WebGL projective RenderPlan executor", () => {
 
   it("builds scale-invariant positive-w clip vertices from Content mappings", () => {
     const mapping = perspectivePlane(-1e120)
-    const projection = { mapping, mesh: { columns: 8, rows: 6 } }
+    const projection = { mapping }
     const vertices = createProjectiveClipVertices(
       projection,
       { scale: 1, width: 80, height: 60 },
@@ -198,7 +198,7 @@ describe("internal WebGL projective RenderPlan executor", () => {
       m20: 0, m21: 0, m22: 1,
     }, { x: 0, y: 0, width: 3, height: 3 })
     const vertices = createProjectiveClipVertices(
-      { mapping, mesh: { columns: 1, rows: 1 } },
+      { mapping },
       { scale: 0.5, width: 2, height: 2 },
       10,
       10,
@@ -230,7 +230,7 @@ describe("internal WebGL projective RenderPlan executor", () => {
       [later, earlier],
       0,
       undefined,
-      () => ({ mapping: perspectivePlane(), mesh: { columns: 4, rows: 3 } })
+      () => ({ mapping: perspectivePlane() })
     )
     const gl = createRecordingContext(layers[0])
     const getNow = vi.fn(() => 42)
@@ -262,7 +262,9 @@ describe("internal WebGL projective RenderPlan executor", () => {
     const order: string[] = []
     const append = (name: string, zIndex: number) => stage.tools.appendChild({
       className: name,
-      transform: name === "affine-2" ? { x: 15, y: 7 } : undefined,
+      placement: name === "affine-2"
+        ? { type: "affine", x: 15, y: 7 }
+        : undefined,
       shape: new Rectangle({
         x: 0, y: 0, width: 80, height: 60, zIndex,
         fillConfig: { color: { r: 40, g: 90, b: 180, a: 1 } },
@@ -288,7 +290,7 @@ describe("internal WebGL projective RenderPlan executor", () => {
       0,
       undefined,
       (child) => child.className.startsWith("projected")
-        ? { mapping: perspectivePlane(), mesh: { columns: 4, rows: 3 } }
+        ? { mapping: perspectivePlane() }
         : undefined
     )
     const gl = createRecordingContext(layers[0])
@@ -322,6 +324,303 @@ describe("internal WebGL projective RenderPlan executor", () => {
     expect(secondAffineSurface.getContext("2d")!.getImageData(30, 20, 1, 1).data[3])
       .toBeGreaterThan(0)
     stage.destroy()
+  })
+
+  it("resolves Child placement kind and mapping at each WebGL draw boundary", () => {
+    const { stage, layers } = createStage({ width: 200, height: 150, layers: 1 })
+    const order: string[] = []
+    const projectivePlacement = (x: number, y: number) => ({
+      type: "projective" as const,
+      matrix: {
+        m00: 1, m01: 0, m02: x,
+        m10: 0, m11: 1, m12: y,
+        m20: 0.002, m21: 0, m22: 1,
+      },
+      domain: { x: 0, y: 0, width: 40, height: 30 },
+    })
+    const shape = (name: string, zIndex: number) => new Rectangle({
+      x: 0, y: 0, width: 40, height: 30, zIndex,
+      stateDrawFuncMap: { default: { afterDraw: () => order.push(name) } },
+    })
+    const affineToProjective = stage.tools.appendChild({
+      className: "affine-to-projective",
+      shape: shape("affine-to-projective", 1),
+    })
+    const projectiveToAffine = stage.tools.appendChild({
+      className: "projective-to-affine",
+      shape: shape("projective-to-affine", 2),
+      placement: projectivePlacement(20, 60),
+    })
+    const projectiveToProjective = stage.tools.appendChild({
+      className: "projective-to-projective",
+      shape: shape("projective-to-projective", 3),
+      placement: projectivePlacement(20, 100),
+    })
+    stage.tools.appendChild({
+      className: "mutator",
+      shape: new Rectangle({
+        x: 0, y: 0, width: 2, height: 2, zIndex: 0,
+        stateDrawFuncMap: {
+          default: {
+            afterDraw: () => {
+              order.push("mutator")
+              affineToProjective.setPlacement(projectivePlacement(20, 10))
+              projectiveToAffine.setPlacement({ type: "affine", x: 100, y: 60 })
+              projectiveToProjective.setPlacement(projectivePlacement(100, 100))
+            },
+          },
+        },
+      }),
+    })
+    const gl = createRecordingContext(layers[0])
+    const projectiveMappings: unknown[] = []
+
+    executeWebGLRenderPlan({
+      context: gl.context,
+      items: createLayerRenderPlan(stage.tools.getChildrenWithoutRoot(), 0).items,
+      getNow: () => 0,
+      width: 200,
+      height: 150,
+      contentToView: identityFrame,
+      getProjectiveRasterScale: ({ projection }) => {
+        projectiveMappings.push(projection?.mapping)
+        return 1
+      },
+      forceDraw: true,
+    })
+
+    expect(order).toEqual([
+      "mutator",
+      "affine-to-projective",
+      "projective-to-affine",
+      "projective-to-projective",
+    ])
+    expect(gl.spies.texImage2D).toHaveBeenCalledTimes(4)
+    expect(projectiveMappings.slice(-2)).toEqual([
+      affineToProjective.getProjectiveMapping(),
+      projectiveToProjective.getProjectiveMapping(),
+    ])
+    stage.destroy()
+  })
+
+  it("keeps one affine composition batch when projective reclassifies before its boundary", () => {
+    const { stage, layers } = createStage({ width: 200, height: 120, layers: 1 })
+    const later = stage.tools.appendChild({
+      className: "later",
+      shape: new Rectangle({
+        x: 0, y: 0, width: 80, height: 60, zIndex: 2,
+        fillConfig: { color: { r: 20, g: 80, b: 180, a: 1 } },
+      }),
+      placement: {
+        type: "projective",
+        matrix: {
+          m00: 1, m01: 0, m02: 0,
+          m10: 0, m11: 1, m12: 0,
+          m20: 0.002, m21: 0, m22: 1,
+        },
+        domain: { x: 0, y: 0, width: 80, height: 60 },
+      },
+    })
+    const earlier = stage.tools.appendChild({
+      className: "earlier",
+      shape: new Rectangle({
+        x: 0, y: 0, width: 80, height: 60, zIndex: 1,
+        fillConfig: { color: { r: 20, g: 80, b: 180, a: 1 } },
+        stateDrawFuncMap: {
+          default: {
+            afterDraw: () => {
+              later.setPlacement({ type: "affine" })
+              later.shape.globalConfig.gco = "destination-out"
+            },
+          },
+        },
+      }),
+    })
+    const gl = createRecordingContext(layers[0])
+
+    executeWebGLRenderPlan({
+      context: gl.context,
+      items: createLayerRenderPlan([earlier, later], 0).items,
+      getNow: () => 0,
+      width: 200,
+      height: 120,
+      contentToView: identityFrame,
+      getProjectiveRasterScale: () => 1,
+      forceDraw: true,
+    })
+    expect(gl.spies.texImage2D).toHaveBeenCalledOnce()
+    const surface = gl.spies.texImage2D.mock.calls[0][5] as HTMLCanvasElement
+    expect(surface.getContext("2d")!.getImageData(10, 10, 1, 1).data[3]).toBe(0)
+    expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
+    stage.destroy()
+  })
+
+  it("does not preflight a mutable projective raster that becomes affine before drawing", () => {
+    const { stage, layers } = createStage({ width: 60, height: 40, layers: 1 })
+    const order: string[] = []
+    const later = stage.tools.appendChild({
+      className: "later",
+      shape: new Rectangle({
+        x: 10, y: 0, width: 40, height: 30, zIndex: 2,
+        stateDrawFuncMap: { default: { afterDraw: () => order.push("later") } },
+      }),
+      placement: {
+        type: "projective",
+        matrix: {
+          m00: 1, m01: 0, m02: 0,
+          m10: 0, m11: 1, m12: 0,
+          m20: 0.002, m21: 0, m22: 1,
+        },
+        domain: { x: 0, y: 0, width: 40, height: 30 },
+      },
+    })
+    const earlier = stage.tools.appendChild({
+      className: "earlier",
+      shape: new Rectangle({
+        x: 0, y: 0, width: 10, height: 10, zIndex: 1,
+        stateDrawFuncMap: {
+          default: {
+            afterDraw: () => {
+              order.push("earlier")
+              later.setPlacement({ type: "affine" })
+            },
+          },
+        },
+      }),
+    })
+    const gl = createRecordingContext(layers[0], { maxTextureSize: 64 })
+    const getProjectiveRasterScale = vi.fn(() => 2)
+
+    executeWebGLRenderPlan({
+      context: gl.context,
+      items: createLayerRenderPlan([earlier, later], 0).items,
+      getNow: () => 0,
+      width: 60,
+      height: 40,
+      contentToView: identityFrame,
+      getProjectiveRasterScale,
+      forceDraw: true,
+    })
+
+    expect(order).toEqual(["earlier", "later"])
+    expect(getProjectiveRasterScale).not.toHaveBeenCalled()
+    expect(gl.spies.texImage2D).toHaveBeenCalledOnce()
+    stage.destroy()
+  })
+
+  it("checks mixed composition from the value used at each affine draw boundary", () => {
+    const placement = {
+      type: "projective" as const,
+      matrix: {
+        m00: 1, m01: 0, m02: 20,
+        m10: 0, m11: 1, m12: 20,
+        m20: 0.002, m21: 0, m22: 1,
+      },
+      domain: { x: 0, y: 0, width: 40, height: 30 },
+    }
+    const run = (initialGco: GlobalCompositeOperation, changedGco: GlobalCompositeOperation) => {
+      const { stage, layers } = createStage({ width: 100, height: 80, layers: 1 })
+      const later = stage.tools.appendChild({
+        className: "later",
+        shape: new Rectangle({ x: 0, y: 0, width: 40, height: 30, zIndex: 2 }),
+      })
+      const earlier = stage.tools.appendChild({
+        className: "earlier",
+        shape: new Rectangle({
+          x: 0, y: 0, width: 40, height: 30, zIndex: 1,
+          globalConfig: { gco: initialGco },
+          stateDrawFuncMap: {
+            default: {
+              afterDraw() {
+                this.globalConfig.gco = changedGco
+                later.setPlacement(placement)
+              },
+            },
+          },
+        }),
+      })
+      const gl = createRecordingContext(layers[0])
+      const execute = () => executeWebGLRenderPlan({
+        context: gl.context,
+        items: createLayerRenderPlan([earlier, later], 0).items,
+        getNow: () => 0,
+        width: 100,
+        height: 80,
+        contentToView: identityFrame,
+        getProjectiveRasterScale: () => 1,
+        forceDraw: true,
+      })
+      return { stage, gl, execute }
+    }
+
+    const allowed = run("source-over", "destination-out")
+    allowed.execute()
+    expect(allowed.gl.spies.texImage2D).toHaveBeenCalledTimes(2)
+    allowed.stage.destroy()
+
+    const rejected = run("destination-out", "source-over")
+    expect(rejected.execute).toThrow("currently supports source-over Shapes")
+    expect(rejected.gl.spies.texImage2D).not.toHaveBeenCalled()
+    expect(rejected.gl.spies.deleteTexture).toHaveBeenCalledOnce()
+    rejected.stage.destroy()
+  })
+
+  it("validates affine texture size only when a mutable affine batch is realized", () => {
+    const projectivePlacement = {
+      type: "projective" as const,
+      matrix: {
+        m00: 1, m01: 0, m02: 0,
+        m10: 0, m11: 1, m12: 0,
+        m20: 0.002, m21: 0, m22: 1,
+      },
+      domain: { x: 0, y: 0, width: 20, height: 20 },
+    }
+    const createPair = (laterStartsProjective: boolean) => {
+      const { stage, layers } = createStage({ width: 200, height: 120, layers: 1 })
+      const later = stage.tools.appendChild({
+        className: "later",
+        shape: new Rectangle({ x: 0, y: 0, width: 20, height: 20, zIndex: 2 }),
+        placement: laterStartsProjective ? projectivePlacement : undefined,
+      })
+      const earlier = stage.tools.appendChild({
+        className: "earlier",
+        shape: new Rectangle({
+          x: 0, y: 0, width: 20, height: 20, zIndex: 1,
+          stateDrawFuncMap: {
+            default: {
+              afterDraw: () => later.setPlacement(
+                laterStartsProjective ? { type: "affine" } : projectivePlacement
+              ),
+            },
+          },
+        }),
+        placement: projectivePlacement,
+      })
+      const gl = createRecordingContext(layers[0], { maxTextureSize: 64 })
+      const execute = () => executeWebGLRenderPlan({
+        context: gl.context,
+        items: createLayerRenderPlan([earlier, later], 0).items,
+        getNow: () => 0,
+        width: 200,
+        height: 120,
+        contentToView: identityFrame,
+        getProjectiveRasterScale: () => 1,
+        forceDraw: true,
+      })
+      return { stage, gl, execute }
+    }
+
+    const staysProjective = createPair(false)
+    staysProjective.execute()
+    expect(staysProjective.gl.spies.texImage2D).toHaveBeenCalledTimes(2)
+    staysProjective.stage.destroy()
+
+    const becomesAffine = createPair(true)
+    expect(becomesAffine.execute)
+      .toThrow("affine batch raster 200x120 exceeds WebGL texture limit 64")
+    expect(becomesAffine.gl.spies.texImage2D).toHaveBeenCalledOnce()
+    expect(becomesAffine.gl.spies.deleteTexture).toHaveBeenCalledOnce()
+    becomesAffine.stage.destroy()
   })
 
   it("preserves Canvas2D composition inside an affine-only WebGL batch", () => {
@@ -371,7 +670,7 @@ describe("internal WebGL projective RenderPlan executor", () => {
     const plan = createLayerRenderPlan(
       [projected, mask], 0, undefined,
       (child) => child === projected
-        ? { mapping: perspectivePlane(), mesh: { columns: 2, rows: 2 } }
+        ? { mapping: perspectivePlane() }
         : undefined
     )
     const gl = createRecordingContext(layers[0])
@@ -412,7 +711,7 @@ describe("internal WebGL projective RenderPlan executor", () => {
     const plan = createLayerRenderPlan(
       [affine, projected], 0, undefined,
       (child) => child === projected
-        ? { mapping: perspectivePlane(), mesh: { columns: 2, rows: 2 } }
+        ? { mapping: perspectivePlane() }
         : undefined
     )
     const gl = createRecordingContext(layers[0])
@@ -458,7 +757,7 @@ describe("internal WebGL projective RenderPlan executor", () => {
 
     const projectedPlan = createLayerRenderPlan(
       [child], 0, undefined,
-      () => ({ mapping: perspectivePlane(), mesh: { columns: 2, rows: 2 } })
+      () => ({ mapping: perspectivePlane() })
     )
     expect(() => executeWebGLRenderPlan({
       ...props,
@@ -483,7 +782,7 @@ describe("internal WebGL projective RenderPlan executor", () => {
     })
     const plan = createLayerRenderPlan(
       [child], 0, undefined,
-      () => ({ mapping: perspectivePlane(), mesh: { columns: 2, rows: 2 } })
+      () => ({ mapping: perspectivePlane() })
     )
     const gl = createRecordingContext(layers[0])
 
@@ -543,7 +842,7 @@ describe("internal WebGL projective RenderPlan executor", () => {
     })
     const plan = createLayerRenderPlan(
       [child], 0, undefined,
-      () => ({ mapping: perspectivePlane(), mesh: { columns: 2, rows: 2 } })
+      () => ({ mapping: perspectivePlane() })
     )
     const gl = createRecordingContext(layers[0], { lost: true })
     const props = {

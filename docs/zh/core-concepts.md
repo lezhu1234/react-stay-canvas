@@ -103,7 +103,7 @@ tools.appendChild({
 
 `child.shape` 返回这个 Child 的第一个 Shape，适合最常见的单 Shape Child。多 Shape Child 应使用 `child.shapeMap` 明确访问或遍历全部 Shape。
 
-Child transform 可以把其中全部 Shape 作为一个局部对象整体平移、旋转、缩放或倾斜，而不改写 Shape 几何。绘制、边界、点命中、区域查询、历史、场景传输和区域截图共享同一变换。公开指针 `e.point` 仍是 Content 坐标；只有需要局部几何时才调用 `child.toLocalPoint(e.point)`。
+Child placement 把其中全部 Shape 从同一个局部对象映射到 Content，而不改写 Shape 几何；它可以是 affine，也可以是带有限 local domain 的 projective 平面。绘制、边界、点命中、区域查询、历史、场景传输和区域截图共享同一份 placement。公开指针 `e.point` 仍是 Content 坐标；只有需要局部几何时才调用 `child.toLocalPoint(e.point)`，并处理 projective 域外的 `undefined`。
 
 ## 图层与 `zIndex`
 

@@ -31,14 +31,14 @@ describe("internal Canvas2D projective rendering slice", () => {
     const child = stage.tools.appendChild({
       className: "projected-plane",
       shape,
-      transform: { x: 500, y: 500 },
+      placement: { type: "affine", x: 500, y: 500 },
     })
     const mapping = perspectivePlane()
     const plan = createLayerRenderPlan(
       [child],
       0,
       { x: 0, y: 0, width: 140, height: 120 },
-      () => ({ mapping, mesh: { columns: 8, rows: 6 } })
+      () => ({ mapping })
     )
 
     executeCanvas2DRenderPlan({
@@ -48,7 +48,10 @@ describe("internal Canvas2D projective rendering slice", () => {
       width: 140,
       height: 120,
       forceDraw: true,
-      getProjectiveRasterScale: () => 2,
+      getProjectiveQuality: () => ({
+        mesh: { columns: 8, rows: 6 },
+        rasterScale: 2,
+      }),
     })
 
     expect(plan.items).toHaveLength(1)
@@ -85,7 +88,7 @@ describe("internal Canvas2D projective rendering slice", () => {
       0,
       undefined,
       (child) => child === projected
-        ? { mapping, mesh: { columns: 2, rows: 2 } }
+        ? { mapping }
         : undefined
     )
 
@@ -96,7 +99,10 @@ describe("internal Canvas2D projective rendering slice", () => {
       width: 140,
       height: 120,
       forceDraw: true,
-      getProjectiveRasterScale: () => 1,
+      getProjectiveQuality: () => ({
+        mesh: { columns: 2, rows: 2 },
+        rasterScale: 1,
+      }),
     })
 
     expect(order).toEqual(["affine", "projected"])
@@ -108,10 +114,10 @@ describe("internal Canvas2D projective rendering slice", () => {
     const child = stage.tools.appendChild({
       className: "projected",
       shape: new Rectangle({ x: 0, y: 0, width: 80, height: 60 }),
-      transform: { x: 500, y: 500 },
+      placement: { type: "affine", x: 500, y: 500 },
     })
     const mapping = perspectivePlane()
-    const resolver = () => ({ mapping, mesh: { columns: 2, rows: 2 } })
+    const resolver = () => ({ mapping })
 
     expect(createLayerRenderPlan(
       [child], 0, { x: 0, y: 0, width: 140, height: 120 }, resolver
@@ -135,7 +141,7 @@ describe("internal Canvas2D projective rendering slice", () => {
     const mapping = perspectivePlane()
     const plan = createLayerRenderPlan(
       [child], 0, undefined,
-      () => ({ mapping, mesh: { columns: 2, rows: 2 } })
+      () => ({ mapping })
     )
     const props = {
       context: layers[0].getContext("2d")!,
@@ -147,25 +153,34 @@ describe("internal Canvas2D projective rendering slice", () => {
     }
 
     expect(() => executeCanvas2DRenderPlan(props))
-      .toThrow("requires an explicit raster scale")
+      .toThrow("requires explicit quality")
     expect(() => executeCanvas2DRenderPlan({
       ...props,
-      getProjectiveRasterScale: () => 1,
+      getProjectiveQuality: () => ({
+        mesh: { columns: 2, rows: 2 },
+        rasterScale: 1,
+      }),
     })).toThrow("currently supports source-over Shapes")
 
     shape.globalConfig.gco = "source-over"
     expect(() => executeCanvas2DRenderPlan({
       ...props,
-      getProjectiveRasterScale: () => 0,
+      getProjectiveQuality: () => ({
+        mesh: { columns: 2, rows: 2 },
+        rasterScale: 0,
+      }),
     })).toThrow("projective raster scale must be finite and greater than 0")
     const invalidMesh = createLayerRenderPlan(
       [child], 0, undefined,
-      () => ({ mapping, mesh: { columns: 0, rows: 2 } })
+      () => ({ mapping })
     )
     expect(() => executeCanvas2DRenderPlan({
       ...props,
       items: invalidMesh.items,
-      getProjectiveRasterScale: () => 1,
+      getProjectiveQuality: () => ({
+        mesh: { columns: 0, rows: 2 },
+        rasterScale: 1,
+      }),
     })).toThrow("projective mesh columns must be a positive integer")
     stage.destroy()
   })
@@ -185,7 +200,7 @@ describe("internal Canvas2D projective rendering slice", () => {
     const child = stage.tools.appendChild({ className: "projected", shape })
     const plan = createLayerRenderPlan(
       [child], 0, undefined,
-      () => ({ mapping: perspectivePlane(), mesh: { columns: 2, rows: 2 } })
+      () => ({ mapping: perspectivePlane() })
     )
     const context = layers[0].getContext("2d")!
     context.globalAlpha = 0.35
@@ -198,7 +213,10 @@ describe("internal Canvas2D projective rendering slice", () => {
       width: 140,
       height: 120,
       forceDraw: true,
-      getProjectiveRasterScale: () => 1,
+      getProjectiveQuality: () => ({
+        mesh: { columns: 2, rows: 2 },
+        rasterScale: 1,
+      }),
     })).toThrow(failure)
     expect(context.globalAlpha).toBe(targetAlpha)
     stage.destroy()

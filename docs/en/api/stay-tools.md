@@ -8,7 +8,7 @@
 
 | Method | Signature summary | Meaning |
 | --- | --- | --- |
-| `appendChild` | `({ id?, className, shape, transform? }) => StayInstantChild` | Add a static Child; shape may be one value, an array, or a Map |
+| `appendChild` | `({ id?, className, shape, placement? }) => StayInstantChild` | Add a static Child; shape may be one value, an array, or a Map |
 | `removeChild` | `(childId) => Promise<void> \| void` | Remove a Child; root cannot be removed |
 | `hasChild` | `(id) => boolean` | Test existence by id |
 | `getChildrenWithoutRoot` | `() => StayInstantChild[]` | Return application Children |
@@ -58,11 +58,11 @@ The package root also exports `ClientPoint`, `ViewPoint`, `ContentPoint`, `ViewV
 
 `tools.coordinates` reads the latest viewport when it is called. By contrast, event `e.point` is the Content point captured for that input sample; it stays stable even when an earlier Listener changes the viewport during the same dispatch.
 
-### Non-destructive Child transform
+### Non-destructive Child placement
 
-`appendChild()` and `createChild()` accept an optional semantic `{ x, y, rotation, scaleX, scaleY, skewX, skewY, origin }` transform or an advanced raw `{ matrix: { a, b, c, d, e, f } }`. Rotation and skew are degrees. The transform maps Child-local Shape geometry into Content without changing Shape properties.
+`appendChild()` and `createChild()` accept one optional discriminated placement. `{ type: "affine", x, y, rotation, scaleX, scaleY, skewX, skewY, origin }` is the semantic form; `{ type: "affine", matrix: { a, b, c, d, e, f } }` is its raw equivalent. `{ type: "projective", matrix: { m00, ..., m22 }, domain }` defines a finite perspective plane.
 
-`child.setTransform(transform)` replaces the complete transform. `child.transform` returns the resolved matrix snapshot; `child.toLocalPoint(contentPoint)` and `child.toContentPoint(localPoint)` cross the local boundary explicitly. Matrices must be finite and invertible. Static transforms participate in history and scene transfer; animated transform interpolation is not yet supported.
+`child.setPlacement(placement)` replaces the complete placement. `child.placement` returns a snapshot; `child.toLocalPoint(contentPoint)` and `child.toContentPoint(localPoint)` cross the local boundary explicitly and return `undefined` outside a projective domain. Matrices must be finite and invertible. Static placement participates in history and scene transfer; animated placement interpolation is not yet supported.
 
 ### Non-destructive viewport
 
@@ -108,7 +108,7 @@ Animated Children do not participate in history. See [Scenes and tools: History 
 
 | Method | Signature summary | Meaning |
 | --- | --- | --- |
-| `createChild` | `({ id?, className, transform? }) => StayAnimatedChild` | Create and append an animated Child with an optional static transform |
+| `createChild` | `({ id?, className, placement? }) => StayAnimatedChild` | Create and append an animated Child with an optional static placement |
 | `progress` | `({ timeMs, bound?, beforeDrawCallback?, afterDrawCallback? }) => DrawReturn` | Advance animated Children and draw immediately |
 
 `DrawReturn`:
@@ -131,7 +131,7 @@ interface DrawReturn {
 | `importChildren(scene, targetArea?)` | Materialize a fragment at equal aspect ratio with new runtime ids |
 | `regionToTargetCanvas({ area, targetSize?, children, progress? })` | Aspect-fit a region onto a new HTMLCanvasElement; optionally capture an animation frame without changing playback |
 
-`CaptureSceneProps` is the export input. `SceneFragment` contains an `area` and Child fragments with `sourceId`, `className`, `shapes`, and `transform`. `sourceId` is correlation metadata; it is not reused as the imported Child id.
+`CaptureSceneProps` is the export input. `SceneFragment` contains an `area` and Child fragments with `sourceId`, `className`, `shapes`, and `placement`. `sourceId` is correlation metadata; it is not reused as the imported Child id.
 
 Scene transfer captures common Shape state and independently owned style containers. It intentionally captures only the current projection of an Animated Child and is not a timeline serialization format.
 

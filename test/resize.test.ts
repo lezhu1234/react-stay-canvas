@@ -10,13 +10,13 @@ describe("non-destructive resize", () => {
       id: "shape",
       className: "shape",
       shape: new Rectangle({ x: 20, y: 30, width: 80, height: 50 }),
-      transform: { x: 7, y: 9, rotate: 12 },
+      placement: { type: "affine", x: 7, y: 9, rotation: 12 },
     })
     stage.tools.log()
     child.shape.move(15, 5)
     stage.tools.log()
     const viewport = stage.tools.viewport.restore({ x: 18, y: 24, scale: 1.75 })
-    const transform = child.transform
+    const placement = child.placement
     const rootBound = stage.rootChild.getBound()
     const stackLength = stage.stack.length
     const stackIndex = stage.stackIndex
@@ -29,7 +29,7 @@ describe("non-destructive resize", () => {
     expect(stage.root.height).toBe(360)
     expect(stage.tools.getChildById("shape")).toBe(child)
     expect(child.shape.getBound()).toEqual({ x: 35, y: 35, width: 80, height: 50 })
-    expect(child.transform).toEqual(transform)
+    expect(child.placement).toEqual(placement)
     expect(stage.tools.viewport.get()).toEqual(viewport)
     expect(stage.rootChild.getBound()).toEqual(rootBound)
     expect(stage.stack).toHaveLength(stackLength)

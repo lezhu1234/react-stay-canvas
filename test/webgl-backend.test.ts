@@ -2,10 +2,14 @@
 import { describe, expect, it, vi } from "vitest"
 
 import {
+  AmbientLight,
+  DirectionalLight,
+  LambertMaterial,
   Mesh,
   PerspectiveCamera,
   Rectangle,
   Root,
+  UnlitMaterial,
   type WebGL2LayerConfig,
 } from "react-stay-canvas"
 import { Canvas } from "../src/canvas"
@@ -17,12 +21,20 @@ const triangle = () => ({
   indices: [0, 1, 2],
 })
 
+const litTriangle = () => ({
+  ...triangle(),
+  normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+})
+
 const camera = () => new PerspectiveCamera({
   position: [0, 0, 3],
   target: [0, 0, 0],
   near: 0.1,
   far: 20,
 })
+
+const unlit = (color: readonly [number, number, number, number]) =>
+  new UnlitMaterial({ color })
 
 describe("public native WebGL2 layer backend", () => {
   it("renders Mesh children with persistent GPU resources", () => {
@@ -40,7 +52,7 @@ describe("public native WebGL2 layer backend", () => {
         },
       }],
     })
-    const mesh = new Mesh({ geometry: triangle(), color: [0.2, 0.5, 0.9, 1] })
+    const mesh = new Mesh({ geometry: triangle(), material: unlit([0.2, 0.5, 0.9, 1]) })
     stage.tools.webgl.appendChild({ className: "native-plane", layer: 0, meshes: [mesh] })
 
     expect(stage.draw({ now: 1 }).updatedLayers).toEqual([0])
@@ -49,14 +61,14 @@ describe("public native WebGL2 layer backend", () => {
     expect(gl?.spies.drawElements).toHaveBeenCalledOnce()
     expect(gl?.spies.texImage2D).not.toHaveBeenCalled()
     expect(gl?.spies.createProgram).toHaveBeenCalledOnce()
-    expect(gl?.spies.createBuffer).toHaveBeenCalledTimes(2)
+    expect(gl?.spies.createBuffer).toHaveBeenCalledTimes(3)
     expect(gl?.spies.createVertexArray).toHaveBeenCalledOnce()
 
-    mesh.setColor([0.9, 0.3, 0.2, 1])
+    mesh.setMaterial(unlit([0.9, 0.3, 0.2, 1]))
     expect(stage.draw({ now: 2 }).updatedLayers).toEqual([0])
     expect(gl?.spies.createProgram).toHaveBeenCalledOnce()
-    expect(gl?.spies.createBuffer).toHaveBeenCalledTimes(2)
-    expect(gl?.spies.bufferData).toHaveBeenCalledTimes(2)
+    expect(gl?.spies.createBuffer).toHaveBeenCalledTimes(3)
+    expect(gl?.spies.bufferData).toHaveBeenCalledTimes(3)
 
     sceneCamera.setPose([0.2, 0, 3], [0, 0, 0])
     expect(stage.draw({ now: 3 }).updatedLayers).toEqual([0])
@@ -65,6 +77,45 @@ describe("public native WebGL2 layer backend", () => {
     expect(gl?.spies.createProgram).toHaveBeenCalledOnce()
     expect(layers[0].style.width).toBe("320px")
     expect(layers[0].style.height).toBe("180px")
+  })
+
+  it("maps layer-owned Light changes onto dirtiness without uploading geometry", () => {
+    let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
+    const ambient = new AmbientLight({ intensity: 0.3 })
+    const key = new DirectionalLight({
+      directionToLight: [0, 0, 1],
+      intensity: 0.8,
+    })
+    const { stage } = createStage({
+      layers: [{
+        backend: "webgl2",
+        camera: camera(),
+        lights: [ambient, key],
+        context: (canvas) => {
+          gl ??= createRecordingWebGL2Context(canvas)
+          return gl.context
+        },
+      }],
+    })
+    stage.tools.webgl.appendChild({
+      className: "lit-plane",
+      layer: 0,
+      meshes: [new Mesh({
+        geometry: litTriangle(),
+        material: new LambertMaterial({ color: [0.3, 0.6, 0.9, 1] }),
+      })],
+    })
+
+    stage.draw({ now: 1 })
+    key.setDirectionToLight([0.4, 0.2, 1])
+    expect(stage.draw({ now: 2 }).updatedLayers).toEqual([0])
+    ambient.setIntensity(0.45)
+    expect(stage.draw({ now: 3 }).updatedLayers).toEqual([0])
+    expect(gl?.spies.bufferData).toHaveBeenCalledTimes(3)
+
+    stage.destroy()
+    key.setIntensity(0.5)
+    ambient.setColor([0.9, 0.9, 1])
   })
 
   it("rejects Children assigned to the wrong backend or layer", () => {
@@ -141,7 +192,7 @@ describe("public native WebGL2 layer backend", () => {
       }
     }
     const source = createStage({ layers: [config()] }).stage
-    const mesh = new Mesh({ geometry: triangle(), color: [0.2, 0.5, 0.9, 1] })
+    const mesh = new Mesh({ geometry: triangle(), material: unlit([0.2, 0.5, 0.9, 1]) })
     const child = source.tools.webgl.appendChild({
       id: "native-history",
       className: "native",
@@ -149,25 +200,25 @@ describe("public native WebGL2 layer backend", () => {
       meshes: [mesh],
     })
     source.tools.log()
-    mesh.setColor([0.9, 0.2, 0.1, 1])
+    mesh.setMaterial(unlit([0.9, 0.2, 0.1, 1]))
     child.setClassName("native:edited")
     source.tools.log()
 
     source.tools.undo()
     expect(source.tools.webgl.getChildById(child.id)).toBe(child)
     expect(child.className).toBe("native")
-    expect(child.meshes[0].getColor()).toEqual([0.2, 0.5, 0.9, 1])
+    expect(child.meshes[0].getMaterial()).toEqual(unlit([0.2, 0.5, 0.9, 1]))
     source.tools.redo()
     expect(child.className).toBe("native:edited")
-    expect(child.meshes[0].getColor()).toEqual([0.9, 0.2, 0.1, 1])
+    expect(child.meshes[0].getMaterial()).toEqual(unlit([0.9, 0.2, 0.1, 1]))
 
     const fragment = source.tools.webgl.exportChildren([child])
     const target = createStage({ layers: [config()] }).stage
     const [imported] = target.tools.webgl.importChildren(fragment)
     expect(imported.id).not.toBe(child.id)
     expect(imported.className).toBe(child.className)
-    imported.meshes[0].setColor([0, 1, 0, 1])
-    expect(child.meshes[0].getColor()).toEqual([0.9, 0.2, 0.1, 1])
+    imported.meshes[0].setMaterial(unlit([0, 1, 0, 1]))
+    expect(child.meshes[0].getMaterial()).toEqual(unlit([0.9, 0.2, 0.1, 1]))
   })
 
   it("pauses on context loss and rebuilds resources after restore", () => {
@@ -196,7 +247,7 @@ describe("public native WebGL2 layer backend", () => {
     gl!.setLost(true)
     const lost = new Event("webglcontextlost", { cancelable: true })
     layers[0].dispatchEvent(lost)
-    child.meshes[0].setColor([1, 0, 0, 1])
+    child.meshes[0].setMaterial(unlit([1, 0, 0, 1]))
     expect(stage.draw({ now: 2 }).updatedLayers).toEqual([])
     expect(lost.defaultPrevented).toBe(true)
 
@@ -209,7 +260,7 @@ describe("public native WebGL2 layer backend", () => {
 
     stage.tools.webgl.removeChild(child.id)
     stage.draw({ now: 4 })
-    expect(gl!.spies.deleteBuffer).toHaveBeenCalledTimes(2)
+    expect(gl!.spies.deleteBuffer).toHaveBeenCalledTimes(3)
     expect(gl!.spies.deleteVertexArray).toHaveBeenCalledOnce()
 
     stage.destroy()
@@ -276,7 +327,7 @@ describe("public native WebGL2 layer backend", () => {
 
     gl!.setLost(true)
     layers[0].dispatchEvent(new Event("webglcontextlost", { cancelable: true }))
-    mesh.setColor([1, 0, 0, 1])
+    mesh.setMaterial(unlit([1, 0, 0, 1]))
     gl!.setLost(false)
     const errors: Error[] = []
     const captureError = (event: ErrorEvent) => {
@@ -343,6 +394,13 @@ describe("public native WebGL2 layer backend", () => {
       .toThrow("Unable to get WebGL2 context for layer 0")
     expect(() => createStage({ layers: [{ backend: "webgpu" } as never] }))
       .toThrow("Unsupported Canvas backend for layer 0")
+    expect(() => createStage({ layers: [{
+      backend: "webgl2",
+      camera: camera(),
+      lights: Array.from({ length: 5 }, () => new DirectionalLight({
+        directionToLight: [0, 0, 1],
+      })),
+    }] })).toThrow("supports at most 4 directional lights")
 
     const first = document.createElement("canvas")
     const second = document.createElement("canvas")

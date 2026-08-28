@@ -1,22 +1,55 @@
-import { multiplyMatrix4 } from "./math3D"
+import {
+  webGL2DirectionalLightLimit,
+  type WebGLLight,
+} from "./light"
+import {
+  multiplyMatrix4,
+  normalMatrix3FromMatrix4,
+  type Matrix4,
+} from "./math3D"
 import { Mesh } from "./mesh"
+import type { MeshMaterial } from "./material"
 import { PerspectiveCamera } from "./perspectiveCamera"
 
-interface PipelineResources {
+interface UnlitPipelineResources {
+  readonly kind: "unlit"
   readonly program: WebGLProgram
   readonly modelViewProjectionLocation: WebGLUniformLocation
   readonly colorLocation: WebGLUniformLocation
 }
 
+interface LambertPipelineResources {
+  readonly kind: "lambert"
+  readonly program: WebGLProgram
+  readonly viewProjectionLocation: WebGLUniformLocation
+  readonly modelLocation: WebGLUniformLocation
+  readonly normalMatrixLocation: WebGLUniformLocation
+  readonly colorLocation: WebGLUniformLocation
+  readonly ambientLightLocation: WebGLUniformLocation
+  readonly directionalLightCountLocation: WebGLUniformLocation
+  readonly directionToLightsLocation: WebGLUniformLocation
+  readonly directionalLightColorsLocation: WebGLUniformLocation
+}
+
+type PipelineResources = UnlitPipelineResources | LambertPipelineResources
+
 interface MeshResources {
   readonly vertexArray: WebGLVertexArrayObject
   readonly positionBuffer: WebGLBuffer
+  readonly normalBuffer: WebGLBuffer
   readonly indexBuffer: WebGLBuffer
   geometryRevision: number
   indexCount: number
 }
 
-const VERTEX_SHADER = `#version 300 es
+interface LightingSnapshot {
+  readonly ambient: Float32Array
+  readonly directionToLights: Float32Array
+  readonly directionalColors: Float32Array
+  readonly directionalCount: number
+}
+
+const UNLIT_VERTEX_SHADER = `#version 300 es
 layout(location = 0) in vec3 a_position;
 uniform mat4 u_model_view_projection;
 
@@ -25,13 +58,51 @@ void main() {
 }
 `
 
-const FRAGMENT_SHADER = `#version 300 es
+const LAMBERT_VERTEX_SHADER = `#version 300 es
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+uniform mat4 u_view_projection;
+uniform mat4 u_model;
+uniform mat3 u_normal_matrix;
+out vec3 world_normal;
+
+void main() {
+  gl_Position = u_view_projection * u_model * vec4(a_position, 1.0);
+  world_normal = normalize(u_normal_matrix * a_normal);
+}
+`
+
+const UNLIT_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 uniform vec4 u_color;
 out vec4 output_color;
 
 void main() {
   output_color = u_color;
+}
+`
+
+const LAMBERT_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+#define MAX_DIRECTIONAL_LIGHTS ${webGL2DirectionalLightLimit}
+uniform vec4 u_color;
+uniform vec3 u_ambient_light;
+uniform int u_directional_light_count;
+uniform vec3 u_direction_to_lights[MAX_DIRECTIONAL_LIGHTS];
+uniform vec3 u_directional_light_colors[MAX_DIRECTIONAL_LIGHTS];
+in vec3 world_normal;
+out vec4 output_color;
+
+void main() {
+  vec3 normal = normalize(world_normal);
+  if (!gl_FrontFacing) normal = -normal;
+  vec3 illumination = u_ambient_light;
+  for (int index = 0; index < MAX_DIRECTIONAL_LIGHTS; index++) {
+    if (index >= u_directional_light_count) break;
+    float diffuse = max(dot(normal, u_direction_to_lights[index]), 0.0);
+    illumination += u_directional_light_colors[index] * diffuse;
+  }
+  output_color = vec4(u_color.rgb * illumination, 1.0);
 }
 `
 
@@ -74,12 +145,27 @@ function compileShader(
   return shader
 }
 
-function createPipeline(context: WebGL2RenderingContext): PipelineResources {
-  const vertexShader = compileShader(context, context.VERTEX_SHADER, VERTEX_SHADER)
+function requireUniform(
+  context: WebGL2RenderingContext,
+  program: WebGLProgram,
+  name: string
+) {
+  const location = context.getUniformLocation(program, name)
+  if (location === null) throw new Error(`Unable to resolve WebGL2 scene shader input ${name}`)
+  return location
+}
+
+function createPipeline(
+  context: WebGL2RenderingContext,
+  kind: MeshMaterial["kind"]
+): PipelineResources {
+  const vertexSource = kind === "unlit" ? UNLIT_VERTEX_SHADER : LAMBERT_VERTEX_SHADER
+  const fragmentSource = kind === "unlit" ? UNLIT_FRAGMENT_SHADER : LAMBERT_FRAGMENT_SHADER
+  const vertexShader = compileShader(context, context.VERTEX_SHADER, vertexSource)
   let fragmentShader: WebGLShader | undefined
   let program: WebGLProgram | undefined
   try {
-    fragmentShader = compileShader(context, context.FRAGMENT_SHADER, FRAGMENT_SHADER)
+    fragmentShader = compileShader(context, context.FRAGMENT_SHADER, fragmentSource)
     program = context.createProgram() ?? undefined
     if (!program) throw new Error("Unable to create WebGL2 program")
     context.attachShader(program, vertexShader)
@@ -89,15 +175,43 @@ function createPipeline(context: WebGL2RenderingContext): PipelineResources {
       const info = context.getProgramInfoLog(program) || "unknown program error"
       throw new Error(`Unable to link WebGL2 program: ${info}`)
     }
-    const modelViewProjectionLocation = context.getUniformLocation(
-      program,
-      "u_model_view_projection"
-    )
-    const colorLocation = context.getUniformLocation(program, "u_color")
-    if (!modelViewProjectionLocation || !colorLocation) {
-      throw new Error("Unable to resolve WebGL2 scene shader inputs")
+    const colorLocation = requireUniform(context, program, "u_color")
+    if (kind === "unlit") {
+      return {
+        kind,
+        program,
+        colorLocation,
+        modelViewProjectionLocation: requireUniform(
+          context,
+          program,
+          "u_model_view_projection"
+        ),
+      }
     }
-    return { program, modelViewProjectionLocation, colorLocation }
+    return {
+      kind,
+      program,
+      colorLocation,
+      viewProjectionLocation: requireUniform(context, program, "u_view_projection"),
+      modelLocation: requireUniform(context, program, "u_model"),
+      normalMatrixLocation: requireUniform(context, program, "u_normal_matrix"),
+      ambientLightLocation: requireUniform(context, program, "u_ambient_light"),
+      directionalLightCountLocation: requireUniform(
+        context,
+        program,
+        "u_directional_light_count"
+      ),
+      directionToLightsLocation: requireUniform(
+        context,
+        program,
+        "u_direction_to_lights[0]"
+      ),
+      directionalLightColorsLocation: requireUniform(
+        context,
+        program,
+        "u_directional_light_colors[0]"
+      ),
+    }
   } catch (error) {
     if (program) context.deleteProgram(program)
     throw error
@@ -113,6 +227,25 @@ function requireBuffer(context: WebGL2RenderingContext, name: string) {
   return buffer
 }
 
+function uploadGeometry(
+  context: WebGL2RenderingContext,
+  geometry: ReturnType<Mesh["copyGeometrySnapshot"]>,
+  resources: Pick<MeshResources, "vertexArray" | "positionBuffer" | "normalBuffer" | "indexBuffer">
+) {
+  context.bindVertexArray(resources.vertexArray)
+  context.bindBuffer(context.ARRAY_BUFFER, resources.positionBuffer)
+  context.bufferData(context.ARRAY_BUFFER, geometry.positions, context.STATIC_DRAW)
+  context.bindBuffer(context.ARRAY_BUFFER, resources.normalBuffer)
+  context.bufferData(
+    context.ARRAY_BUFFER,
+    geometry.normals ?? new Float32Array(),
+    context.STATIC_DRAW
+  )
+  context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, resources.indexBuffer)
+  context.bufferData(context.ELEMENT_ARRAY_BUFFER, geometry.indices, context.STATIC_DRAW)
+  assertNoWebGLError(context, "Mesh geometry upload")
+}
+
 function createMeshResources(
   context: WebGL2RenderingContext,
   mesh: Mesh
@@ -120,23 +253,30 @@ function createMeshResources(
   const vertexArray = context.createVertexArray()
   if (!vertexArray) throw new Error("Unable to create WebGL2 vertex array")
   let positionBuffer: WebGLBuffer | undefined
+  let normalBuffer: WebGLBuffer | undefined
   let indexBuffer: WebGLBuffer | undefined
   try {
     positionBuffer = requireBuffer(context, "position")
+    normalBuffer = requireBuffer(context, "normal")
     indexBuffer = requireBuffer(context, "index")
     const geometry = mesh.copyGeometrySnapshot()
-    context.bindVertexArray(vertexArray)
+    uploadGeometry(context, geometry, {
+      vertexArray,
+      positionBuffer,
+      normalBuffer,
+      indexBuffer,
+    })
     context.bindBuffer(context.ARRAY_BUFFER, positionBuffer)
-    context.bufferData(context.ARRAY_BUFFER, geometry.positions, context.STATIC_DRAW)
     context.enableVertexAttribArray(0)
     context.vertexAttribPointer(0, 3, context.FLOAT, false, 0, 0)
-    context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, indexBuffer)
-    context.bufferData(context.ELEMENT_ARRAY_BUFFER, geometry.indices, context.STATIC_DRAW)
-    assertNoWebGLError(context, "Mesh geometry upload")
+    context.bindBuffer(context.ARRAY_BUFFER, normalBuffer)
+    context.enableVertexAttribArray(1)
+    context.vertexAttribPointer(1, 3, context.FLOAT, false, 0, 0)
     context.bindVertexArray(null)
     return {
       vertexArray,
       positionBuffer,
+      normalBuffer,
       indexBuffer,
       geometryRevision: geometry.revision,
       indexCount: geometry.indices.length,
@@ -144,6 +284,7 @@ function createMeshResources(
   } catch (error) {
     context.bindVertexArray(null)
     if (indexBuffer) context.deleteBuffer(indexBuffer)
+    if (normalBuffer) context.deleteBuffer(normalBuffer)
     if (positionBuffer) context.deleteBuffer(positionBuffer)
     context.deleteVertexArray(vertexArray)
     throw error
@@ -157,24 +298,50 @@ function uploadChangedGeometry(
 ) {
   if (resources.geometryRevision === mesh.geometryRevision) return
   const geometry = mesh.copyGeometrySnapshot()
-  context.bindVertexArray(resources.vertexArray)
-  context.bindBuffer(context.ARRAY_BUFFER, resources.positionBuffer)
-  context.bufferData(context.ARRAY_BUFFER, geometry.positions, context.STATIC_DRAW)
-  context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, resources.indexBuffer)
-  context.bufferData(context.ELEMENT_ARRAY_BUFFER, geometry.indices, context.STATIC_DRAW)
-  assertNoWebGLError(context, "Mesh geometry upload")
+  uploadGeometry(context, geometry, resources)
   resources.geometryRevision = geometry.revision
   resources.indexCount = geometry.indices.length
 }
 
+function lightingSnapshot(lights: readonly WebGLLight[]): LightingSnapshot {
+  const ambient = new Float32Array(3)
+  const directions: number[] = []
+  const colors: number[] = []
+  lights.forEach((light) => {
+    const color = light.getColor()
+    if (light.kind === "ambient") {
+      ambient[0] += color[0] * light.intensity
+      ambient[1] += color[1] * light.intensity
+      ambient[2] += color[2] * light.intensity
+      return
+    }
+    if (directions.length / 3 >= webGL2DirectionalLightLimit) {
+      throw new RangeError(
+        `WebGL2 Lambert rendering supports at most ${webGL2DirectionalLightLimit} directional lights`
+      )
+    }
+    directions.push(...light.getDirectionToLight())
+    colors.push(
+      color[0] * light.intensity,
+      color[1] * light.intensity,
+      color[2] * light.intensity
+    )
+  })
+  return {
+    ambient,
+    directionToLights: new Float32Array(directions),
+    directionalColors: new Float32Array(colors),
+    directionalCount: directions.length / 3,
+  }
+}
+
 /**
- * @internal Owns one WebGL2 context's derived GPU cache. Mesh and Camera CPU
- * state stay authoritative; context restoration forgets every invalid handle
- * and recreates it lazily on the next render.
+ * @internal Owns one WebGL2 context's derived GPU cache. Mesh, Material, Light,
+ * and Camera CPU state stay authoritative; restoration recreates handles lazily.
  */
 export class WebGL2SceneRuntime {
   #context: WebGL2RenderingContext
-  #pipeline?: PipelineResources
+  readonly #pipelines = new Map<MeshMaterial["kind"], PipelineResources>()
   readonly #meshes = new Map<Mesh, MeshResources>()
   #disposed = false
 
@@ -184,7 +351,11 @@ export class WebGL2SceneRuntime {
     this.#context = context
   }
 
-  render(meshes: readonly Mesh[], camera: PerspectiveCamera) {
+  render(
+    meshes: readonly Mesh[],
+    camera: PerspectiveCamera,
+    lights: readonly WebGLLight[] = []
+  ) {
     this.#assertActive()
     const context = this.#context
     assertContextAvailable(context)
@@ -202,20 +373,40 @@ export class WebGL2SceneRuntime {
       return
     }
 
-    const pipeline = this.#pipeline ??= createPipeline(context)
     const viewProjection = camera.getViewProjection(width / height)
-    context.useProgram(pipeline.program)
+    let lighting: LightingSnapshot | undefined
+    let activePipeline: PipelineResources | undefined
     try {
       meshes.forEach((mesh) => {
+        const material = mesh.getMaterial()
+        const pipeline = this.#pipeline(material.kind)
+        if (pipeline !== activePipeline) {
+          context.useProgram(pipeline.program)
+          activePipeline = pipeline
+          if (pipeline.kind === "lambert") {
+            lighting ??= lightingSnapshot(lights)
+            this.#applyLambertFrameUniforms(pipeline, viewProjection, lighting)
+          }
+        }
         const resources = this.#meshResources(mesh)
         uploadChangedGeometry(context, mesh, resources)
         context.bindVertexArray(resources.vertexArray)
-        context.uniformMatrix4fv(
-          pipeline.modelViewProjectionLocation,
-          false,
-          multiplyMatrix4(viewProjection, mesh.getModelMatrix())
-        )
-        context.uniform4fv(pipeline.colorLocation, new Float32Array(mesh.getColor()))
+        if (pipeline.kind === "unlit") {
+          context.uniformMatrix4fv(
+            pipeline.modelViewProjectionLocation,
+            false,
+            multiplyMatrix4(viewProjection, mesh.getModelMatrix())
+          )
+        } else {
+          const model = mesh.getModelMatrix()
+          context.uniformMatrix4fv(pipeline.modelLocation, false, model)
+          context.uniformMatrix3fv(
+            pipeline.normalMatrixLocation,
+            false,
+            normalMatrix3FromMatrix4(model)
+          )
+        }
+        context.uniform4fv(pipeline.colorLocation, new Float32Array(material.color))
         context.drawElements(
           context.TRIANGLES,
           resources.indexCount,
@@ -274,6 +465,30 @@ export class WebGL2SceneRuntime {
     context.clear(context.COLOR_BUFFER_BIT | context.DEPTH_BUFFER_BIT)
   }
 
+  #pipeline(kind: MeshMaterial["kind"]) {
+    const existing = this.#pipelines.get(kind)
+    if (existing) return existing
+    const created = createPipeline(this.#context, kind)
+    this.#pipelines.set(kind, created)
+    return created
+  }
+
+  #applyLambertFrameUniforms(
+    pipeline: LambertPipelineResources,
+    viewProjection: Matrix4,
+    lighting: LightingSnapshot
+  ) {
+    const context = this.#context
+    context.uniformMatrix4fv(pipeline.viewProjectionLocation, false, viewProjection)
+    context.uniform3fv(pipeline.ambientLightLocation, lighting.ambient)
+    context.uniform1i(pipeline.directionalLightCountLocation, lighting.directionalCount)
+    context.uniform3fv(pipeline.directionToLightsLocation, lighting.directionToLights)
+    context.uniform3fv(
+      pipeline.directionalLightColorsLocation,
+      lighting.directionalColors
+    )
+  }
+
   #meshResources(mesh: Mesh) {
     const existing = this.#meshes.get(mesh)
     if (existing) return existing
@@ -292,6 +507,7 @@ export class WebGL2SceneRuntime {
 
   #deleteMeshResources(resources: MeshResources) {
     this.#context.deleteBuffer(resources.indexBuffer)
+    this.#context.deleteBuffer(resources.normalBuffer)
     this.#context.deleteBuffer(resources.positionBuffer)
     this.#context.deleteVertexArray(resources.vertexArray)
   }
@@ -299,12 +515,12 @@ export class WebGL2SceneRuntime {
   #deleteResources() {
     this.#meshes.forEach((resources) => this.#deleteMeshResources(resources))
     this.#meshes.clear()
-    if (this.#pipeline) this.#context.deleteProgram(this.#pipeline.program)
-    this.#pipeline = undefined
+    this.#pipelines.forEach((pipeline) => this.#context.deleteProgram(pipeline.program))
+    this.#pipelines.clear()
   }
 
   #forgetResources() {
     this.#meshes.clear()
-    this.#pipeline = undefined
+    this.#pipelines.clear()
   }
 }

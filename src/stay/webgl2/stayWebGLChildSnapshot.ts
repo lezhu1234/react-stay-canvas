@@ -1,12 +1,18 @@
 import type { Matrix4 } from "./math3D"
-import { Mesh, type MeshColor } from "./mesh"
+import { Mesh } from "./mesh"
+import {
+  captureMeshMaterial,
+  materializeMeshMaterial,
+  type MeshMaterialSnapshot,
+} from "./material"
 import { StayWebGLChild } from "./stayWebGLChild"
 
 export interface WebGLMeshSnapshot {
   readonly positions: Float32Array
+  readonly normals?: Float32Array
   readonly indices: Uint16Array
   readonly modelMatrix: Matrix4
-  readonly color: MeshColor
+  readonly material: MeshMaterialSnapshot
 }
 
 export interface StayWebGLChildSnapshot {
@@ -32,9 +38,10 @@ function captureMesh(mesh: Mesh): WebGLMeshSnapshot {
   const geometry = mesh.copyGeometrySnapshot()
   return {
     positions: geometry.positions,
+    normals: geometry.normals,
     indices: geometry.indices,
     modelMatrix: mesh.getModelMatrix(),
-    color: mesh.getColor(),
+    material: captureMeshMaterial(mesh.getMaterial()),
   }
 }
 
@@ -42,10 +49,11 @@ function materializeMesh(snapshot: WebGLMeshSnapshot) {
   return new Mesh({
     geometry: {
       positions: snapshot.positions,
+      normals: snapshot.normals,
       indices: snapshot.indices,
     },
     modelMatrix: snapshot.modelMatrix,
-    color: snapshot.color,
+    material: materializeMeshMaterial(snapshot.material),
   })
 }
 

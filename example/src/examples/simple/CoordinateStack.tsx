@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef } from "react"
 import {
+  AmbientLight,
   Circle,
   type CanvasLayerConfig,
+  DirectionalLight,
+  LambertMaterial,
   Line,
   Mesh,
   StayCanvas,
   StayText,
+  UnlitMaterial,
   type Coordinate,
   type Rect,
   type StayTools,
@@ -52,6 +56,11 @@ const STACK_HEIGHT = 120
 const WEBGL_LAYER = 0
 const OVERLAY_LAYER = 1
 
+const unlitMaterial = (color: ReturnType<typeof rgba>) =>
+  new UnlitMaterial({ color: meshColor(color) })
+const lambertMaterial = (color: ReturnType<typeof rgba>) =>
+  new LambertMaterial({ color: meshColor(color) })
+
 export type CoordinateMappingFocus = "view-client" | "content-view"
 
 type PlaneMeshes = {
@@ -88,6 +97,7 @@ type StackRuntime = {
   clientViewLinks: [Line, Line, Line, Line]
   viewContentLinks: [Line, Line, Line, Line]
   rays: [Line, Line]
+  materialFocus?: CoordinateMappingFocus
 }
 
 function planeRange(
@@ -201,36 +211,36 @@ function createPlaneRuntime(
 
   const frameFill = new Mesh({
     geometry: rectMeshGeometry(plane, basis, planeRect, 0),
-    color: meshColor(plane.fill),
+    material: lambertMaterial(plane.fill),
   })
   const frameEdges = new Mesh({
     geometry: lineMeshGeometry(plane, basis, frameSegments(plane.width, plane.height), 1.25, 0.002),
-    color: meshColor(plane.stroke),
+    material: unlitMaterial(plane.stroke),
   })
   const grid = new Mesh({
     geometry: lineMeshGeometry(plane, basis, gridSegments(plane), 1, 0.003),
-    color: meshColor({ ...plane.stroke, a: 0.1 }),
+    material: unlitMaterial({ ...plane.stroke, a: 0.1 }),
   })
   const axes = new Mesh({
     geometry: lineMeshGeometry(plane, basis, [
       { x1: 12, y1: 20, x2: plane.width - 14, y2: 20 },
       { x1: 12, y1: 20, x2: 12, y2: plane.height - 12 },
     ], 1, 0.004),
-    color: meshColor(axisColor),
+    material: unlitMaterial(axisColor),
   })
-  const shapeFill = new Mesh({ geometry: emptyMeshGeometry(), color: meshColor(rgba(54, 105, 221, 0.13)) })
-  const shapeEdges = new Mesh({ geometry: emptyMeshGeometry(), color: meshColor(rgba(54, 105, 221, 0.9)) })
+  const shapeFill = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.13)) })
+  const shapeEdges = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.9)) })
   const canvasDomEdges = name === "client" ? new Mesh({
     geometry: emptyMeshGeometry(),
-    color: meshColor(rgba(74, 163, 214, 0.64)),
+    material: unlitMaterial(rgba(74, 163, 214, 0.64)),
   }) : undefined
   const viewportFill = name === "content" ? new Mesh({
     geometry: emptyMeshGeometry(),
-    color: meshColor(rgba(70, 143, 77, 0.045)),
+    material: unlitMaterial(rgba(70, 143, 77, 0.045)),
   }) : undefined
   const viewportEdges = name === "content" ? new Mesh({
     geometry: emptyMeshGeometry(),
-    color: meshColor(rgba(70, 143, 77, 0.78)),
+    material: unlitMaterial(rgba(70, 143, 77, 0.78)),
   }) : undefined
 
   const title = new StayText({
@@ -413,13 +423,22 @@ export function CoordinateStack({
   const { text } = useI18n()
   const runtimeRef = useRef<StackRuntime>()
   const camera = useMemo(() => createCoordinateCamera(), [])
+  const lights = useMemo(() => [
+    new AmbientLight({ color: [0.92, 0.97, 1], intensity: 0.78 }),
+    new DirectionalLight({
+      directionToLight: [-0.45, 0.7, 1],
+      color: [1, 0.96, 0.88],
+      intensity: 0.34,
+    }),
+  ], [])
   const layers = useMemo<CanvasLayerConfig[]>(() => [
     {
       backend: "webgl2",
       camera,
+      lights,
     },
     { backend: "canvas2d" },
-  ], [camera])
+  ], [camera, lights])
 
   const update = (sample: CoordinateProbe, currentViewport: Readonly<ViewportState>) => {
     const runtime = runtimeRef.current
@@ -427,6 +446,7 @@ export function CoordinateStack({
     const shapeProjection = projectContentRect(sample, currentViewport)
     const points: Partial<Record<PlaneName, Coordinate>> = {}
     const ranges = {} as Record<PlaneName, PlaneRange>
+    const materialFocusChanged = runtime.materialFocus !== mappingFocus
 
     for (const name of Object.keys(runtime.planes) as PlaneName[]) {
       const plane = runtime.planes[name]
@@ -440,14 +460,16 @@ export function CoordinateStack({
       const localShape = rectOnPlane(plane, shapeProjection[name], range)
       const isActive = planeIsActive(name, mappingFocus)
 
-      plane.meshes.frameFill.setColor(meshColor({
-        ...plane.fill,
-        a: isActive ? plane.fill.a : plane.fill.a * 0.72,
-      }))
-      plane.meshes.frameEdges.setColor(meshColor({
-        ...plane.stroke,
-        a: isActive ? plane.stroke.a : plane.stroke.a * 0.68,
-      }))
+      if (materialFocusChanged) {
+        plane.meshes.frameFill.setMaterial(lambertMaterial({
+          ...plane.fill,
+          a: isActive ? plane.fill.a : plane.fill.a * 0.72,
+        }))
+        plane.meshes.frameEdges.setMaterial(unlitMaterial({
+          ...plane.stroke,
+          a: isActive ? plane.stroke.a : plane.stroke.a * 0.68,
+        }))
+      }
       plane.overlay.title.update({
         fillConfig: { color: { ...plane.stroke, a: isActive ? 1 : 0.68 } },
       })
@@ -534,6 +556,7 @@ export function CoordinateStack({
     })
     updateRay(runtime.rays[0], points.client, points.view, clientViewActive ? 0.88 : 0.48, clientViewActive ? 1.7 : 1.2)
     updateRay(runtime.rays[1], points.view, points.content, clientViewActive ? 0.48 : 0.88, clientViewActive ? 1.2 : 1.7)
+    runtime.materialFocus = mappingFocus
   }
 
   useEffect(() => update(probe, viewport), [clientRange, mappingFocus, probe, viewport])

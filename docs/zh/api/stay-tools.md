@@ -30,7 +30,23 @@
 
 ## 原生 WebGL2 场景
 
-`tools.webgl` 在同一实例、同一 identity store 中管理原生 Mesh Child。一个 `StayWebGLChild` 在一个 WebGL2 图层上拥有有序 Mesh 列表；Mesh 几何、模型矩阵与颜色以 CPU 状态为准，修改后会标脏对应图层。
+`tools.webgl` 在同一实例、同一 identity store 中管理原生 Mesh Child。一个 `StayWebGLChild` 在一个 WebGL2 图层上拥有有序 Mesh 列表；Mesh 几何、模型矩阵与材质以 CPU 状态为准，修改后会标脏对应图层。
+
+`Mesh` 默认使用不透明的 `UnlitMaterial`。`LambertMaterial` 要求显式非零的逐顶点 normals；法线会被复制、在 shader 中归一化，并通过 model matrix 的逆转置进行变换。Material 是不可变值，更新时使用 `mesh.setMaterial()` 替换，不共享可变材质状态：
+
+```ts
+const mesh = new Mesh({
+  geometry: {
+    positions: [-1, -1, 0, 1, -1, 0, 0, 1, 0],
+    normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+    indices: [0, 1, 2],
+  },
+  material: new LambertMaterial({ color: [0.2, 0.55, 0.9, 1] }),
+})
+```
+
+当前两种材质都不透明，color alpha 必须为 `1`。透明与玻璃会使用独立合同，不把不透明材质上的半透明颜色解释成透明渲染。
+未配置任何 Light 时 Lambert 材质会呈现黑色；请显式添加环境光或方向光，不依赖隐藏的默认灯组。
 
 | 方法 | 说明 |
 | --- | --- |
@@ -42,7 +58,7 @@
 | `webgl.exportChildren(children)` | 捕获带 source id、深度隔离的 CPU Mesh 片段 |
 | `webgl.importChildren(fragment)` | 生成新的 Child id 与独立 Mesh 状态 |
 
-包入口导出 `Mesh`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、灯光、材质、阴影和 Canvas 截图暂不属于这个接口。
+包入口导出 `Mesh`、`UnlitMaterial`、`LambertMaterial`、`AmbientLight`、`DirectionalLight`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、透明材质、阴影、纹理和 Canvas 截图暂不属于这个接口。
 
 ## 状态与显示
 
@@ -120,7 +136,7 @@
 | `redo()` | 重做一个历史项；无可重做项时只输出日志 |
 | `resetHistory()` | 清空 undo/redo，并把当前静态场景作为新的历史基线 |
 
-Canvas2D 与 WebGL2 静态 Child 进入同一 History 事务和 id 命名空间；Camera 修改属于显示状态，不进入历史。动画 Child 不参与历史。调用边界与示例见[场景与工具：历史记录](../scene-and-tools.md#历史记录)。
+Canvas2D 与 WebGL2 静态 Child 进入同一 History 事务和 id 命名空间；Camera 与 Light 修改属于图层显示状态，不进入历史。动画 Child 不参与历史。调用边界与示例见[场景与工具：历史记录](../scene-and-tools.md#历史记录)。
 
 ## 动画
 
@@ -153,7 +169,7 @@ interface DrawReturn {
 
 场景传输会捕获公共 Shape 状态并隔离库拥有的样式容器。Animated Child 只捕获当前投影，不作为时间线序列化格式。
 
-原生 Mesh 没有 2D area/placement 变换，因此使用独立的 `tools.webgl.exportChildren()` 与 `tools.webgl.importChildren()`；Camera 由目标图层配置拥有，不进入片段。
+原生 Mesh 没有 2D area/placement 变换，因此使用独立的 `tools.webgl.exportChildren()` 与 `tools.webgl.importChildren()`；Camera 与 Light 由目标图层配置拥有，不进入片段。
 
 ## 动作与 Listener
 

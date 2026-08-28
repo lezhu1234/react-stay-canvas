@@ -10,7 +10,7 @@
 - `Point.getBound()` 尚未实现。正常渲染会先按边界判断 viewport，因此追加 Point 会在绘制前抛错；它仍可单独作为几何工具使用。
 - `StayImage` 会在构造、更新和复制时保留显式源裁剪尺寸，但自定义 `swidth`、`sheight` 尚未纳入 transition，时间线插值帧不会保留它们。
 - 类型接受 `CircleAttr.stroke`、`CircleAttr.fill` 和 `StayText.decoration`，但它们不会产生对应的稳定绘制效果。Circle 样式请使用 `strokeConfig` 和 `fillConfig`。
-- 原生 WebGL2 当前支持带 depth 的纯色索引三角形 Mesh；灯光、材质、纹理、透明排序、阴影和 WebGL2 区域截图尚未提供。
+- 原生 WebGL2 支持带 depth 的索引三角形 Mesh、不透明 unlit/Lambert 材质、显式逐顶点法线、环境光，以及每层最多四个方向光；纹理、透明/玻璃材质、透明排序、阴影和 WebGL2 区域截图尚未提供。
 
 ## 动画与历史
 

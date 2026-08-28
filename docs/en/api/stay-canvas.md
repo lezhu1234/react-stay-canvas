@@ -4,6 +4,8 @@
 
 ```ts
 import {
+  AmbientLight,
+  DirectionalLight,
   StayCanvas,
   PerspectiveCamera,
   type CanvasLayerConfig,
@@ -48,6 +50,10 @@ The legacy function-array form creates one Canvas per entry and calls the corres
     {
       backend: "webgl2",
       camera: new PerspectiveCamera({ position: [0, 0, 3], target: [0, 0, 0] }),
+      lights: [
+        new AmbientLight({ intensity: 0.25 }),
+        new DirectionalLight({ directionToLight: [0, 0, 1], intensity: 0.8 }),
+      ],
       context: (canvas) => canvas.getContext("webgl2", { alpha: true, depth: true }),
       onContextRestored: () => console.info("WebGL2 layer restored"),
     },
@@ -56,6 +62,8 @@ The legacy function-array form creates one Canvas per entry and calls the corres
 ```
 
 Canvas2D remains the default. A WebGL2 layer is an opt-in native Mesh scene, not a Shape raster backend. Add Mesh children with `tools.webgl.appendChild()`; Canvas2D Shapes may target only Canvas2D layers, while a `StayWebGLChild` targets exactly one WebGL2 layer. Mesh depth is authoritative inside the native scene, so Shape `zIndex` does not cross backend boundaries.
+
+`lights` is optional layer display state. `AmbientLight` and `DirectionalLight` mutations invalidate only their owning WebGL2 layers, as camera mutations do; neither is included in Child History or scene transfer. One layer currently accepts up to four directional lights. `directionToLight` is a world-space vector from the surface toward the light and is normalized by the Light.
 
 Backend failures are explicit. Failure to create WebGL2, context loss during a draw, invalid Mesh state, and GPU upload failures are not converted to Canvas2D. A lost WebGL2 layer pauses until the native context is restored. The layer runtime prevents the native loss event by default so the browser may restore its owned context; `onContextLost` observes that event without owning recovery. Restoration discards invalid GPU handles, rebuilds them lazily from CPU Mesh state, invalidates the layer, and then calls `onContextRestored`.
 

@@ -4,6 +4,7 @@ import { ChildrenStore } from "../src/stay/children/childrenStore"
 import { captureChildHistory } from "../src/stay/historySnapshot"
 import { identityMatrix4, translationMatrix4 } from "../src/stay/webgl2/math3D"
 import { Mesh } from "../src/stay/webgl2/mesh"
+import { LambertMaterial, UnlitMaterial } from "../src/stay/webgl2/material"
 import { StayWebGLChild } from "../src/stay/webgl2/stayWebGLChild"
 import {
   stayWebGLChildHistory,
@@ -25,10 +26,15 @@ const triangle = (z = 0) => ({
   indices: [0, 1, 2],
 })
 
+const normals = [0, 0, 1, 0, 0, 1, 0, 0, 1]
+
 const mesh = (z = 0) => new Mesh({
   geometry: triangle(z),
-  color: [0.1, 0.2, 0.3, 1],
+  material: new UnlitMaterial({ color: [0.1, 0.2, 0.3, 1] }),
 })
+
+const material = (color: readonly [number, number, number, number]) =>
+  new UnlitMaterial({ color })
 
 describe("internal Stay WebGL Child runtime", () => {
   it("uses the shared selector store with WebGL Child identity", () => {
@@ -83,16 +89,19 @@ describe("internal Stay WebGL Child runtime", () => {
     stayWebGLChildLayers.drawn(child, 1)
     stayWebGLChildLayers.drawn(child, 3)
     child.setMeshes([secondMesh])
-    firstMesh.setColor([1, 0, 0, 1])
+    firstMesh.setMaterial(material([1, 0, 0, 1]))
     expect([...stayWebGLChildLayers.dirtyLayers(child)]).toEqual([3])
     onChange.mockClear()
     child.destroy()
-    secondMesh.setColor([0, 1, 0, 1])
+    secondMesh.setMaterial(material([0, 1, 0, 1]))
     expect(onChange).not.toHaveBeenCalled()
   })
 
   it("captures and restores owned History snapshots", () => {
-    const originalMesh = mesh()
+    const originalMesh = new Mesh({
+      geometry: { ...triangle(), normals },
+      material: new LambertMaterial({ color: [0.1, 0.2, 0.3, 1] }),
+    })
     const child = new StayWebGLChild({
       id: "history-mesh",
       className: "plane",
@@ -102,20 +111,22 @@ describe("internal Stay WebGL Child runtime", () => {
     const captured = captureChildHistory([child], stayWebGLChildHistory)
     const snapshot = captured.get(child.id)!
 
-    originalMesh.setGeometry(triangle(-0.5))
+    originalMesh.setGeometry({ ...triangle(-0.5), normals })
     originalMesh.setModelMatrix(translationMatrix4(3, 4, 5))
-    originalMesh.setColor([1, 0, 0, 1])
+    originalMesh.setMaterial(new LambertMaterial({ color: [1, 0, 0, 1] }))
     child.setLayer(4)
 
     expect(snapshot.layer).toBe(2)
     expect(snapshot.meshes[0].positions).toEqual(new Float32Array(triangle().positions))
+    expect(snapshot.meshes[0].normals).toEqual(new Float32Array(normals))
     expect(snapshot.meshes[0].modelMatrix).toEqual(identityMatrix4())
-    expect(snapshot.meshes[0].color).toEqual([0.1, 0.2, 0.3, 1])
+    expect(snapshot.meshes[0].material)
+      .toEqual({ kind: "lambert", color: [0.1, 0.2, 0.3, 1] })
 
     const onChange = vi.fn()
     const restored = restoreStayWebGLChildSnapshot(snapshot, onChange)
     expect(captureStayWebGLChildSnapshot(restored)).toEqual(snapshot)
-    restored.meshes[0].setColor([0, 1, 0, 1])
+    restored.meshes[0].setMaterial(new LambertMaterial({ color: [0, 1, 0, 1] }))
     expect(onChange).toHaveBeenCalledWith("history-mesh")
     child.destroy()
     restored.destroy()
@@ -138,8 +149,8 @@ describe("internal Stay WebGL Child runtime", () => {
     expect(captureStayWebGLChildSnapshot(imported).meshes)
       .toEqual(captureStayWebGLChildSnapshot(original).meshes)
 
-    imported.meshes[0].setColor([0, 1, 0, 1])
-    expect(original.meshes[0].getColor()).toEqual([0.1, 0.2, 0.3, 1])
+    imported.meshes[0].setMaterial(material([0, 1, 0, 1]))
+    expect(original.meshes[0].getMaterial()).toEqual(material([0.1, 0.2, 0.3, 1]))
     original.destroy()
     imported.destroy()
   })

@@ -8,10 +8,27 @@ export { StayInstantChild } from "./stay/children/stayInstantChild"
 export { StayAnimatedChild } from "./stay/children/stayAnimatedChild"
 export { Mesh } from "./stay/webgl2/mesh"
 export type {
-  MeshColor,
   MeshGeometryInput,
   MeshGeometrySnapshot,
 } from "./stay/webgl2/mesh"
+export {
+  LambertMaterial,
+  UnlitMaterial,
+} from "./stay/webgl2/material"
+export type {
+  LambertMaterialProps,
+  MeshColor,
+  MeshMaterial,
+  MeshMaterialSnapshot,
+  UnlitMaterialProps,
+} from "./stay/webgl2/material"
+export { AmbientLight, DirectionalLight } from "./stay/webgl2/light"
+export type {
+  AmbientLightProps,
+  DirectionalLightProps,
+  LightColor,
+  WebGLLight,
+} from "./stay/webgl2/light"
 export { PerspectiveCamera } from "./stay/webgl2/perspectiveCamera"
 export { StayWebGLChild } from "./stay/webgl2/stayWebGLChild"
 export type { StayWebGLChildProps } from "./stay/webgl2/stayWebGLChild"

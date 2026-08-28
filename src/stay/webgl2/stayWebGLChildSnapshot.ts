@@ -13,6 +13,8 @@ export interface WebGLMeshSnapshot {
   readonly indices: Uint16Array
   readonly modelMatrix: Matrix4
   readonly material: MeshMaterialSnapshot
+  readonly castShadow: boolean
+  readonly receiveShadow: boolean
 }
 
 export interface StayWebGLChildSnapshot {
@@ -42,6 +44,8 @@ function captureMesh(mesh: Mesh): WebGLMeshSnapshot {
     indices: geometry.indices,
     modelMatrix: mesh.getModelMatrix(),
     material: captureMeshMaterial(mesh.getMaterial()),
+    castShadow: mesh.castShadow,
+    receiveShadow: mesh.receiveShadow,
   }
 }
 
@@ -54,6 +58,8 @@ function materializeMesh(snapshot: WebGLMeshSnapshot) {
     },
     modelMatrix: snapshot.modelMatrix,
     material: materializeMeshMaterial(snapshot.material),
+    castShadow: snapshot.castShadow,
+    receiveShadow: snapshot.receiveShadow,
   })
 }
 

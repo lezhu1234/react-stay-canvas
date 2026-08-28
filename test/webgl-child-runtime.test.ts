@@ -101,6 +101,8 @@ describe("internal Stay WebGL Child runtime", () => {
     const originalMesh = new Mesh({
       geometry: { ...triangle(), normals },
       material: new LambertMaterial({ color: [0.1, 0.2, 0.3, 1] }),
+      castShadow: true,
+      receiveShadow: true,
     })
     const child = new StayWebGLChild({
       id: "history-mesh",
@@ -114,6 +116,8 @@ describe("internal Stay WebGL Child runtime", () => {
     originalMesh.setGeometry({ ...triangle(-0.5), normals })
     originalMesh.setModelMatrix(translationMatrix4(3, 4, 5))
     originalMesh.setMaterial(new LambertMaterial({ color: [1, 0, 0, 1] }))
+    originalMesh.setCastShadow(false)
+    originalMesh.setReceiveShadow(false)
     child.setLayer(4)
 
     expect(snapshot.layer).toBe(2)
@@ -122,10 +126,14 @@ describe("internal Stay WebGL Child runtime", () => {
     expect(snapshot.meshes[0].modelMatrix).toEqual(identityMatrix4())
     expect(snapshot.meshes[0].material)
       .toEqual({ kind: "lambert", color: [0.1, 0.2, 0.3, 1] })
+    expect(snapshot.meshes[0].castShadow).toBe(true)
+    expect(snapshot.meshes[0].receiveShadow).toBe(true)
 
     const onChange = vi.fn()
     const restored = restoreStayWebGLChildSnapshot(snapshot, onChange)
     expect(captureStayWebGLChildSnapshot(restored)).toEqual(snapshot)
+    expect(restored.meshes[0].castShadow).toBe(true)
+    expect(restored.meshes[0].receiveShadow).toBe(true)
     restored.meshes[0].setMaterial(new LambertMaterial({ color: [0, 1, 0, 1] }))
     expect(onChange).toHaveBeenCalledWith("history-mesh")
     child.destroy()

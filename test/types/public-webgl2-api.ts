@@ -23,15 +23,24 @@ const mesh = new Mesh({
     indices: [0, 1, 2],
   },
   material: new LambertMaterial({ color: [0.2, 0.5, 0.9, 1] }),
+  castShadow: true,
+  receiveShadow: true,
 })
 mesh.setModelMatrix(translationMatrix4(0.2, 0, 0))
 mesh.setMaterial(new LambertMaterial({ color: [0.3, 0.6, 1, 1] }))
 mesh.setMaterial(new GlassMaterial({ color: [0.6, 0.85, 1, 0.2] }))
+mesh.setCastShadow(false)
+mesh.setReceiveShadow(true)
 
 const ambient = new AmbientLight({ color: [0.9, 0.95, 1], intensity: 0.3 })
-const key = new DirectionalLight({ directionToLight: [0, 0, 1], intensity: 0.8 })
+const key = new DirectionalLight({
+  directionToLight: [0.2, 0.4, 1],
+  intensity: 0.8,
+  shadow: { target: [0, 0, 0], width: 6, height: 4, mapSize: 1024 },
+})
 const layer: WebGL2LayerConfig = { backend: "webgl2", camera, lights: [ambient, key] }
 key.setDirectionToLight([0.2, 0.4, 1])
+key.setShadow({ target: [0, 0, -1], distance: 8, near: 0.1, far: 20 })
 
 declare const tools: StayTools
 const child: StayWebGLChild = tools.webgl.appendChild({

@@ -42,6 +42,8 @@ const mesh = new Mesh({
     indices: [0, 1, 2],
   },
   material: new LambertMaterial({ color: [0.2, 0.55, 0.9, 1] }),
+  castShadow: true,
+  receiveShadow: true,
 })
 
 const glass = new GlassMaterial({ color: [0.6, 0.85, 1, 0.2] })
@@ -51,6 +53,8 @@ mesh.setMaterial(glass)
 `UnlitMaterial` 与 `LambertMaterial` 都不透明，color alpha 必须为 `1`。`GlassMaterial` 的 alpha 必须严格位于 `0` 与 `1` 之间；它提供带光照和视角边缘高光的薄层玻璃近似。它不会采样表面后的场景，因此暂不模拟折射、厚度、粗糙度或物理透射。
 
 renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 depth write，再按局部包围盒中心变换到相机 view space 后的深度稳定地从远到近绘制。这是行业常用的对象级透明方案：彼此分离、不相交的表面能稳定合成；相交透明 Mesh 和自身重叠几何仍可能需要拆分 geometry，或等待后续 order-independent transparency。
+
+阴影行为是显式的 CPU Mesh 状态。`castShadow` 与 `receiveShadow` 都默认 `false`，运行时分别通过 `setCastShadow()`、`setReceiveShadow()` 修改。带光照的 receiver 会采样图层方向光的 shadow map；Glass 可以接收阴影。若对 Glass 显式开启投影，当前只承诺二值几何轮廓，不模拟彩色或透射阴影。History 与场景传输会保留阴影标志，且修改标志不会推进 geometry revision。
 
 未配置任何 Light 时 Lambert 与 Glass 材质都会偏暗；请显式添加环境光或方向光，不依赖隐藏的默认灯组。
 
@@ -64,7 +68,7 @@ renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 dep
 | `webgl.exportChildren(children)` | 捕获带 source id、深度隔离的 CPU Mesh 片段 |
 | `webgl.importChildren(fragment)` | 生成新的 Child id 与独立 Mesh 状态 |
 
-包入口导出 `Mesh`、`UnlitMaterial`、`LambertMaterial`、`GlassMaterial`、`AmbientLight`、`DirectionalLight`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、scene-color 折射、阴影、纹理、order-independent transparency 和 Canvas 截图暂不属于这个接口。
+包入口导出 `Mesh`、`UnlitMaterial`、`LambertMaterial`、`GlassMaterial`、`AmbientLight`、`DirectionalLight`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、shadow texture/framebuffer、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、scene-color 折射、彩色/透射阴影、纹理、order-independent transparency 和 Canvas 截图暂不属于这个接口。
 
 ## 状态与显示
 

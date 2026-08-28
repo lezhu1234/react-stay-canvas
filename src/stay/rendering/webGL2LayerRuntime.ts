@@ -41,6 +41,14 @@ export class WebGL2LayerRuntime {
         `WebGL2 layer ${this.index} supports at most ${webGL2DirectionalLightLimit} directional lights`
       )
     }
+    if (
+      this.#lights.filter((light) =>
+        light.kind === "directional" && light.getShadow() !== undefined).length > 1
+    ) {
+      throw new RangeError(
+        `WebGL2 layer ${this.index} supports at most one shadow-casting directional light`
+      )
+    }
     this.element.addEventListener("webglcontextlost", this.#handleContextLost)
     this.element.addEventListener("webglcontextrestored", this.#handleContextRestored)
     this.#unsubscribeCameraChanges = this.config.camera.subscribeChanges(this.invalidate)

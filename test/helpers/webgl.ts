@@ -101,3 +101,27 @@ export function createRecordingWebGLContext(
     spies,
   }
 }
+
+export function createRecordingWebGL2Context(
+  canvas: HTMLCanvasElement,
+  options: { lost?: boolean; maxTextureSize?: number } = {}
+) {
+  const recording = createRecordingWebGLContext(canvas, options)
+  let nextVertexArray = 10_000
+  const webgl2 = Object.assign(recording.spies, {
+    DEPTH_BUFFER_BIT: 0x0100,
+    LEQUAL: 0x0203,
+    createVertexArray: vi.fn(() => ({ id: ++nextVertexArray })),
+    deleteVertexArray: vi.fn(),
+    bindVertexArray: vi.fn(),
+    uniformMatrix4fv: vi.fn(),
+    uniform4fv: vi.fn(),
+    depthFunc: vi.fn(),
+    clearDepth: vi.fn(),
+  })
+  return {
+    context: webgl2 as unknown as WebGL2RenderingContext,
+    setLost: recording.setLost,
+    spies: webgl2,
+  }
+}

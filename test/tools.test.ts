@@ -134,6 +134,71 @@ describe("export / import children", () => {
 })
 
 describe("regionToTargetCanvas", () => {
+  it("uses global layer, zIndex, and stable insertion order across Children", async () => {
+    const { stage } = createStage({ layers: 2 })
+    const drawOrder: string[] = []
+    const recordingRect = (name: string, layer: number, zIndex: number) =>
+      new Rectangle({
+        x: 10,
+        y: 10,
+        width: 20,
+        height: 20,
+        layer,
+        zIndex,
+        stateDrawFuncMap: {
+          default: {
+            afterDraw: () => drawOrder.push(name),
+          },
+        },
+      })
+
+    const first = stage.tools.appendChild({
+      className: "first",
+      shape: [
+        recordingRect("first-layer-1", 1, 1),
+        recordingRect("first-high", 0, 3),
+        recordingRect("first-low", 0, 1),
+      ],
+    })
+    const second = stage.tools.appendChild({
+      className: "second",
+      shape: [
+        recordingRect("second-middle", 0, 2),
+        recordingRect("second-high", 0, 3),
+        recordingRect("second-layer-1", 1, 0),
+      ],
+    })
+
+    await stage.tools.regionToTargetCanvas({
+      area: { x: 0, y: 0, width: 100, height: 100 },
+      children: [first, second],
+    })
+
+    expect(drawOrder).toEqual([
+      "first-low",
+      "second-middle",
+      "first-high",
+      "second-high",
+      "second-layer-1",
+      "first-layer-1",
+    ])
+  })
+
+  it("does not consume dirty layers from the live renderer", async () => {
+    const { stage } = createStage({ layers: 2 })
+    const child = stage.tools.appendChild({
+      className: "capture-only",
+      shape: filledRect(10, 10),
+    })
+
+    await stage.tools.regionToTargetCanvas({
+      area: { x: 0, y: 0, width: 100, height: 100 },
+      children: [child],
+    })
+
+    expect(stage.draw({ now: 0 }).updatedLayers).toEqual([0])
+  })
+
   it("exports Content independently of the live viewport", async () => {
     const { stage } = createStage({ width: 120, height: 60 })
     const shape = filledRect(10, 10, 20, 20)

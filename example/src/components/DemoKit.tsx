@@ -156,6 +156,7 @@ export function CanvasSurface({
   className,
   viewportLabel,
   canvasDisplayTransform,
+  fitInitialDisplayTransformToViewport = false,
   resizeToViewport = false,
   shrinkToViewport = false,
 }: {
@@ -163,6 +164,7 @@ export function CanvasSurface({
   className?: string
   viewportLabel?: string
   canvasDisplayTransform?: CanvasDisplayTransform
+  fitInitialDisplayTransformToViewport?: boolean
   resizeToViewport?: boolean
   shrinkToViewport?: boolean
 }) {
@@ -175,17 +177,32 @@ export function CanvasSurface({
   const displayOffsetX = finiteOr(canvasDisplayTransform?.offsetX, 0)
   const displayOffsetY = finiteOr(canvasDisplayTransform?.offsetY, 0)
   const usesDisplayTransform = canvasDisplayTransform !== undefined
+  // Keep the responsive fit as a stable baseline. Later transform controls
+  // must change the DOM footprint without silently resizing logical Canvas.
+  const initialDisplayTransform = useRef({
+    offsetX: displayOffsetX,
+    offsetY: displayOffsetY,
+    scaleX: displayScaleX,
+    scaleY: displayScaleY,
+  })
   const canvasFrame: { element: ReactNode; height?: number; width?: number } | null =
     isValidElement<StayCanvasProps>(children) && viewportSize
     ? (() => {
         const sceneWidth = children.props.width ?? 500
         const sceneHeight = children.props.height ?? 500
         const hasMeasuredViewport = viewportSize.width > 1 && viewportSize.height > 1
+        const initialTransform = initialDisplayTransform.current
+        const fittedViewportWidth = fitInitialDisplayTransformToViewport
+          ? Math.max(1, viewportSize.width - initialTransform.offsetX) / initialTransform.scaleX
+          : viewportSize.width
+        const fittedViewportHeight = fitInitialDisplayTransformToViewport
+          ? Math.max(1, viewportSize.height - initialTransform.offsetY) / initialTransform.scaleY
+          : viewportSize.height
         const width = (resizeToViewport || shrinkToViewport) && hasMeasuredViewport
-          ? viewportSize.width
+          ? fittedViewportWidth
           : Math.max(sceneWidth, viewportSize.width)
         const height = (resizeToViewport || shrinkToViewport) && hasMeasuredViewport
-          ? viewportSize.height
+          ? fittedViewportHeight
           : Math.max(sceneHeight, viewportSize.height)
         const placement = {
           offsetX: Math.max(0, (width - sceneWidth) / 2),

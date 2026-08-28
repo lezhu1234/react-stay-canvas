@@ -785,7 +785,6 @@ export function CoordinateStack({
       <CanvasSurface
         className="coordinate-stack-surface"
         shrinkToViewport
-        viewportLabel="WEBGL · PROJECTIVE"
       >
         <StayCanvas className="demo-canvas coordinate-stack-canvas" focusOnInit={false} height={STACK_HEIGHT} layers={PROJECTIVE_WEBGL_LAYERS} mounted={mounted} width={STACK_WIDTH} />
       </CanvasSurface>

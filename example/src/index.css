@@ -687,9 +687,9 @@ input:focus-visible {
 
 .coordinate-canvas {
   background:
-    linear-gradient(rgba(77, 93, 96, 0.075) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(77, 93, 96, 0.075) 1px, transparent 1px),
-    rgba(247, 249, 245, 0.96);
+    linear-gradient(rgba(77, 93, 96, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(77, 93, 96, 0.055) 1px, transparent 1px),
+    rgba(246, 249, 248, 0.72);
   background-size: 34px 34px;
 }
 
@@ -709,18 +709,21 @@ input:focus-visible {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr) 260px;
-  gap: 26px;
-  padding: 0 30px 34px;
+  grid-template-rows: minmax(0, 1fr) 190px;
+  gap: 18px;
+  padding: 0 28px 24px;
   overflow: hidden;
-  border: 1px solid rgba(17, 37, 31, 0.72);
+  border: 1px solid rgba(26, 54, 46, 0.32);
   border-radius: 0;
   color: var(--coordinate-ink);
   background:
-    radial-gradient(circle at 78% 30%, rgba(189, 221, 207, 0.19), transparent 29%),
-    radial-gradient(circle at 18% 6%, rgba(255, 255, 255, 0.98), transparent 38%),
-    #f8f7f2;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(232, 239, 237, 0.42)),
+    radial-gradient(circle at 78% 28%, rgba(205, 230, 244, 0.6), transparent 27%),
+    radial-gradient(circle at 20% 3%, rgba(255, 255, 255, 0.98), transparent 42%),
+    #eef1ef;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    inset 0 -70px 110px rgba(132, 154, 147, 0.1);
 }
 
 .coordinate-experience::before,
@@ -732,23 +735,25 @@ input:focus-visible {
 }
 
 .coordinate-experience::before {
-  top: -26%;
-  left: 20%;
-  width: 42%;
-  height: 78%;
-  background: linear-gradient(108deg, transparent 22%, rgba(255, 255, 255, 0.56) 48%, transparent 72%);
-  filter: blur(10px);
-  transform: rotate(-8deg);
+  top: -9%;
+  right: 8%;
+  width: 38%;
+  height: 72%;
+  background: linear-gradient(112deg, transparent 14%, rgba(255, 255, 255, 0.86) 48%, transparent 76%);
+  filter: blur(7px);
+  transform: rotate(-5deg);
 }
 
 .coordinate-experience::after {
-  right: -9%;
-  bottom: 260px;
-  width: 42%;
-  height: 38%;
+  right: -4%;
+  bottom: 176px;
+  width: 74%;
+  height: 31%;
   border-radius: 50%;
-  background: rgba(99, 157, 134, 0.1);
-  filter: blur(48px);
+  background:
+    radial-gradient(ellipse, rgba(81, 164, 139, 0.15), transparent 62%),
+    radial-gradient(ellipse at 36% 48%, rgba(77, 130, 226, 0.12), transparent 48%);
+  filter: blur(36px);
 }
 
 .coordinate-stage {
@@ -757,14 +762,20 @@ input:focus-visible {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  background: linear-gradient(
+    180deg,
+    transparent 0 43%,
+    rgba(249, 251, 250, 0.72) 43%,
+    rgba(226, 234, 231, 0.58) 100%
+  );
 }
 
 .coordinate-hero {
   position: absolute;
   z-index: 4;
-  top: 34px;
-  left: 8px;
-  width: 380px;
+  top: 32px;
+  left: 12px;
+  width: 390px;
   pointer-events: none;
 }
 
@@ -772,7 +783,7 @@ input:focus-visible {
   margin: 0 0 12px;
   color: var(--coordinate-green);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 760;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -782,11 +793,11 @@ input:focus-visible {
   max-width: none;
   margin: 0;
   color: #063b26;
-  font-family: "Songti SC", STSong, "Noto Serif CJK SC", Georgia, serif;
-  font-size: clamp(48px, 3.4vw, 56px);
-  font-weight: 700;
-  letter-spacing: -0.065em;
-  line-height: 1.08;
+  font-family: "Arial Narrow", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  font-size: clamp(44px, 3.3vw, 58px);
+  font-weight: 650;
+  letter-spacing: -0.055em;
+  line-height: 1.02;
 }
 
 .coordinate-hero h2 span {
@@ -797,7 +808,7 @@ input:focus-visible {
 .coordinate-hero > span {
   display: block;
   max-width: 380px;
-  margin-top: 17px;
+  margin-top: 14px;
   color: rgba(41, 63, 59, 0.64);
   font-size: 15px;
   line-height: 1.5;
@@ -812,8 +823,8 @@ input:focus-visible {
   min-width: 0;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
-  gap: 10px;
-  padding: 0 24px;
+  gap: 7px;
+  padding: 0 22px;
   border-left: 1px solid rgba(55, 82, 76, 0.15);
 }
 
@@ -821,16 +832,37 @@ input:focus-visible {
   padding-left: 24px;
 }
 
+.coordinate-operations > .coordinate-operation-group:first-child {
+  position: relative;
+  grid-area: display;
+  padding-left: 0;
+  border-left: 0;
+}
+
+.coordinate-operations > .coordinate-operation-group:first-child .coordinate-operation-heading {
+  padding-right: 48px;
+}
+
+.coordinate-operations > .coordinate-operation-group:first-child > .control-button {
+  position: absolute;
+  top: 0;
+  right: 22px;
+}
+
+.coordinate-operations > .coordinate-operation-group:last-child {
+  grid-area: viewport;
+}
+
 .coordinate-operation-heading {
   display: grid;
   min-width: 0;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 5px;
+  margin-bottom: 2px;
 }
 
 .coordinate-operation-heading strong {
   color: var(--coordinate-ink);
-  font-size: 14px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: -0.02em;
 }
@@ -839,15 +871,15 @@ input:focus-visible {
   overflow: hidden;
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 9px;
+  font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .coordinate-scale-control {
   display: grid;
-  grid-template-columns: 70px minmax(0, 1fr) 80px;
-  gap: 12px;
+  grid-template-columns: 62px minmax(0, 1fr) 64px;
+  gap: 9px;
   align-items: center;
 }
 
@@ -906,8 +938,8 @@ input:focus-visible {
 }
 
 .coordinate-scale-control output {
-  min-height: 32px;
-  padding: 7px 10px;
+  min-height: 28px;
+  padding: 5px 8px;
   border: 1px solid rgba(55, 82, 76, 0.15);
   border-radius: 6px;
   color: var(--coordinate-blue);
@@ -931,7 +963,7 @@ input:focus-visible {
 .coordinate-offset-controls input {
   width: 100%;
   min-width: 0;
-  height: 34px;
+  height: 29px;
   padding: 4px 8px;
   border: 1px solid rgba(55, 82, 76, 0.18);
   border-radius: 6px;
@@ -959,8 +991,8 @@ input:focus-visible {
 
 .coordinate-operation-group .toolbar .control-button {
   width: 100%;
-  min-height: 84px;
-  padding: 10px 5px;
+  min-height: 58px;
+  padding: 7px 4px;
   border-color: rgba(55, 82, 76, 0.18);
   color: var(--coordinate-ink);
   border-radius: 8px;
@@ -968,18 +1000,6 @@ input:focus-visible {
   font-size: 11px;
   line-height: 1.2;
   white-space: normal;
-}
-
-.coordinate-operation-group .toolbar .control-button svg {
-  display: block;
-  width: 28px;
-  height: 28px;
-  margin: 0 auto 8px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
 }
 
 .coordinate-experience .control-button:active:not(:disabled) {
@@ -991,9 +1011,9 @@ input:focus-visible {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  padding: 144px 20px 0 8px;
-  grid-template-columns: minmax(720px, 1fr) minmax(520px, 590px);
-  gap: 30px;
+  padding: 128px 16px 0 8px;
+  grid-template-columns: minmax(0, 1.72fr) minmax(390px, 0.9fr);
+  gap: 36px;
   overflow: hidden;
 }
 
@@ -1006,12 +1026,12 @@ input:focus-visible {
 }
 
 .coordinate-stack-exhibit {
-  padding-top: 96px;
+  padding-top: 62px;
   grid-template-rows: minmax(0, 1fr);
 }
 
 .coordinate-live-exhibit {
-  grid-template-rows: 68px minmax(0, 1fr);
+  grid-template-rows: 54px minmax(0, 1fr);
 }
 
 .coordinate-live-heading {
@@ -1019,7 +1039,7 @@ input:focus-visible {
   min-width: 0;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 0 3px 14px;
+  padding: 0 3px 10px;
 }
 
 .coordinate-live-heading h3 {
@@ -1055,22 +1075,26 @@ input:focus-visible {
 .coordinate-stack-surface {
   border: 0;
   border-radius: 0;
-  background: transparent;
+  background: radial-gradient(ellipse at 56% 90%, rgba(151, 184, 173, 0.12), transparent 58%);
   box-shadow: none;
 }
 
 .coordinate-live-surface {
-  border: 1px solid rgba(67, 100, 92, 0.16);
-  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  border-radius: 12px;
+  background: rgba(247, 250, 249, 0.38);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 20px 48px rgba(45, 73, 65, 0.08);
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 0 0 1px rgba(79, 119, 108, 0.12),
+    0 24px 60px rgba(45, 73, 65, 0.13);
+  backdrop-filter: blur(18px) saturate(118%);
   transition: border-color 240ms ease-out, box-shadow 240ms ease-out;
 }
 
 .coordinate-stack-canvas {
   background:
-    radial-gradient(ellipse at 50% 82%, rgba(69, 115, 98, 0.1), transparent 42%),
+    radial-gradient(ellipse at 56% 88%, rgba(69, 115, 98, 0.13), transparent 42%),
+    radial-gradient(circle at 82% 8%, rgba(255, 255, 255, 0.72), transparent 24%),
     transparent;
 }
 
@@ -1092,9 +1116,11 @@ input:focus-visible {
   padding: 8px 15px;
   border-color: rgba(66, 111, 232, 0.25);
   border-radius: 999px;
-  background: rgba(249, 250, 247, 0.8);
-  box-shadow: 0 10px 24px rgba(39, 51, 67, 0.08);
-  backdrop-filter: blur(12px);
+  background: rgba(249, 250, 247, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    0 10px 24px rgba(39, 51, 67, 0.09);
+  backdrop-filter: blur(16px) saturate(130%);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -1105,24 +1131,22 @@ input:focus-visible {
   display: grid;
   min-width: 0;
   min-height: 0;
-  overflow-x: auto;
+  overflow: hidden;
   overflow-y: hidden;
-  padding: 26px 24px;
-  grid-template-columns: 303px 345px 446px minmax(360px, 1fr);
+  padding: 20px 18px;
+  grid-template-columns: minmax(310px, 1fr) minmax(390px, 1.18fr) minmax(330px, 0.92fr);
+  grid-template-areas: "display mapping viewport";
   gap: 0;
-  border: 1px solid rgba(55, 82, 76, 0.16);
-  border-radius: 10px;
-  background: rgba(250, 249, 246, 0.84);
-  box-shadow: 0 14px 34px rgba(58, 84, 76, 0.1);
-  backdrop-filter: blur(22px) saturate(120%);
-}
-
-.coordinate-console-intro {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  justify-content: flex-start;
-  padding-right: 52px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(238, 242, 240, 0.48)),
+    rgba(245, 247, 245, 0.58);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 -1px 0 rgba(100, 126, 118, 0.1),
+    0 18px 44px rgba(58, 84, 76, 0.14);
+  backdrop-filter: blur(24px) saturate(128%);
 }
 
 .coordinate-operation-heading .coordinate-console-label {
@@ -1133,49 +1157,18 @@ input:focus-visible {
 .coordinate-evidence-toggle span {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   color: var(--coordinate-green);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 720;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
-.coordinate-console-label b {
-  display: inline-grid;
-  width: 24px;
-  height: 24px;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  place-items: center;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+.coordinate-sync-status {
+  color: var(--coordinate-green);
+  font-size: 10px;
   font-weight: 650;
-}
-
-.coordinate-signal-card {
-  display: grid;
-  min-height: 104px;
-  margin-top: 22px;
-  border: 1px solid rgba(55, 82, 76, 0.16);
-  border-radius: 8px;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.coordinate-console-intro strong {
-  margin-top: 0;
-  color: var(--coordinate-green);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 18px;
-}
-
-.coordinate-console-intro small {
-  margin-top: 16px;
-  color: var(--coordinate-green);
-  font-size: 13px;
-  line-height: 1.4;
-  text-align: center;
 }
 
 .coordinate-sync-status::before {
@@ -1186,16 +1179,19 @@ input:focus-visible {
 .coordinate-flow {
   display: grid;
   min-width: 0;
+  grid-area: mapping;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  gap: 10px;
   align-content: start;
-  padding: 0 24px;
+  padding: 0 22px;
   border-left: 1px solid rgba(55, 82, 76, 0.15);
 }
 
-.coordinate-flow > p:first-child {
-  grid-column: 1 / -1;
-  margin-bottom: 12px;
+.coordinate-flow-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 25px;
 }
 
 .coordinate-zoom-proof > p,
@@ -1210,41 +1206,46 @@ input:focus-visible {
 .coordinate-flow-value {
   display: grid;
   min-width: 0;
-  min-height: 44px;
-  padding: 7px 12px;
-  border: 1px solid rgba(55, 82, 76, 0.14);
-  border-left: 2px solid rgba(126, 137, 136, 0.5);
-  border-radius: 7px;
-  grid-template-columns: 74px minmax(0, 1fr) 70px;
-  gap: 1px;
-  align-items: baseline;
-  background: rgba(255, 255, 255, 0.28);
+  padding: 4px;
+  gap: 4px;
+  text-align: center;
 }
 
 .coordinate-flow-view {
-  border-color: var(--coordinate-blue);
-  background: rgba(66, 111, 232, 0.07);
+  color: var(--coordinate-blue);
 }
 
 .coordinate-flow-result {
-  border-color: var(--coordinate-green);
-  background: rgba(47, 138, 104, 0.07);
+  color: var(--coordinate-green);
 }
 
 .coordinate-flow-value span,
 .coordinate-flow-value small,
 .coordinate-flow-operation span {
   color: rgba(41, 63, 59, 0.52);
-  font-size: 11px;
+  font-size: 9px;
 }
 
 .coordinate-flow-value strong {
   overflow: hidden;
   color: var(--coordinate-ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 17px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.coordinate-flow-values {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr) 18px minmax(0, 1fr);
+  align-items: center;
+}
+
+.coordinate-flow-arrow {
+  color: rgba(41, 63, 59, 0.46);
+  font-size: 18px;
+  text-align: center;
 }
 
 .coordinate-flow-operation {
@@ -1258,7 +1259,9 @@ input:focus-visible {
 .coordinate-flow .coordinate-event-sample {
   grid-column: 1 / -1;
   color: rgba(41, 63, 59, 0.5);
-  font-size: 10px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
   font-weight: 500;
 }
 
@@ -1270,8 +1273,8 @@ input:focus-visible {
 .coordinate-evidence-toggle {
   display: flex;
   min-width: 0;
-  min-height: 46px;
-  padding: 7px 10px;
+  min-height: 34px;
+  padding: 5px 10px;
   border: 1px solid rgba(55, 82, 76, 0.18);
   border-radius: 10px;
   flex-direction: row;
@@ -1293,7 +1296,7 @@ input:focus-visible {
   z-index: 12;
   top: 20px;
   right: 20px;
-  bottom: 186px;
+  bottom: 210px;
   width: min(380px, calc(100% - 40px));
   overflow: auto;
   padding: 15px;
@@ -1403,38 +1406,30 @@ input:focus-visible {
 
 @media (max-width: 1565px) {
   .coordinate-workspace {
-    padding-inline: 18px;
-    grid-template-columns: minmax(390px, 1.45fr) minmax(230px, 0.7fr);
-    gap: 14px;
+    padding-inline: 14px;
+    grid-template-columns: minmax(480px, 1.55fr) minmax(330px, 0.82fr);
+    gap: 22px;
   }
 
   .coordinate-console {
     padding-inline: 14px;
-    grid-template-columns: minmax(130px, 0.72fr) minmax(230px, 1fr) minmax(290px, 1.25fr) minmax(260px, 1.1fr);
+    grid-template-columns: minmax(280px, 1fr) minmax(350px, 1.12fr) minmax(290px, 0.92fr);
   }
 
   .coordinate-operation-group + .coordinate-operation-group {
     padding-left: 18px;
   }
 
-  .coordinate-flow-value {
-    grid-template-columns: 48px minmax(0, 1fr);
-  }
-
   .coordinate-flow-value strong {
-    font-size: 15px;
-  }
-
-  .coordinate-flow-value small {
-    display: none;
+    font-size: 13px;
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1040px) {
   .coordinate-hero {
     top: 16px;
     left: 18px;
-    width: 48%;
+    width: min(390px, 48%);
   }
 
   .coordinate-hero span {
@@ -1450,7 +1445,7 @@ input:focus-visible {
 
   .coordinate-console {
     overflow-x: auto;
-    grid-template-columns: 150px 250px 300px 280px;
+    grid-template-columns: 300px 390px 310px;
   }
 
   .coordinate-evidence {
@@ -1491,17 +1486,17 @@ input:focus-visible {
   }
 
   .coordinate-workspace {
-    padding-top: 124px;
+    padding-top: 112px;
   }
 
   .coordinate-stack-exhibit {
-    padding-top: 0;
+    padding-top: 28px;
   }
 }
 
 @media (max-height: 700px) {
   .coordinate-experience {
-    grid-template-rows: minmax(0, 1fr) 72px;
+    grid-template-rows: minmax(0, 1fr) 82px;
   }
 
   .coordinate-hero {
@@ -1536,6 +1531,10 @@ input:focus-visible {
     grid-template-rows: 24px minmax(0, 1fr);
   }
 
+  .coordinate-stack-exhibit {
+    padding-top: 0;
+  }
+
   .coordinate-live-heading {
     align-items: center;
     padding-bottom: 4px;
@@ -1548,14 +1547,6 @@ input:focus-visible {
   .coordinate-console {
     padding-block: 6px;
     overflow-y: auto;
-  }
-
-  .coordinate-console-intro small {
-    display: none;
-  }
-
-  .coordinate-console-intro strong {
-    margin-top: 2px;
   }
 
   .coordinate-operation-group .toolbar .control-button {

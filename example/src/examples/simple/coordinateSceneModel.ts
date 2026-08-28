@@ -16,9 +16,9 @@ export const PLANE_ASPECT_RATIO = 4 / 3
 export const PLANE_GRID_COLUMNS = 6
 export const PLANE_GRID_ROWS = 5
 
-const PLANE_NEAR_SCALE = 1.32
-const PLANE_FAR_SCALE = 1.08
-const PLANE_WIDTH_SCALES = [1.08, 0.96, 0.96] as const
+const PLANE_NEAR_SCALE = 1.46
+const PLANE_FAR_SCALE = 0.88
+const PLANE_WIDTH_SCALES = [1.08, 1, 0.96] as const
 const CAMERA_FIELD_OF_VIEW = Math.PI / 3
 const CAMERA_NEAR_DEPTH = 4.5
 const CAMERA_FAR_DEPTH = CAMERA_NEAR_DEPTH * PLANE_NEAR_SCALE / PLANE_FAR_SCALE
@@ -46,16 +46,16 @@ export type PlaneBasis = {
 
 export const planePalette = {
   client: {
-    fill: rgba(111, 190, 229, 0.045),
-    stroke: rgba(74, 163, 214, 0.68),
+    fill: rgba(178, 224, 246, 0.2),
+    stroke: rgba(77, 178, 224, 0.9),
   },
   view: {
-    fill: rgba(132, 186, 103, 0.055),
-    stroke: rgba(70, 143, 77, 0.72),
+    fill: rgba(181, 205, 255, 0.18),
+    stroke: rgba(67, 112, 230, 0.92),
   },
   content: {
-    fill: rgba(166, 137, 216, 0.05),
-    stroke: rgba(137, 105, 197, 0.68),
+    fill: rgba(174, 232, 205, 0.18),
+    stroke: rgba(45, 151, 108, 0.92),
   },
 } as const
 
@@ -82,41 +82,36 @@ export function createPlaneDefinitions(
   width: number,
   height: number,
 ): Record<PlaneName, PlaneDefinition> {
-  const horizontalPadding = Math.max(10, width * 0.02)
-  const gaps = [Math.max(12, width * 0.075), Math.max(12, width * 0.09)] as const
-  const labelSpace = Math.max(28, Math.min(44, height * 0.18))
-  const bottomPadding = Math.max(8, height * 0.08)
+  const horizontalPadding = Math.max(12, width * 0.035)
+  const labelSpace = Math.max(34, Math.min(54, height * 0.14))
+  const bottomPadding = Math.max(12, height * 0.05)
+  const verticalOffsets = [0, height * 0.075, height * 0.145] as const
   const minimumBlockTop = 4
   const widthScaleTotal = PLANE_WIDTH_SCALES.reduce((total, scale) => total + scale, 0)
-  const widthBound = (width - horizontalPadding * 2 - gaps[0] - gaps[1]) / widthScaleTotal
-  const projectedHeightSpace = Math.max(1, height - labelSpace - bottomPadding - minimumBlockTop)
+  const overlapScaleTotal = 0.28
+  const widthBound = (width - horizontalPadding * 2) / (widthScaleTotal - overlapScaleTotal)
+  const projectedHeightSpace = Math.max(
+    1,
+    height - labelSpace - bottomPadding - minimumBlockTop - verticalOffsets[2],
+  )
   const heightBound = projectedHeightSpace * PLANE_ASPECT_RATIO
     / PLANE_NEAR_SCALE / PLANE_WIDTH_SCALES[0]
   const baseWidth = Math.max(1, Math.min(widthBound, heightBound))
   const planeWidths = PLANE_WIDTH_SCALES.map((scale) => baseWidth * scale)
+  const gaps = [-baseWidth * 0.14, -baseWidth * 0.14] as const
   const planeHeight = planeWidths[0] / PLANE_ASPECT_RATIO
   const groupWidth = planeWidths.reduce((total, planeWidth) => total + planeWidth, 0)
     + gaps[0] + gaps[1]
   const startX = (width - groupWidth) / 2
-  const desiredVerticalSpace = height - labelSpace - planeHeight - bottomPadding
-  const maximumBlockTop = height
-    - labelSpace
-    - planeHeight * PLANE_NEAR_SCALE
-    - bottomPadding
-  const blockTop = Math.max(
-    minimumBlockTop,
-    Math.min(desiredVerticalSpace * 0.67, maximumBlockTop),
-  )
-  const visualPlaneTop = blockTop + labelSpace
-  const labelY = visualPlaneTop - Math.min(38, labelSpace * 0.9)
+  const visualPlaneTop = minimumBlockTop + labelSpace
 
   const definition = (name: PlaneName, index: number): PlaneDefinition => {
     const planeWidth = planeWidths[index]
     const x = startX
       + planeWidths.slice(0, index).reduce((total, value) => total + value, 0)
       + gaps.slice(0, index).reduce((total, value) => total + value, 0)
-    const nearTop = visualPlaneTop
-    const farTop = visualPlaneTop
+    const nearTop = visualPlaneTop + verticalOffsets[index]
+    const farTop = nearTop
       + planeHeight * (PLANE_NEAR_SCALE - PLANE_FAR_SCALE) / 2
     const farBottom = farTop + planeHeight * PLANE_FAR_SCALE
     const nearBottom = nearTop + planeHeight * PLANE_NEAR_SCALE
@@ -124,7 +119,7 @@ export function createPlaneDefinitions(
       width: planeWidth,
       height: planeHeight,
       labelX: x,
-      labelY,
+      labelY: nearTop - Math.min(19, labelSpace * 0.44),
       placement: projectivePlacementFromQuad(
         { x: 0, y: 0, width: planeWidth, height: planeHeight },
         {
@@ -219,19 +214,15 @@ export function createPlaneBasis(
   }
 }
 
-export function backdropMeshGeometry(
-  canvasWidth: number,
-  canvasHeight: number,
-  depth = 6.25,
-): MeshGeometryInput {
-  const points = [
-    worldPointFromCanvas({ x: 0, y: 0 }, depth, canvasWidth, canvasHeight),
-    worldPointFromCanvas({ x: canvasWidth, y: 0 }, depth, canvasWidth, canvasHeight),
-    worldPointFromCanvas({ x: canvasWidth, y: canvasHeight }, depth, canvasWidth, canvasHeight),
-    worldPointFromCanvas({ x: 0, y: canvasHeight }, depth, canvasWidth, canvasHeight),
+export function floorMeshGeometry(): MeshGeometryInput {
+  const points: Vector3[] = [
+    [-6, -1.72, -3.7],
+    [6, -1.72, -3.7],
+    [18, -1.72, -14],
+    [-18, -1.72, -14],
   ]
   const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
-  appendQuad(builder, points, [0, 0, 1])
+  appendQuad(builder, points, [0, 1, 0])
   return builder
 }
 

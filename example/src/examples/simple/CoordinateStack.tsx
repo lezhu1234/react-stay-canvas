@@ -33,12 +33,12 @@ import {
 } from "./coordinateLabModel"
 import {
   createCoordinateCamera,
-  backdropMeshGeometry,
   createPlaneBasis,
   createPlaneDefinitions,
   dashedSegments,
   emptyMeshGeometry,
   expandRangeToAspect,
+  floorMeshGeometry,
   lineMeshGeometry,
   meshColor,
   PLANE_GRID_COLUMNS,
@@ -431,20 +431,20 @@ export function CoordinateStack({
   const runtimeRef = useRef<StackRuntime>()
   const camera = useMemo(() => createCoordinateCamera(), [])
   const lights = useMemo(() => [
-    new AmbientLight({ color: [0.92, 0.97, 1], intensity: 0.78 }),
+    new AmbientLight({ color: [0.91, 0.95, 1], intensity: 0.86 }),
     new DirectionalLight({
-      directionToLight: [-0.45, 0.7, 1],
-      color: [1, 0.96, 0.88],
-      intensity: 0.34,
+      directionToLight: [-0.55, 0.82, 0.7],
+      color: [1, 0.94, 0.84],
+      intensity: 0.42,
       shadow: {
-        target: [0, 0, -5.3],
-        distance: 7,
-        width: 9,
-        height: 6,
+        target: [0, -0.6, -6],
+        distance: 9,
+        width: 13,
+        height: 8,
         near: 0.1,
-        far: 16,
+        far: 22,
         mapSize: 1024,
-        bias: 0.0015,
+        bias: 0.0012,
       },
     }),
   ], [])
@@ -584,8 +584,8 @@ export function CoordinateStack({
     const planeNames: PlaneName[] = ["client", "view", "content"]
     const planes = {} as Record<PlaneName, PlaneRuntime>
     const meshes: Mesh[] = [new Mesh({
-      geometry: backdropMeshGeometry(canvasArea.width, canvasArea.height),
-      material: new LambertMaterial({ color: [0.96, 0.975, 0.965, 1] }),
+      geometry: floorMeshGeometry(),
+      material: new LambertMaterial({ color: [0.99, 0.995, 0.99, 1] }),
       receiveShadow: true,
     })]
     const overlays: Array<Circle | Line | StayText> = []

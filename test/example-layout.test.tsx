@@ -147,6 +147,21 @@ describe("Example Canvas workspace", () => {
       .toBeLessThanOrEqual(canvasHeight + Number.EPSILON)
   })
 
+  it("stages the three coordinate planes as a descending overlapping depth sequence", () => {
+    const definitions = createPlaneDefinitions(1012, 524)
+    const bounds = (["client", "view", "content"] as const).map((name) => {
+      const placement = definitions[name].placement
+      expect(placement.type).toBe("projective")
+      if (placement.type !== "projective") throw new Error("expected projective plane")
+      return createFiniteProjectiveMapping(placement.matrix, placement.domain).contentBounds
+    })
+
+    expect(bounds[0].y).toBeLessThan(bounds[1].y)
+    expect(bounds[1].y).toBeLessThan(bounds[2].y)
+    expect(bounds[0].x + bounds[0].width).toBeGreaterThan(bounds[1].x)
+    expect(bounds[1].x + bounds[1].width).toBeGreaterThan(bounds[2].x)
+  })
+
   it("defines a bounded Content scene and connects all corresponding plane corners", () => {
     const fittedRange = expandRangeToAspect({ x: 100, y: 40, width: 300, height: 300 }, 4 / 3)
     expect(fittedRange.width / fittedRange.height).toBeCloseTo(4 / 3)

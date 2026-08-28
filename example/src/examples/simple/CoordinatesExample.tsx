@@ -50,19 +50,8 @@ const CSS_SCALE_MAX = 1
 const CSS_OFFSET_MAX = 96
 const VIEWPORT_MIN_SCALE = 0.4
 
-function ViewportIcon({ name }: { name: "zoom-in" | "zoom-out" | "pan" | "reset" }) {
-  if (name === "pan") {
-    return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8.5 11V6.7a1.45 1.45 0 0 1 2.9 0V10 5.2a1.45 1.45 0 0 1 2.9 0V10 6.2a1.45 1.45 0 0 1 2.9 0v5.3l.9-1.1a1.55 1.55 0 0 1 2.35-.08 1.6 1.6 0 0 1 .08 2.06l-3.4 4.65A6.2 6.2 0 0 1 12.1 19.6H11a6.1 6.1 0 0 1-5.4-3.25L3.7 12.8a1.5 1.5 0 0 1 2.55-1.56L8.5 14" /></svg>
-  }
-  if (name === "reset") {
-    return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5" /></svg>
-  }
-  const isZoomIn = name === "zoom-in"
-  return <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.2 15.2 5 5M7.5 10.5h6" />{isZoomIn && <path d="M10.5 7.5v6" />}</svg>
-}
-
-function ConsoleLabel({ index, children }: { index: number; children: string }) {
-  return <span className="coordinate-console-label"><b>{index}</b>{children}</span>
+function ConsoleLabel({ children }: { children: string }) {
+  return <span className="coordinate-console-label">{children}</span>
 }
 
 const INITIAL_PROBE: CoordinateProbe = {
@@ -454,18 +443,23 @@ export default function CoordinatesExample() {
       </section>
 
       <footer className="coordinate-console">
-        <div className="coordinate-console-intro">
-          <ConsoleLabel index={1}>Live signal</ConsoleLabel>
-          <div className="coordinate-signal-card">
-            <strong>{mappingFocus === "view-client" ? "VIEW → CLIENT" : "CONTENT → VIEW"}</strong>
-          </div>
-          <small className="coordinate-sync-status">{text("Synchronized", "同步正常")}</small>
-        </div>
-
         <div className="coordinate-flow" aria-label={text("Coordinate conversion flow", "坐标转换流程")}>
-          <p><ConsoleLabel index={2}>Coordinates</ConsoleLabel></p>
-          <div className="coordinate-flow-value coordinate-flow-client">
-            <span>Client</span><strong>{formatPoint(probe.client)}</strong><small>{text("Browser window", "浏览器窗口")}</small>
+          <div className="coordinate-flow-heading">
+            <ConsoleLabel>Coordinates</ConsoleLabel>
+            <small className="coordinate-sync-status">{text("Synchronized", "同步正常")}</small>
+          </div>
+          <div className="coordinate-flow-values">
+            <div className="coordinate-flow-value coordinate-flow-client">
+              <span>Client</span><strong>{formatPoint(probe.client)}</strong><small>{text("Browser", "浏览器")}</small>
+            </div>
+            <span className="coordinate-flow-arrow" aria-hidden="true">→</span>
+            <div className="coordinate-flow-value coordinate-flow-view">
+              <span>View</span><strong>{formatPoint(probe.view)}</strong><small>Canvas</small>
+            </div>
+            <span className="coordinate-flow-arrow" aria-hidden="true">→</span>
+            <div className="coordinate-flow-value coordinate-flow-result">
+              <span>Content</span><strong>{formatPoint(probe.content)}</strong><small>{text("Scene result", "场景结果")}</small>
+            </div>
           </div>
           <div className="coordinate-flow-operation">
             <span>{text(
@@ -474,23 +468,20 @@ export default function CoordinatesExample() {
             )}</span>
             <code>[({formatPoint(probe.client)}) - ({Math.round(probe.surface.left)}, {Math.round(probe.surface.top)})] × {scaleFactors(probe.surface)}</code>
           </div>
-          <div className="coordinate-flow-value coordinate-flow-view">
-            <span>View</span><strong>{formatPoint(probe.view)}</strong><small>{text("Logical Canvas", "逻辑 Canvas")}</small>
-          </div>
           <div className="coordinate-flow-operation">
             <span>{text("Undo viewport offset and scale", "撤销 viewport 平移与缩放")}</span>
             <code>[({formatPoint(probe.view)}) - ({Math.round(viewport.x)}, {Math.round(viewport.y)})] ÷ {viewport.scale.toFixed(2)}</code>
           </div>
-          <div className="coordinate-flow-value coordinate-flow-result">
-            <span>Content</span><strong>{formatPoint(probe.content)}</strong><small>{text("Scene result", "场景结果")}</small>
-          </div>
-          <p className="coordinate-event-sample">e.point: <code>{formatPoint(eventPoint)}</code></p>
+          <p className="coordinate-event-sample">
+            <span>{mappingFocus === "view-client" ? "VIEW → CLIENT" : "CONTENT → VIEW"}</span>
+            e.point <code>{formatPoint(eventPoint)}</code>
+          </p>
         </div>
 
         <div className="coordinate-operations">
           <section className="coordinate-operation-group">
             <div className="coordinate-operation-heading">
-              <strong><ConsoleLabel index={3}>CSS display</ConsoleLabel></strong>
+              <strong><ConsoleLabel>CSS display</ConsoleLabel></strong>
               <code>translate({cssDisplay.offsetX}, {cssDisplay.offsetY}) scale({cssDisplay.scaleX.toFixed(2)}, {cssDisplay.scaleY.toFixed(2)})</code>
             </div>
             <label className="coordinate-scale-control">
@@ -552,14 +543,14 @@ export default function CoordinatesExample() {
           </section>
           <section className="coordinate-operation-group">
             <div className="coordinate-operation-heading">
-              <strong><ConsoleLabel index={4}>Viewport</ConsoleLabel></strong>
+              <strong><ConsoleLabel>Viewport</ConsoleLabel></strong>
               <code>translate({Math.round(viewport.x)}, {Math.round(viewport.y)}) scale({viewport.scale.toFixed(2)})</code>
             </div>
             <Toolbar>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}><ViewportIcon name="zoom-in" />zoom in</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}><ViewportIcon name="zoom-out" />zoom out</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}><ViewportIcon name="pan" />pan</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.restore(homeViewportRef.current))}><ViewportIcon name="reset" />reset</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}>zoom in</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}>zoom out</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}>pan</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.restore(homeViewportRef.current))}>reset</Button>
             </Toolbar>
             <button
               aria-controls="coordinate-evidence"

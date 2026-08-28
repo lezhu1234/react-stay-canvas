@@ -189,6 +189,56 @@ describe("StayCanvas layers", () => {
     })
   })
 
+  it("sizes every backing store before resolving any layer context", () => {
+    const container = createContainer()
+    const observedSizes: Array<Array<{ width: number; height: number }>> = []
+    const setters = Array.from({ length: 3 }, () =>
+      vi.fn<ContextLayerSetFunction>((canvas) => {
+        observedSizes.push([...container.querySelectorAll("canvas")].map((layer) => ({
+          width: layer.width,
+          height: layer.height,
+        })))
+        const context = canvas.getContext("2d")
+        if (context) context.imageSmoothingEnabled = false
+        return context
+      })
+    )
+
+    act(() => {
+      root?.render(
+        <StayCanvas
+          width={240}
+          height={160}
+          layers={setters}
+          focusOnInit={false}
+        />
+      )
+    })
+    act(() => {
+      root?.render(
+        <StayCanvas
+          width={360}
+          height={220}
+          layers={setters}
+          focusOnInit={false}
+        />
+      )
+    })
+
+    const dpr = window.devicePixelRatio || 1
+    const repeatedLayerSizes = (width: number, height: number) =>
+      Array.from({ length: 3 }, () =>
+        Array.from({ length: 3 }, () => ({ width, height })))
+    expect(observedSizes).toEqual([
+      ...repeatedLayerSizes(240 * dpr, 160 * dpr),
+      ...repeatedLayerSizes(360 * dpr, 220 * dpr),
+    ])
+    const canvases = [...container.querySelectorAll("canvas")]
+    canvases.forEach((canvas) => {
+      expect(canvas.getContext("2d")!.imageSmoothingEnabled).toBe(false)
+    })
+  })
+
   it("cancels an active pointer session in its pre-resize DOM coordinate frame", () => {
     const container = createContainer()
     const terminal = vi.fn()

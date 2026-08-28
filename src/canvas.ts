@@ -2,21 +2,10 @@ import type { ContextLayerSetFunction, DrawCanvasContext } from "./types/canvas"
 import type { ViewPoint } from "./types/coordinates"
 import type { Rect } from "./types/geometry"
 import type { SurfaceMetrics } from "./stay/coordinates/coordinateSystem"
-
-function sizeBackingStore(
-  canvas: HTMLCanvasElement,
-  width: number,
-  height: number
-) {
-  const dpr = window.devicePixelRatio || 1
-
-  canvas.width = Math.round(width * dpr)
-  canvas.height = Math.round(height * dpr)
-
-  // Set the "drawn" size of the canvas
-  canvas.style.width = `${width}px`
-  canvas.style.height = `${height}px`
-}
+import {
+  Canvas2DLayerRuntime,
+  clearUnownedCanvas2DContext,
+} from "./stay/rendering/canvas2DLayerRuntime"
 
 export class Canvas {
   contexts: DrawCanvasContext[]
@@ -25,7 +14,7 @@ export class Canvas {
   status: string
   width: number
   bound: Rect
-  private readonly contextLayerSetFunctionList: ContextLayerSetFunction[]
+  private readonly layerRuntimes: Canvas2DLayerRuntime[]
 
   constructor(
     layers: HTMLCanvasElement[],
@@ -37,7 +26,12 @@ export class Canvas {
       throw new Error("Canvas must have at least one layer")
     }
     this.layers = layers
-    this.contextLayerSetFunctionList = [...contextLayerSetFunctionList]
+    this.layerRuntimes = layers.map((layer, index) =>
+      new Canvas2DLayerRuntime(
+        layer,
+        contextLayerSetFunctionList[index],
+        index
+      ))
     this.width = width
     this.height = height
     this.status = "default"
@@ -71,14 +65,12 @@ export class Canvas {
   }
 
   public clear(context: DrawCanvasContext) {
-    const layer = this.layers[this.contexts.indexOf(context)]
-    context.save()
-    try {
-      context.setTransform(1, 0, 0, 1, 0, 0)
-      context.clearRect(0, 0, layer?.width ?? this.width, layer?.height ?? this.height)
-    } finally {
-      context.restore()
+    const layerRuntime = this.layerRuntimes[this.contexts.indexOf(context)]
+    if (layerRuntime) {
+      layerRuntime.clear(context)
+      return
     }
+    clearUnownedCanvas2DContext(context, this.width, this.height)
   }
 
   getSurfaceMetrics(): SurfaceMetrics {
@@ -103,27 +95,13 @@ export class Canvas {
     transform: { offsetX: number; offsetY: number; scale: number },
     draw: (context: DrawCanvasContext) => void
   ) {
-    const layer = this.layers[layerIndex]
-    const context = this.contexts[layerIndex]
-    const backingScaleX = layer.width / this.width
-    const backingScaleY = layer.height / this.height
-
-    context.save()
-    try {
-      context.setTransform(1, 0, 0, 1, 0, 0)
-      context.clearRect(0, 0, layer.width, layer.height)
-      context.setTransform(
-        backingScaleX * transform.scale,
-        0,
-        0,
-        backingScaleY * transform.scale,
-        backingScaleX * transform.offsetX,
-        backingScaleY * transform.offsetY
-      )
-      draw(context)
-    } finally {
-      context.restore()
-    }
+    this.layerRuntimes[layerIndex].withFrame(
+      this.contexts[layerIndex],
+      this.width,
+      this.height,
+      transform,
+      draw
+    )
   }
 
   init() {
@@ -135,20 +113,12 @@ export class Canvas {
     this.height = height
     this.bound = { x: 0, y: 0, width, height }
 
-    this.layers.forEach((layer) => {
-      sizeBackingStore(layer, width, height)
-    })
+    this.layerRuntimes.forEach((layer) => layer.resizeBackingStore(width, height))
 
     // Changing a Canvas backing-store size resets its context state. Resolve
     // every configured context again after sizing so custom setters can
     // restore the state they own without recreating the Stay runtime.
-    this.contexts = this.layers.map((layer, i) => {
-      const context = this.contextLayerSetFunctionList[i](layer)
-      if (!context) {
-        throw new Error(`Unable to get drawing context for layer ${i}`)
-      }
-      return context
-    })
+    this.contexts = this.layerRuntimes.map((layer) => layer.resolveContext())
   }
 }
 

@@ -305,21 +305,8 @@ vec3 environment_radiance(vec3 direction, float roughness) {
 }
 `
 
-const STANDARD_FRAGMENT_SHADER = `#version 300 es
-precision highp float;
-#define MAX_DIRECTIONAL_LIGHTS ${webGL2DirectionalLightLimit}
+const MICROFACET_FRAGMENT_INPUTS = `
 const float PI = 3.14159265359;
-uniform vec4 u_color;
-uniform float u_metallic;
-uniform float u_roughness;
-uniform vec3 u_ambient_light;
-uniform int u_directional_light_count;
-uniform vec3 u_direction_to_lights[MAX_DIRECTIONAL_LIGHTS];
-uniform vec3 u_directional_light_colors[MAX_DIRECTIONAL_LIGHTS];
-in vec3 world_normal;
-out vec4 output_color;
-${SHADOW_FRAGMENT_INPUTS}
-${ENVIRONMENT_FRAGMENT_INPUTS}
 
 vec3 fresnel_schlick(float cosine, vec3 reflectance) {
   return reflectance + (1.0 - reflectance) * pow(1.0 - cosine, 5.0);
@@ -338,6 +325,23 @@ float geometry_schlick_ggx(float normal_direction, float roughness) {
   float k = remapped * remapped / 8.0;
   return normal_direction / max(normal_direction * (1.0 - k) + k, 0.000001);
 }
+`
+
+const STANDARD_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+#define MAX_DIRECTIONAL_LIGHTS ${webGL2DirectionalLightLimit}
+uniform vec4 u_color;
+uniform float u_metallic;
+uniform float u_roughness;
+uniform vec3 u_ambient_light;
+uniform int u_directional_light_count;
+uniform vec3 u_direction_to_lights[MAX_DIRECTIONAL_LIGHTS];
+uniform vec3 u_directional_light_colors[MAX_DIRECTIONAL_LIGHTS];
+in vec3 world_normal;
+out vec4 output_color;
+${SHADOW_FRAGMENT_INPUTS}
+${ENVIRONMENT_FRAGMENT_INPUTS}
+${MICROFACET_FRAGMENT_INPUTS}
 
 void main() {
   vec3 normal = normalize(world_normal);
@@ -407,32 +411,84 @@ out vec4 output_color;
 ${SHADOW_FRAGMENT_INPUTS}
 ${ENVIRONMENT_FRAGMENT_INPUTS}
 ${VOLUME_ATTENUATION_GLSL}
+${MICROFACET_FRAGMENT_INPUTS}
+
+vec2 projected_uv(vec4 clip_position) {
+  return clip_position.xy / clip_position.w * 0.5 + 0.5;
+}
+
+vec2 refracted_scene_uv(
+  vec3 view_position,
+  vec3 view_normal,
+  vec3 incident,
+  vec2 texture_size
+) {
+  vec2 current_uv = gl_FragCoord.xy / texture_size;
+  if (u_thickness <= 0.0) return current_uv;
+  vec3 refracted_direction = refract(incident, view_normal, 1.0 / u_ior);
+  vec4 incident_clip = u_projection
+    * vec4(view_position + incident * u_thickness, 1.0);
+  vec4 refracted_clip = u_projection
+    * vec4(view_position + refracted_direction * u_thickness, 1.0);
+  if (incident_clip.w <= 0.00001 || refracted_clip.w <= 0.00001) {
+    return current_uv;
+  }
+  vec2 candidate_uv = current_uv
+    + projected_uv(refracted_clip)
+    - projected_uv(incident_clip);
+  vec2 half_texel = 0.5 / texture_size;
+  bool candidate_is_valid = all(greaterThanEqual(candidate_uv, half_texel))
+    && all(lessThanEqual(candidate_uv, vec2(1.0) - half_texel));
+  if (candidate_is_valid) {
+    return candidate_uv;
+  }
+  return current_uv;
+}
 
 void main() {
   vec3 normal = normalize(world_normal);
   if (!gl_FrontFacing) normal = -normal;
+  vec3 view_direction = normalize(u_camera_position - world_position);
+  float normal_view = max(dot(normal, view_direction), 0.0);
+  float f0 = pow((u_ior - 1.0) / (u_ior + 1.0), 2.0);
+  float fresnel = fresnel_schlick(normal_view, vec3(f0)).r;
   vec3 illumination = u_ambient_light;
+  vec3 direct_specular = vec3(0.0);
   for (int index = 0; index < MAX_DIRECTIONAL_LIGHTS; index++) {
     if (index >= u_directional_light_count) break;
-    float diffuse = max(dot(normal, u_direction_to_lights[index]), 0.0);
+    vec3 light_direction = u_direction_to_lights[index];
+    float diffuse = max(dot(normal, light_direction), 0.0);
     vec3 transmittance = index == u_shadow_light_index
       ? shadow_transmittance()
       : vec3(1.0);
     illumination += u_directional_light_colors[index] * diffuse * transmittance;
+    if (diffuse <= 0.0) continue;
+    vec3 half_direction = normalize(view_direction + light_direction);
+    vec3 light_fresnel = fresnel_schlick(
+      max(dot(half_direction, view_direction), 0.0),
+      vec3(f0)
+    );
+    float distribution = distribution_ggx(normal, half_direction, u_roughness);
+    float geometry = geometry_schlick_ggx(normal_view, u_roughness)
+      * geometry_schlick_ggx(diffuse, u_roughness);
+    direct_specular += u_directional_light_colors[index]
+      * transmittance
+      * diffuse
+      * distribution
+      * geometry
+      * light_fresnel
+      / max(4.0 * normal_view * diffuse, 0.000001);
   }
-  vec3 view_direction = normalize(u_camera_position - world_position);
-  float cosine = abs(dot(normal, view_direction));
-  float f0 = pow((u_ior - 1.0) / (u_ior + 1.0), 2.0);
-  float fresnel = f0 + (1.0 - f0) * pow(1.0 - cosine, 5.0);
   vec3 view_position = (u_view * vec4(world_position, 1.0)).xyz;
   vec3 view_normal = normalize(mat3(u_view) * normal);
   vec3 incident = normalize(view_position);
-  vec3 refracted_direction = refract(incident, view_normal, 1.0 / u_ior);
-  vec3 refracted_position = view_position + refracted_direction * u_thickness;
-  vec4 refracted_clip = u_projection * vec4(refracted_position, 1.0);
-  vec2 refracted_uv = refracted_clip.xy / refracted_clip.w * 0.5 + 0.5;
-  vec2 half_texel = 0.5 / vec2(textureSize(u_scene_color, 0));
-  refracted_uv = clamp(refracted_uv, half_texel, vec2(1.0) - half_texel);
+  vec2 scene_texture_size = vec2(textureSize(u_scene_color, 0));
+  vec2 refracted_uv = refracted_scene_uv(
+    view_position,
+    view_normal,
+    incident,
+    scene_texture_size
+  );
   vec4 scene_color = textureLod(
     u_scene_color,
     refracted_uv,
@@ -457,12 +513,14 @@ void main() {
   if (u_has_environment) {
     float alpha = u_color.a + (1.0 - u_color.a) * fresnel;
     vec3 premultiplied_color = surface_color * (alpha - fresnel)
-      + reflection_color * fresnel;
-    output_color = vec4(premultiplied_color, alpha);
+      + reflection_color * fresnel
+      + direct_specular;
+    output_color = vec4(min(premultiplied_color, vec3(alpha)), alpha);
   } else {
     surface_color = mix(surface_color, vec3(1.0), fresnel * 0.42);
     float alpha = u_color.a + (1.0 - u_color.a) * fresnel * 0.34;
-    output_color = vec4(surface_color * alpha, alpha);
+    vec3 premultiplied_color = surface_color * alpha + direct_specular;
+    output_color = vec4(min(premultiplied_color, vec3(alpha)), alpha);
   }
 }
 `

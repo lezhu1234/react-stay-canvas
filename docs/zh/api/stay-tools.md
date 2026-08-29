@@ -67,7 +67,7 @@ mesh.setMaterial(glass)
 
 Material 与 Light 的 RGB 值按 sRGB 显示颜色传入。renderer 会在着色前把所有材质和灯光颜色转换到线性空间，把 opaque 与预乘 alpha 的 Glass 结果写入同一个线性 scene target，只在最终输出 pass 把完整画面编码为 sRGB。alpha 仍是线性覆盖率；`GlassMaterial.attenuationColor` 表示物理透射比例，因此也保持在线性空间。
 
-`GlassMaterial` 的 alpha 必须严格位于 `0` 与 `1` 之间，`ior` 必须大于 `1`（默认 `1.5`），`roughness` 位于 `0` 到 `1`（默认 `0`），`thickness` 是非负的 world-space 距离（默认 `0.1`）。renderer 会用这些值计算带光照的 Fresnel 边缘，以及对本图层 opaque WebGL2 scene color 的屏幕空间折射。roughness 会选择逐级过滤后的 scene-color 和 environment mip：零表示清晰，一表示使用可用的最宽模糊。厚度为零时仍保留透射和 Fresnel，只是不偏移屏幕采样位置。
+`GlassMaterial` 的 alpha 必须严格位于 `0` 与 `1` 之间，`ior` 必须大于 `1`（默认 `1.5`），`roughness` 位于 `0` 到 `1`（默认 `0`），`thickness` 是非负的 world-space 距离（默认 `0.1`）。renderer 会用这些值计算 Fresnel 响应与方向光镜面高光，以及对本图层 opaque WebGL2 scene color 的屏幕空间折射。折射位移取折射路径与未折射路径的投影差；若该路径越出 scene-color target，则退回未偏移采样。roughness 会选择逐级过滤后的 scene-color 和 environment mip：零表示清晰，一表示使用可用的最宽模糊。厚度为零时仍保留透射和 Fresnel，只是不偏移屏幕采样位置。
 
 体积吸收遵循 Beer-Lambert 透射模型。`attenuationColor` 表示光线在介质内经过 `attenuationDistance` 个 world unit 后剩余的 RGB 颜色，因此每个通道的透射率为 `attenuationColor ** (thickness / attenuationDistance)`。attenuation color 默认白色；不传 `attenuationDistance` 表示无限距离，即不发生吸收。显式距离必须为正的有限数，颜色通道必须是 `0` 到 `1` 的有限数。`color` 仍描述玻璃边界的 tint，attenuation 则描述体积内部的损耗。当前材质直接把 `thickness` 当作完整传播距离，不会根据 Mesh 几何或厚度纹理推导路径长度。
 

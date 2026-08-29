@@ -373,6 +373,13 @@ describe("internal WebGL2 scene runtime", () => {
 
     expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
       String(source).includes("refract(incident, view_normal, 1.0 / u_ior)")
+      && String(source).includes("current_uv = gl_FragCoord.xy / texture_size")
+      && String(source).includes("if (u_thickness <= 0.0) return current_uv")
+      && String(source).includes("projected_uv(refracted_clip)")
+      && String(source).includes("- projected_uv(incident_clip)")
+      && String(source).includes("candidate_is_valid = all(greaterThanEqual")
+      && String(source).includes("if (candidate_is_valid)")
+      && String(source).includes("return current_uv")
       && String(source).includes("volume_attenuation(")
       && String(source).includes("uniform float u_log_attenuation_exponent")
       && String(source).includes("if (color <= 0.0) return 0.0")
@@ -581,12 +588,20 @@ describe("internal WebGL2 scene runtime", () => {
       material: new GlassMaterial({ roughness: 0.35 }),
     })
 
-    runtime.render([glass], camera(), [new AmbientLight()], environment)
-    runtime.render([glass], camera(), [new AmbientLight()], environment)
+    const directionalLight = new DirectionalLight({
+      color: [0.8, 0.9, 1],
+      directionToLight: [0, 0, 1],
+      intensity: 1.4,
+    })
+    runtime.render([glass], camera(), [new AmbientLight(), directionalLight], environment)
+    runtime.render([glass], camera(), [new AmbientLight(), directionalLight], environment)
 
     expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
       String(source).includes("environment_radiance(reflected_direction, u_roughness)")
       && String(source).includes("reflect(-view_direction, normal)")
+      && String(source).includes("direct_specular += u_directional_light_colors[index]")
+      && String(source).includes("distribution_ggx(normal, half_direction, u_roughness)")
+      && String(source).includes("min(premultiplied_color, vec3(alpha))")
       && String(source).includes("scene_color.rgb / scene_color.a")
       && String(source).includes("surface_color * (alpha - fresnel)")
       && String(source).includes("reflection_color * fresnel")))

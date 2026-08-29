@@ -71,9 +71,9 @@ const PLANE_GLASS_ATTENUATION: Readonly<Record<PlaneName, {
   color: GlassAttenuationColor
   distance: number
 }>> = {
-  client: { color: [0.56, 0.92, 1], distance: 0.4 },
-  view: { color: [0.34, 0.58, 1], distance: 0.32 },
-  content: { color: [0.32, 1, 0.55], distance: 0.3 },
+  client: { color: [0.18, 0.74, 1], distance: 0.4 },
+  view: { color: [0.07, 0.27, 1], distance: 0.32 },
+  content: { color: [0.06, 1, 0.25], distance: 0.3 },
 }
 
 const unlitMaterial = (color: ReturnType<typeof rgba>) =>
@@ -123,7 +123,7 @@ function createCoordinateEnvironment() {
       data[offset + 3] = 255
     }
   }
-  return new EnvironmentMap({ width, height, data, intensity: 1.55 })
+  return new EnvironmentMap({ width, height, data, intensity: 1.65 })
 }
 
 export type CoordinateMappingFocus = "view-client" | "content-view"
@@ -338,8 +338,8 @@ function createPlaneRuntime(
     geometry: lineMeshGeometry(plane, basis, [
       { x1: 0, y1: 0, x2: plane.width, y2: 0 },
       { x1: plane.width, y1: 0, x2: plane.width, y2: plane.height },
-    ], 1.45, PANEL_FACE_OFFSET + 0.007),
-    material: unlitMaterial(rgba(185, 220, 232, 0.58)),
+    ], 1.65, PANEL_FACE_OFFSET + 0.007),
+    material: unlitMaterial(rgba(205, 233, 242, 0.78)),
   })
   const grid = new Mesh({
     geometry: lineMeshGeometry(plane, basis, gridSegments(plane), 0.8, PANEL_FACE_OFFSET + 0.006),
@@ -534,11 +534,11 @@ export function CoordinateStack({
   const camera = useMemo(() => createCoordinateCamera(), [])
   const environment = useMemo(() => createCoordinateEnvironment(), [])
   const lights = useMemo(() => [
-    new AmbientLight({ color: [0.86, 0.9, 0.91], intensity: 0.16 }),
+    new AmbientLight({ color: [0.86, 0.9, 0.91], intensity: 0.14 }),
     new DirectionalLight({
       directionToLight: [0.72, 0.96, 0.5],
-      color: [1, 0.92, 0.8],
-      intensity: 1.35,
+      color: [1, 0.96, 0.9],
+      intensity: 1.9,
       shadow: {
         target: [0, -0.4, -7.2],
         distance: 11,
@@ -553,8 +553,8 @@ export function CoordinateStack({
     }),
     new DirectionalLight({
       directionToLight: [-0.62, 0.2, 0.76],
-      color: [0.57, 0.72, 1],
-      intensity: 0.2,
+      color: [0.78, 0.86, 1],
+      intensity: 0.16,
     }),
   ], [])
   const layers = useMemo<CanvasLayerConfig[]>(() => [
@@ -693,9 +693,9 @@ export function CoordinateStack({
     const meshes: Mesh[] = [new Mesh({
       geometry: floorMeshGeometry(),
       material: new StandardMaterial({
-        color: [0.62, 0.6, 0.56, 1],
+        color: [0.68, 0.65, 0.59, 1],
         metallic: 0,
-        roughness: 0.52,
+        roughness: 0.5,
       }),
       receiveShadow: true,
     })]

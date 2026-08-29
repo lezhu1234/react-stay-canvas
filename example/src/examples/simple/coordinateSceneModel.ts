@@ -49,15 +49,15 @@ export type PlaneBasis = {
 
 export const planePalette = {
   client: {
-    fill: rgba(90, 190, 236, 0.12),
+    fill: rgba(90, 190, 236, 0.18),
     stroke: rgba(77, 178, 224, 0.9),
   },
   view: {
-    fill: rgba(72, 114, 235, 0.13),
+    fill: rgba(72, 114, 235, 0.19),
     stroke: rgba(67, 112, 230, 0.92),
   },
   content: {
-    fill: rgba(51, 180, 121, 0.12),
+    fill: rgba(51, 180, 121, 0.18),
     stroke: rgba(45, 151, 108, 0.92),
   },
 } as const

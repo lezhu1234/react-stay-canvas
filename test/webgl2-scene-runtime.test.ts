@@ -18,6 +18,10 @@ import { EnvironmentMap } from "../src/stay/webgl2/environmentMap"
 import { PerspectiveCamera } from "../src/stay/webgl2/perspectiveCamera"
 import { WebGL2SceneRuntime } from "../src/stay/webgl2/sceneRuntime"
 import {
+  linearizeSrgbColorWithAlpha,
+  srgbChannelToLinear,
+} from "../src/stay/webgl2/colorSpace"
+import {
   createRecordingWebGL2Context,
   createRecordingWebGLContext,
 } from "./helpers/webgl"
@@ -53,6 +57,85 @@ const environmentImage = (value = 160) => ({
 })
 
 describe("internal WebGL2 scene runtime", () => {
+  it("converts sRGB authoring values to linear shader inputs", () => {
+    expect(srgbChannelToLinear(0)).toBe(0)
+    expect(srgbChannelToLinear(1)).toBe(1)
+    expect(srgbChannelToLinear(0.04045)).toBeCloseTo(0.0031308, 7)
+    expect(srgbChannelToLinear(0.5)).toBeCloseTo(0.21404114, 7)
+  })
+
+  it("resolves a persistent multisampled linear target through one output pass", () => {
+    const canvas = document.createElement("canvas")
+    canvas.width = 240
+    canvas.height = 160
+    const gl = createRecordingWebGL2Context(canvas, {
+      samples: 4,
+      supportedSamples: [8, 4, 2],
+    })
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const mesh = new Mesh({ geometry: triangle(), material: unlit([0.5, 0.25, 1, 1]) })
+
+    runtime.render([mesh], camera())
+    runtime.render([mesh], camera())
+
+    expect(gl.spies.renderbufferStorageMultisample).toHaveBeenCalledTimes(2)
+    expect(gl.spies.renderbufferStorageMultisample.mock.calls.every(([, samples]) =>
+      samples === 4)).toBe(true)
+    expect(gl.spies.renderbufferStorage).not.toHaveBeenCalled()
+    expect(gl.spies.createRenderbuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.blitFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.generateMipmap).not.toHaveBeenCalled()
+    expect(gl.spies.texParameteri).toHaveBeenCalledWith(
+      gl.spies.TEXTURE_2D,
+      gl.spies.TEXTURE_MIN_FILTER,
+      gl.spies.LINEAR,
+    )
+    expect(gl.spies.drawArrays).toHaveBeenCalledTimes(2)
+    expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
+      String(source).includes(
+        "clamp(linear_to_srgb(linear_output), 0.0, 1.0)",
+      )
+      && String(source).includes("scene_color.rgb / scene_color.a")
+      && String(source).includes("u_premultiplied_alpha")))
+      .toBe(true)
+    expect(gl.spies.uniform4fv).toHaveBeenCalledWith(
+      expect.anything(),
+      linearizeSrgbColorWithAlpha([0.5, 0.25, 1, 1]),
+    )
+    runtime.dispose()
+  })
+
+  it("preserves covered linear RGB for an opaque drawing buffer", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas, {
+      contextAttributes: { alpha: false, premultipliedAlpha: false },
+    })
+    const runtime = new WebGL2SceneRuntime(gl.context)
+
+    runtime.render([new Mesh({ geometry: triangle() })], camera())
+
+    expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
+      String(source).includes(
+        "u_has_alpha ? straight_linear : scene_color.rgb",
+      )))
+      .toBe(true)
+    expect(gl.spies.uniform1i.mock.calls).toContainEqual([expect.anything(), 0])
+    runtime.dispose()
+  })
+
+  it("falls back to single-sample scene renderbuffers", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas, { samples: 0 })
+    const runtime = new WebGL2SceneRuntime(gl.context)
+
+    runtime.render([new Mesh({ geometry: triangle() })], camera())
+
+    expect(gl.spies.renderbufferStorageMultisample).not.toHaveBeenCalled()
+    expect(gl.spies.renderbufferStorage).toHaveBeenCalledTimes(2)
+    runtime.dispose()
+  })
+
   it("rejects a WebGL1 context instead of falling back", () => {
     const canvas = document.createElement("canvas")
     const gl = createRecordingWebGLContext(canvas)
@@ -102,15 +185,15 @@ describe("internal WebGL2 scene runtime", () => {
     mesh.setMaterial(unlit([0, 0.8, 0.2, 1]))
     runtime.render([mesh], camera())
 
-    expect(gl.spies.createProgram).toHaveBeenCalledOnce()
-    expect(gl.spies.createVertexArray).toHaveBeenCalledOnce()
+    expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(2)
     expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.bufferData).toHaveBeenCalledTimes(3)
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(2)
 
     mesh.setGeometry(triangle(-0.25))
     runtime.render([mesh], camera())
-    expect(gl.spies.createVertexArray).toHaveBeenCalledOnce()
+    expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(2)
     expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.bufferData).toHaveBeenCalledTimes(6)
 
@@ -118,7 +201,7 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.deleteBuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.deleteVertexArray).toHaveBeenCalledOnce()
     runtime.dispose()
-    expect(gl.spies.deleteProgram).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteProgram).toHaveBeenCalledTimes(2)
   })
 
   it("does not invalidate or upload equal CPU state", () => {
@@ -167,6 +250,7 @@ describe("internal WebGL2 scene runtime", () => {
     const mesh = new Mesh({ geometry: triangle() })
     gl.spies.getError
       .mockReturnValueOnce(gl.spies.NO_ERROR)
+      .mockReturnValueOnce(gl.spies.NO_ERROR)
       .mockReturnValueOnce(0x0505)
       .mockReturnValue(gl.spies.NO_ERROR)
 
@@ -176,7 +260,7 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.deleteVertexArray).toHaveBeenCalledOnce()
 
     runtime.render([mesh], camera())
-    expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(3)
     expect(gl.spies.createBuffer).toHaveBeenCalledTimes(6)
     expect(gl.spies.bufferData).toHaveBeenCalledTimes(6)
     expect(gl.spies.drawElements).toHaveBeenCalledOnce()
@@ -199,7 +283,7 @@ describe("internal WebGL2 scene runtime", () => {
       .toThrow("Mesh geometry upload")
 
     runtime.render([mesh], camera())
-    expect(gl.spies.createVertexArray).toHaveBeenCalledOnce()
+    expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(2)
     expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.bufferData).toHaveBeenCalledTimes(9)
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(2)
@@ -253,9 +337,9 @@ describe("internal WebGL2 scene runtime", () => {
 
     expect(gl.spies.uniform4fv.mock.calls.map((call) => Array.from(call[1])))
       .toEqual([
-        [0.9, 0.2, 0.1, 1].map(Math.fround),
-        [0.2, 0.4, 0.9, 0.18].map(Math.fround),
-        [0.2, 0.8, 0.4, 0.24].map(Math.fround),
+        Array.from(linearizeSrgbColorWithAlpha([0.9, 0.2, 0.1, 1])),
+        Array.from(linearizeSrgbColorWithAlpha([0.2, 0.4, 0.9, 0.18])),
+        Array.from(linearizeSrgbColorWithAlpha([0.2, 0.8, 0.4, 0.24])),
       ])
     expect(gl.spies.enable).toHaveBeenCalledWith(gl.spies.BLEND)
     expect(gl.spies.blendEquation).toHaveBeenCalledWith(gl.spies.FUNC_ADD)
@@ -297,14 +381,22 @@ describe("internal WebGL2 scene runtime", () => {
       && String(source).includes("u_color.rgb * volume_transmittance")))
       .toBe(true)
     expect(gl.spies.createTexture).toHaveBeenCalledOnce()
-    expect(gl.spies.createFramebuffer).toHaveBeenCalledOnce()
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createRenderbuffer).toHaveBeenCalledTimes(2)
     expect(gl.spies.texImage2D).toHaveBeenCalledOnce()
-    expect(gl.spies.blitFramebuffer).toHaveBeenCalledTimes(2)
-    const sceneFramebuffer = gl.spies.createFramebuffer.mock.results[0].value
+    expect(gl.spies.blitFramebuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.generateMipmap).toHaveBeenCalledTimes(2)
+    expect(gl.spies.texParameteri).toHaveBeenCalledWith(
+      gl.spies.TEXTURE_2D,
+      gl.spies.TEXTURE_MIN_FILTER,
+      gl.spies.LINEAR_MIPMAP_LINEAR,
+    )
+    const drawFramebuffer = gl.spies.createFramebuffer.mock.results[0].value
+    const resolveFramebuffer = gl.spies.createFramebuffer.mock.results[1].value
     expect(gl.spies.bindFramebuffer)
-      .toHaveBeenCalledWith(gl.spies.READ_FRAMEBUFFER, null)
+      .toHaveBeenCalledWith(gl.spies.READ_FRAMEBUFFER, drawFramebuffer)
     expect(gl.spies.bindFramebuffer)
-      .toHaveBeenCalledWith(gl.spies.DRAW_FRAMEBUFFER, sceneFramebuffer)
+      .toHaveBeenCalledWith(gl.spies.DRAW_FRAMEBUFFER, resolveFramebuffer)
     expect(gl.spies.blitFramebuffer).toHaveBeenCalledWith(
       0,
       0,
@@ -338,13 +430,15 @@ describe("internal WebGL2 scene runtime", () => {
     canvas.height = 180
     runtime.render([glass, opaque], camera(), [new AmbientLight()])
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
-    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(4)
     expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
-    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.deleteRenderbuffer).toHaveBeenCalledTimes(2)
 
     runtime.dispose()
     expect(gl.spies.deleteTexture).toHaveBeenCalledTimes(2)
-    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.deleteRenderbuffer).toHaveBeenCalledTimes(4)
   })
 
   it("uploads finite logarithmic attenuation for valid Float32 endpoint ratios", () => {
@@ -388,7 +482,7 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.dispose()
   })
 
-  it("keeps the direct default-framebuffer path when no material uses environment", () => {
+  it("uses one persistent scene target without uploading an unused environment", () => {
     const canvas = document.createElement("canvas")
     const gl = createRecordingWebGL2Context(canvas)
     const runtime = new WebGL2SceneRuntime(gl.context)
@@ -396,9 +490,11 @@ describe("internal WebGL2 scene runtime", () => {
 
     runtime.render([opaque], camera(), [], new EnvironmentMap(environmentImage()))
 
-    expect(gl.spies.createTexture).not.toHaveBeenCalled()
-    expect(gl.spies.createFramebuffer).not.toHaveBeenCalled()
-    expect(gl.spies.blitFramebuffer).not.toHaveBeenCalled()
+    expect(gl.spies.createTexture).toHaveBeenCalledOnce()
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createRenderbuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.blitFramebuffer).toHaveBeenCalledOnce()
+    expect(gl.spies.drawArrays).toHaveBeenCalledOnce()
     runtime.dispose()
   })
 
@@ -424,12 +520,23 @@ describe("internal WebGL2 scene runtime", () => {
       String(source).includes("distribution_ggx")
       && String(source).includes("environment_radiance"))?.[1]
     expect(String(standardSource)).toContain("mix(vec3(0.04), base_color, u_metallic)")
-    expect(gl.spies.createProgram).toHaveBeenCalledOnce()
-    expect(gl.spies.createTexture).toHaveBeenCalledOnce()
-    expect(gl.spies.createFramebuffer).not.toHaveBeenCalled()
-    expect(gl.spies.blitFramebuffer).not.toHaveBeenCalled()
-    expect(gl.spies.texImage2D).toHaveBeenCalledOnce()
+    expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.blitFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.texImage2D).toHaveBeenCalledTimes(2)
     expect(gl.spies.generateMipmap).toHaveBeenCalledOnce()
+    expect(gl.spies.texImage2D).toHaveBeenCalledWith(
+      gl.spies.TEXTURE_2D,
+      0,
+      gl.spies.SRGB8_ALPHA8,
+      4,
+      2,
+      0,
+      gl.spies.RGBA,
+      gl.spies.UNSIGNED_BYTE,
+      expect.any(Uint8Array),
+    )
     expect(gl.spies.uniform3fv.mock.calls.every(([, value]) => value.length > 0))
       .toBe(true)
     expect(gl.spies.uniform1f.mock.calls)
@@ -445,15 +552,15 @@ describe("internal WebGL2 scene runtime", () => {
       roughness: 0.35,
     }))
     runtime.render([mesh], camera(), [new AmbientLight()], environment)
-    expect(gl.spies.createProgram).toHaveBeenCalledOnce()
+    expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
     expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.bufferData).toHaveBeenCalledTimes(3)
-    expect(gl.spies.createTexture).toHaveBeenCalledOnce()
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
 
     environment.setIntensity(0.5)
     runtime.render([mesh], camera(), [new AmbientLight()], environment)
-    expect(gl.spies.createTexture).toHaveBeenCalledOnce()
-    expect(gl.spies.texImage2D).toHaveBeenCalledOnce()
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
+    expect(gl.spies.texImage2D).toHaveBeenCalledTimes(2)
     expect(gl.spies.uniform1f.mock.calls)
       .toContainEqual([expect.anything(), Math.fround(0.5)])
     runtime.dispose()
@@ -485,7 +592,7 @@ describe("internal WebGL2 scene runtime", () => {
       && String(source).includes("reflection_color * fresnel")))
       .toBe(true)
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
-    expect(gl.spies.createFramebuffer).toHaveBeenCalledOnce()
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
     expect(gl.spies.texImage2D).toHaveBeenCalledTimes(2)
     expect(gl.spies.generateMipmap).toHaveBeenCalledTimes(3)
     expect(gl.spies.activeTexture).toHaveBeenCalledWith(gl.spies.TEXTURE2)
@@ -514,24 +621,27 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.restoreContext()
     runtime.render([glass], camera(), [], environment)
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(4)
-    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(4)
     expect(gl.spies.texImage2D).toHaveBeenCalledTimes(5)
 
     runtime.dispose()
     expect(gl.spies.deleteTexture).toHaveBeenCalledTimes(2)
   })
 
-  it("cleans a failed scene-color allocation and retries from CPU state", () => {
+  it("cleans a failed scene-target allocation and retries from CPU state", () => {
     const canvas = document.createElement("canvas")
     const gl = createRecordingWebGL2Context(canvas)
     const runtime = new WebGL2SceneRuntime(gl.context)
     const glass = new Mesh({ geometry: litTriangle(), material: new GlassMaterial() })
-    gl.spies.createFramebuffer.mockReturnValueOnce(null)
+    gl.spies.createFramebuffer
+      .mockReturnValueOnce({ id: 90_001 })
+      .mockReturnValueOnce(null)
 
     expect(() => runtime.render([glass], camera(), [new AmbientLight()]))
-      .toThrow("Unable to create WebGL2 scene-color framebuffer")
-    expect(gl.spies.deleteFramebuffer).not.toHaveBeenCalled()
+      .toThrow("Unable to create WebGL2 scene resolve framebuffer")
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledOnce()
     expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteRenderbuffer).toHaveBeenCalledTimes(2)
 
     runtime.render([glass], camera(), [new AmbientLight()])
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
@@ -573,7 +683,7 @@ describe("internal WebGL2 scene runtime", () => {
       [0, 0, 1, 0.2].map(Math.fround),
       [1, 0, 0, 0.2].map(Math.fround),
     ])
-    expect(gl.spies.createProgram).toHaveBeenCalledOnce()
+    expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
     expect(gl.spies.createBuffer).toHaveBeenCalledTimes(6)
     expect(gl.spies.bufferData).toHaveBeenCalledTimes(6)
     runtime.dispose()
@@ -633,16 +743,16 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.restoreContext()
     runtime.render([mesh], camera(), [new AmbientLight()])
 
-    expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
-    expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createProgram).toHaveBeenCalledTimes(4)
+    expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(4)
     expect(gl.spies.createBuffer).toHaveBeenCalledTimes(6)
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
-    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(4)
     expect(gl.spies.deleteProgram).not.toHaveBeenCalled()
     runtime.dispose()
-    expect(gl.spies.deleteProgram).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteProgram).toHaveBeenCalledTimes(2)
     expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
-    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(2)
     expect(() => runtime.render([mesh], camera())).toThrow("has been disposed")
   })
 
@@ -666,7 +776,7 @@ describe("internal WebGL2 scene runtime", () => {
     key.setIntensity(0.6)
     runtime.render([mesh], camera(), [ambient, key])
 
-    expect(gl.spies.createProgram).toHaveBeenCalledOnce()
+    expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
     expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.bufferData).toHaveBeenCalledTimes(3)
     expect(gl.spies.uniformMatrix3fv).toHaveBeenCalledTimes(2)
@@ -708,8 +818,8 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.render([caster, receiver], camera(), [light])
     runtime.render([caster, receiver], camera(), [light])
 
-    expect(gl.spies.createFramebuffer).toHaveBeenCalledOnce()
-    expect(gl.spies.createTexture).toHaveBeenCalledOnce()
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
     expect(gl.spies.texImage2D).toHaveBeenCalledWith(
       gl.spies.TEXTURE_2D,
       0,
@@ -748,8 +858,8 @@ describe("internal WebGL2 scene runtime", () => {
       .toBe(true)
 
     runtime.dispose()
-    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledOnce()
-    expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.deleteTexture).toHaveBeenCalledTimes(2)
   })
 
   it("casts Glass volume attenuation through a persistent transmissive shadow map", () => {
@@ -780,7 +890,7 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.render([caster, receiver], camera(), [light])
     runtime.render([caster, receiver], camera(), [light])
 
-    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(3)
     expect(gl.spies.texImage2D).toHaveBeenCalledWith(
       gl.spies.TEXTURE_2D,
@@ -804,7 +914,7 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(6)
 
     runtime.dispose()
-    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.deleteTexture).toHaveBeenCalledTimes(3)
   })
 
@@ -834,7 +944,7 @@ describe("internal WebGL2 scene runtime", () => {
 
     runtime.render([opaqueCaster, glassCaster, receiver], camera(), [light])
 
-    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(4)
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(4)
     expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
       String(source).includes("float opaque_visibility")
@@ -847,7 +957,7 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(5)
 
     runtime.dispose()
-    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(4)
     expect(gl.spies.deleteTexture).toHaveBeenCalledTimes(4)
   })
 
@@ -869,7 +979,7 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.render([caster, receiver], camera(), [light])
     light.setShadow({ mapSize: 256, filterRadius: 2 })
     runtime.render([caster, receiver], camera(), [light])
-    expect(gl.spies.createFramebuffer).toHaveBeenCalledOnce()
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.deleteFramebuffer).not.toHaveBeenCalled()
     expect(gl.spies.uniform2f.mock.calls).toContainEqual([
       expect.anything(),
@@ -879,7 +989,7 @@ describe("internal WebGL2 scene runtime", () => {
 
     light.setShadow({ mapSize: 512, filterRadius: 2 })
     runtime.render([caster, receiver], camera(), [light])
-    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(4)
     expect(gl.spies.deleteFramebuffer).toHaveBeenCalledOnce()
     expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
 
@@ -887,8 +997,8 @@ describe("internal WebGL2 scene runtime", () => {
     gl.setLost(false)
     runtime.restoreContext()
     runtime.render([caster, receiver], camera(), [light])
-    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(3)
-    expect(gl.spies.createTexture).toHaveBeenCalledTimes(3)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(7)
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(5)
     runtime.dispose()
   })
 
@@ -918,8 +1028,8 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.colorMask).toHaveBeenLastCalledWith(true, true, true, true)
 
     runtime.render([caster, receiver], camera(), [light])
-    expect(gl.spies.createFramebuffer).toHaveBeenCalledOnce()
-    expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(3)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(4)
     runtime.dispose()
   })
 

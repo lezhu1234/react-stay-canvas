@@ -22,9 +22,17 @@ import {
   type EnvironmentTextureResources,
 } from "./environmentResources"
 import {
-  createSceneColorResources,
-  type SceneColorResources,
-} from "./sceneColorResources"
+  createSceneTargetResources,
+  deleteSceneTargetResources,
+  resolveSceneTarget,
+  type SceneTargetResources,
+} from "./sceneTargetResources"
+import {
+  createOutputPipeline,
+  deleteOutputPipeline,
+  presentScene,
+  type OutputPipelineResources,
+} from "./outputPipeline"
 import {
   createShadowMapResources,
   createShadowPipeline,
@@ -39,6 +47,10 @@ import {
   VOLUME_ATTENUATION_GLSL,
   volumeAttenuationUniforms,
 } from "./volumeAttenuation"
+import {
+  linearizeSrgbColor,
+  linearizeSrgbColorWithAlpha,
+} from "./colorSpace"
 
 interface UnlitPipelineResources {
   readonly kind: "unlit"
@@ -758,7 +770,7 @@ function lightingSnapshot(lights: readonly WebGLLight[]): LightingSnapshot {
   const directions: number[] = []
   const colors: number[] = []
   lights.forEach((light) => {
-    const color = light.getColor()
+    const color = linearizeSrgbColor(light.getColor())
     if (light.kind === "ambient") {
       ambient[0] += color[0] * light.intensity
       ambient[1] += color[1] * light.intensity
@@ -852,7 +864,8 @@ export class WebGL2SceneRuntime {
   #shadowMap?: ShadowMapResources
   #transmissiveShadowPipeline?: TransmissiveShadowPipelineResources
   #transmissiveShadowMap?: TransmissiveShadowMapResources
-  #sceneColor?: SceneColorResources
+  #sceneTarget?: SceneTargetResources
+  #outputPipeline?: OutputPipelineResources
   #environmentTexture?: EnvironmentTextureResources
   #disposed = false
 
@@ -881,20 +894,18 @@ export class WebGL2SceneRuntime {
     this.#pruneMeshResources(new Set(meshes))
     const shadowLight = findShadowLight(lights)
     if (meshes.length === 0) {
-      this.#configureFrame(width, height)
+      this.#configureEmptyFrame(width, height)
       assertNoWebGLError(context, "empty frame")
       return
     }
 
     const shadow = this.#renderShadowPass(meshes, shadowLight)
     const queues = buildRenderQueues(meshes, camera)
-    const sceneColor = queues.transparent.length > 0
-      ? this.#sceneColorResources(width, height)
-      : undefined
+    const sceneTarget = this.#sceneTargetResources(width, height)
     const environmentTexture = environment && renderQueuesUseEnvironment(queues)
       ? this.#environmentTextureResources(environment)
       : undefined
-    this.#configureFrame(width, height)
+    this.#configureFrame(sceneTarget)
     const aspect = width / height
     const view = camera.getViewMatrix()
     const projection = camera.getProjectionMatrix(aspect)
@@ -922,10 +933,10 @@ export class WebGL2SceneRuntime {
             context.uniformMatrix4fv(pipeline.projectionLocation, false, projection)
             context.uniform1i(pipeline.sceneColorLocation, 1)
             context.activeTexture(context.TEXTURE1)
-            context.bindTexture(context.TEXTURE_2D, sceneColor?.texture ?? null)
+            context.bindTexture(context.TEXTURE_2D, sceneTarget.resolveTexture)
             context.uniform1f(
               pipeline.sceneColorMaxLodLocation,
-              sceneColor?.maxMipLevel ?? 0,
+              sceneTarget.maxMipLevel,
             )
           }
         }
@@ -952,7 +963,10 @@ export class WebGL2SceneRuntime {
           shadow && mesh.receiveShadow ? 1 : 0
         )
       }
-      context.uniform4fv(pipeline.colorLocation, new Float32Array(material.color))
+      context.uniform4fv(
+        pipeline.colorLocation,
+        linearizeSrgbColorWithAlpha(material.color),
+      )
       if (pipeline.kind === "standard" && material.kind === "standard") {
         context.uniform1f(pipeline.metallicLocation, material.metallic)
         context.uniform1f(pipeline.roughnessLocation, material.roughness)
@@ -984,11 +998,19 @@ export class WebGL2SceneRuntime {
     }
     try {
       queues.opaque.forEach(draw)
-      if (sceneColor) {
-        this.#resolveSceneColor(sceneColor)
-        this.#configureTransparentPass(width, height)
+      if (queues.transparent.length > 0) {
+        resolveSceneTarget(context, sceneTarget, true)
+        this.#configureTransparentPass(sceneTarget)
         queues.transparent.forEach(draw)
       }
+      resolveSceneTarget(context, sceneTarget, false)
+      presentScene(
+        context,
+        this.#outputPipelineResources(),
+        sceneTarget.resolveTexture,
+        width,
+        height,
+      )
       assertNoWebGLError(context, "frame draw")
       assertContextAvailable(context)
     } finally {
@@ -1036,7 +1058,7 @@ export class WebGL2SceneRuntime {
     if (this.#disposed) throw new Error("WebGL2 scene runtime has been disposed")
   }
 
-  #configureFrame(width: number, height: number) {
+  #configureEmptyFrame(width: number, height: number) {
     const context = this.#context
     context.bindFramebuffer(context.FRAMEBUFFER, null)
     context.viewport(0, 0, width, height)
@@ -1053,39 +1075,33 @@ export class WebGL2SceneRuntime {
     context.clear(context.COLOR_BUFFER_BIT | context.DEPTH_BUFFER_BIT)
   }
 
+  #configureFrame(resources: SceneTargetResources) {
+    const context = this.#context
+    context.bindFramebuffer(context.FRAMEBUFFER, resources.drawFramebuffer)
+    context.viewport(0, 0, resources.width, resources.height)
+    context.disable(context.CULL_FACE)
+    context.disable(context.BLEND)
+    context.disable(context.SCISSOR_TEST)
+    context.disable(context.STENCIL_TEST)
+    context.colorMask(true, true, true, true)
+    context.enable(context.DEPTH_TEST)
+    context.depthFunc(context.LEQUAL)
+    context.depthMask(true)
+    context.clearColor(0, 0, 0, 0)
+    context.clearDepth(1)
+    context.clear(context.COLOR_BUFFER_BIT | context.DEPTH_BUFFER_BIT)
+  }
+
   #configureTransparentPass(
-    width: number,
-    height: number,
+    resources: SceneTargetResources,
   ) {
     const context = this.#context
-    context.bindFramebuffer(context.FRAMEBUFFER, null)
-    context.viewport(0, 0, width, height)
+    context.bindFramebuffer(context.FRAMEBUFFER, resources.drawFramebuffer)
+    context.viewport(0, 0, resources.width, resources.height)
     context.enable(context.BLEND)
     context.blendEquation(context.FUNC_ADD)
     context.blendFunc(context.ONE, context.ONE_MINUS_SRC_ALPHA)
     context.depthMask(false)
-  }
-
-  #resolveSceneColor(resources: SceneColorResources) {
-    const context = this.#context
-    context.bindFramebuffer(context.READ_FRAMEBUFFER, null)
-    context.bindFramebuffer(context.DRAW_FRAMEBUFFER, resources.framebuffer)
-    context.blitFramebuffer(
-      0,
-      0,
-      resources.width,
-      resources.height,
-      0,
-      0,
-      resources.width,
-      resources.height,
-      context.COLOR_BUFFER_BIT,
-      context.NEAREST,
-    )
-    context.bindFramebuffer(context.FRAMEBUFFER, null)
-    context.activeTexture(context.TEXTURE1)
-    context.bindTexture(context.TEXTURE_2D, resources.texture)
-    context.generateMipmap(context.TEXTURE_2D)
   }
 
   #renderShadowPass(
@@ -1338,15 +1354,22 @@ export class WebGL2SceneRuntime {
     return created
   }
 
-  #sceneColorResources(width: number, height: number) {
-    if (this.#sceneColor?.width === width && this.#sceneColor.height === height) {
-      return this.#sceneColor
+  #sceneTargetResources(width: number, height: number) {
+    if (this.#sceneTarget?.width === width && this.#sceneTarget.height === height) {
+      return this.#sceneTarget
     }
-    if (this.#sceneColor) this.#deleteSceneColor(this.#sceneColor)
-    this.#sceneColor = undefined
-    const created = createSceneColorResources(this.#context, width, height)
-    this.#sceneColor = created
+    if (this.#sceneTarget) {
+      deleteSceneTargetResources(this.#context, this.#sceneTarget)
+    }
+    this.#sceneTarget = undefined
+    const created = createSceneTargetResources(this.#context, width, height)
+    this.#sceneTarget = created
     return created
+  }
+
+  #outputPipelineResources() {
+    this.#outputPipeline ??= createOutputPipeline(this.#context)
+    return this.#outputPipeline
   }
 
   #environmentTextureResources(environment: EnvironmentMap) {
@@ -1405,11 +1428,6 @@ export class WebGL2SceneRuntime {
     this.#context.deleteTexture(resources.transmittanceTexture)
   }
 
-  #deleteSceneColor(resources: SceneColorResources) {
-    this.#context.deleteFramebuffer(resources.framebuffer)
-    this.#context.deleteTexture(resources.texture)
-  }
-
   #deleteEnvironmentTexture(resources: EnvironmentTextureResources) {
     this.#context.deleteTexture(resources.texture)
   }
@@ -1427,7 +1445,12 @@ export class WebGL2SceneRuntime {
     if (this.#transmissiveShadowMap) {
       this.#deleteTransmissiveShadowMap(this.#transmissiveShadowMap)
     }
-    if (this.#sceneColor) this.#deleteSceneColor(this.#sceneColor)
+    if (this.#sceneTarget) {
+      deleteSceneTargetResources(this.#context, this.#sceneTarget)
+    }
+    if (this.#outputPipeline) {
+      deleteOutputPipeline(this.#context, this.#outputPipeline)
+    }
     if (this.#environmentTexture) {
       this.#deleteEnvironmentTexture(this.#environmentTexture)
     }
@@ -1435,7 +1458,8 @@ export class WebGL2SceneRuntime {
     this.#shadowMap = undefined
     this.#transmissiveShadowPipeline = undefined
     this.#transmissiveShadowMap = undefined
-    this.#sceneColor = undefined
+    this.#sceneTarget = undefined
+    this.#outputPipeline = undefined
     this.#environmentTexture = undefined
   }
 
@@ -1446,7 +1470,8 @@ export class WebGL2SceneRuntime {
     this.#shadowMap = undefined
     this.#transmissiveShadowPipeline = undefined
     this.#transmissiveShadowMap = undefined
-    this.#sceneColor = undefined
+    this.#sceneTarget = undefined
+    this.#outputPipeline = undefined
     this.#environmentTexture = undefined
   }
 }

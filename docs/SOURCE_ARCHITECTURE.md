@@ -123,18 +123,29 @@ in History and scene transfer. One persistent depth texture/framebuffer is deriv
 layer and recreated only for a map-size or context-lifecycle change; the core never auto-fits the
 explicit orthographic shadow frustum to scene content.
 
-Each native frame derives two queues from the same ordered CPU Mesh list. Opaque Meshes draw first
-with depth writes into the default framebuffer, preserving the antialiasing negotiated for the
-WebGL2 layer. When Glass is present, that opaque color is resolved into one persistent texture-backed
-scene-color target. Glass samples only the resolved opaque color while it continues rendering into
-the default framebuffer, whose opaque color and depth remain intact. This separation prevents
-framebuffer feedback without replacing the layer's multisampled render target. The scene-color target
-generates a mip chain after each opaque resolve so Glass roughness can filter transmission without a
-second scene pass. An optional layer-owned equirectangular RGBA8 `EnvironmentMap` supplies world-space
-reflection radiance to opaque `StandardMaterial` and transparent `GlassMaterial` through a persistent
-mipmapped texture; intensity changes are uniform-only,
-while pixel revision changes re-upload that texture. Both textures are derived GPU state and are
-forgotten on context loss. Glass applies immutable material-owned Beer-Lambert attenuation to the
+Each native frame derives two queues from the same ordered CPU Mesh list. Non-empty scenes render
+into one persistent linear RGBA8 scene target instead of the browser framebuffer. Its draw framebuffer
+owns color and depth renderbuffers with the highest common supported sample count not exceeding the
+default framebuffer's negotiated samples. Its resolve framebuffer owns one single-sample mipmapped
+texture. Opaque Meshes write linear color and depth to the draw framebuffer. When Glass is present,
+the opaque color is resolved into the texture and mipmapped; Glass then samples only that resolved
+opaque color while blending premultiplied linear output back into the original draw framebuffer with
+depth tests and no depth writes. This separation prevents framebuffer feedback and preserves the
+existing object-level transparency contract. After Glass, or immediately after an opaque-only pass,
+the complete scene resolves into the same texture. One fullscreen output pipeline converts straight
+linear color to sRGB, restores the context's straight or premultiplied alpha representation, and
+presents to the default framebuffer. Empty frames clear the default framebuffer without allocating a
+scene target.
+
+Public Material and Light RGB values are sRGB inputs and become linear CPU uniform values. An optional
+layer-owned equirectangular RGBA8 `EnvironmentMap` uploads as `SRGB8_ALPHA8`, so filtering and mip
+generation operate on hardware-decoded linear samples before supplying world-space reflection
+radiance to opaque `StandardMaterial` and transparent `GlassMaterial`. Intensity changes are
+uniform-only, while pixel revision changes re-upload that texture. Scene targets, output pipelines,
+and environment textures are derived GPU state, recreated only for resize or context lifecycle
+changes, and forgotten on context loss. The RGBA8 scene target deliberately remains LDR; a future
+capability-gated format descriptor can select a floating-point target while exposure and tone mapping
+remain isolated to the same output pipeline. Glass applies immutable material-owned Beer-Lambert attenuation to the
 refracted scene color. `attenuationColor` is the remaining per-channel transmission after
 `attenuationDistance`; the explicit `thickness` is the travel distance. An omitted attenuation
 distance is represented to the shader as a disabled branch. For enabled attenuation, the CPU derives

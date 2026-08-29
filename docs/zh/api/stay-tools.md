@@ -65,11 +65,15 @@ mesh.setMaterial(glass)
 
 `UnlitMaterial`、`LambertMaterial` 与 `StandardMaterial` 都不透明，color alpha 必须为 `1`。`StandardMaterial` 使用 metallic-roughness 光照；`metallic` 默认 `0`，`roughness` 默认 `1`，两者都必须位于 `0` 到 `1`。它会同时消费方向光、阴影、相机视线和可选 `EnvironmentMap`，但仍在 opaque pass 中写入 depth；替换 Standard material 只更新 CPU 材质值和 shader uniform，不会推进 geometry revision。
 
+Material 与 Light 的 RGB 值按 sRGB 显示颜色传入。renderer 会在着色前把所有材质和灯光颜色转换到线性空间，把 opaque 与预乘 alpha 的 Glass 结果写入同一个线性 scene target，只在最终输出 pass 把完整画面编码为 sRGB。alpha 仍是线性覆盖率；`GlassMaterial.attenuationColor` 表示物理透射比例，因此也保持在线性空间。
+
 `GlassMaterial` 的 alpha 必须严格位于 `0` 与 `1` 之间，`ior` 必须大于 `1`（默认 `1.5`），`roughness` 位于 `0` 到 `1`（默认 `0`），`thickness` 是非负的 world-space 距离（默认 `0.1`）。renderer 会用这些值计算带光照的 Fresnel 边缘，以及对本图层 opaque WebGL2 scene color 的屏幕空间折射。roughness 会选择逐级过滤后的 scene-color 和 environment mip：零表示清晰，一表示使用可用的最宽模糊。厚度为零时仍保留透射和 Fresnel，只是不偏移屏幕采样位置。
 
 体积吸收遵循 Beer-Lambert 透射模型。`attenuationColor` 表示光线在介质内经过 `attenuationDistance` 个 world unit 后剩余的 RGB 颜色，因此每个通道的透射率为 `attenuationColor ** (thickness / attenuationDistance)`。attenuation color 默认白色；不传 `attenuationDistance` 表示无限距离，即不发生吸收。显式距离必须为正的有限数，颜色通道必须是 `0` 到 `1` 的有限数。`color` 仍描述玻璃边界的 tint，attenuation 则描述体积内部的损耗。当前材质直接把 `thickness` 当作完整传播距离，不会根据 Mesh 几何或厚度纹理推导路径长度。
 
-Scene-color 折射刻意限制在当前图层内：它可以扭曲同一 WebGL2 图层中更早绘制的 opaque Mesh。WebGL2 layer config 提供 `EnvironmentMap` 时，Standard 与 Glass 都会按 world-space 经纬反射方向采样它，并使用各自 roughness 选择 mip LOD。纯 Standard 场景不需要 scene-color framebuffer。environment 属于图层显示状态，不进入 Material History 或场景传输。折射仍不能采样 Canvas 后面的 DOM/CSS 内容或其他透明 Mesh；当前 LDR mip-chain 模型也不提供 HDR 预过滤辐射或物理多表面透射。
+Scene-color 折射刻意限制在当前图层内：它可以扭曲同一 WebGL2 图层中更早绘制的 opaque Mesh。非空场景会画入持久的线性 RGBA8 color target 与共享 depth buffer；当 RGBA8 和 depth 都支持时，该 target 会保留 context 可用的 MSAA sample count。renderer 会在 Glass 之前 resolve 并生成 opaque color mip，使 Glass 无需产生 framebuffer feedback 就能采样；完整线性画面随后再次 resolve 并输出到浏览器。没有 Glass 的帧只需要最终一次 resolve。输出 pass 会适配 context 的 alpha 与 premultiplied-alpha 属性。
+
+WebGL2 layer config 提供 `EnvironmentMap` 时，其 RGBA8 byte 按 sRGB 解释。Standard 与 Glass 会按 world-space 经纬反射方向采样由硬件完成解码的 texture，并使用各自 roughness 选择 mip LOD。environment 属于图层显示状态，不进入 Material History 或场景传输。折射仍不能采样 Canvas 后面的 DOM/CSS 内容或其他透明 Mesh。当前线性 target 仍是 LDR RGBA8：它不会保留大于 `1` 的辐射值，也不提供 exposure、tone mapping、HDR 预过滤辐射或物理多表面透射。
 
 renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 depth write，再按局部包围盒中心变换到相机 view space 后的深度稳定地从远到近绘制。这是行业常用的对象级透明方案：彼此分离、不相交的表面能稳定合成；相交透明 Mesh 和自身重叠几何仍可能需要拆分 geometry，或等待后续 order-independent transparency。
 

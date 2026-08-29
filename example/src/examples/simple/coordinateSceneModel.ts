@@ -365,19 +365,6 @@ export function roundedRectMeshGeometry(
   return builder
 }
 
-export function roundedRectSegments(
-  rect: Readonly<Rect>,
-  radiusX: number,
-  radiusY: number,
-  segments: number,
-): LineSegment[] {
-  const perimeter = roundedRectPoints(rect, radiusX, radiusY, segments)
-  return perimeter.map((point, index) => {
-    const next = perimeter[(index + 1) % perimeter.length]
-    return { x1: point.x, y1: point.y, x2: next.x, y2: next.y }
-  })
-}
-
 function appendConnectedRings(
   builder: GeometryBuilder,
   inner: readonly Vector3[],

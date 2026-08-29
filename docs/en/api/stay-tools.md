@@ -46,17 +46,23 @@ const mesh = new Mesh({
   receiveShadow: true,
 })
 
-const glass = new GlassMaterial({ color: [0.6, 0.85, 1, 0.2] })
+const glass = new GlassMaterial({
+  color: [0.6, 0.85, 1, 0.2],
+  ior: 1.46,
+  thickness: 0.18,
+})
 mesh.setMaterial(glass)
 ```
 
-`UnlitMaterial` and `LambertMaterial` are opaque and require color alpha `1`. `GlassMaterial` requires alpha strictly between `0` and `1`; it provides a lit thin-glass approximation with a view-angle edge highlight. It does not sample the scene behind the surface, so it does not yet model refraction, thickness, roughness, or physical transmission.
+`UnlitMaterial` and `LambertMaterial` are opaque and require color alpha `1`. `GlassMaterial` requires alpha strictly between `0` and `1`, `ior` greater than `1` (default `1.5`), and non-negative `thickness` in world units (default `0.1`). The renderer uses those values for a lit Fresnel edge and screen-space refraction through the layer's opaque WebGL2 scene color. A zero thickness keeps transmission and Fresnel shading but samples the undisplaced screen position.
+
+Scene-color refraction is intentionally layer-local: it can bend opaque WebGL2 Meshes rendered earlier in the same layer. It cannot sample DOM/CSS content behind the Canvas or other transparent Meshes, and it does not yet provide roughness, environment reflection, absorption, or physical multi-surface transmission.
 
 The renderer draws opaque Meshes first. Glass Meshes keep depth testing, disable depth writes, and are stable-sorted back to front by their transformed local bounding-box center in camera view space. This is standard object-level transparency: separate non-intersecting surfaces compose predictably, while intersecting transparent Meshes and self-overlapping geometry may require geometry splitting or a future order-independent transparency path.
 
 Shadow behavior is explicit CPU Mesh state. `castShadow` and `receiveShadow` both default to `false`; update them with `setCastShadow()` and `setReceiveShadow()`. A lit receiver samples the layer's directional shadow map. Glass can receive shadows. Enabling casting on Glass produces a binary geometry silhouette; colored or transmissive glass shadows are outside the current model. Shadow flags are preserved by History and scene transfer without changing geometry revisions.
 
-Without any configured lights, Lambert and Glass materials render dark; add ambient or directional light explicitly instead of relying on a hidden default rig.
+Without any configured lights, Lambert renders dark. Glass keeps scene-color transmission and its Fresnel edge, but its directly lit tint is dark; add ambient or directional light when that surface lighting is wanted instead of relying on a hidden default rig.
 
 | Method | Meaning |
 | --- | --- |
@@ -68,7 +74,7 @@ Without any configured lights, Lambert and Glass materials render dark; add ambi
 | `webgl.exportChildren(children)` | Capture deep-owned CPU Mesh fragments with source ids |
 | `webgl.importChildren(fragment)` | Materialize new Child ids and independent Mesh state |
 
-`Mesh`, `UnlitMaterial`, `LambertMaterial`, `GlassMaterial`, `AmbientLight`, `DirectionalLight`, `PerspectiveCamera`, `StayWebGLChild`, and the minimal Matrix4 helpers are exported from the package root. GPU programs, VAOs, buffers, shadow textures/framebuffers, shaders, and layer runtimes remain internal. WebGL2 Child picking/raycast, scene-color refraction, colored/transmissive shadows, textures, order-independent transparency, and Canvas capture are not part of this surface yet.
+`Mesh`, `UnlitMaterial`, `LambertMaterial`, `GlassMaterial`, `AmbientLight`, `DirectionalLight`, `PerspectiveCamera`, `StayWebGLChild`, and the minimal Matrix4 helpers are exported from the package root. GPU programs, VAOs, buffers, scene-color/shadow targets, shaders, and layer runtimes remain internal. WebGL2 Child picking/raycast, colored/transmissive shadows, user textures, order-independent transparency, and Canvas capture are not part of this surface yet.
 
 ## State and display
 

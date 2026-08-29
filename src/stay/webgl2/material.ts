@@ -10,6 +10,10 @@ export interface LambertMaterialProps {
 
 export interface GlassMaterialProps {
   readonly color?: MeshColor
+  /** Refractive index of the glass medium. Must be greater than 1. */
+  readonly ior?: number
+  /** Distance travelled through the medium in world units. */
+  readonly thickness?: number
 }
 
 function copyColor(
@@ -50,6 +54,29 @@ function copyGlassColor(
   return copied
 }
 
+function copyFloat32(value: number, name: string) {
+  if (!Number.isFinite(value)) throw new TypeError(`${name} must be finite`)
+  const copied = Math.fround(value)
+  if (!Number.isFinite(copied)) throw new RangeError(`${name} exceeds Float32 range`)
+  return copied
+}
+
+function copyIndexOfRefraction(value = 1.5) {
+  const copied = copyFloat32(value, "GlassMaterial ior")
+  if (copied <= 1) {
+    throw new RangeError("GlassMaterial ior must be greater than 1 in Float32 range")
+  }
+  return copied
+}
+
+function copyThickness(value = 0.1) {
+  if (Number.isFinite(value) && value < 0) {
+    throw new RangeError("GlassMaterial thickness must be greater than or equal to 0")
+  }
+  const copied = copyFloat32(value, "GlassMaterial thickness")
+  return copied
+}
+
 /** An immutable opaque material that ignores scene lights. */
 export class UnlitMaterial {
   readonly kind = "unlit"
@@ -74,42 +101,67 @@ export class LambertMaterial {
   }
 }
 
-/** An immutable lit thin-glass approximation rendered in the transparent queue. */
+/** An immutable lit refractive material rendered in the transparent queue. */
 export class GlassMaterial {
   readonly kind = "glass"
   readonly color: MeshColor
+  readonly ior: number
+  readonly thickness: number
   readonly #materialBrand = "glass"
 
-  constructor({ color }: GlassMaterialProps = {}) {
+  constructor({ color, ior, thickness }: GlassMaterialProps = {}) {
     this.color = copyGlassColor(color)
+    this.ior = copyIndexOfRefraction(ior)
+    this.thickness = copyThickness(thickness)
     Object.freeze(this)
   }
 }
 
 export type MeshMaterial = UnlitMaterial | LambertMaterial | GlassMaterial
 
-export type MeshMaterialSnapshot = Readonly<{
-  kind: MeshMaterial["kind"]
-  color: MeshColor
-}>
+export type MeshMaterialSnapshot = Readonly<
+  | { kind: "unlit"; color: MeshColor }
+  | { kind: "lambert"; color: MeshColor }
+  | { kind: "glass"; color: MeshColor; ior: number; thickness: number }
+>
 
 export function copyMeshMaterial(material: MeshMaterial): MeshMaterial {
   if (material instanceof UnlitMaterial) return new UnlitMaterial({ color: material.color })
   if (material instanceof LambertMaterial) return new LambertMaterial({ color: material.color })
-  if (material instanceof GlassMaterial) return new GlassMaterial({ color: material.color })
+  if (material instanceof GlassMaterial) {
+    return new GlassMaterial({
+      color: material.color,
+      ior: material.ior,
+      thickness: material.thickness,
+    })
+  }
   throw new TypeError(
     "Mesh material must be an UnlitMaterial, LambertMaterial, or GlassMaterial"
   )
 }
 
 export function captureMeshMaterial(material: MeshMaterial): MeshMaterialSnapshot {
+  if (material instanceof GlassMaterial) {
+    return {
+      kind: material.kind,
+      color: [...material.color],
+      ior: material.ior,
+      thickness: material.thickness,
+    }
+  }
   return { kind: material.kind, color: [...material.color] }
 }
 
 export function materializeMeshMaterial(snapshot: MeshMaterialSnapshot): MeshMaterial {
   if (snapshot.kind === "unlit") return new UnlitMaterial({ color: snapshot.color })
   if (snapshot.kind === "lambert") return new LambertMaterial({ color: snapshot.color })
-  if (snapshot.kind === "glass") return new GlassMaterial({ color: snapshot.color })
+  if (snapshot.kind === "glass") {
+    return new GlassMaterial({
+      color: snapshot.color,
+      ior: snapshot.ior,
+      thickness: snapshot.thickness,
+    })
+  }
   throw new TypeError("Mesh material snapshot has an unsupported kind")
 }
 

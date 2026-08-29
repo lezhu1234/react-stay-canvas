@@ -68,14 +68,19 @@ export class PerspectiveCamera {
   }
 
   getViewProjection(aspect: number): Matrix4 {
-    const projection = perspectiveMatrix4(
+    const projection = this.getProjectionMatrix(aspect)
+    const view = this.getViewMatrix()
+    return multiplyMatrix4(projection, view)
+  }
+
+  /** @internal Provides the projection matrix to view-dependent materials. */
+  getProjectionMatrix(aspect: number): Matrix4 {
+    return perspectiveMatrix4(
       this.#verticalFieldOfView,
       aspect,
       this.#near,
       this.#far
     )
-    const view = lookAtMatrix4(this.#position, this.#target, this.#up)
-    return multiplyMatrix4(projection, view)
   }
 
   /** @internal Provides one view matrix for transparent sorting during a frame. */

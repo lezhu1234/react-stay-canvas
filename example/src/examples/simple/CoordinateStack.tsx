@@ -49,7 +49,6 @@ import {
   projectPlanePoint,
   rectMeshGeometry,
   roundedRectMeshGeometry,
-  roundedRectSegments,
   transparentMeshColor,
   type PlaneBasis,
   type PlaneDefinition,
@@ -66,7 +65,7 @@ const OVERLAY_LAYER = 1
 const PANEL_THICKNESS = 0.18
 const PANEL_FACE_OFFSET = PANEL_THICKNESS / 2
 const PANEL_BEVEL_RADIUS = 0.09
-const PANEL_BEVEL_SEGMENTS = 3
+const PANEL_BEVEL_SEGMENTS = 6
 const PLANE_GLASS_ROUGHNESS: Readonly<Record<PlaneName, number>> = {
   client: 0.02,
   view: 0.38,
@@ -136,7 +135,6 @@ export type CoordinateMappingFocus = "view-client" | "content-view"
 type PlaneMeshes = {
   frameFill: Mesh
   frameDepth: Mesh
-  frameEdges: Mesh
   grid: Mesh
   axes: Mesh
   shapeFill: Mesh
@@ -322,21 +320,6 @@ function createPlaneRuntime(
     ),
     receiveShadow: true,
   })
-  const frameEdges = new Mesh({
-    geometry: lineMeshGeometry(
-      plane,
-      basis,
-      roundedRectSegments(
-        face.rect,
-        face.radiusX,
-        face.radiusY,
-        PANEL_BEVEL_SEGMENTS,
-      ),
-      0.72,
-      PANEL_FACE_OFFSET + 0.004,
-    ),
-    material: unlitMaterial(plane.stroke),
-  })
   const grid = new Mesh({
     geometry: lineMeshGeometry(plane, basis, gridSegments(plane).map((segment) => ({
       ...segment,
@@ -431,7 +414,6 @@ function createPlaneRuntime(
   const meshes: PlaneMeshes = {
     frameFill,
     frameDepth,
-    frameEdges,
     grid,
     axes,
     shapeFill,
@@ -592,10 +574,6 @@ export function CoordinateStack({
           ...plane.fill,
           a: isActive ? plane.fill.a : plane.fill.a * 0.72,
         }, PANEL_THICKNESS, PLANE_GLASS_ROUGHNESS[name], PLANE_GLASS_ATTENUATION[name]))
-        plane.meshes.frameEdges.setMaterial(unlitMaterial({
-          ...plane.stroke,
-          a: isActive ? plane.stroke.a : plane.stroke.a * 0.68,
-        }))
         plane.meshes.frameDepth.setMaterial(glassMaterial({
           ...plane.stroke,
           a: isActive ? 0.32 : 0.22,

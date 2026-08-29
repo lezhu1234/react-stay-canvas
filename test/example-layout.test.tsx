@@ -37,7 +37,6 @@ import {
   planeVolumeGeometry,
   rectMeshGeometry,
   roundedRectMeshGeometry,
-  roundedRectSegments,
 } from "../example/src/examples/simple/coordinateSceneModel"
 import {
   createFiniteProjectiveMapping,
@@ -251,7 +250,7 @@ describe("Example Canvas workspace", () => {
     const plane = createPlaneDefinitions(1012, 524).client
     const basis = createPlaneBasis(plane)
     const bevelRadius = 0.09
-    const segments = 3
+    const segments = 6
     const face = createPlaneBevelFaceProfile(plane, basis, bevelRadius)
     const roundedFace = roundedRectMeshGeometry(
       plane,
@@ -270,8 +269,6 @@ describe("Example Canvas workspace", () => {
       segments,
     )
 
-    expect(roundedRectSegments(face.rect, face.radiusX, face.radiusY, segments))
-      .toHaveLength(4 * (segments + 1))
     expectValidIndexedGeometry(roundedFace)
     expectValidIndexedGeometry(roundedBevel)
 

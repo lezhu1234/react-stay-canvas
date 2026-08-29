@@ -64,8 +64,12 @@ const CONTACT_CASTER_HEIGHT = 14
 
 const unlitMaterial = (color: ReturnType<typeof rgba>) =>
   new UnlitMaterial({ color: meshColor(color) })
-const glassMaterial = (color: ReturnType<typeof rgba>) =>
-  new GlassMaterial({ color: transparentMeshColor(color) })
+const glassMaterial = (color: ReturnType<typeof rgba>, thickness = 0) =>
+  new GlassMaterial({
+    color: transparentMeshColor(color),
+    ior: 1.46,
+    thickness,
+  })
 
 export type CoordinateMappingFocus = "view-client" | "content-view"
 
@@ -236,12 +240,12 @@ function createPlaneRuntime(
 
   const frameFill = new Mesh({
     geometry: rectMeshGeometry(plane, basis, planeRect, PANEL_FACE_OFFSET),
-    material: glassMaterial(plane.fill),
+    material: glassMaterial(plane.fill, PANEL_THICKNESS),
     receiveShadow: true,
   })
   const frameDepth = new Mesh({
     geometry: planeVolumeGeometry(plane, basis, PANEL_THICKNESS),
-    material: glassMaterial({ ...plane.stroke, a: 0.32 }),
+    material: glassMaterial({ ...plane.stroke, a: 0.32 }, PANEL_THICKNESS),
     receiveShadow: true,
   })
   const contactCaster = new Mesh({
@@ -541,7 +545,7 @@ export function CoordinateStack({
         plane.meshes.frameFill.setMaterial(glassMaterial({
           ...plane.fill,
           a: isActive ? plane.fill.a : plane.fill.a * 0.72,
-        }))
+        }, PANEL_THICKNESS))
         plane.meshes.frameEdges.setMaterial(unlitMaterial({
           ...plane.stroke,
           a: isActive ? plane.stroke.a : plane.stroke.a * 0.68,
@@ -549,7 +553,7 @@ export function CoordinateStack({
         plane.meshes.frameDepth.setMaterial(glassMaterial({
           ...plane.stroke,
           a: isActive ? 0.32 : 0.22,
-        }))
+        }, PANEL_THICKNESS))
       }
       plane.overlay.title.update({
         fillConfig: { color: { ...plane.stroke, a: isActive ? 1 : 0.68 } },

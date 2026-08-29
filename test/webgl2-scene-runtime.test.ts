@@ -240,6 +240,100 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.dispose()
   })
 
+  it("refracts the persistent opaque scene color through Glass ior and thickness", () => {
+    const canvas = document.createElement("canvas")
+    canvas.width = 240
+    canvas.height = 160
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const opaque = new Mesh({ geometry: triangle(-1), material: unlit([0.9, 0.2, 0.1, 1]) })
+    const glass = new Mesh({
+      geometry: litTriangle(),
+      material: new GlassMaterial({
+        color: [0.6, 0.85, 1, 0.2],
+        ior: 1.46,
+        thickness: 0.18,
+      }),
+    })
+
+    runtime.render([glass, opaque], camera(), [new AmbientLight()])
+    runtime.render([glass, opaque], camera(), [new AmbientLight()])
+
+    expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
+      String(source).includes("refract(incident, view_normal, 1.0 / u_ior)")))
+      .toBe(true)
+    expect(gl.spies.createTexture).toHaveBeenCalledOnce()
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledOnce()
+    expect(gl.spies.texImage2D).toHaveBeenCalledOnce()
+    expect(gl.spies.blitFramebuffer).toHaveBeenCalledTimes(2)
+    const sceneFramebuffer = gl.spies.createFramebuffer.mock.results[0].value
+    expect(gl.spies.bindFramebuffer)
+      .toHaveBeenCalledWith(gl.spies.READ_FRAMEBUFFER, null)
+    expect(gl.spies.bindFramebuffer)
+      .toHaveBeenCalledWith(gl.spies.DRAW_FRAMEBUFFER, sceneFramebuffer)
+    expect(gl.spies.blitFramebuffer).toHaveBeenCalledWith(
+      0,
+      0,
+      240,
+      160,
+      0,
+      0,
+      240,
+      160,
+      gl.spies.COLOR_BUFFER_BIT,
+      gl.spies.NEAREST,
+    )
+    expect(gl.spies.activeTexture).toHaveBeenCalledWith(gl.spies.TEXTURE1)
+    expect(gl.spies.uniform1f.mock.calls)
+      .toContainEqual([expect.anything(), Math.fround(1.46)])
+    expect(gl.spies.uniform1f.mock.calls)
+      .toContainEqual([expect.anything(), Math.fround(0.18)])
+
+    canvas.width = 320
+    canvas.height = 180
+    runtime.render([glass, opaque], camera(), [new AmbientLight()])
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledOnce()
+
+    runtime.dispose()
+    expect(gl.spies.deleteTexture).toHaveBeenCalledTimes(2)
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(2)
+  })
+
+  it("keeps the direct default-framebuffer path when a scene has no Glass", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const opaque = new Mesh({ geometry: triangle(), material: unlit([0.2, 0.5, 0.9, 1]) })
+
+    runtime.render([opaque], camera())
+
+    expect(gl.spies.createTexture).not.toHaveBeenCalled()
+    expect(gl.spies.createFramebuffer).not.toHaveBeenCalled()
+    expect(gl.spies.blitFramebuffer).not.toHaveBeenCalled()
+    runtime.dispose()
+  })
+
+  it("cleans a failed scene-color allocation and retries from CPU state", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const glass = new Mesh({ geometry: litTriangle(), material: new GlassMaterial() })
+    gl.spies.createFramebuffer.mockReturnValueOnce(null)
+
+    expect(() => runtime.render([glass], camera(), [new AmbientLight()]))
+      .toThrow("Unable to create WebGL2 scene-color framebuffer")
+    expect(gl.spies.deleteFramebuffer).not.toHaveBeenCalled()
+    expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
+
+    runtime.render([glass], camera(), [new AmbientLight()])
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
+    expect(gl.spies.drawElements).toHaveBeenCalledOnce()
+    runtime.dispose()
+  })
+
   it("re-sorts Glass with camera changes without rebuilding GPU resources", () => {
     const canvas = document.createElement("canvas")
     const gl = createRecordingWebGL2Context(canvas)
@@ -337,9 +431,13 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
     expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(2)
     expect(gl.spies.createBuffer).toHaveBeenCalledTimes(6)
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
     expect(gl.spies.deleteProgram).not.toHaveBeenCalled()
     runtime.dispose()
     expect(gl.spies.deleteProgram).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledOnce()
     expect(() => runtime.render([mesh], camera())).toThrow("has been disposed")
   })
 
@@ -583,6 +681,18 @@ describe("internal WebGL2 scene runtime", () => {
       .toThrow("greater than 0 and less than 1")
     expect(() => new GlassMaterial({ color: [1, 1, 1, 0] }))
       .toThrow("greater than 0 and less than 1")
+    expect(() => new GlassMaterial({ ior: 1 })).toThrow("ior must be greater than 1")
+    expect(() => new GlassMaterial({ ior: 1 + Number.EPSILON }))
+      .toThrow("ior must be greater than 1 in Float32 range")
+    expect(() => new GlassMaterial({ ior: Number.MAX_VALUE }))
+      .toThrow("ior exceeds Float32 range")
+    expect(() => new GlassMaterial({ ior: Number.NaN })).toThrow("ior must be finite")
+    expect(() => new GlassMaterial({ thickness: -0.1 }))
+      .toThrow("thickness must be greater than or equal to 0")
+    expect(() => new GlassMaterial({ thickness: -Number.MIN_VALUE }))
+      .toThrow("thickness must be greater than or equal to 0")
+    expect(() => new GlassMaterial({ thickness: Number.MAX_VALUE }))
+      .toThrow("thickness exceeds Float32 range")
     expect(() => new Mesh({
       geometry: triangle(),
       material: new GlassMaterial(),

@@ -170,19 +170,29 @@ describe("internal Stay WebGL Child runtime", () => {
       layer: 0,
       meshes: [new Mesh({
         geometry: { ...triangle(), normals },
-        material: new GlassMaterial({ color: [0.2, 0.7, 0.9, 0.22] }),
+        material: new GlassMaterial({
+          color: [0.2, 0.7, 0.9, 0.22],
+          ior: 1.46,
+          thickness: 0.18,
+        }),
       })],
     })
     const snapshot = captureStayWebGLChildSnapshot(original)
     expect(snapshot.meshes[0].material).toEqual({
       kind: "glass",
       color: [0.2, 0.7, 0.9, 0.22],
+      ior: Math.fround(1.46),
+      thickness: Math.fround(0.18),
     })
 
     const restored = restoreStayWebGLChildSnapshot(snapshot)
     restored.meshes[0].setMaterial(new GlassMaterial({ color: [1, 1, 1, 0.4] }))
     expect(original.meshes[0].getMaterial()).toEqual(
-      new GlassMaterial({ color: [0.2, 0.7, 0.9, 0.22] })
+      new GlassMaterial({
+        color: [0.2, 0.7, 0.9, 0.22],
+        ior: 1.46,
+        thickness: 0.18,
+      })
     )
     original.destroy()
     restored.destroy()

@@ -28,7 +28,14 @@ const mesh = new Mesh({
 })
 mesh.setModelMatrix(translationMatrix4(0.2, 0, 0))
 mesh.setMaterial(new LambertMaterial({ color: [0.3, 0.6, 1, 1] }))
-mesh.setMaterial(new GlassMaterial({ color: [0.6, 0.85, 1, 0.2] }))
+const glass = new GlassMaterial({
+  color: [0.6, 0.85, 1, 0.2],
+  ior: 1.46,
+  thickness: 0.18,
+})
+const glassIor: number = glass.ior
+const glassThickness: number = glass.thickness
+mesh.setMaterial(glass)
 mesh.setCastShadow(false)
 mesh.setReceiveShadow(true)
 
@@ -61,5 +68,7 @@ import { WebGL2LayerRuntime } from "react-stay-canvas"
 void camera
 void child
 void layer
+void glassIor
+void glassThickness
 void WebGL2SceneRuntime
 void WebGL2LayerRuntime

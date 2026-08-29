@@ -114,7 +114,7 @@ ActionRouter, EventRuntime, Listener registry, state stores, and DOM input adapt
 `StayWebGLChild` owns ordered CPU `Mesh` geometry, model, and immutable material values on one
 WebGL2 layer. `PerspectiveCamera`, `AmbientLight`, and `DirectionalLight` belong to that layer's
 public display configuration. `WebGL2LayerRuntime` subscribes their CPU mutations and owns context loss/restoration and one
-`WebGL2SceneRuntime`; the scene runtime owns only derived program/VAO/buffer caches. Resize retains
+`WebGL2SceneRuntime`; the scene runtime owns only derived program/VAO/buffer/target caches. Resize retains
 live cache objects when the resolver returns the same context. Context restoration forgets invalid
 handles and lazily reconstructs them from CPU Mesh/Camera/Light state. Geometry normals share the
 Mesh geometry revision; material, light, model, and camera changes never upload geometry buffers.
@@ -124,11 +124,17 @@ layer and recreated only for a map-size or context-lifecycle change; the core ne
 explicit orthographic shadow frustum to scene content.
 
 Each native frame derives two queues from the same ordered CPU Mesh list. Opaque Meshes draw first
-with depth writes. Glass Meshes remain depth-tested, disable depth writes, use premultiplied-alpha
+with depth writes into the default framebuffer, preserving the antialiasing negotiated for the
+WebGL2 layer. When Glass is present, that opaque color is resolved into one persistent texture-backed
+scene-color target. Glass samples only the resolved opaque color while it continues rendering into
+the default framebuffer, whose opaque color and depth remain intact. This separation prevents
+framebuffer feedback without replacing the layer's multisampled render target. The scene-color target
+is derived GPU state, reused at a stable drawing-buffer size, recreated on resize, and forgotten on
+context loss. Glass Meshes disable depth writes, use premultiplied-alpha
 blending, and stable-sort back to front by the model-transformed local AABB center in camera view
 space. That center is derived Mesh state, not a second scene transform. The current contract is
-object-level transparency; exact intersecting/self-overlapping composition and scene-color
-refraction remain outside this runtime.
+object-level transparency; exact intersecting/self-overlapping composition, transparent-on-transparent
+refraction, and sampling outside the WebGL2 layer remain outside this runtime.
 
 The native backend does not consume Shape RenderPlans, Canvas2D raster surfaces, projective Shape
 placements, or Shape `zIndex`. Depth is authoritative inside a WebGL2 layer. Mesh history and scene

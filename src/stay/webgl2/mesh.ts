@@ -307,7 +307,11 @@ function optionalFloat32ValuesEqual(
 }
 
 function materialsEqual(first: MeshMaterial, second: MeshMaterial) {
-  return first.kind === second.kind && arrayValuesEqual(first.color, second.color)
+  if (first.kind !== second.kind || !arrayValuesEqual(first.color, second.color)) return false
+  if (first instanceof GlassMaterial && second instanceof GlassMaterial) {
+    return first.ior === second.ior && first.thickness === second.thickness
+  }
+  return true
 }
 
 function assertLitMeshState(

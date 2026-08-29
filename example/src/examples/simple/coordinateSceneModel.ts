@@ -19,6 +19,7 @@ export const PLANE_GRID_ROWS = 5
 const CAMERA_FIELD_OF_VIEW = Math.PI / 3.4
 const CAMERA_POSITION_X = 4.2
 const GROUND_HEIGHT = -2.8
+const BEVEL_FACE_CORNER_RATIO = 0.28
 const PANEL_LAYOUT = [
   { centerX: -2.6, depth: 8.8, worldWidth: 4.3, worldHeight: 6.6, yaw: 0.04, logicalScale: 1 },
   { centerX: 2.4, depth: 7.8, worldWidth: 4.2, worldHeight: 5.8, yaw: 0.16, logicalScale: 0.96 },
@@ -45,6 +46,12 @@ export type PlaneBasis = {
   horizontal: Vector3
   vertical: Vector3
   normal: Vector3
+}
+
+export type PlaneBevelFaceProfile = {
+  rect: Rect
+  radiusX: number
+  radiusY: number
 }
 
 export const planePalette = {
@@ -278,11 +285,175 @@ function appendPlaneQuad(
   )
 }
 
+function roundedRectPoints(
+  rect: Readonly<Rect>,
+  radiusX: number,
+  radiusY: number,
+  segments: number,
+): Coordinate[] {
+  if (!Number.isInteger(segments) || segments < 1) {
+    throw new RangeError("rounded rectangle segments must be a positive integer")
+  }
+  if (
+    !Number.isFinite(radiusX)
+    || !Number.isFinite(radiusY)
+    || radiusX <= 0
+    || radiusY <= 0
+    || radiusX > rect.width / 2
+    || radiusY > rect.height / 2
+  ) {
+    throw new RangeError("rounded rectangle radii must fit inside its bounds")
+  }
+  const corners = [
+    { x: rect.x + rect.width - radiusX, y: rect.y + radiusY, start: -Math.PI / 2 },
+    { x: rect.x + rect.width - radiusX, y: rect.y + rect.height - radiusY, start: 0 },
+    { x: rect.x + radiusX, y: rect.y + rect.height - radiusY, start: Math.PI / 2 },
+    { x: rect.x + radiusX, y: rect.y + radiusY, start: Math.PI },
+  ]
+  return corners.flatMap((corner) =>
+    Array.from({ length: segments + 1 }, (_, index) => {
+      const angle = corner.start + Math.PI / 2 * index / segments
+      return {
+        x: corner.x + Math.cos(angle) * radiusX,
+        y: corner.y + Math.sin(angle) * radiusY,
+      }
+    }))
+}
+
+export function createPlaneBevelFaceProfile(
+  plane: PlaneDefinition,
+  basis: PlaneBasis,
+  bevelRadius: number,
+): PlaneBevelFaceProfile {
+  const insetX = bevelRadius / Math.hypot(...basis.horizontal) * plane.width
+  const insetY = bevelRadius / Math.hypot(...basis.vertical) * plane.height
+  return {
+    rect: {
+      x: insetX,
+      y: insetY,
+      width: plane.width - insetX * 2,
+      height: plane.height - insetY * 2,
+    },
+    radiusX: insetX * BEVEL_FACE_CORNER_RATIO,
+    radiusY: insetY * BEVEL_FACE_CORNER_RATIO,
+  }
+}
+
+export function roundedRectMeshGeometry(
+  plane: PlaneDefinition,
+  basis: PlaneBasis,
+  rect: Readonly<Rect>,
+  radiusX: number,
+  radiusY: number,
+  segments: number,
+  depthOffset: number,
+): MeshGeometryInput {
+  const perimeter = roundedRectPoints(rect, radiusX, radiusY, segments)
+  const center = planeWorldPoint(plane, basis, {
+    x: rect.x + rect.width / 2,
+    y: rect.y + rect.height / 2,
+  }, depthOffset)
+  const builder: GeometryBuilder = { positions: [...center], normals: [...basis.normal], indices: [] }
+  perimeter.forEach((point) => {
+    builder.positions.push(...planeWorldPoint(plane, basis, point, depthOffset))
+    builder.normals.push(...basis.normal)
+  })
+  perimeter.forEach((_, index) => {
+    const next = (index + 1) % perimeter.length
+    builder.indices.push(0, next + 1, index + 1)
+  })
+  return builder
+}
+
+export function roundedRectSegments(
+  rect: Readonly<Rect>,
+  radiusX: number,
+  radiusY: number,
+  segments: number,
+): LineSegment[] {
+  const perimeter = roundedRectPoints(rect, radiusX, radiusY, segments)
+  return perimeter.map((point, index) => {
+    const next = perimeter[(index + 1) % perimeter.length]
+    return { x1: point.x, y1: point.y, x2: next.x, y2: next.y }
+  })
+}
+
+function appendConnectedRings(
+  builder: GeometryBuilder,
+  inner: readonly Vector3[],
+  outer: readonly Vector3[],
+) {
+  for (let edge = 0; edge < inner.length; edge++) {
+    const next = (edge + 1) % inner.length
+    appendQuadWithComputedNormal(builder, [
+      outer[next],
+      outer[edge],
+      inner[edge],
+      inner[next],
+    ])
+  }
+}
+
+function roundedPlaneVolumeGeometry(
+  plane: PlaneDefinition,
+  basis: PlaneBasis,
+  thickness: number,
+  bevelRadius: number,
+  bevelSegments: number,
+): MeshGeometryInput {
+  const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
+  const horizontalLength = Math.hypot(...basis.horizontal)
+  const verticalLength = Math.hypot(...basis.vertical)
+  const depthRadius = Math.min(bevelRadius, thickness / 2)
+  const face = createPlaneBevelFaceProfile(plane, basis, bevelRadius)
+  const shoulderRadiusX = bevelRadius / horizontalLength * plane.width
+  const shoulderRadiusY = bevelRadius / verticalLength * plane.height
+  const rings = Array.from({ length: bevelSegments + 1 }, (_, index) => {
+    const angle = Math.PI / 2 * index / bevelSegments
+    const radialProgress = Math.sin(angle)
+    const insetX = face.rect.x * (1 - radialProgress)
+    const insetY = face.rect.y * (1 - radialProgress)
+    const cornerRadiusX = face.radiusX + radialProgress * (shoulderRadiusX - face.radiusX)
+    const cornerRadiusY = face.radiusY + radialProgress * (shoulderRadiusY - face.radiusY)
+    const depth = thickness / 2 - depthRadius + depthRadius * Math.cos(angle)
+    return roundedRectPoints(
+      {
+        x: insetX,
+        y: insetY,
+        width: plane.width - insetX * 2,
+        height: plane.height - insetY * 2,
+      },
+      cornerRadiusX,
+      cornerRadiusY,
+      bevelSegments,
+    ).map((point) => planeWorldPoint(plane, basis, point, depth))
+  })
+
+  for (let ringIndex = 0; ringIndex < bevelSegments; ringIndex++) {
+    appendConnectedRings(builder, rings[ringIndex], rings[ringIndex + 1])
+  }
+
+  const shoulder = rings[rings.length - 1]
+  const backRing = roundedRectPoints(
+    { x: 0, y: 0, width: plane.width, height: plane.height },
+    shoulderRadiusX,
+    shoulderRadiusY,
+    bevelSegments,
+  ).map((point) => planeWorldPoint(plane, basis, point, -thickness / 2))
+  appendConnectedRings(builder, backRing, shoulder)
+  return builder
+}
+
 export function planeVolumeGeometry(
   plane: PlaneDefinition,
   basis: PlaneBasis,
   thickness: number,
+  bevelRadius = 0,
+  bevelSegments = 1,
 ): MeshGeometryInput {
+  if (bevelRadius > 0 && bevelSegments > 0) {
+    return roundedPlaneVolumeGeometry(plane, basis, thickness, bevelRadius, bevelSegments)
+  }
   const localCorners = pointsForRect({ x: 0, y: 0, width: plane.width, height: plane.height })
   const front = localCorners.map((point) => planeWorldPoint(plane, basis, point, thickness / 2)) as
     [Vector3, Vector3, Vector3, Vector3]

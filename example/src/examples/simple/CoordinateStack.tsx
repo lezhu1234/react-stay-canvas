@@ -35,6 +35,7 @@ import {
 } from "./coordinateLabModel"
 import {
   createCoordinateCamera,
+  createPlaneBevelFaceProfile,
   createPlaneBasis,
   createPlaneDefinitions,
   emptyMeshGeometry,
@@ -47,6 +48,8 @@ import {
   PLANE_GRID_ROWS,
   projectPlanePoint,
   rectMeshGeometry,
+  roundedRectMeshGeometry,
+  roundedRectSegments,
   transparentMeshColor,
   type PlaneBasis,
   type PlaneDefinition,
@@ -62,6 +65,8 @@ const WEBGL_LAYER = 0
 const OVERLAY_LAYER = 1
 const PANEL_THICKNESS = 0.18
 const PANEL_FACE_OFFSET = PANEL_THICKNESS / 2
+const PANEL_BEVEL_RADIUS = 0.09
+const PANEL_BEVEL_SEGMENTS = 3
 const PLANE_GLASS_ROUGHNESS: Readonly<Record<PlaneName, number>> = {
   client: 0.02,
   view: 0.38,
@@ -131,9 +136,7 @@ export type CoordinateMappingFocus = "view-client" | "content-view"
 type PlaneMeshes = {
   frameFill: Mesh
   frameDepth: Mesh
-  frameBackEdges: Mesh
   frameEdges: Mesh
-  frameHighlight: Mesh
   grid: Mesh
   axes: Mesh
   shapeFill: Mesh
@@ -210,15 +213,6 @@ function pointIsInsidePlane(plane: PlaneDefinition, point: Readonly<Coordinate>)
   return point.x >= 0 && point.y >= 0 && point.x <= plane.width && point.y <= plane.height
 }
 
-function frameSegments(width: number, height: number): LineSegment[] {
-  return [
-    { x1: 0, y1: 0, x2: width, y2: 0 },
-    { x1: width, y1: 0, x2: width, y2: height },
-    { x1: width, y1: height, x2: 0, y2: height },
-    { x1: 0, y1: height, x2: 0, y2: 0 },
-  ]
-}
-
 function cornerSegments(rect: Readonly<Rect>): LineSegment[] {
   const length = Math.min(12, rect.width / 4, rect.height / 4)
   const left = rect.x
@@ -286,15 +280,23 @@ function createPlaneRuntime(
   plane: PlaneDefinition,
 ): { meshes: Mesh[]; overlays: Array<Circle | Line | StayText>; runtime: PlaneRuntime } {
   const basis = createPlaneBasis(plane)
-  const planeRect = { x: 0, y: 0, width: plane.width, height: plane.height }
   const titleSize = Math.max(13, Math.min(16, plane.width * 0.065))
   const detailSize = Math.max(9, Math.min(11, plane.width * 0.045))
   const axisColor = rgba(78, 89, 104, 0.24)
   const panelRoughness = PLANE_GLASS_ROUGHNESS[name]
   const panelAttenuation = PLANE_GLASS_ATTENUATION[name]
+  const face = createPlaneBevelFaceProfile(plane, basis, PANEL_BEVEL_RADIUS)
 
   const frameFill = new Mesh({
-    geometry: rectMeshGeometry(plane, basis, planeRect, PANEL_FACE_OFFSET),
+    geometry: roundedRectMeshGeometry(
+      plane,
+      basis,
+      face.rect,
+      face.radiusX,
+      face.radiusY,
+      PANEL_BEVEL_SEGMENTS,
+      PANEL_FACE_OFFSET,
+    ),
     material: glassMaterial(
       plane.fill,
       PANEL_THICKNESS,
@@ -305,7 +307,13 @@ function createPlaneRuntime(
     receiveShadow: true,
   })
   const frameDepth = new Mesh({
-    geometry: planeVolumeGeometry(plane, basis, PANEL_THICKNESS),
+    geometry: planeVolumeGeometry(
+      plane,
+      basis,
+      PANEL_THICKNESS,
+      PANEL_BEVEL_RADIUS,
+      PANEL_BEVEL_SEGMENTS,
+    ),
     material: glassMaterial(
       { ...plane.stroke, a: 0.32 },
       PANEL_THICKNESS,
@@ -314,35 +322,29 @@ function createPlaneRuntime(
     ),
     receiveShadow: true,
   })
-  const frameBackEdges = new Mesh({
-    geometry: lineMeshGeometry(
-      plane,
-      basis,
-      frameSegments(plane.width, plane.height),
-      1.05,
-      -PANEL_FACE_OFFSET,
-    ),
-    material: unlitMaterial({ ...plane.stroke, a: 0.34 }),
-  })
   const frameEdges = new Mesh({
     geometry: lineMeshGeometry(
       plane,
       basis,
-      frameSegments(plane.width, plane.height),
-      1.15,
+      roundedRectSegments(
+        face.rect,
+        face.radiusX,
+        face.radiusY,
+        PANEL_BEVEL_SEGMENTS,
+      ),
+      0.72,
       PANEL_FACE_OFFSET + 0.004,
     ),
     material: unlitMaterial(plane.stroke),
   })
-  const frameHighlight = new Mesh({
-    geometry: lineMeshGeometry(plane, basis, [
-      { x1: 0, y1: 0, x2: plane.width, y2: 0 },
-      { x1: plane.width, y1: 0, x2: plane.width, y2: plane.height },
-    ], 1.65, PANEL_FACE_OFFSET + 0.007),
-    material: unlitMaterial(rgba(205, 233, 242, 0.78)),
-  })
   const grid = new Mesh({
-    geometry: lineMeshGeometry(plane, basis, gridSegments(plane), 0.8, PANEL_FACE_OFFSET + 0.006),
+    geometry: lineMeshGeometry(plane, basis, gridSegments(plane).map((segment) => ({
+      ...segment,
+      x1: Math.max(face.rect.x, Math.min(face.rect.x + face.rect.width, segment.x1)),
+      x2: Math.max(face.rect.x, Math.min(face.rect.x + face.rect.width, segment.x2)),
+      y1: Math.max(face.rect.y, Math.min(face.rect.y + face.rect.height, segment.y1)),
+      y2: Math.max(face.rect.y, Math.min(face.rect.y + face.rect.height, segment.y2)),
+    })), 0.8, PANEL_FACE_OFFSET + 0.006),
     material: glassMaterial({ ...plane.stroke, a: 0.045 }),
   })
   const axes = new Mesh({
@@ -429,9 +431,7 @@ function createPlaneRuntime(
   const meshes: PlaneMeshes = {
     frameFill,
     frameDepth,
-    frameBackEdges,
     frameEdges,
-    frameHighlight,
     grid,
     axes,
     shapeFill,

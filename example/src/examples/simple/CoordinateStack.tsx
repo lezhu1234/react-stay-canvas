@@ -4,6 +4,7 @@ import {
   Circle,
   type CanvasLayerConfig,
   DirectionalLight,
+  EnvironmentMap,
   GlassMaterial,
   Line,
   Mesh,
@@ -61,15 +62,58 @@ const OVERLAY_LAYER = 1
 const PANEL_THICKNESS = 0.18
 const PANEL_FACE_OFFSET = PANEL_THICKNESS / 2
 const CONTACT_CASTER_HEIGHT = 14
+const PLANE_GLASS_ROUGHNESS: Readonly<Record<PlaneName, number>> = {
+  client: 0.02,
+  view: 0.38,
+  content: 0.76,
+}
 
 const unlitMaterial = (color: ReturnType<typeof rgba>) =>
   new UnlitMaterial({ color: meshColor(color) })
-const glassMaterial = (color: ReturnType<typeof rgba>, thickness = 0) =>
+const glassMaterial = (
+  color: ReturnType<typeof rgba>,
+  thickness = 0,
+  roughness = 0.12,
+) =>
   new GlassMaterial({
     color: transparentMeshColor(color),
     ior: 1.46,
+    roughness,
     thickness,
   })
+
+function createCoordinateEnvironment() {
+  const width = 128
+  const height = 64
+  const data = new Uint8Array(width * height * 4)
+  const windowCenters = [0.664, 0.771, 0.848]
+  for (let y = 0; y < height; y++) {
+    const vertical = y / (height - 1)
+    const horizon = Math.exp(-Math.pow((vertical - 0.5) / 0.18, 2))
+    const ground = Math.max(0, (vertical - 0.5) * 2)
+    for (let x = 0; x < width; x++) {
+      const horizontal = x / (width - 1)
+      const windowLight = Math.max(...windowCenters.map((center) =>
+        Math.exp(-Math.pow((horizontal - center) / 0.014, 2))))
+        * Math.exp(-Math.pow((vertical - 0.5) / 0.32, 2))
+      const offset = (y * width + x) * 4
+      data[offset] = Math.min(
+        255,
+        Math.round(72 + horizon * 4 - ground * 2 + windowLight * 180),
+      )
+      data[offset + 1] = Math.min(
+        255,
+        Math.round(75 + horizon * 3 - ground * 2 + windowLight * 178),
+      )
+      data[offset + 2] = Math.min(
+        255,
+        Math.round(78 + horizon * 2 - ground * 1.5 + windowLight * 172),
+      )
+      data[offset + 3] = 255
+    }
+  }
+  return new EnvironmentMap({ width, height, data, intensity: 3.2 })
+}
 
 export type CoordinateMappingFocus = "view-client" | "content-view"
 
@@ -237,15 +281,20 @@ function createPlaneRuntime(
   const titleSize = Math.max(13, Math.min(16, plane.width * 0.065))
   const detailSize = Math.max(9, Math.min(11, plane.width * 0.045))
   const axisColor = rgba(78, 89, 104, 0.24)
+  const panelRoughness = PLANE_GLASS_ROUGHNESS[name]
 
   const frameFill = new Mesh({
     geometry: rectMeshGeometry(plane, basis, planeRect, PANEL_FACE_OFFSET),
-    material: glassMaterial(plane.fill, PANEL_THICKNESS),
+    material: glassMaterial(plane.fill, PANEL_THICKNESS, panelRoughness),
     receiveShadow: true,
   })
   const frameDepth = new Mesh({
     geometry: planeVolumeGeometry(plane, basis, PANEL_THICKNESS),
-    material: glassMaterial({ ...plane.stroke, a: 0.32 }, PANEL_THICKNESS),
+    material: glassMaterial(
+      { ...plane.stroke, a: 0.32 },
+      PANEL_THICKNESS,
+      panelRoughness,
+    ),
     receiveShadow: true,
   })
   const contactCaster = new Mesh({
@@ -489,6 +538,7 @@ export function CoordinateStack({
   const runtimeRef = useRef<StackRuntime>()
   const viewToClientRef = useRef<(point: Coordinate) => Coordinate>()
   const camera = useMemo(() => createCoordinateCamera(), [])
+  const environment = useMemo(() => createCoordinateEnvironment(), [])
   const lights = useMemo(() => [
     new AmbientLight({ color: [0.84, 0.91, 0.95], intensity: 0.32 }),
     new DirectionalLight({
@@ -516,10 +566,11 @@ export function CoordinateStack({
     {
       backend: "webgl2",
       camera,
+      environment,
       lights,
     },
     { backend: "canvas2d" },
-  ], [camera, lights])
+  ], [camera, environment, lights])
 
   const update = (sample: CoordinateProbe, currentViewport: Readonly<ViewportState>) => {
     const runtime = runtimeRef.current
@@ -545,7 +596,7 @@ export function CoordinateStack({
         plane.meshes.frameFill.setMaterial(glassMaterial({
           ...plane.fill,
           a: isActive ? plane.fill.a : plane.fill.a * 0.72,
-        }, PANEL_THICKNESS))
+        }, PANEL_THICKNESS, PLANE_GLASS_ROUGHNESS[name]))
         plane.meshes.frameEdges.setMaterial(unlitMaterial({
           ...plane.stroke,
           a: isActive ? plane.stroke.a : plane.stroke.a * 0.68,
@@ -553,13 +604,13 @@ export function CoordinateStack({
         plane.meshes.frameDepth.setMaterial(glassMaterial({
           ...plane.stroke,
           a: isActive ? 0.32 : 0.22,
-        }, PANEL_THICKNESS))
+        }, PANEL_THICKNESS, PLANE_GLASS_ROUGHNESS[name]))
       }
       plane.overlay.title.update({
         fillConfig: { color: { ...plane.stroke, a: isActive ? 1 : 0.68 } },
       })
       plane.overlay.dimension.update({
-        text: `${Math.round(range.width)} × ${Math.round(range.height)}`,
+        text: `${Math.round(range.width)} × ${Math.round(range.height)} · R ${PLANE_GLASS_ROUGHNESS[name].toFixed(2)}`,
         fillConfig: { color: rgba(78, 89, 104, isActive ? 0.72 : 0.5) },
       })
       plane.overlay.dot.update({
@@ -650,10 +701,16 @@ export function CoordinateStack({
     const planes = {} as Record<PlaneName, PlaneRuntime>
     const meshes: Mesh[] = [new Mesh({
       geometry: floorMeshGeometry(),
-      material: new GlassMaterial({ color: [0.86, 0.9, 0.88, 0.01] }),
+      material: new GlassMaterial({
+        color: [0.86, 0.9, 0.88, 0.01],
+        roughness: 0.46,
+      }),
     }), new Mesh({
       geometry: contactShadowReceiverGeometry(Object.values(definitions)),
-      material: new GlassMaterial({ color: [0.32, 0.46, 0.42, 0.035] }),
+      material: new GlassMaterial({
+        color: [0.32, 0.46, 0.42, 0.035],
+        roughness: 0.72,
+      }),
       receiveShadow: true,
     })]
     const overlays: Array<Circle | Line | StayText> = []

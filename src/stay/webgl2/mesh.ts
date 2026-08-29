@@ -309,7 +309,9 @@ function optionalFloat32ValuesEqual(
 function materialsEqual(first: MeshMaterial, second: MeshMaterial) {
   if (first.kind !== second.kind || !arrayValuesEqual(first.color, second.color)) return false
   if (first instanceof GlassMaterial && second instanceof GlassMaterial) {
-    return first.ior === second.ior && first.thickness === second.thickness
+    return first.ior === second.ior
+      && first.roughness === second.roughness
+      && first.thickness === second.thickness
   }
   return true
 }

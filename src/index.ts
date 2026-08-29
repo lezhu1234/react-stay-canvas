@@ -33,6 +33,12 @@ export type {
   LightColor,
   WebGLLight,
 } from "./stay/webgl2/light"
+export { EnvironmentMap } from "./stay/webgl2/environmentMap"
+export type {
+  EnvironmentMapImage,
+  EnvironmentMapPixelData,
+  EnvironmentMapProps,
+} from "./stay/webgl2/environmentMap"
 export { PerspectiveCamera } from "./stay/webgl2/perspectiveCamera"
 export { StayWebGLChild } from "./stay/webgl2/stayWebGLChild"
 export type { StayWebGLChildProps } from "./stay/webgl2/stayWebGLChild"

@@ -3,6 +3,7 @@ export interface SceneColorResources {
   readonly height: number
   readonly framebuffer: WebGLFramebuffer
   readonly texture: WebGLTexture
+  readonly maxMipLevel: number
 }
 
 function assertFramebufferComplete(context: WebGL2RenderingContext) {
@@ -35,7 +36,11 @@ export function createSceneColorResources(
   let framebuffer: WebGLFramebuffer | undefined
   try {
     context.bindTexture(context.TEXTURE_2D, texture)
-    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MIN_FILTER, context.LINEAR)
+    context.texParameteri(
+      context.TEXTURE_2D,
+      context.TEXTURE_MIN_FILTER,
+      context.LINEAR_MIPMAP_LINEAR,
+    )
     context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MAG_FILTER, context.LINEAR)
     context.texParameteri(context.TEXTURE_2D, context.TEXTURE_WRAP_S, context.CLAMP_TO_EDGE)
     context.texParameteri(context.TEXTURE_2D, context.TEXTURE_WRAP_T, context.CLAMP_TO_EDGE)
@@ -65,7 +70,13 @@ export function createSceneColorResources(
     context.readBuffer(context.COLOR_ATTACHMENT0)
     assertFramebufferComplete(context)
     assertSceneColorReady(context)
-    return { width, height, framebuffer, texture }
+    return {
+      width,
+      height,
+      framebuffer,
+      texture,
+      maxMipLevel: Math.floor(Math.log2(Math.max(width, height))),
+    }
   } catch (error) {
     if (framebuffer) context.deleteFramebuffer(framebuffer)
     context.deleteTexture(texture)

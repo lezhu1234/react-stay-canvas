@@ -1,6 +1,7 @@
 import {
   AmbientLight,
   DirectionalLight,
+  EnvironmentMap,
   GlassMaterial,
   LambertMaterial,
   Mesh,
@@ -31,9 +32,11 @@ mesh.setMaterial(new LambertMaterial({ color: [0.3, 0.6, 1, 1] }))
 const glass = new GlassMaterial({
   color: [0.6, 0.85, 1, 0.2],
   ior: 1.46,
+  roughness: 0.24,
   thickness: 0.18,
 })
 const glassIor: number = glass.ior
+const glassRoughness: number = glass.roughness
 const glassThickness: number = glass.thickness
 mesh.setMaterial(glass)
 mesh.setCastShadow(false)
@@ -45,7 +48,20 @@ const key = new DirectionalLight({
   intensity: 0.8,
   shadow: { target: [0, 0, 0], width: 6, height: 4, mapSize: 1024 },
 })
-const layer: WebGL2LayerConfig = { backend: "webgl2", camera, lights: [ambient, key] }
+const environment = new EnvironmentMap({
+  width: 4,
+  height: 2,
+  data: new Uint8Array(32),
+  intensity: 0.8,
+})
+environment.setIntensity(0.6)
+environment.setImage({ width: 8, height: 4, data: new Uint8ClampedArray(128) })
+const layer: WebGL2LayerConfig = {
+  backend: "webgl2",
+  camera,
+  environment,
+  lights: [ambient, key],
+}
 key.setDirectionToLight([0.2, 0.4, 1])
 key.setShadow({ target: [0, 0, -1], distance: 8, near: 0.1, far: 20 })
 
@@ -69,6 +85,7 @@ void camera
 void child
 void layer
 void glassIor
+void glassRoughness
 void glassThickness
 void WebGL2SceneRuntime
 void WebGL2LayerRuntime

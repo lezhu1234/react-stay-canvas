@@ -15,6 +15,12 @@ import {
   type MeshMaterial,
 } from "./material"
 import { PerspectiveCamera } from "./perspectiveCamera"
+import { EnvironmentMap } from "./environmentMap"
+import {
+  createEnvironmentTextureResources,
+  uploadEnvironmentTexture,
+  type EnvironmentTextureResources,
+} from "./environmentResources"
 import {
   createSceneColorResources,
   type SceneColorResources,
@@ -66,7 +72,13 @@ interface GlassPipelineResources {
   readonly viewLocation: WebGLUniformLocation
   readonly projectionLocation: WebGLUniformLocation
   readonly sceneColorLocation: WebGLUniformLocation
+  readonly sceneColorMaxLodLocation: WebGLUniformLocation
+  readonly environmentMapLocation: WebGLUniformLocation
+  readonly environmentIntensityLocation: WebGLUniformLocation
+  readonly environmentMaxLodLocation: WebGLUniformLocation
+  readonly hasEnvironmentLocation: WebGLUniformLocation
   readonly iorLocation: WebGLUniformLocation
+  readonly roughnessLocation: WebGLUniformLocation
   readonly thicknessLocation: WebGLUniformLocation
   readonly shadowLightIndexLocation: WebGLUniformLocation
   readonly shadowViewProjectionLocation: WebGLUniformLocation
@@ -232,7 +244,13 @@ uniform vec3 u_camera_position;
 uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform sampler2D u_scene_color;
+uniform float u_scene_color_max_lod;
+uniform sampler2D u_environment_map;
+uniform float u_environment_intensity;
+uniform float u_environment_max_lod;
+uniform bool u_has_environment;
 uniform float u_ior;
+uniform float u_roughness;
 uniform float u_thickness;
 in vec3 world_normal;
 out vec4 output_color;
@@ -261,14 +279,40 @@ void main() {
   vec2 refracted_uv = refracted_clip.xy / refracted_clip.w * 0.5 + 0.5;
   vec2 half_texel = 0.5 / vec2(textureSize(u_scene_color, 0));
   refracted_uv = clamp(refracted_uv, half_texel, vec2(1.0) - half_texel);
-  vec4 scene_color = texture(u_scene_color, refracted_uv);
+  vec4 scene_color = textureLod(
+    u_scene_color,
+    refracted_uv,
+    u_roughness * u_scene_color_max_lod
+  );
   vec3 lit_tint = u_color.rgb * illumination;
   float transmission = scene_color.a * (1.0 - u_color.a) * (1.0 - fresnel);
-  vec3 refracted_color = scene_color.rgb * u_color.rgb;
+  vec3 refracted_color = scene_color.a > 0.00001
+    ? scene_color.rgb / scene_color.a * u_color.rgb
+    : vec3(0.0);
   vec3 surface_color = mix(lit_tint, refracted_color, transmission);
-  surface_color = mix(surface_color, vec3(1.0), fresnel * 0.42);
-  float alpha = u_color.a + (1.0 - u_color.a) * fresnel * 0.34;
-  output_color = vec4(surface_color * alpha, alpha);
+  vec3 reflection_color = vec3(1.0);
+  if (u_has_environment) {
+    vec3 reflected_direction = normalize(reflect(-view_direction, normal));
+    vec2 environment_uv = vec2(
+      atan(reflected_direction.z, reflected_direction.x) / 6.28318530718 + 0.5,
+      0.5 - asin(clamp(reflected_direction.y, -1.0, 1.0)) / 3.14159265359
+    );
+    reflection_color = textureLod(
+      u_environment_map,
+      environment_uv,
+      u_roughness * u_environment_max_lod
+    ).rgb * u_environment_intensity;
+  }
+  if (u_has_environment) {
+    float alpha = u_color.a + (1.0 - u_color.a) * fresnel;
+    vec3 premultiplied_color = surface_color * (alpha - fresnel)
+      + reflection_color * fresnel;
+    output_color = vec4(premultiplied_color, alpha);
+  } else {
+    surface_color = mix(surface_color, vec3(1.0), fresnel * 0.42);
+    float alpha = u_color.a + (1.0 - u_color.a) * fresnel * 0.34;
+    output_color = vec4(surface_color * alpha, alpha);
+  }
 }
 `
 
@@ -402,7 +446,21 @@ function createPipeline(
       viewLocation: requireUniform(context, program, "u_view"),
       projectionLocation: requireUniform(context, program, "u_projection"),
       sceneColorLocation: requireUniform(context, program, "u_scene_color"),
+      sceneColorMaxLodLocation: requireUniform(context, program, "u_scene_color_max_lod"),
+      environmentMapLocation: requireUniform(context, program, "u_environment_map"),
+      environmentIntensityLocation: requireUniform(
+        context,
+        program,
+        "u_environment_intensity"
+      ),
+      environmentMaxLodLocation: requireUniform(
+        context,
+        program,
+        "u_environment_max_lod"
+      ),
+      hasEnvironmentLocation: requireUniform(context, program, "u_has_environment"),
       iorLocation: requireUniform(context, program, "u_ior"),
+      roughnessLocation: requireUniform(context, program, "u_roughness"),
       thicknessLocation: requireUniform(context, program, "u_thickness"),
     }
   } catch (error) {
@@ -589,6 +647,7 @@ export class WebGL2SceneRuntime {
   #shadowPipeline?: ShadowPipelineResources
   #shadowMap?: ShadowMapResources
   #sceneColor?: SceneColorResources
+  #environmentTexture?: EnvironmentTextureResources
   #disposed = false
 
   constructor(context: WebGL2RenderingContext) {
@@ -600,7 +659,8 @@ export class WebGL2SceneRuntime {
   render(
     meshes: readonly Mesh[],
     camera: PerspectiveCamera,
-    lights: readonly WebGLLight[] = []
+    lights: readonly WebGLLight[] = [],
+    environment?: EnvironmentMap,
   ) {
     this.#assertActive()
     const context = this.#context
@@ -624,6 +684,9 @@ export class WebGL2SceneRuntime {
     const queues = buildRenderQueues(meshes, camera)
     const sceneColor = queues.transparent.length > 0
       ? this.#sceneColorResources(width, height)
+      : undefined
+    const environmentTexture = sceneColor && environment
+      ? this.#environmentTextureResources(environment)
       : undefined
     this.#configureFrame(width, height)
     const aspect = width / height
@@ -650,6 +713,28 @@ export class WebGL2SceneRuntime {
             context.uniform1i(pipeline.sceneColorLocation, 1)
             context.activeTexture(context.TEXTURE1)
             context.bindTexture(context.TEXTURE_2D, sceneColor?.texture ?? null)
+            context.uniform1f(
+              pipeline.sceneColorMaxLodLocation,
+              sceneColor?.maxMipLevel ?? 0,
+            )
+            context.uniform1i(pipeline.environmentMapLocation, 2)
+            context.uniform1i(
+              pipeline.hasEnvironmentLocation,
+              environmentTexture ? 1 : 0,
+            )
+            context.uniform1f(
+              pipeline.environmentIntensityLocation,
+              environment?.intensity ?? 0,
+            )
+            context.uniform1f(
+              pipeline.environmentMaxLodLocation,
+              environmentTexture?.maxMipLevel ?? 0,
+            )
+            context.activeTexture(context.TEXTURE2)
+            context.bindTexture(
+              context.TEXTURE_2D,
+              environmentTexture?.texture ?? null,
+            )
           }
         }
       }
@@ -678,6 +763,7 @@ export class WebGL2SceneRuntime {
       context.uniform4fv(pipeline.colorLocation, new Float32Array(material.color))
       if (pipeline.kind === "glass" && material.kind === "glass") {
         context.uniform1f(pipeline.iorLocation, material.ior)
+        context.uniform1f(pipeline.roughnessLocation, material.roughness)
         context.uniform1f(pipeline.thicknessLocation, material.thickness)
       }
       context.drawElements(
@@ -700,6 +786,8 @@ export class WebGL2SceneRuntime {
       context.depthMask(true)
       context.disable(context.BLEND)
       context.bindFramebuffer(context.FRAMEBUFFER, null)
+      context.activeTexture(context.TEXTURE2)
+      context.bindTexture(context.TEXTURE_2D, null)
       context.activeTexture(context.TEXTURE1)
       context.bindTexture(context.TEXTURE_2D, null)
       context.activeTexture(context.TEXTURE0)
@@ -782,6 +870,9 @@ export class WebGL2SceneRuntime {
       context.NEAREST,
     )
     context.bindFramebuffer(context.FRAMEBUFFER, null)
+    context.activeTexture(context.TEXTURE1)
+    context.bindTexture(context.TEXTURE_2D, resources.texture)
+    context.generateMipmap(context.TEXTURE_2D)
   }
 
   #renderShadowPass(
@@ -906,6 +997,28 @@ export class WebGL2SceneRuntime {
     return created
   }
 
+  #environmentTextureResources(environment: EnvironmentMap) {
+    const context = this.#context
+    context.activeTexture(context.TEXTURE2)
+    try {
+      if (!this.#environmentTexture) {
+        this.#environmentTexture = createEnvironmentTextureResources(
+          context,
+          environment.copyImageSnapshot(),
+        )
+      } else if (this.#environmentTexture.imageRevision !== environment.imageRevision) {
+        uploadEnvironmentTexture(
+          context,
+          this.#environmentTexture,
+          environment.copyImageSnapshot(),
+        )
+      }
+      return this.#environmentTexture
+    } finally {
+      context.activeTexture(context.TEXTURE0)
+    }
+  }
+
   #meshResources(mesh: Mesh) {
     const existing = this.#meshes.get(mesh)
     if (existing) return existing
@@ -939,6 +1052,10 @@ export class WebGL2SceneRuntime {
     this.#context.deleteTexture(resources.texture)
   }
 
+  #deleteEnvironmentTexture(resources: EnvironmentTextureResources) {
+    this.#context.deleteTexture(resources.texture)
+  }
+
   #deleteResources() {
     this.#meshes.forEach((resources) => this.#deleteMeshResources(resources))
     this.#meshes.clear()
@@ -947,9 +1064,13 @@ export class WebGL2SceneRuntime {
     if (this.#shadowPipeline) this.#context.deleteProgram(this.#shadowPipeline.program)
     if (this.#shadowMap) this.#deleteShadowMap(this.#shadowMap)
     if (this.#sceneColor) this.#deleteSceneColor(this.#sceneColor)
+    if (this.#environmentTexture) {
+      this.#deleteEnvironmentTexture(this.#environmentTexture)
+    }
     this.#shadowPipeline = undefined
     this.#shadowMap = undefined
     this.#sceneColor = undefined
+    this.#environmentTexture = undefined
   }
 
   #forgetResources() {
@@ -958,5 +1079,6 @@ export class WebGL2SceneRuntime {
     this.#shadowPipeline = undefined
     this.#shadowMap = undefined
     this.#sceneColor = undefined
+    this.#environmentTexture = undefined
   }
 }

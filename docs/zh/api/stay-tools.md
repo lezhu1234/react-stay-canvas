@@ -49,14 +49,15 @@ const mesh = new Mesh({
 const glass = new GlassMaterial({
   color: [0.6, 0.85, 1, 0.2],
   ior: 1.46,
+  roughness: 0.24,
   thickness: 0.18,
 })
 mesh.setMaterial(glass)
 ```
 
-`UnlitMaterial` 与 `LambertMaterial` 都不透明，color alpha 必须为 `1`。`GlassMaterial` 的 alpha 必须严格位于 `0` 与 `1` 之间，`ior` 必须大于 `1`（默认 `1.5`），`thickness` 是非负的 world-space 距离（默认 `0.1`）。renderer 会用这些值计算带光照的 Fresnel 边缘，以及对本图层 opaque WebGL2 scene color 的屏幕空间折射。厚度为零时仍保留透射和 Fresnel，只是不偏移屏幕采样位置。
+`UnlitMaterial` 与 `LambertMaterial` 都不透明，color alpha 必须为 `1`。`GlassMaterial` 的 alpha 必须严格位于 `0` 与 `1` 之间，`ior` 必须大于 `1`（默认 `1.5`），`roughness` 位于 `0` 到 `1`（默认 `0`），`thickness` 是非负的 world-space 距离（默认 `0.1`）。renderer 会用这些值计算带光照的 Fresnel 边缘，以及对本图层 opaque WebGL2 scene color 的屏幕空间折射。roughness 会选择逐级过滤后的 scene-color 和 environment mip：零表示清晰，一表示使用可用的最宽模糊。厚度为零时仍保留透射和 Fresnel，只是不偏移屏幕采样位置。
 
-Scene-color 折射刻意限制在当前图层内：它可以扭曲同一 WebGL2 图层中更早绘制的 opaque Mesh，但不能采样 Canvas 后面的 DOM/CSS 内容或其他透明 Mesh；roughness、环境反射、吸收和物理多表面透射仍不在当前能力内。
+Scene-color 折射刻意限制在当前图层内：它可以扭曲同一 WebGL2 图层中更早绘制的 opaque Mesh。WebGL2 layer config 提供 `EnvironmentMap` 时，Glass 还会按 world-space 经纬反射方向采样它，并使用同一个 roughness LOD。environment 属于图层显示状态，不进入 Material History 或场景传输。折射仍不能采样 Canvas 后面的 DOM/CSS 内容或其他透明 Mesh；当前 LDR mip-chain 模型也不提供 HDR 预过滤辐射、吸收或物理多表面透射。
 
 renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 depth write，再按局部包围盒中心变换到相机 view space 后的深度稳定地从远到近绘制。这是行业常用的对象级透明方案：彼此分离、不相交的表面能稳定合成；相交透明 Mesh 和自身重叠几何仍可能需要拆分 geometry，或等待后续 order-independent transparency。
 
@@ -74,7 +75,7 @@ renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 dep
 | `webgl.exportChildren(children)` | 捕获带 source id、深度隔离的 CPU Mesh 片段 |
 | `webgl.importChildren(fragment)` | 生成新的 Child id 与独立 Mesh 状态 |
 
-包入口导出 `Mesh`、`UnlitMaterial`、`LambertMaterial`、`GlassMaterial`、`AmbientLight`、`DirectionalLight`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、scene-color/shadow target、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、彩色/透射阴影、用户纹理、order-independent transparency 和 Canvas 截图暂不属于这个接口。
+包入口导出 `Mesh`、`UnlitMaterial`、`LambertMaterial`、`GlassMaterial`、`EnvironmentMap`、`AmbientLight`、`DirectionalLight`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、scene-color/environment/shadow target、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、通用材质纹理、彩色/透射阴影、order-independent transparency 和 Canvas 截图暂不属于这个接口。
 
 ## 状态与显示
 
@@ -152,7 +153,7 @@ renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 dep
 | `redo()` | 重做一个历史项；无可重做项时只输出日志 |
 | `resetHistory()` | 清空 undo/redo，并把当前静态场景作为新的历史基线 |
 
-Canvas2D 与 WebGL2 静态 Child 进入同一 History 事务和 id 命名空间；Camera 与 Light 修改属于图层显示状态，不进入历史。动画 Child 不参与历史。调用边界与示例见[场景与工具：历史记录](../scene-and-tools.md#历史记录)。
+Canvas2D 与 WebGL2 静态 Child 进入同一 History 事务和 id 命名空间；Camera、EnvironmentMap 与 Light 修改属于图层显示状态，不进入历史。动画 Child 不参与历史。调用边界与示例见[场景与工具：历史记录](../scene-and-tools.md#历史记录)。
 
 ## 动画
 
@@ -185,7 +186,7 @@ interface DrawReturn {
 
 场景传输会捕获公共 Shape 状态并隔离库拥有的样式容器。Animated Child 只捕获当前投影，不作为时间线序列化格式。
 
-原生 Mesh 没有 2D area/placement 变换，因此使用独立的 `tools.webgl.exportChildren()` 与 `tools.webgl.importChildren()`；Camera 与 Light 由目标图层配置拥有，不进入片段。
+原生 Mesh 没有 2D area/placement 变换，因此使用独立的 `tools.webgl.exportChildren()` 与 `tools.webgl.importChildren()`；Camera、EnvironmentMap 与 Light 由目标图层配置拥有，不进入片段。
 
 ## 动作与 Listener
 

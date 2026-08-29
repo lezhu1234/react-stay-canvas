@@ -173,6 +173,7 @@ describe("internal Stay WebGL Child runtime", () => {
         material: new GlassMaterial({
           color: [0.2, 0.7, 0.9, 0.22],
           ior: 1.46,
+          roughness: 0.24,
           thickness: 0.18,
         }),
       })],
@@ -182,6 +183,7 @@ describe("internal Stay WebGL Child runtime", () => {
       kind: "glass",
       color: [0.2, 0.7, 0.9, 0.22],
       ior: Math.fround(1.46),
+      roughness: Math.fround(0.24),
       thickness: Math.fround(0.18),
     })
 
@@ -191,6 +193,7 @@ describe("internal Stay WebGL Child runtime", () => {
       new GlassMaterial({
         color: [0.2, 0.7, 0.9, 0.22],
         ior: 1.46,
+        roughness: 0.24,
         thickness: 0.18,
       })
     )

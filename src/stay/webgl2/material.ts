@@ -12,6 +12,8 @@ export interface GlassMaterialProps {
   readonly color?: MeshColor
   /** Refractive index of the glass medium. Must be greater than 1. */
   readonly ior?: number
+  /** Micro-surface blur from 0 (sharp) to 1 (fully rough). */
+  readonly roughness?: number
   /** Distance travelled through the medium in world units. */
   readonly thickness?: number
 }
@@ -77,6 +79,17 @@ function copyThickness(value = 0.1) {
   return copied
 }
 
+function copyRoughness(value = 0) {
+  if (Number.isFinite(value) && (value < 0 || value > 1)) {
+    throw new RangeError("GlassMaterial roughness must be between 0 and 1")
+  }
+  const copied = copyFloat32(value, "GlassMaterial roughness")
+  if (copied < 0 || copied > 1) {
+    throw new RangeError("GlassMaterial roughness must be between 0 and 1")
+  }
+  return copied
+}
+
 /** An immutable opaque material that ignores scene lights. */
 export class UnlitMaterial {
   readonly kind = "unlit"
@@ -106,12 +119,14 @@ export class GlassMaterial {
   readonly kind = "glass"
   readonly color: MeshColor
   readonly ior: number
+  readonly roughness: number
   readonly thickness: number
   readonly #materialBrand = "glass"
 
-  constructor({ color, ior, thickness }: GlassMaterialProps = {}) {
+  constructor({ color, ior, roughness, thickness }: GlassMaterialProps = {}) {
     this.color = copyGlassColor(color)
     this.ior = copyIndexOfRefraction(ior)
+    this.roughness = copyRoughness(roughness)
     this.thickness = copyThickness(thickness)
     Object.freeze(this)
   }
@@ -122,7 +137,13 @@ export type MeshMaterial = UnlitMaterial | LambertMaterial | GlassMaterial
 export type MeshMaterialSnapshot = Readonly<
   | { kind: "unlit"; color: MeshColor }
   | { kind: "lambert"; color: MeshColor }
-  | { kind: "glass"; color: MeshColor; ior: number; thickness: number }
+  | {
+    kind: "glass"
+    color: MeshColor
+    ior: number
+    roughness: number
+    thickness: number
+  }
 >
 
 export function copyMeshMaterial(material: MeshMaterial): MeshMaterial {
@@ -132,6 +153,7 @@ export function copyMeshMaterial(material: MeshMaterial): MeshMaterial {
     return new GlassMaterial({
       color: material.color,
       ior: material.ior,
+      roughness: material.roughness,
       thickness: material.thickness,
     })
   }
@@ -146,6 +168,7 @@ export function captureMeshMaterial(material: MeshMaterial): MeshMaterialSnapsho
       kind: material.kind,
       color: [...material.color],
       ior: material.ior,
+      roughness: material.roughness,
       thickness: material.thickness,
     }
   }
@@ -159,6 +182,7 @@ export function materializeMeshMaterial(snapshot: MeshMaterialSnapshot): MeshMat
     return new GlassMaterial({
       color: snapshot.color,
       ior: snapshot.ior,
+      roughness: snapshot.roughness,
       thickness: snapshot.thickness,
     })
   }

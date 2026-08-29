@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest"
 import {
   AmbientLight,
   DirectionalLight,
+  EnvironmentMap,
+  GlassMaterial,
   LambertMaterial,
   Mesh,
   PerspectiveCamera,
@@ -35,6 +37,12 @@ const camera = () => new PerspectiveCamera({
 
 const unlit = (color: readonly [number, number, number, number]) =>
   new UnlitMaterial({ color })
+
+const environmentImage = (value = 160) => ({
+  width: 4,
+  height: 2,
+  data: new Uint8Array(32).fill(value),
+})
 
 describe("public native WebGL2 layer backend", () => {
   it("renders Mesh children with persistent GPU resources", () => {
@@ -118,6 +126,49 @@ describe("public native WebGL2 layer backend", () => {
     stage.destroy()
     key.setIntensity(0.5)
     ambient.setColor([0.9, 0.9, 1])
+  })
+
+  it("maps EnvironmentMap changes onto layer dirtiness without rebuilding geometry", () => {
+    let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
+    const environment = new EnvironmentMap({
+      ...environmentImage(),
+      intensity: 0.8,
+    })
+    const { stage } = createStage({
+      layers: [{
+        backend: "webgl2",
+        camera: camera(),
+        environment,
+        context: (canvas) => {
+          gl ??= createRecordingWebGL2Context(canvas)
+          return gl.context
+        },
+      }],
+    })
+    stage.tools.webgl.appendChild({
+      className: "reflective-glass",
+      layer: 0,
+      meshes: [new Mesh({
+        geometry: litTriangle(),
+        material: new GlassMaterial({ roughness: 0.3 }),
+      })],
+    })
+
+    stage.draw({ now: 1 })
+    const uploads = gl!.spies.texImage2D.mock.calls.length
+    const geometryUploads = gl!.spies.bufferData.mock.calls.length
+    environment.setIntensity(0.6)
+    expect(stage.draw({ now: 2 }).updatedLayers).toEqual([0])
+    expect(gl!.spies.texImage2D).toHaveBeenCalledTimes(uploads)
+    expect(gl!.spies.bufferData).toHaveBeenCalledTimes(geometryUploads)
+
+    environment.setImage(environmentImage(96))
+    expect(stage.draw({ now: 3 }).updatedLayers).toEqual([0])
+    expect(gl!.spies.texImage2D).toHaveBeenCalledTimes(uploads + 1)
+    expect(gl!.spies.bufferData).toHaveBeenCalledTimes(geometryUploads)
+
+    stage.destroy()
+    environment.setIntensity(0.4)
   })
 
   it("rejects Children assigned to the wrong backend or layer", () => {

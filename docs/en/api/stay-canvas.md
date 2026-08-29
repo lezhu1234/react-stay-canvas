@@ -6,6 +6,7 @@
 import {
   AmbientLight,
   DirectionalLight,
+  EnvironmentMap,
   StayCanvas,
   PerspectiveCamera,
   type CanvasLayerConfig,
@@ -41,7 +42,7 @@ A numeric value uses `canvas.getContext("2d")` for every layer:
 <StayCanvas width={720} height={420} layers={3} />
 ```
 
-The legacy function-array form creates one Canvas per entry and calls the corresponding function with that Canvas. Every function must return a usable 2D drawing context. Descriptor entries make a backend explicit and may be mixed with legacy functions. A native WebGL2 layer requires one CPU-owned camera:
+The legacy function-array form creates one Canvas per entry and calls the corresponding function with that Canvas. Every function must return a usable 2D drawing context. Descriptor entries make a backend explicit and may be mixed with legacy functions. A native WebGL2 layer requires one CPU-owned camera. It may also own an explicit equirectangular environment:
 
 ```tsx
 <StayCanvas
@@ -50,6 +51,12 @@ The legacy function-array form creates one Canvas per entry and calls the corres
     {
       backend: "webgl2",
       camera: new PerspectiveCamera({ position: [0, 0, 3], target: [0, 0, 0] }),
+      environment: new EnvironmentMap({
+        width: 1024,
+        height: 512,
+        data: environmentRgba8,
+        intensity: 0.8,
+      }),
       lights: [
         new AmbientLight({ intensity: 0.25 }),
         new DirectionalLight({
@@ -67,7 +74,7 @@ The legacy function-array form creates one Canvas per entry and calls the corres
 
 Canvas2D remains the default. A WebGL2 layer is an opt-in native Mesh scene, not a Shape raster backend. Add Mesh children with `tools.webgl.appendChild()`; Canvas2D Shapes may target only Canvas2D layers, while a `StayWebGLChild` targets exactly one WebGL2 layer. Opaque Mesh visibility is depth-authoritative; Glass Meshes keep depth testing and stable-sort back to front after the opaque pass. Shape `zIndex` does not cross backend boundaries.
 
-`lights` is optional layer display state. `AmbientLight` and `DirectionalLight` mutations invalidate only their owning WebGL2 layers, as camera mutations do; neither is included in Child History or scene transfer. One layer currently accepts up to four directional lights and one directional shadow map. `directionToLight` is a world-space vector from the surface toward the light and is normalized by the Light. A DirectionalLight shadow uses an explicit orthographic camera (`target`, `up`, `distance`, `width`, `height`, `near`, `far`) plus `mapSize` and `bias`; the core does not automatically fit it to scene content. Changing only the light or shadow camera reuses Mesh geometry uploads. Shadow GPU resources are persistent until map size, context, or layer lifetime changes.
+`lights` and `environment` are optional layer display state. `EnvironmentMap`, `AmbientLight`, and `DirectionalLight` mutations invalidate only their owning WebGL2 layers, as camera mutations do; none is included in Child History or scene transfer. `EnvironmentMap` deep-copies a 2:1, row-major equirectangular RGBA8 image. The first row represents the +Y pole, horizontal pixels wrap around world Y, and `intensity` is a non-negative multiplier. Changing only intensity updates uniforms; changing pixels uploads the existing GPU texture and regenerates its roughness mip chain. One layer currently accepts up to four directional lights and one directional shadow map. `directionToLight` is a world-space vector from the surface toward the light and is normalized by the Light. A DirectionalLight shadow uses an explicit orthographic camera (`target`, `up`, `distance`, `width`, `height`, `near`, `far`) plus `mapSize` and `bias`; the core does not automatically fit it to scene content. Changing only the light or shadow camera reuses Mesh geometry uploads. Shadow and environment GPU resources persist until their source, context, or layer lifetime requires a rebuild.
 
 Backend failures are explicit. Failure to create WebGL2 or a Glass scene-color target, context loss during a draw, invalid Mesh state, and GPU upload failures are not converted to Canvas2D. A lost WebGL2 layer pauses until the native context is restored. The layer runtime prevents the native loss event by default so the browser may restore its owned context; `onContextLost` observes that event without owning recovery. Restoration discards invalid GPU handles, rebuilds them lazily from CPU Mesh state, invalidates the layer, and then calls `onContextRestored`.
 

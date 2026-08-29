@@ -3,6 +3,7 @@ import type {
   WebGL2LayerConfig,
 } from "../../types/canvas"
 import type { Mesh } from "../webgl2/mesh"
+import type { EnvironmentMap } from "../webgl2/environmentMap"
 import {
   webGL2DirectionalLightLimit,
   type WebGLLight,
@@ -22,6 +23,8 @@ export class WebGL2LayerRuntime {
   readonly #unsubscribeCameraChanges: () => void
   readonly #lights: readonly WebGLLight[]
   readonly #unsubscribeLightChanges: readonly (() => void)[]
+  readonly #environment?: EnvironmentMap
+  readonly #unsubscribeEnvironmentChanges?: () => void
 
   constructor(
     readonly element: HTMLCanvasElement,
@@ -30,6 +33,7 @@ export class WebGL2LayerRuntime {
     private readonly invalidate: () => void
   ) {
     this.#lights = [...(this.config.lights ?? [])]
+    this.#environment = this.config.environment
     if (new Set(this.#lights).size !== this.#lights.length) {
       throw new RangeError(`WebGL2 layer ${this.index} cannot contain duplicate Light instances`)
     }
@@ -54,6 +58,7 @@ export class WebGL2LayerRuntime {
     this.#unsubscribeCameraChanges = this.config.camera.subscribeChanges(this.invalidate)
     this.#unsubscribeLightChanges = this.#lights.map((light) =>
       light.subscribeChanges(this.invalidate))
+    this.#unsubscribeEnvironmentChanges = this.#environment?.subscribeChanges(this.invalidate)
   }
 
   resizeBackingStore(width: number, height: number) {
@@ -78,7 +83,7 @@ export class WebGL2LayerRuntime {
 
   render(meshes: readonly Mesh[]) {
     if (!this.#scene) throw new Error(`WebGL2 layer ${this.index} is not initialized`)
-    this.#scene.render(meshes, this.config.camera, this.#lights)
+    this.#scene.render(meshes, this.config.camera, this.#lights, this.#environment)
   }
 
   isDrawable() {
@@ -88,6 +93,7 @@ export class WebGL2LayerRuntime {
   destroy() {
     this.#unsubscribeCameraChanges()
     this.#unsubscribeLightChanges.forEach((unsubscribe) => unsubscribe())
+    this.#unsubscribeEnvironmentChanges?.()
     this.element.removeEventListener("webglcontextlost", this.#handleContextLost)
     this.element.removeEventListener("webglcontextrestored", this.#handleContextRestored)
     this.#scene?.dispose()

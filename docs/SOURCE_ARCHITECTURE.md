@@ -112,11 +112,11 @@ Shape-specific until the native scene has a raycast contract, but it continues t
 ActionRouter, EventRuntime, Listener registry, state stores, and DOM input adapter.
 
 `StayWebGLChild` owns ordered CPU `Mesh` geometry, model, and immutable material values on one
-WebGL2 layer. `PerspectiveCamera`, `AmbientLight`, and `DirectionalLight` belong to that layer's
+WebGL2 layer. `PerspectiveCamera`, `EnvironmentMap`, `AmbientLight`, and `DirectionalLight` belong to that layer's
 public display configuration. `WebGL2LayerRuntime` subscribes their CPU mutations and owns context loss/restoration and one
 `WebGL2SceneRuntime`; the scene runtime owns only derived program/VAO/buffer/target caches. Resize retains
 live cache objects when the resolver returns the same context. Context restoration forgets invalid
-handles and lazily reconstructs them from CPU Mesh/Camera/Light state. Geometry normals share the
+handles and lazily reconstructs them from CPU Mesh/Camera/Environment/Light state. Geometry normals share the
 Mesh geometry revision; material, light, model, and camera changes never upload geometry buffers.
 Directional shadow camera state remains Light-owned, while per-Mesh cast/receive flags participate
 in History and scene transfer. One persistent depth texture/framebuffer is derived per shadowed
@@ -129,8 +129,11 @@ WebGL2 layer. When Glass is present, that opaque color is resolved into one pers
 scene-color target. Glass samples only the resolved opaque color while it continues rendering into
 the default framebuffer, whose opaque color and depth remain intact. This separation prevents
 framebuffer feedback without replacing the layer's multisampled render target. The scene-color target
-is derived GPU state, reused at a stable drawing-buffer size, recreated on resize, and forgotten on
-context loss. Glass Meshes disable depth writes, use premultiplied-alpha
+generates a mip chain after each opaque resolve so Glass roughness can filter transmission without a
+second scene pass. An optional layer-owned equirectangular RGBA8 `EnvironmentMap` supplies world-space
+reflection radiance through a second persistent mipmapped texture; intensity changes are uniform-only,
+while pixel revision changes re-upload that texture. Both textures are derived GPU state and are
+forgotten on context loss. Glass Meshes disable depth writes, use premultiplied-alpha
 blending, and stable-sort back to front by the model-transformed local AABB center in camera view
 space. That center is derived Mesh state, not a second scene transform. The current contract is
 object-level transparency; exact intersecting/self-overlapping composition, transparent-on-transparent
@@ -138,8 +141,9 @@ refraction, and sampling outside the WebGL2 layer remain outside this runtime.
 
 The native backend does not consume Shape RenderPlans, Canvas2D raster surfaces, projective Shape
 placements, or Shape `zIndex`. Depth is authoritative inside a WebGL2 layer. Mesh history and scene
-transfer deep-copy CPU geometry, normals, model matrices, and material values; Camera and Light
-state is display configuration and is neither historical nor transferred.
+transfer deep-copy CPU geometry, normals, model matrices, and material values, including Glass
+roughness; Camera, EnvironmentMap, and Light state is display configuration and is neither historical
+nor transferred.
 
 ## Documentation boundary
 

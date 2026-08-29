@@ -13,6 +13,7 @@ import {
   UnlitMaterial,
 } from "../src/stay/webgl2/material"
 import { AmbientLight, DirectionalLight } from "../src/stay/webgl2/light"
+import { EnvironmentMap } from "../src/stay/webgl2/environmentMap"
 import { PerspectiveCamera } from "../src/stay/webgl2/perspectiveCamera"
 import { WebGL2SceneRuntime } from "../src/stay/webgl2/sceneRuntime"
 import {
@@ -42,6 +43,12 @@ const camera = () => new PerspectiveCamera({
   target: [0, 0, 0],
   near: 0.1,
   far: 20,
+})
+
+const environmentImage = (value = 160) => ({
+  width: 4,
+  height: 2,
+  data: new Uint8Array(4 * 2 * 4).fill(value),
 })
 
 describe("internal WebGL2 scene runtime", () => {
@@ -314,6 +321,68 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.createFramebuffer).not.toHaveBeenCalled()
     expect(gl.spies.blitFramebuffer).not.toHaveBeenCalled()
     runtime.dispose()
+  })
+
+  it("uses persistent mipmapped environment reflection and rough transmission", () => {
+    const canvas = document.createElement("canvas")
+    canvas.width = 240
+    canvas.height = 160
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const environment = new EnvironmentMap({
+      ...environmentImage(),
+      intensity: 0.8,
+    })
+    const glass = new Mesh({
+      geometry: litTriangle(),
+      material: new GlassMaterial({ roughness: 0.35 }),
+    })
+
+    runtime.render([glass], camera(), [new AmbientLight()], environment)
+    runtime.render([glass], camera(), [new AmbientLight()], environment)
+
+    expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
+      String(source).includes("textureLod(\n      u_environment_map")
+      && String(source).includes("reflect(-view_direction, normal)")
+      && String(source).includes("scene_color.rgb / scene_color.a")
+      && String(source).includes("surface_color * (alpha - fresnel)")
+      && String(source).includes("reflection_color * fresnel")))
+      .toBe(true)
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledOnce()
+    expect(gl.spies.texImage2D).toHaveBeenCalledTimes(2)
+    expect(gl.spies.generateMipmap).toHaveBeenCalledTimes(3)
+    expect(gl.spies.activeTexture).toHaveBeenCalledWith(gl.spies.TEXTURE2)
+    expect(gl.spies.uniform1f.mock.calls)
+      .toContainEqual([expect.anything(), Math.fround(0.35)])
+    expect(gl.spies.uniform1f.mock.calls)
+      .toContainEqual([expect.anything(), Math.fround(0.8)])
+
+    environment.setIntensity(0.6)
+    runtime.render([glass], camera(), [new AmbientLight()], environment)
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
+    expect(gl.spies.texImage2D).toHaveBeenCalledTimes(2)
+    expect(gl.spies.uniform1f.mock.calls)
+      .toContainEqual([expect.anything(), Math.fround(0.6)])
+
+    environment.setImage(environmentImage(96))
+    runtime.render([glass], camera(), [new AmbientLight()], environment)
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
+    expect(gl.spies.texImage2D).toHaveBeenCalledTimes(3)
+    expect(gl.spies.generateMipmap).toHaveBeenCalledTimes(6)
+
+    gl.setLost(true)
+    expect(() => runtime.render([glass], camera(), [], environment))
+      .toThrow("context is lost")
+    gl.setLost(false)
+    runtime.restoreContext()
+    runtime.render([glass], camera(), [], environment)
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(4)
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.texImage2D).toHaveBeenCalledTimes(5)
+
+    runtime.dispose()
+    expect(gl.spies.deleteTexture).toHaveBeenCalledTimes(2)
   })
 
   it("cleans a failed scene-color allocation and retries from CPU state", () => {
@@ -687,12 +756,27 @@ describe("internal WebGL2 scene runtime", () => {
     expect(() => new GlassMaterial({ ior: Number.MAX_VALUE }))
       .toThrow("ior exceeds Float32 range")
     expect(() => new GlassMaterial({ ior: Number.NaN })).toThrow("ior must be finite")
+    expect(() => new GlassMaterial({ roughness: -0.1 }))
+      .toThrow("roughness must be between 0 and 1")
+    expect(() => new GlassMaterial({ roughness: -Number.MIN_VALUE }))
+      .toThrow("roughness must be between 0 and 1")
+    expect(() => new GlassMaterial({ roughness: 1.1 }))
+      .toThrow("roughness must be between 0 and 1")
     expect(() => new GlassMaterial({ thickness: -0.1 }))
       .toThrow("thickness must be greater than or equal to 0")
     expect(() => new GlassMaterial({ thickness: -Number.MIN_VALUE }))
       .toThrow("thickness must be greater than or equal to 0")
     expect(() => new GlassMaterial({ thickness: Number.MAX_VALUE }))
       .toThrow("thickness exceeds Float32 range")
+    expect(() => new EnvironmentMap({ ...environmentImage(), width: 3 }))
+      .toThrow("2:1 equirectangular image")
+    expect(() => new EnvironmentMap({
+      width: 4,
+      height: 2,
+      data: new Uint8Array(31),
+    })).toThrow("exactly 32 RGBA8 values")
+    expect(() => new EnvironmentMap({ ...environmentImage(), intensity: -0.1 }))
+      .toThrow("intensity must be greater than or equal to 0")
     expect(() => new Mesh({
       geometry: triangle(),
       material: new GlassMaterial(),

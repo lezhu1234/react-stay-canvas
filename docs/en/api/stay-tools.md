@@ -49,14 +49,15 @@ const mesh = new Mesh({
 const glass = new GlassMaterial({
   color: [0.6, 0.85, 1, 0.2],
   ior: 1.46,
+  roughness: 0.24,
   thickness: 0.18,
 })
 mesh.setMaterial(glass)
 ```
 
-`UnlitMaterial` and `LambertMaterial` are opaque and require color alpha `1`. `GlassMaterial` requires alpha strictly between `0` and `1`, `ior` greater than `1` (default `1.5`), and non-negative `thickness` in world units (default `0.1`). The renderer uses those values for a lit Fresnel edge and screen-space refraction through the layer's opaque WebGL2 scene color. A zero thickness keeps transmission and Fresnel shading but samples the undisplaced screen position.
+`UnlitMaterial` and `LambertMaterial` are opaque and require color alpha `1`. `GlassMaterial` requires alpha strictly between `0` and `1`, `ior` greater than `1` (default `1.5`), `roughness` from `0` to `1` (default `0`), and non-negative `thickness` in world units (default `0.1`). The renderer uses those values for a lit Fresnel edge and screen-space refraction through the layer's opaque WebGL2 scene color. Roughness selects progressively filtered scene-color and environment mip levels; zero is sharp and one selects the broadest available blur. A zero thickness keeps transmission and Fresnel shading but samples the undisplaced screen position.
 
-Scene-color refraction is intentionally layer-local: it can bend opaque WebGL2 Meshes rendered earlier in the same layer. It cannot sample DOM/CSS content behind the Canvas or other transparent Meshes, and it does not yet provide roughness, environment reflection, absorption, or physical multi-surface transmission.
+Scene-color refraction is intentionally layer-local: it can bend opaque WebGL2 Meshes rendered earlier in the same layer. When the WebGL2 layer config supplies an `EnvironmentMap`, Glass also samples its world-space equirectangular reflection direction and applies the same roughness LOD. The environment belongs to layer display state, not Material History or scene transfer. Refraction still cannot sample DOM/CSS content behind the Canvas or other transparent Meshes, and the current LDR mip-chain model does not provide HDR prefiltered radiance, absorption, or physical multi-surface transmission.
 
 The renderer draws opaque Meshes first. Glass Meshes keep depth testing, disable depth writes, and are stable-sorted back to front by their transformed local bounding-box center in camera view space. This is standard object-level transparency: separate non-intersecting surfaces compose predictably, while intersecting transparent Meshes and self-overlapping geometry may require geometry splitting or a future order-independent transparency path.
 
@@ -74,7 +75,7 @@ Without any configured lights, Lambert renders dark. Glass keeps scene-color tra
 | `webgl.exportChildren(children)` | Capture deep-owned CPU Mesh fragments with source ids |
 | `webgl.importChildren(fragment)` | Materialize new Child ids and independent Mesh state |
 
-`Mesh`, `UnlitMaterial`, `LambertMaterial`, `GlassMaterial`, `AmbientLight`, `DirectionalLight`, `PerspectiveCamera`, `StayWebGLChild`, and the minimal Matrix4 helpers are exported from the package root. GPU programs, VAOs, buffers, scene-color/shadow targets, shaders, and layer runtimes remain internal. WebGL2 Child picking/raycast, colored/transmissive shadows, user textures, order-independent transparency, and Canvas capture are not part of this surface yet.
+`Mesh`, `UnlitMaterial`, `LambertMaterial`, `GlassMaterial`, `EnvironmentMap`, `AmbientLight`, `DirectionalLight`, `PerspectiveCamera`, `StayWebGLChild`, and the minimal Matrix4 helpers are exported from the package root. GPU programs, VAOs, buffers, scene-color/environment/shadow targets, shaders, and layer runtimes remain internal. WebGL2 Child picking/raycast, general-purpose material textures, colored/transmissive shadows, order-independent transparency, and Canvas capture are not part of this surface yet.
 
 ## State and display
 
@@ -152,7 +153,7 @@ These legacy methods directly mutate Child/Shape coordinates. They are batch geo
 | `redo()` | Redo one item; logs when none remain |
 | `resetHistory()` | Clear undo/redo and use the current static scene as the new baseline |
 
-Canvas2D and WebGL2 static Children participate in the same History transaction and id namespace. Camera and Light changes are layer display state and are not recorded. Animated Children do not participate in history. See [Scenes and tools: History transactions](../scene-and-tools.md#history-transactions) for boundaries and examples.
+Canvas2D and WebGL2 static Children participate in the same History transaction and id namespace. Camera, EnvironmentMap, and Light changes are layer display state and are not recorded. Animated Children do not participate in history. See [Scenes and tools: History transactions](../scene-and-tools.md#history-transactions) for boundaries and examples.
 
 ## Animation
 
@@ -185,7 +186,7 @@ interface DrawReturn {
 
 Scene transfer captures common Shape state and independently owned style containers. It intentionally captures only the current projection of an Animated Child and is not a timeline serialization format.
 
-Native Mesh transfer is separate because it has no 2D area/placement transform: use `tools.webgl.exportChildren()` and `tools.webgl.importChildren()`. Camera and Light state is owned by the target layer config and is not included.
+Native Mesh transfer is separate because it has no 2D area/placement transform: use `tools.webgl.exportChildren()` and `tools.webgl.importChildren()`. Camera, EnvironmentMap, and Light state is owned by the target layer config and is not included.
 
 ## Actions and Listeners
 

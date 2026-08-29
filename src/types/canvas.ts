@@ -1,5 +1,6 @@
 import type { PerspectiveCamera } from "../stay/webgl2/perspectiveCamera"
 import type { WebGLLight } from "../stay/webgl2/light"
+import type { EnvironmentMap } from "../stay/webgl2/environmentMap"
 
 export type DrawCanvasContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -19,6 +20,7 @@ export interface Canvas2DLayerConfig {
 export interface WebGL2LayerConfig {
   readonly backend: "webgl2"
   readonly camera: PerspectiveCamera
+  readonly environment?: EnvironmentMap
   readonly lights?: readonly WebGLLight[]
   readonly context?: WebGL2ContextLayerSetFunction
   readonly onContextLost?: (event: WebGLContextEvent) => void

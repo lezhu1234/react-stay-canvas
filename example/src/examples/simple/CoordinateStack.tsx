@@ -7,10 +7,10 @@ import {
   EnvironmentMap,
   GlassMaterial,
   type GlassAttenuationColor,
-  LambertMaterial,
   Line,
   Mesh,
   StayCanvas,
+  StandardMaterial,
   StayText,
   UnlitMaterial,
   type Coordinate,
@@ -710,7 +710,11 @@ export function CoordinateStack({
     const planes = {} as Record<PlaneName, PlaneRuntime>
     const meshes: Mesh[] = [new Mesh({
       geometry: floorMeshGeometry(),
-      material: new LambertMaterial({ color: [0.93, 0.95, 0.94, 1] }),
+      material: new StandardMaterial({
+        color: [0.78, 0.8, 0.79, 1],
+        metallic: 0,
+        roughness: 0.24,
+      }),
       receiveShadow: true,
     }), new Mesh({
       geometry: transmissionBackdropGeometry(Object.values(definitions)),

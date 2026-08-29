@@ -32,7 +32,7 @@
 
 `tools.webgl` 在同一实例、同一 identity store 中管理原生 Mesh Child。一个 `StayWebGLChild` 在一个 WebGL2 图层上拥有有序 Mesh 列表；Mesh 几何、模型矩阵与材质以 CPU 状态为准，修改后会标脏对应图层。
 
-`Mesh` 默认使用不透明的 `UnlitMaterial`。`LambertMaterial` 与 `GlassMaterial` 要求显式非零的逐顶点 normals；法线会被复制、在 shader 中归一化，并通过 model matrix 的逆转置进行变换。Material 是不可变值，更新时使用 `mesh.setMaterial()` 替换，不共享可变材质状态：
+`Mesh` 默认使用不透明的 `UnlitMaterial`。`LambertMaterial`、`StandardMaterial` 与 `GlassMaterial` 要求显式非零的逐顶点 normals；法线会被复制、在 shader 中归一化，并通过 model matrix 的逆转置进行变换。Material 是不可变值，更新时使用 `mesh.setMaterial()` 替换，不共享可变材质状态：
 
 ```ts
 const mesh = new Mesh({
@@ -46,6 +46,12 @@ const mesh = new Mesh({
   receiveShadow: true,
 })
 
+const polished = new StandardMaterial({
+  color: [0.72, 0.76, 0.8, 1],
+  metallic: 0.08,
+  roughness: 0.28,
+})
+
 const glass = new GlassMaterial({
   color: [0.6, 0.85, 1, 0.2],
   ior: 1.46,
@@ -57,17 +63,19 @@ const glass = new GlassMaterial({
 mesh.setMaterial(glass)
 ```
 
-`UnlitMaterial` 与 `LambertMaterial` 都不透明，color alpha 必须为 `1`。`GlassMaterial` 的 alpha 必须严格位于 `0` 与 `1` 之间，`ior` 必须大于 `1`（默认 `1.5`），`roughness` 位于 `0` 到 `1`（默认 `0`），`thickness` 是非负的 world-space 距离（默认 `0.1`）。renderer 会用这些值计算带光照的 Fresnel 边缘，以及对本图层 opaque WebGL2 scene color 的屏幕空间折射。roughness 会选择逐级过滤后的 scene-color 和 environment mip：零表示清晰，一表示使用可用的最宽模糊。厚度为零时仍保留透射和 Fresnel，只是不偏移屏幕采样位置。
+`UnlitMaterial`、`LambertMaterial` 与 `StandardMaterial` 都不透明，color alpha 必须为 `1`。`StandardMaterial` 使用 metallic-roughness 光照；`metallic` 默认 `0`，`roughness` 默认 `1`，两者都必须位于 `0` 到 `1`。它会同时消费方向光、阴影、相机视线和可选 `EnvironmentMap`，但仍在 opaque pass 中写入 depth；替换 Standard material 只更新 CPU 材质值和 shader uniform，不会推进 geometry revision。
+
+`GlassMaterial` 的 alpha 必须严格位于 `0` 与 `1` 之间，`ior` 必须大于 `1`（默认 `1.5`），`roughness` 位于 `0` 到 `1`（默认 `0`），`thickness` 是非负的 world-space 距离（默认 `0.1`）。renderer 会用这些值计算带光照的 Fresnel 边缘，以及对本图层 opaque WebGL2 scene color 的屏幕空间折射。roughness 会选择逐级过滤后的 scene-color 和 environment mip：零表示清晰，一表示使用可用的最宽模糊。厚度为零时仍保留透射和 Fresnel，只是不偏移屏幕采样位置。
 
 体积吸收遵循 Beer-Lambert 透射模型。`attenuationColor` 表示光线在介质内经过 `attenuationDistance` 个 world unit 后剩余的 RGB 颜色，因此每个通道的透射率为 `attenuationColor ** (thickness / attenuationDistance)`。attenuation color 默认白色；不传 `attenuationDistance` 表示无限距离，即不发生吸收。显式距离必须为正的有限数，颜色通道必须是 `0` 到 `1` 的有限数。`color` 仍描述玻璃边界的 tint，attenuation 则描述体积内部的损耗。当前材质直接把 `thickness` 当作完整传播距离，不会根据 Mesh 几何或厚度纹理推导路径长度。
 
-Scene-color 折射刻意限制在当前图层内：它可以扭曲同一 WebGL2 图层中更早绘制的 opaque Mesh。WebGL2 layer config 提供 `EnvironmentMap` 时，Glass 还会按 world-space 经纬反射方向采样它，并使用同一个 roughness LOD。environment 属于图层显示状态，不进入 Material History 或场景传输。折射仍不能采样 Canvas 后面的 DOM/CSS 内容或其他透明 Mesh；当前 LDR mip-chain 模型也不提供 HDR 预过滤辐射或物理多表面透射。
+Scene-color 折射刻意限制在当前图层内：它可以扭曲同一 WebGL2 图层中更早绘制的 opaque Mesh。WebGL2 layer config 提供 `EnvironmentMap` 时，Standard 与 Glass 都会按 world-space 经纬反射方向采样它，并使用各自 roughness 选择 mip LOD。纯 Standard 场景不需要 scene-color framebuffer。environment 属于图层显示状态，不进入 Material History 或场景传输。折射仍不能采样 Canvas 后面的 DOM/CSS 内容或其他透明 Mesh；当前 LDR mip-chain 模型也不提供 HDR 预过滤辐射或物理多表面透射。
 
 renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 depth write，再按局部包围盒中心变换到相机 view space 后的深度稳定地从远到近绘制。这是行业常用的对象级透明方案：彼此分离、不相交的表面能稳定合成；相交透明 Mesh 和自身重叠几何仍可能需要拆分 geometry，或等待后续 order-independent transparency。
 
 阴影行为是显式的 CPU Mesh 状态。`castShadow` 与 `receiveShadow` 都默认 `false`，运行时分别通过 `setCastShadow()`、`setReceiveShadow()` 修改。带光照的 receiver 会采样图层方向光的 shadow map；Glass 既可以接收，也可以投射阴影。`DirectionalLight.shadow.filterRadius` 用 shadow-map texel 表示固定 3×3 PCF tap 半径：默认值为 `1`；设为 `0` 时所有 tap 会收拢到最小的双线性硬件比较 footprint。增大它可以在不分配额外渲染目标的情况下柔化边缘；`mapSize` 与 shadow frustum 仍共同决定每个 texel 覆盖多少 world space。不透明 caster 会截断直射光；Glass caster 则把已有的边界透射率（`1 - color alpha`）与自身 `attenuationColor`、`attenuationDistance`、`thickness` 算出的 Beer-Lambert RGB 相乘。`color` 的 RGB 仍只描述边界 tint，不会成为第二套阴影颜色来源。当前有界 shadow-map 模型在每个光空间 texel 只保存最近的一层 Glass caster，多个重叠透射体还不会累积；不透明遮挡使用独立 depth map，因此即使 opaque caster 位于 Glass 后方，也仍会正确截断光线。History 与场景传输会保留阴影标志，且修改标志不会推进 geometry revision。
 
-未配置任何 Light 时 Lambert 会变暗。Glass 仍保留 scene-color 透射和 Fresnel 边缘，但直接受光的 tint 会变暗；需要这部分表面光照时请显式添加环境光或方向光，不依赖隐藏的默认灯组。
+未配置任何 Light 时 Lambert 会变暗。Standard 仍可显示已配置 EnvironmentMap 的反射；Glass 仍保留 scene-color 透射和 Fresnel 边缘，但两者直接受光的部分都会变暗。需要表面直射或漫射光时请显式添加环境光或方向光，不依赖隐藏的默认灯组。
 
 | 方法 | 说明 |
 | --- | --- |
@@ -79,7 +87,7 @@ renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 dep
 | `webgl.exportChildren(children)` | 捕获带 source id、深度隔离的 CPU Mesh 片段 |
 | `webgl.importChildren(fragment)` | 生成新的 Child id 与独立 Mesh 状态 |
 
-包入口导出 `Mesh`、`UnlitMaterial`、`LambertMaterial`、`GlassMaterial`、`EnvironmentMap`、`AmbientLight`、`DirectionalLight`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、scene-color/environment/shadow target、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、通用材质纹理、多层透射阴影、order-independent transparency 和 Canvas 截图暂不属于这个接口。
+包入口导出 `Mesh`、`UnlitMaterial`、`LambertMaterial`、`StandardMaterial`、`GlassMaterial`、`EnvironmentMap`、`AmbientLight`、`DirectionalLight`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、scene-color/environment/shadow target、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、通用材质纹理、多层透射阴影、order-independent transparency 和 Canvas 截图暂不属于这个接口。
 
 ## 状态与显示
 

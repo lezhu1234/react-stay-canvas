@@ -9,6 +9,7 @@ import {
   GlassMaterial,
   LambertMaterial,
   meshMaterialUsesLighting,
+  StandardMaterial,
   UnlitMaterial,
   type MeshMaterial,
 } from "./material"
@@ -190,9 +191,10 @@ export class Mesh {
   setMaterial(material: MeshMaterial) {
     if (!(material instanceof UnlitMaterial)
         && !(material instanceof LambertMaterial)
+        && !(material instanceof StandardMaterial)
         && !(material instanceof GlassMaterial)) {
       throw new TypeError(
-        "Mesh material must be an UnlitMaterial, LambertMaterial, or GlassMaterial"
+        "Mesh material must be an UnlitMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
       )
     }
     if (materialsEqual(this.#material, material)) return
@@ -308,6 +310,10 @@ function optionalFloat32ValuesEqual(
 
 function materialsEqual(first: MeshMaterial, second: MeshMaterial) {
   if (first.kind !== second.kind || !arrayValuesEqual(first.color, second.color)) return false
+  if (first instanceof StandardMaterial && second instanceof StandardMaterial) {
+    return first.metallic === second.metallic
+      && first.roughness === second.roughness
+  }
   if (first instanceof GlassMaterial && second instanceof GlassMaterial) {
     return arrayValuesEqual(first.attenuationColor, second.attenuationColor)
       && first.attenuationDistance === second.attenuationDistance

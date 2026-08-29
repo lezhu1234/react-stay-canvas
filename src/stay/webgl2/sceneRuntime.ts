@@ -77,6 +77,9 @@ interface GlassPipelineResources {
   readonly environmentIntensityLocation: WebGLUniformLocation
   readonly environmentMaxLodLocation: WebGLUniformLocation
   readonly hasEnvironmentLocation: WebGLUniformLocation
+  readonly attenuationColorLocation: WebGLUniformLocation
+  readonly hasVolumeAttenuationLocation: WebGLUniformLocation
+  readonly logAttenuationExponentLocation: WebGLUniformLocation
   readonly iorLocation: WebGLUniformLocation
   readonly roughnessLocation: WebGLUniformLocation
   readonly thicknessLocation: WebGLUniformLocation
@@ -249,12 +252,23 @@ uniform sampler2D u_environment_map;
 uniform float u_environment_intensity;
 uniform float u_environment_max_lod;
 uniform bool u_has_environment;
+uniform vec3 u_attenuation_color;
+uniform bool u_has_volume_attenuation;
+uniform float u_log_attenuation_exponent;
 uniform float u_ior;
 uniform float u_roughness;
 uniform float u_thickness;
 in vec3 world_normal;
 out vec4 output_color;
 ${SHADOW_FRAGMENT_INPUTS}
+
+float volume_attenuation_channel(float color, float log_attenuation_exponent) {
+  if (color <= 0.0) return 0.0;
+  if (color >= 1.0) return 1.0;
+  // Beyond this range every non-endpoint Float32 channel rounds to its 0 or 1 limit.
+  float attenuation_exponent = exp(clamp(log_attenuation_exponent, -80.0, 80.0));
+  return exp(log(color) * attenuation_exponent);
+}
 
 void main() {
   vec3 normal = normalize(world_normal);
@@ -286,8 +300,16 @@ void main() {
   );
   vec3 lit_tint = u_color.rgb * illumination;
   float transmission = scene_color.a * (1.0 - u_color.a) * (1.0 - fresnel);
+  vec3 volume_transmittance = vec3(1.0);
+  if (u_has_volume_attenuation) {
+    volume_transmittance = vec3(
+      volume_attenuation_channel(u_attenuation_color.r, u_log_attenuation_exponent),
+      volume_attenuation_channel(u_attenuation_color.g, u_log_attenuation_exponent),
+      volume_attenuation_channel(u_attenuation_color.b, u_log_attenuation_exponent)
+    );
+  }
   vec3 refracted_color = scene_color.a > 0.00001
-    ? scene_color.rgb / scene_color.a * u_color.rgb
+    ? scene_color.rgb / scene_color.a * u_color.rgb * volume_transmittance
     : vec3(0.0);
   vec3 surface_color = mix(lit_tint, refracted_color, transmission);
   vec3 reflection_color = vec3(1.0);
@@ -459,6 +481,17 @@ function createPipeline(
         "u_environment_max_lod"
       ),
       hasEnvironmentLocation: requireUniform(context, program, "u_has_environment"),
+      attenuationColorLocation: requireUniform(context, program, "u_attenuation_color"),
+      hasVolumeAttenuationLocation: requireUniform(
+        context,
+        program,
+        "u_has_volume_attenuation"
+      ),
+      logAttenuationExponentLocation: requireUniform(
+        context,
+        program,
+        "u_log_attenuation_exponent"
+      ),
       iorLocation: requireUniform(context, program, "u_ior"),
       roughnessLocation: requireUniform(context, program, "u_roughness"),
       thicknessLocation: requireUniform(context, program, "u_thickness"),
@@ -762,6 +795,24 @@ export class WebGL2SceneRuntime {
       }
       context.uniform4fv(pipeline.colorLocation, new Float32Array(material.color))
       if (pipeline.kind === "glass" && material.kind === "glass") {
+        context.uniform3fv(
+          pipeline.attenuationColorLocation,
+          new Float32Array(material.attenuationColor),
+        )
+        const hasVolumeAttenuation = material.attenuationDistance !== undefined
+          && material.thickness > 0
+        const logAttenuationExponent = material.attenuationDistance === undefined
+          || material.thickness === 0
+          ? 0
+          : Math.log(material.thickness) - Math.log(material.attenuationDistance)
+        context.uniform1i(
+          pipeline.hasVolumeAttenuationLocation,
+          hasVolumeAttenuation ? 1 : 0,
+        )
+        context.uniform1f(
+          pipeline.logAttenuationExponentLocation,
+          logAttenuationExponent,
+        )
         context.uniform1f(pipeline.iorLocation, material.ior)
         context.uniform1f(pipeline.roughnessLocation, material.roughness)
         context.uniform1f(pipeline.thicknessLocation, material.thickness)

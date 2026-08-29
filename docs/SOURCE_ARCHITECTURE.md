@@ -133,7 +133,14 @@ generates a mip chain after each opaque resolve so Glass roughness can filter tr
 second scene pass. An optional layer-owned equirectangular RGBA8 `EnvironmentMap` supplies world-space
 reflection radiance through a second persistent mipmapped texture; intensity changes are uniform-only,
 while pixel revision changes re-upload that texture. Both textures are derived GPU state and are
-forgotten on context loss. Glass Meshes disable depth writes, use premultiplied-alpha
+forgotten on context loss. Glass applies immutable material-owned Beer-Lambert attenuation to the
+refracted scene color. `attenuationColor` is the remaining per-channel transmission after
+`attenuationDistance`; the explicit `thickness` is the travel distance. An omitted attenuation
+distance is represented to the shader as a disabled branch. For enabled attenuation, the CPU derives
+a finite logarithmic thickness/distance exponent from canonical material values before uniform upload;
+this preserves valid Float32 subnormal endpoints that a GPU may otherwise flush to zero. The default
+material preserves the pre-attenuation result without another GPU resource. Glass Meshes disable
+depth writes, use premultiplied-alpha
 blending, and stable-sort back to front by the model-transformed local AABB center in camera view
 space. That center is derived Mesh state, not a second scene transform. The current contract is
 object-level transparency; exact intersecting/self-overlapping composition, transparent-on-transparent
@@ -142,7 +149,7 @@ refraction, and sampling outside the WebGL2 layer remain outside this runtime.
 The native backend does not consume Shape RenderPlans, Canvas2D raster surfaces, projective Shape
 placements, or Shape `zIndex`. Depth is authoritative inside a WebGL2 layer. Mesh history and scene
 transfer deep-copy CPU geometry, normals, model matrices, and material values, including Glass
-roughness; Camera, EnvironmentMap, and Light state is display configuration and is neither historical
+roughness and volume attenuation; Camera, EnvironmentMap, and Light state is display configuration and is neither historical
 nor transferred.
 
 ## Documentation boundary

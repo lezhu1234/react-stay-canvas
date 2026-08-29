@@ -171,6 +171,8 @@ describe("internal Stay WebGL Child runtime", () => {
       meshes: [new Mesh({
         geometry: { ...triangle(), normals },
         material: new GlassMaterial({
+          attenuationColor: [0.72, 0.9, 1],
+          attenuationDistance: 1.4,
           color: [0.2, 0.7, 0.9, 0.22],
           ior: 1.46,
           roughness: 0.24,
@@ -181,6 +183,8 @@ describe("internal Stay WebGL Child runtime", () => {
     const snapshot = captureStayWebGLChildSnapshot(original)
     expect(snapshot.meshes[0].material).toEqual({
       kind: "glass",
+      attenuationColor: [0.72, 0.9, 1],
+      attenuationDistance: Math.fround(1.4),
       color: [0.2, 0.7, 0.9, 0.22],
       ior: Math.fround(1.46),
       roughness: Math.fround(0.24),
@@ -191,6 +195,8 @@ describe("internal Stay WebGL Child runtime", () => {
     restored.meshes[0].setMaterial(new GlassMaterial({ color: [1, 1, 1, 0.4] }))
     expect(original.meshes[0].getMaterial()).toEqual(
       new GlassMaterial({
+        attenuationColor: [0.72, 0.9, 1],
+        attenuationDistance: 1.4,
         color: [0.2, 0.7, 0.9, 0.22],
         ior: 1.46,
         roughness: 0.24,

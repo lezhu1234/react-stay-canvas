@@ -6,6 +6,7 @@ import {
   DirectionalLight,
   EnvironmentMap,
   GlassMaterial,
+  type GlassAttenuationColor,
   Line,
   Mesh,
   StayCanvas,
@@ -46,6 +47,7 @@ import {
   PLANE_GRID_ROWS,
   projectPlanePoint,
   rectMeshGeometry,
+  transmissionBackdropGeometry,
   transparentMeshColor,
   type PlaneBasis,
   type PlaneDefinition,
@@ -67,6 +69,14 @@ const PLANE_GLASS_ROUGHNESS: Readonly<Record<PlaneName, number>> = {
   view: 0.38,
   content: 0.76,
 }
+const PLANE_GLASS_ATTENUATION: Readonly<Record<PlaneName, {
+  color: GlassAttenuationColor
+  distance: number
+}>> = {
+  client: { color: [0.72, 0.95, 1], distance: 0.8 },
+  view: { color: [0.48, 0.72, 1], distance: 0.55 },
+  content: { color: [0.52, 1, 0.68], distance: 0.45 },
+}
 
 const unlitMaterial = (color: ReturnType<typeof rgba>) =>
   new UnlitMaterial({ color: meshColor(color) })
@@ -74,8 +84,11 @@ const glassMaterial = (
   color: ReturnType<typeof rgba>,
   thickness = 0,
   roughness = 0.12,
+  attenuation?: typeof PLANE_GLASS_ATTENUATION[PlaneName],
 ) =>
   new GlassMaterial({
+    attenuationColor: attenuation?.color,
+    attenuationDistance: attenuation?.distance,
     color: transparentMeshColor(color),
     ior: 1.46,
     roughness,
@@ -282,10 +295,16 @@ function createPlaneRuntime(
   const detailSize = Math.max(9, Math.min(11, plane.width * 0.045))
   const axisColor = rgba(78, 89, 104, 0.24)
   const panelRoughness = PLANE_GLASS_ROUGHNESS[name]
+  const panelAttenuation = PLANE_GLASS_ATTENUATION[name]
 
   const frameFill = new Mesh({
     geometry: rectMeshGeometry(plane, basis, planeRect, PANEL_FACE_OFFSET),
-    material: glassMaterial(plane.fill, PANEL_THICKNESS, panelRoughness),
+    material: glassMaterial(
+      plane.fill,
+      PANEL_THICKNESS,
+      panelRoughness,
+      panelAttenuation,
+    ),
     receiveShadow: true,
   })
   const frameDepth = new Mesh({
@@ -294,6 +313,7 @@ function createPlaneRuntime(
       { ...plane.stroke, a: 0.32 },
       PANEL_THICKNESS,
       panelRoughness,
+      panelAttenuation,
     ),
     receiveShadow: true,
   })
@@ -596,7 +616,7 @@ export function CoordinateStack({
         plane.meshes.frameFill.setMaterial(glassMaterial({
           ...plane.fill,
           a: isActive ? plane.fill.a : plane.fill.a * 0.72,
-        }, PANEL_THICKNESS, PLANE_GLASS_ROUGHNESS[name]))
+        }, PANEL_THICKNESS, PLANE_GLASS_ROUGHNESS[name], PLANE_GLASS_ATTENUATION[name]))
         plane.meshes.frameEdges.setMaterial(unlitMaterial({
           ...plane.stroke,
           a: isActive ? plane.stroke.a : plane.stroke.a * 0.68,
@@ -604,13 +624,13 @@ export function CoordinateStack({
         plane.meshes.frameDepth.setMaterial(glassMaterial({
           ...plane.stroke,
           a: isActive ? 0.32 : 0.22,
-        }, PANEL_THICKNESS, PLANE_GLASS_ROUGHNESS[name]))
+        }, PANEL_THICKNESS, PLANE_GLASS_ROUGHNESS[name], PLANE_GLASS_ATTENUATION[name]))
       }
       plane.overlay.title.update({
         fillConfig: { color: { ...plane.stroke, a: isActive ? 1 : 0.68 } },
       })
       plane.overlay.dimension.update({
-        text: `${Math.round(range.width)} × ${Math.round(range.height)} · R ${PLANE_GLASS_ROUGHNESS[name].toFixed(2)}`,
+        text: `${Math.round(range.width)} × ${Math.round(range.height)} · R ${PLANE_GLASS_ROUGHNESS[name].toFixed(2)} · AD ${PLANE_GLASS_ATTENUATION[name].distance.toFixed(2)}`,
         fillConfig: { color: rgba(78, 89, 104, isActive ? 0.72 : 0.5) },
       })
       plane.overlay.dot.update({
@@ -705,6 +725,9 @@ export function CoordinateStack({
         color: [0.86, 0.9, 0.88, 0.01],
         roughness: 0.46,
       }),
+    }), new Mesh({
+      geometry: transmissionBackdropGeometry(Object.values(definitions)),
+      material: new UnlitMaterial({ color: [0.89, 0.9, 0.895, 1] }),
     }), new Mesh({
       geometry: contactShadowReceiverGeometry(Object.values(definitions)),
       material: new GlassMaterial({

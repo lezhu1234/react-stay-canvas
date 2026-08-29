@@ -7,6 +7,7 @@ import { Rectangle, StayCanvas, type StayTools } from "react-stay-canvas"
 import {
   Button,
   CanvasCard,
+  CanvasSurface,
   DemoLayout,
   EventLog,
   placeSceneChild,
@@ -25,6 +26,10 @@ import {
   createPlaneDefinitions,
   expandRangeToAspect,
 } from "../example/src/examples/simple/CoordinateStack"
+import {
+  createPlaneBasis,
+  rectMeshGeometry,
+} from "../example/src/examples/simple/coordinateSceneModel"
 import {
   createFiniteProjectiveMapping,
   mapProjectiveLocalToContentPoint,
@@ -145,6 +150,54 @@ describe("Example Canvas workspace", () => {
     expect(mapping.contentBounds.y).toBeGreaterThanOrEqual(-Number.EPSILON)
     expect(mapping.contentBounds.y + mapping.contentBounds.height)
       .toBeLessThanOrEqual(canvasHeight + Number.EPSILON)
+  })
+
+  it("grounds the three coordinate planes as separated descending depth stages", () => {
+    const definitions = createPlaneDefinitions(1012, 524)
+    const bounds = (["client", "view", "content"] as const).map((name) => {
+      const placement = definitions[name].placement
+      expect(placement.type).toBe("projective")
+      if (placement.type !== "projective") throw new Error("expected projective plane")
+      return createFiniteProjectiveMapping(placement.matrix, placement.domain).contentBounds
+    })
+
+    expect(bounds[0].y).toBeLessThan(bounds[1].y)
+    expect(bounds[1].y).toBeLessThan(bounds[2].y)
+    expect(bounds[0].x + bounds[0].width).toBeLessThan(bounds[1].x)
+    expect(bounds[1].x + bounds[1].width).toBeLessThan(bounds[2].x)
+    const groundHeight = definitions.client.worldQuad[3][1]
+    for (const definition of Object.values(definitions)) {
+      expect(definition.worldQuad[2][1]).toBe(groundHeight)
+      expect(definition.worldQuad[3][1]).toBe(groundHeight)
+    }
+  })
+
+  it("keeps plane triangle winding aligned with the stored front-face normal", () => {
+    const plane = createPlaneDefinitions(1012, 524).client
+    const basis = createPlaneBasis(plane)
+    const geometry = rectMeshGeometry(
+      plane,
+      basis,
+      { x: 0, y: 0, width: plane.width, height: plane.height },
+      0.09,
+    )
+    const positions = Array.from(geometry.positions)
+    const normals = Array.from(geometry.normals ?? [])
+    const indices = Array.from(geometry.indices ?? [])
+    const point = (index: number) => positions.slice(index * 3, index * 3 + 3)
+    const first = point(indices[0])
+    const second = point(indices[1])
+    const third = point(indices[2])
+    const along = second.map((value, index) => value - first[index])
+    const across = third.map((value, index) => value - first[index])
+    const faceNormal = [
+      along[1] * across[2] - along[2] * across[1],
+      along[2] * across[0] - along[0] * across[2],
+      along[0] * across[1] - along[1] * across[0],
+    ]
+    const dot = faceNormal.reduce((sum, value, index) => sum + value * normals[index], 0)
+
+    expect(dot).toBeGreaterThan(0)
   })
 
   it("defines a bounded Content scene and connects all corresponding plane corners", () => {
@@ -483,6 +536,9 @@ describe("Example Canvas workspace", () => {
     const scaleYInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS scale Y"]')
     const offsetXInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS translate X"]')
     const offsetYInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS translate Y"]')
+    const bridgeEndpointBeforeCss = container
+      .querySelector<SVGLineElement>(".coordinate-space-bridge-line")
+      ?.getAttribute("x2")
     const setInputValue = (input: HTMLInputElement | null, value: string) => {
       const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
       setValue?.call(input, value)
@@ -498,6 +554,8 @@ describe("Example Canvas workspace", () => {
     expect(displayTransform?.style.transform).toBe("translate(32px, 24px) scale(0.65, 0.9)")
     expect(workspace?.querySelector(".coordinate-live-exhibit .canvas-viewport-label")?.textContent)
       .toBe("CLIENT DOM · 65% × 90%")
+    expect(container.querySelector(".coordinate-space-bridge-line")?.getAttribute("x2"))
+      .not.toBe(bridgeEndpointBeforeCss)
     expect(proofRows
       .find((item) => item.querySelector("dt")?.textContent === "CSS View to Client")
       ?.querySelector("code")?.textContent)
@@ -622,6 +680,32 @@ describe("Example Canvas workspace", () => {
     } finally {
       globalThis.ResizeObserver = originalResizeObserver
     }
+  })
+
+  it("reports the actual shrunken drawing-buffer area to mounted scenes", () => {
+    viewportWidth = 210
+    viewportHeight = 81
+    let tools: StayTools | undefined
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(
+        <CanvasSurface shrinkToViewport>
+          <StayCanvas
+            height={120}
+            layers={1}
+            mounted={(mountedTools) => { tools = mountedTools }}
+            width={240}
+          />
+        </CanvasSurface>,
+      )
+    })
+
+    expect(container.querySelector<HTMLCanvasElement>("canvas")?.width).toBe(210)
+    expect(container.querySelector<HTMLCanvasElement>("canvas")?.height).toBe(81)
+    expect(sceneCanvasArea(tools!, 240, 120)).toEqual({ x: 0, y: 0, width: 210, height: 81 })
   })
 
   it("keeps reporting pointer samples outside the finite coordinate planes", () => {

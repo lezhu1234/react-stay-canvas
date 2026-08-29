@@ -5,7 +5,6 @@ import {
   type CanvasLayerConfig,
   DirectionalLight,
   GlassMaterial,
-  LambertMaterial,
   Line,
   Mesh,
   StayCanvas,
@@ -32,15 +31,16 @@ import {
   visibleContentRange,
 } from "./coordinateLabModel"
 import {
+  contactShadowReceiverGeometry,
   createCoordinateCamera,
-  backdropMeshGeometry,
   createPlaneBasis,
   createPlaneDefinitions,
-  dashedSegments,
   emptyMeshGeometry,
   expandRangeToAspect,
+  floorMeshGeometry,
   lineMeshGeometry,
   meshColor,
+  planeVolumeGeometry,
   PLANE_GRID_COLUMNS,
   PLANE_GRID_ROWS,
   projectPlanePoint,
@@ -58,6 +58,9 @@ const STACK_WIDTH = 240
 const STACK_HEIGHT = 120
 const WEBGL_LAYER = 0
 const OVERLAY_LAYER = 1
+const PANEL_THICKNESS = 0.18
+const PANEL_FACE_OFFSET = PANEL_THICKNESS / 2
+const CONTACT_CASTER_HEIGHT = 14
 
 const unlitMaterial = (color: ReturnType<typeof rgba>) =>
   new UnlitMaterial({ color: meshColor(color) })
@@ -68,12 +71,15 @@ export type CoordinateMappingFocus = "view-client" | "content-view"
 
 type PlaneMeshes = {
   frameFill: Mesh
+  frameDepth: Mesh
+  contactCaster: Mesh
+  frameBackEdges: Mesh
   frameEdges: Mesh
+  frameHighlight: Mesh
   grid: Mesh
   axes: Mesh
   shapeFill: Mesh
   shapeEdges: Mesh
-  canvasDomEdges?: Mesh
   viewportFill?: Mesh
   viewportEdges?: Mesh
 }
@@ -156,6 +162,24 @@ function frameSegments(width: number, height: number): LineSegment[] {
   ]
 }
 
+function cornerSegments(rect: Readonly<Rect>): LineSegment[] {
+  const length = Math.min(12, rect.width / 4, rect.height / 4)
+  const left = rect.x
+  const right = rect.x + rect.width
+  const top = rect.y
+  const bottom = rect.y + rect.height
+  return [
+    { x1: left, y1: top + length, x2: left, y2: top },
+    { x1: left, y1: top, x2: left + length, y2: top },
+    { x1: right - length, y1: top, x2: right, y2: top },
+    { x1: right, y1: top, x2: right, y2: top + length },
+    { x1: right, y1: bottom - length, x2: right, y2: bottom },
+    { x1: right, y1: bottom, x2: right - length, y2: bottom },
+    { x1: left + length, y1: bottom, x2: left, y2: bottom },
+    { x1: left, y1: bottom, x2: left, y2: bottom - length },
+  ]
+}
+
 function gridPosition(index: number, count: number, size: number) {
   return index / (count + 1) * size
 }
@@ -203,51 +227,80 @@ function createOverlayText(
 function createPlaneRuntime(
   name: PlaneName,
   plane: PlaneDefinition,
-  canvasWidth: number,
-  canvasHeight: number,
 ): { meshes: Mesh[]; overlays: Array<Circle | Line | StayText>; runtime: PlaneRuntime } {
-  const basis = createPlaneBasis(plane, canvasWidth, canvasHeight)
+  const basis = createPlaneBasis(plane)
   const planeRect = { x: 0, y: 0, width: plane.width, height: plane.height }
-  const titleSize = Math.max(9, Math.min(15, plane.width * 0.06))
-  const detailSize = Math.max(7, Math.min(10, plane.width * 0.04))
+  const titleSize = Math.max(13, Math.min(16, plane.width * 0.065))
+  const detailSize = Math.max(9, Math.min(11, plane.width * 0.045))
   const axisColor = rgba(78, 89, 104, 0.24)
 
   const frameFill = new Mesh({
-    geometry: rectMeshGeometry(plane, basis, planeRect, 0),
+    geometry: rectMeshGeometry(plane, basis, planeRect, PANEL_FACE_OFFSET),
     material: glassMaterial(plane.fill),
     receiveShadow: true,
   })
-  const frameEdges = new Mesh({
-    geometry: lineMeshGeometry(plane, basis, frameSegments(plane.width, plane.height), 1.25, 0.002),
-    material: unlitMaterial(plane.stroke),
+  const frameDepth = new Mesh({
+    geometry: planeVolumeGeometry(plane, basis, PANEL_THICKNESS),
+    material: glassMaterial({ ...plane.stroke, a: 0.32 }),
+    receiveShadow: true,
+  })
+  const contactCaster = new Mesh({
+    geometry: rectMeshGeometry(plane, basis, {
+      x: 0,
+      y: plane.height - CONTACT_CASTER_HEIGHT,
+      width: plane.width,
+      height: CONTACT_CASTER_HEIGHT,
+    }, PANEL_FACE_OFFSET + 0.002),
+    material: glassMaterial({ ...plane.stroke, a: 0.012 }),
     castShadow: true,
   })
+  const frameBackEdges = new Mesh({
+    geometry: lineMeshGeometry(
+      plane,
+      basis,
+      frameSegments(plane.width, plane.height),
+      1.05,
+      -PANEL_FACE_OFFSET,
+    ),
+    material: unlitMaterial({ ...plane.stroke, a: 0.34 }),
+  })
+  const frameEdges = new Mesh({
+    geometry: lineMeshGeometry(
+      plane,
+      basis,
+      frameSegments(plane.width, plane.height),
+      1.45,
+      PANEL_FACE_OFFSET + 0.004,
+    ),
+    material: unlitMaterial(plane.stroke),
+  })
+  const frameHighlight = new Mesh({
+    geometry: lineMeshGeometry(plane, basis, [
+      { x1: 0, y1: 0, x2: plane.width, y2: 0 },
+      { x1: plane.width, y1: 0, x2: plane.width, y2: plane.height },
+    ], 1.45, PANEL_FACE_OFFSET + 0.007),
+    material: unlitMaterial(rgba(185, 220, 232, 0.58)),
+  })
   const grid = new Mesh({
-    geometry: lineMeshGeometry(plane, basis, gridSegments(plane), 1, 0.003),
-    material: unlitMaterial({ ...plane.stroke, a: 0.1 }),
-    castShadow: true,
+    geometry: lineMeshGeometry(plane, basis, gridSegments(plane), 0.8, PANEL_FACE_OFFSET + 0.006),
+    material: glassMaterial({ ...plane.stroke, a: 0.08 }),
   })
   const axes = new Mesh({
     geometry: lineMeshGeometry(plane, basis, [
       { x1: 12, y1: 20, x2: plane.width - 14, y2: 20 },
       { x1: 12, y1: 20, x2: 12, y2: plane.height - 12 },
-    ], 1, 0.004),
-    material: unlitMaterial(axisColor),
-    castShadow: true,
+    ], 0.9, PANEL_FACE_OFFSET + 0.008),
+    material: glassMaterial(axisColor),
   })
-  const shapeFill = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.13)), castShadow: true })
-  const shapeEdges = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.9)), castShadow: true })
-  const canvasDomEdges = name === "client" ? new Mesh({
-    geometry: emptyMeshGeometry(),
-    material: unlitMaterial(rgba(74, 163, 214, 0.64)),
-  }) : undefined
+  const shapeFill = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.13)) })
+  const shapeEdges = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.9)) })
   const viewportFill = name === "content" ? new Mesh({
     geometry: emptyMeshGeometry(),
-    material: unlitMaterial(rgba(70, 143, 77, 0.045)),
+    material: glassMaterial(rgba(70, 143, 77, 0.018)),
   }) : undefined
   const viewportEdges = name === "content" ? new Mesh({
     geometry: emptyMeshGeometry(),
-    material: unlitMaterial(rgba(70, 143, 77, 0.78)),
+    material: glassMaterial(rgba(70, 143, 77, 0.18)),
   }) : undefined
 
   const title = new StayText({
@@ -256,6 +309,7 @@ function createPlaneRuntime(
     text: name.toUpperCase(),
     layer: OVERLAY_LAYER,
     zIndex: 20,
+    textAlign: "center",
     textBaseline: "bottom",
     font: { size: titleSize, fontWeight: 700 },
     fillConfig: { color: plane.stroke },
@@ -266,6 +320,7 @@ function createPlaneRuntime(
     text: "0 × 0",
     layer: OVERLAY_LAYER,
     zIndex: 20,
+    textAlign: "center",
     textBaseline: "bottom",
     font: { size: detailSize, fontWeight: 500 },
     fillConfig: { color: colors.gray },
@@ -319,17 +374,20 @@ function createPlaneRuntime(
     zIndex: 6,
     textBaseline: "top",
     font: { size: detailSize, fontWeight: 700 },
-    fillConfig: { color: rgba(70, 143, 77, 0.9) },
+    fillConfig: { color: rgba(70, 143, 77, 0.4) },
   }) : undefined
 
   const meshes: PlaneMeshes = {
     frameFill,
+    frameDepth,
+    contactCaster,
+    frameBackEdges,
     frameEdges,
+    frameHighlight,
     grid,
     axes,
     shapeFill,
     shapeEdges,
-    canvasDomEdges,
     viewportFill,
     viewportEdges,
   }
@@ -364,24 +422,18 @@ function updateViewportProjection(plane: PlaneRuntime, rect: Rect) {
   const clip = { x: 0, y: 0, width: plane.width, height: plane.height }
   const visible = clippedRect(rect, clip)
   updateMeshRect(viewportFill, plane, visible, 0.005)
-  updateMeshLines(viewportEdges, plane, clippedRectEdges(rect, clip), 1.4, 0.007)
+  updateMeshLines(viewportEdges, plane, visible ? cornerSegments(visible) : [], 1.4, 0.007)
   const labelVisible = visible && visible.width >= 52 && visible.height >= 24
   const labelPoint = visible
-    ? projectPlanePoint(plane, { x: visible.x + 7, y: visible.y + 6 })
+    ? projectPlanePoint(plane, {
+        x: visible.x + 7,
+        y: Math.min(plane.height - 18, visible.y + visible.height + 8),
+      })
     : { x: 0, y: 0 }
   viewportLabel.update({
     ...labelPoint,
-    fillConfig: { color: rgba(70, 143, 77, labelVisible ? 0.9 : 0) },
+    fillConfig: { color: rgba(70, 143, 77, labelVisible ? 0.4 : 0) },
   })
-}
-
-function updateClientCanvasEdges(plane: PlaneRuntime, rect: Rect) {
-  const canvasDomEdges = plane.meshes.canvasDomEdges
-  if (!canvasDomEdges) return
-  const clip = { x: 0, y: 0, width: plane.width, height: plane.height }
-  const segments = clippedRectEdges(rect, clip).flatMap((edge) =>
-    edge ? dashedSegments(edge, 5, 4) : [])
-  updateMeshLines(canvasDomEdges, plane, segments, 1.15, 0.007)
 }
 
 function updateCornerLinks(
@@ -419,33 +471,41 @@ function updateCornerLinks(
 export function CoordinateStack({
   clientRange,
   mappingFocus,
+  onContentPointClientChange,
   probe,
   viewport,
 }: {
   clientRange: Readonly<Rect>
   mappingFocus: CoordinateMappingFocus
+  onContentPointClientChange?: (point: Coordinate) => void
   probe: CoordinateProbe
   viewport: Readonly<ViewportState>
 }) {
   const { text } = useI18n()
   const runtimeRef = useRef<StackRuntime>()
+  const viewToClientRef = useRef<(point: Coordinate) => Coordinate>()
   const camera = useMemo(() => createCoordinateCamera(), [])
   const lights = useMemo(() => [
-    new AmbientLight({ color: [0.92, 0.97, 1], intensity: 0.78 }),
+    new AmbientLight({ color: [0.84, 0.91, 0.95], intensity: 0.32 }),
     new DirectionalLight({
-      directionToLight: [-0.45, 0.7, 1],
-      color: [1, 0.96, 0.88],
-      intensity: 0.34,
+      directionToLight: [0.72, 0.96, 0.5],
+      color: [1, 0.92, 0.8],
+      intensity: 0.9,
       shadow: {
-        target: [0, 0, -5.3],
-        distance: 7,
-        width: 9,
-        height: 6,
+        target: [0, -0.4, -7.2],
+        distance: 11,
+        width: 15,
+        height: 10,
         near: 0.1,
-        far: 16,
-        mapSize: 1024,
-        bias: 0.0015,
+        far: 26,
+        mapSize: 512,
+        bias: 0.001,
       },
+    }),
+    new DirectionalLight({
+      directionToLight: [-0.62, 0.2, 0.76],
+      color: [0.57, 0.72, 1],
+      intensity: 0.08,
     }),
   ], [])
   const layers = useMemo<CanvasLayerConfig[]>(() => [
@@ -486,6 +546,10 @@ export function CoordinateStack({
           ...plane.stroke,
           a: isActive ? plane.stroke.a : plane.stroke.a * 0.68,
         }))
+        plane.meshes.frameDepth.setMaterial(glassMaterial({
+          ...plane.stroke,
+          a: isActive ? 0.32 : 0.22,
+        }))
       }
       plane.overlay.title.update({
         fillConfig: { color: { ...plane.stroke, a: isActive ? 1 : 0.68 } },
@@ -513,14 +577,6 @@ export function CoordinateStack({
           plane,
           rectOnPlane(plane, visibleContentRange(sample, currentViewport), range),
         )
-      }
-      if (name === "client") {
-        updateClientCanvasEdges(plane, rectOnPlane(plane, {
-          x: sample.surface.left,
-          y: sample.surface.top,
-          width: sample.surface.width,
-          height: sample.surface.height,
-        }, range))
       }
       updateShapeProjection(plane, localShape)
       if (contentPoint) points[name] = contentPoint
@@ -573,25 +629,33 @@ export function CoordinateStack({
     })
     updateRay(runtime.rays[0], points.client, points.view, clientViewActive ? 0.88 : 0.48, clientViewActive ? 1.7 : 1.2)
     updateRay(runtime.rays[1], points.view, points.content, clientViewActive ? 0.48 : 0.88, clientViewActive ? 1.2 : 1.7)
+    const contentPoint = points.content
+    if (contentPoint && viewToClientRef.current) {
+      onContentPointClientChange?.(viewToClientRef.current(contentPoint))
+    }
     runtime.materialFocus = mappingFocus
   }
 
   useEffect(() => update(probe, viewport), [clientRange, mappingFocus, probe, viewport])
 
   const mounted = (tools: StayTools) => {
+    viewToClientRef.current = (point) => tools.coordinates.viewToClient(point)
     const canvasArea = sceneCanvasArea(tools, STACK_WIDTH, STACK_HEIGHT)
     const definitions = createPlaneDefinitions(canvasArea.width, canvasArea.height)
     const planeNames: PlaneName[] = ["client", "view", "content"]
     const planes = {} as Record<PlaneName, PlaneRuntime>
     const meshes: Mesh[] = [new Mesh({
-      geometry: backdropMeshGeometry(canvasArea.width, canvasArea.height),
-      material: new LambertMaterial({ color: [0.96, 0.975, 0.965, 1] }),
+      geometry: floorMeshGeometry(),
+      material: new GlassMaterial({ color: [0.86, 0.9, 0.88, 0.01] }),
+    }), new Mesh({
+      geometry: contactShadowReceiverGeometry(Object.values(definitions)),
+      material: new GlassMaterial({ color: [0.32, 0.46, 0.42, 0.035] }),
       receiveShadow: true,
     })]
     const overlays: Array<Circle | Line | StayText> = []
 
     planeNames.forEach((name) => {
-      const created = createPlaneRuntime(name, definitions[name], canvasArea.width, canvasArea.height)
+      const created = createPlaneRuntime(name, definitions[name])
       planes[name] = created.runtime
       meshes.push(...created.meshes)
       overlays.push(...created.overlays)

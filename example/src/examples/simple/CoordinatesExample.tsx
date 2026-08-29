@@ -49,20 +49,13 @@ const DEFAULT_CSS_DISPLAY: Readonly<CssDisplayTransform> = {
 const CSS_SCALE_MAX = 1
 const CSS_OFFSET_MAX = 96
 const VIEWPORT_MIN_SCALE = 0.4
-
-function ViewportIcon({ name }: { name: "zoom-in" | "zoom-out" | "pan" | "reset" }) {
-  if (name === "pan") {
-    return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8.5 11V6.7a1.45 1.45 0 0 1 2.9 0V10 5.2a1.45 1.45 0 0 1 2.9 0V10 6.2a1.45 1.45 0 0 1 2.9 0v5.3l.9-1.1a1.55 1.55 0 0 1 2.35-.08 1.6 1.6 0 0 1 .08 2.06l-3.4 4.65A6.2 6.2 0 0 1 12.1 19.6H11a6.1 6.1 0 0 1-5.4-3.25L3.7 12.8a1.5 1.5 0 0 1 2.55-1.56L8.5 14" /></svg>
-  }
-  if (name === "reset") {
-    return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5" /></svg>
-  }
-  const isZoomIn = name === "zoom-in"
-  return <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.2 15.2 5 5M7.5 10.5h6" />{isZoomIn && <path d="M10.5 7.5v6" />}</svg>
+const INITIAL_CONTENT_POINT: Readonly<Coordinate> = {
+  x: LAB_SHAPE.x + LAB_SHAPE.width / 2,
+  y: LAB_SHAPE.y,
 }
 
-function ConsoleLabel({ index, children }: { index: number; children: string }) {
-  return <span className="coordinate-console-label"><b>{index}</b>{children}</span>
+function ConsoleLabel({ children }: { children: string }) {
+  return <span className="coordinate-console-label">{children}</span>
 }
 
 const INITIAL_PROBE: CoordinateProbe = {
@@ -148,10 +141,12 @@ function fitContentViewport(width: number, height: number): Readonly<ViewportSta
 
 export default function CoordinatesExample() {
   const { text } = useI18n()
+  const stageRef = useRef<HTMLElement | null>(null)
   const toolsRef = useRef<StayTools>()
   const homeViewportRef = useRef<Readonly<ViewportState>>({ x: 0, y: 0, scale: 1 })
   const surfaceCanvasRef = useRef<ReturnType<StayTools["appendChild"]>["canvas"]>()
   const markerRef = useRef<{ dot: Circle; horizontal: Line; vertical: Line; label: StayText }>()
+  const markerContentRef = useRef<Readonly<Coordinate>>(INITIAL_CONTENT_POINT)
   const [cssDisplay, setCssDisplay] = useState<CssDisplayTransform>({ ...DEFAULT_CSS_DISPLAY })
   const [clientRange, setClientRange] = useState(() => clientReferenceRange(INITIAL_PROBE))
   const [probe, setProbe] = useState<CoordinateProbe>(INITIAL_PROBE)
@@ -159,14 +154,31 @@ export default function CoordinatesExample() {
   const [viewport, setViewport] = useState<Readonly<ViewportState>>({ x: 0, y: 0, scale: 1 })
   const [mappingFocus, setMappingFocus] = useState<CoordinateMappingFocus>("view-client")
   const [evidenceOpen, setEvidenceOpen] = useState(false)
+  const [stackAnchor, setStackAnchor] = useState<Coordinate>()
+  const [liveAnchor, setLiveAnchor] = useState<Coordinate>()
+
+  const stagePointFromClient = (point: Readonly<Coordinate>) => {
+    const rect = stageRef.current?.getBoundingClientRect()
+    if (!rect) return undefined
+    return { x: point.x - rect.left, y: point.y - rect.top }
+  }
+
+  const updateLiveAnchor = (point: Readonly<Coordinate>) => {
+    const tools = toolsRef.current
+    if (!tools) return
+    const stagePoint = stagePointFromClient(tools.coordinates.contentToClient(point))
+    if (stagePoint) setLiveAnchor(stagePoint)
+  }
 
   const moveMarker = (point: Coordinate) => {
+    markerContentRef.current = point
     const marker = markerRef.current
     if (!marker) return
     marker.dot.update(point)
     marker.horizontal.update({ x1: point.x - 18, y1: point.y, x2: point.x + 18, y2: point.y })
     marker.vertical.update({ x1: point.x, y1: point.y - 18, x2: point.x, y2: point.y + 18 })
     marker.label.update({ x: point.x + 14, y: point.y - 22 })
+    updateLiveAnchor(point)
   }
 
   const syncProbeWithViewport = (viewport: Readonly<ViewportState>) => {
@@ -191,6 +203,7 @@ export default function CoordinatesExample() {
       surface,
       viewSize: { width: canvas.width, height: canvas.height },
     }))
+    updateLiveAnchor(markerContentRef.current)
   }, [cssDisplay])
 
   const listeners = useMemo<ListenerProps[]>(() => {
@@ -297,10 +310,10 @@ export default function CoordinatesExample() {
     toolsRef.current = tools
     const grid = new Map<string, Line>()
     for (let x = -600; x <= 1400; x += 50) {
-      grid.set(`x:${x}`, new Line({ x1: x, y1: -600, x2: x, y2: 1200, zIndex: -10, strokeConfig: { color: { r: 78, g: 89, b: 104, a: 0.1 }, lineWidth: x === 0 ? 2 : 1 } }))
+      grid.set(`x:${x}`, new Line({ x1: x, y1: -600, x2: x, y2: 1200, zIndex: -10, strokeConfig: { color: { r: 78, g: 89, b: 104, a: 0.07 }, lineWidth: x === 0 ? 2 : 1 } }))
     }
     for (let y = -600; y <= 1200; y += 50) {
-      grid.set(`y:${y}`, new Line({ x1: -600, y1: y, x2: 1400, y2: y, zIndex: -10, strokeConfig: { color: { r: 78, g: 89, b: 104, a: 0.1 }, lineWidth: y === 0 ? 2 : 1 } }))
+      grid.set(`y:${y}`, new Line({ x1: -600, y1: y, x2: 1400, y2: y, zIndex: -10, strokeConfig: { color: { r: 78, g: 89, b: 104, a: 0.07 }, lineWidth: y === 0 ? 2 : 1 } }))
     }
     const gridChild = tools.appendChild({ className: "coordinate-grid", shape: grid })
     surfaceCanvasRef.current = gridChild.canvas
@@ -316,8 +329,8 @@ export default function CoordinatesExample() {
         new Rectangle({
           ...LAB_CONTENT_BOUNDS,
           zIndex: -5,
-          fillConfig: { color: rgba(44, 137, 91, 0.035) },
-          strokeConfig: { color: rgba(44, 137, 91, 0.72), lineWidth: 2 },
+          fillConfig: { color: rgba(44, 137, 91, 0.006) },
+          strokeConfig: { color: rgba(44, 137, 91, 0.14), lineWidth: 1.2 },
         }),
         new StayText({
           x: LAB_CONTENT_BOUNDS.x + 12,
@@ -326,7 +339,7 @@ export default function CoordinatesExample() {
           textBaseline: "top",
           zIndex: -4,
           font: { size: 12, fontWeight: 700 },
-          fillConfig: { color: colors.green },
+          fillConfig: { color: rgba(44, 137, 91, 0.22) },
         }),
       ],
     })
@@ -362,13 +375,13 @@ export default function CoordinatesExample() {
     markerRef.current = { dot, horizontal, vertical, label }
     tools.appendChild({ className: "coordinate-marker", shape: [dot, horizontal, vertical, label] })
     const surface = surfaceFrame(gridChild.canvas.getSurfaceMetrics())
-    const view = { x: gridChild.canvas.width / 2, y: gridChild.canvas.height / 2 }
-    const client = tools.coordinates.viewToClient(view)
     const homeViewport = fitContentViewport(gridChild.canvas.width, gridChild.canvas.height)
     homeViewportRef.current = homeViewport
     const currentViewport = tools.viewport.restore(homeViewport)
+    const content = { ...INITIAL_CONTENT_POINT }
+    const view = tools.coordinates.contentToView(content)
+    const client = tools.coordinates.viewToClient(view)
     setViewport(currentViewport)
-    const content = tools.coordinates.viewToContent(view)
     moveMarker(content)
     const initialProbe = {
       client,
@@ -408,7 +421,7 @@ export default function CoordinatesExample() {
 
   return (
     <div className="coordinate-experience">
-      <section className="coordinate-stage">
+      <section className="coordinate-stage" ref={stageRef}>
         <header className="coordinate-hero">
           <p>{text("Coordinate laboratory · 01", "坐标实验室 · 01")}</p>
           <h2>
@@ -421,7 +434,16 @@ export default function CoordinatesExample() {
           )}</span>
         </header>
         <div className="coordinate-workspace">
-          <CoordinateStack clientRange={clientRange} mappingFocus={mappingFocus} probe={probe} viewport={viewport} />
+          <CoordinateStack
+            clientRange={clientRange}
+            mappingFocus={mappingFocus}
+            onContentPointClientChange={(point) => {
+              const stagePoint = stagePointFromClient(point)
+              if (stagePoint) setStackAnchor(stagePoint)
+            }}
+            probe={probe}
+            viewport={viewport}
+          />
           <section className={`coordinate-live-exhibit coordinate-focus-${mappingFocus}`}>
             <header className="coordinate-live-heading">
               <div>
@@ -451,21 +473,44 @@ export default function CoordinatesExample() {
             </CanvasSurface>
           </section>
         </div>
+        {stackAnchor && liveAnchor && (
+          <svg aria-hidden="true" className="coordinate-space-bridge">
+            <line
+              className="coordinate-space-bridge-glow"
+              x1={stackAnchor.x}
+              x2={liveAnchor.x}
+              y1={stackAnchor.y}
+              y2={liveAnchor.y}
+            />
+            <line
+              className="coordinate-space-bridge-line"
+              x1={stackAnchor.x}
+              x2={liveAnchor.x}
+              y1={stackAnchor.y}
+              y2={liveAnchor.y}
+            />
+          </svg>
+        )}
       </section>
 
       <footer className="coordinate-console">
-        <div className="coordinate-console-intro">
-          <ConsoleLabel index={1}>Live signal</ConsoleLabel>
-          <div className="coordinate-signal-card">
-            <strong>{mappingFocus === "view-client" ? "VIEW → CLIENT" : "CONTENT → VIEW"}</strong>
-          </div>
-          <small className="coordinate-sync-status">{text("Synchronized", "同步正常")}</small>
-        </div>
-
         <div className="coordinate-flow" aria-label={text("Coordinate conversion flow", "坐标转换流程")}>
-          <p><ConsoleLabel index={2}>Coordinates</ConsoleLabel></p>
-          <div className="coordinate-flow-value coordinate-flow-client">
-            <span>Client</span><strong>{formatPoint(probe.client)}</strong><small>{text("Browser window", "浏览器窗口")}</small>
+          <div className="coordinate-flow-heading">
+            <ConsoleLabel>Coordinates</ConsoleLabel>
+            <small className="coordinate-sync-status">{text("Synchronized", "同步正常")}</small>
+          </div>
+          <div className="coordinate-flow-values">
+            <div className="coordinate-flow-value coordinate-flow-client">
+              <span>Client</span><strong>{formatPoint(probe.client)}</strong><small>{text("Browser", "浏览器")}</small>
+            </div>
+            <span className="coordinate-flow-arrow" aria-hidden="true">→</span>
+            <div className="coordinate-flow-value coordinate-flow-view">
+              <span>View</span><strong>{formatPoint(probe.view)}</strong><small>Canvas</small>
+            </div>
+            <span className="coordinate-flow-arrow" aria-hidden="true">→</span>
+            <div className="coordinate-flow-value coordinate-flow-result">
+              <span>Content</span><strong>{formatPoint(probe.content)}</strong><small>{text("Scene result", "场景结果")}</small>
+            </div>
           </div>
           <div className="coordinate-flow-operation">
             <span>{text(
@@ -474,23 +519,20 @@ export default function CoordinatesExample() {
             )}</span>
             <code>[({formatPoint(probe.client)}) - ({Math.round(probe.surface.left)}, {Math.round(probe.surface.top)})] × {scaleFactors(probe.surface)}</code>
           </div>
-          <div className="coordinate-flow-value coordinate-flow-view">
-            <span>View</span><strong>{formatPoint(probe.view)}</strong><small>{text("Logical Canvas", "逻辑 Canvas")}</small>
-          </div>
           <div className="coordinate-flow-operation">
             <span>{text("Undo viewport offset and scale", "撤销 viewport 平移与缩放")}</span>
             <code>[({formatPoint(probe.view)}) - ({Math.round(viewport.x)}, {Math.round(viewport.y)})] ÷ {viewport.scale.toFixed(2)}</code>
           </div>
-          <div className="coordinate-flow-value coordinate-flow-result">
-            <span>Content</span><strong>{formatPoint(probe.content)}</strong><small>{text("Scene result", "场景结果")}</small>
-          </div>
-          <p className="coordinate-event-sample">e.point: <code>{formatPoint(eventPoint)}</code></p>
+          <p className="coordinate-event-sample">
+            <span>{mappingFocus === "view-client" ? "VIEW → CLIENT" : "CONTENT → VIEW"}</span>
+            e.point <code>{formatPoint(eventPoint)}</code>
+          </p>
         </div>
 
         <div className="coordinate-operations">
           <section className="coordinate-operation-group">
             <div className="coordinate-operation-heading">
-              <strong><ConsoleLabel index={3}>CSS display</ConsoleLabel></strong>
+              <strong><ConsoleLabel>CSS display</ConsoleLabel></strong>
               <code>translate({cssDisplay.offsetX}, {cssDisplay.offsetY}) scale({cssDisplay.scaleX.toFixed(2)}, {cssDisplay.scaleY.toFixed(2)})</code>
             </div>
             <label className="coordinate-scale-control">
@@ -552,14 +594,14 @@ export default function CoordinatesExample() {
           </section>
           <section className="coordinate-operation-group">
             <div className="coordinate-operation-heading">
-              <strong><ConsoleLabel index={4}>Viewport</ConsoleLabel></strong>
+              <strong><ConsoleLabel>Viewport</ConsoleLabel></strong>
               <code>translate({Math.round(viewport.x)}, {Math.round(viewport.y)}) scale({viewport.scale.toFixed(2)})</code>
             </div>
             <Toolbar>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}><ViewportIcon name="zoom-in" />zoom in</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}><ViewportIcon name="zoom-out" />zoom out</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}><ViewportIcon name="pan" />pan</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.restore(homeViewportRef.current))}><ViewportIcon name="reset" />reset</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}>zoom in</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}>zoom out</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}>pan</Button>
+              <Button onClick={() => changeViewport((tools) => tools.viewport.restore(homeViewportRef.current))}>reset</Button>
             </Toolbar>
             <button
               aria-controls="coordinate-evidence"

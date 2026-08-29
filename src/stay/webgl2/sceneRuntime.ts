@@ -2,6 +2,7 @@ import {
   DirectionalLight,
   directionalLightShadowViewProjection,
   webGL2DirectionalLightLimit,
+  webGL2PointLightLimit,
   type WebGLLight,
 } from "./light"
 import {
@@ -69,6 +70,10 @@ interface LitPipelineBaseResources {
   readonly directionalLightCountLocation: WebGLUniformLocation
   readonly directionToLightsLocation: WebGLUniformLocation
   readonly directionalLightColorsLocation: WebGLUniformLocation
+  readonly pointLightCountLocation: WebGLUniformLocation
+  readonly pointLightPositionsLocation: WebGLUniformLocation
+  readonly pointLightColorsLocation: WebGLUniformLocation
+  readonly pointLightRangesLocation: WebGLUniformLocation
   readonly shadowLightIndexLocation: WebGLUniformLocation
   readonly shadowViewProjectionLocation: WebGLUniformLocation
   readonly shadowMapLocation: WebGLUniformLocation
@@ -135,6 +140,10 @@ interface LightingSnapshot {
   readonly directionToLights: Float32Array
   readonly directionalColors: Float32Array
   readonly directionalCount: number
+  readonly pointPositions: Float32Array
+  readonly pointColors: Float32Array
+  readonly pointRanges: Float32Array
+  readonly pointCount: number
 }
 
 interface ShadowFrame {
@@ -257,29 +266,95 @@ vec3 shadow_transmittance() {
 }
 `
 
-const LAMBERT_FRAGMENT_SHADER = `#version 300 es
-precision highp float;
+const DIRECT_LIGHT_FRAGMENT_INPUTS = `
 #define MAX_DIRECTIONAL_LIGHTS ${webGL2DirectionalLightLimit}
-uniform vec4 u_color;
-uniform vec3 u_ambient_light;
+#define MAX_POINT_LIGHTS ${webGL2PointLightLimit}
+#define MAX_DIRECT_LIGHTS ${webGL2DirectionalLightLimit + webGL2PointLightLimit}
 uniform int u_directional_light_count;
 uniform vec3 u_direction_to_lights[MAX_DIRECTIONAL_LIGHTS];
 uniform vec3 u_directional_light_colors[MAX_DIRECTIONAL_LIGHTS];
+uniform int u_point_light_count;
+uniform vec3 u_point_light_positions[MAX_POINT_LIGHTS];
+uniform vec3 u_point_light_colors[MAX_POINT_LIGHTS];
+uniform float u_point_light_ranges[MAX_POINT_LIGHTS];
+
+struct DirectLightSample {
+  vec3 direction_to_light;
+  vec3 radiance;
+  int directional_index;
+};
+
+DirectLightSample directional_light_sample(int index) {
+  return DirectLightSample(
+    u_direction_to_lights[index],
+    u_directional_light_colors[index],
+    index
+  );
+}
+
+DirectLightSample point_light_sample(int index) {
+  vec3 offset_to_light = u_point_light_positions[index] - world_position;
+  float distance_squared = dot(offset_to_light, offset_to_light);
+  vec3 direction_to_light = vec3(0.0);
+  if (distance_squared > 0.0) {
+    direction_to_light = offset_to_light / sqrt(distance_squared);
+  }
+  float attenuation = 1.0 / max(distance_squared, 0.000001);
+  float range = u_point_light_ranges[index];
+  if (range > 0.0) {
+    float distance_range_squared = distance_squared / (range * range);
+    attenuation *= clamp(
+      1.0 - distance_range_squared * distance_range_squared,
+      0.0,
+      1.0
+    );
+  }
+  return DirectLightSample(
+    direction_to_light,
+    u_point_light_colors[index] * attenuation,
+    -1
+  );
+}
+
+int direct_light_count() {
+  return u_directional_light_count + u_point_light_count;
+}
+
+DirectLightSample direct_light_sample(int index) {
+  if (index < u_directional_light_count) {
+    return directional_light_sample(index);
+  }
+  return point_light_sample(index - u_directional_light_count);
+}
+
+vec3 direct_light_transmittance(DirectLightSample light) {
+  return light.directional_index >= 0
+      && light.directional_index == u_shadow_light_index
+    ? shadow_transmittance()
+    : vec3(1.0);
+}
+`
+
+const LAMBERT_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+uniform vec4 u_color;
+uniform vec3 u_ambient_light;
 in vec3 world_normal;
 out vec4 output_color;
 ${SHADOW_FRAGMENT_INPUTS}
+${DIRECT_LIGHT_FRAGMENT_INPUTS}
 
 void main() {
   vec3 normal = normalize(world_normal);
   if (!gl_FrontFacing) normal = -normal;
   vec3 illumination = u_ambient_light;
-  for (int index = 0; index < MAX_DIRECTIONAL_LIGHTS; index++) {
-    if (index >= u_directional_light_count) break;
-    float diffuse = max(dot(normal, u_direction_to_lights[index]), 0.0);
-    vec3 transmittance = index == u_shadow_light_index
-      ? shadow_transmittance()
-      : vec3(1.0);
-    illumination += u_directional_light_colors[index] * diffuse * transmittance;
+  for (int index = 0; index < MAX_DIRECT_LIGHTS; index++) {
+    if (index >= direct_light_count()) break;
+    DirectLightSample light = direct_light_sample(index);
+    float diffuse = max(dot(normal, light.direction_to_light), 0.0);
+    illumination += light.radiance
+      * diffuse
+      * direct_light_transmittance(light);
   }
   output_color = vec4(u_color.rgb * illumination, 1.0);
 }
@@ -325,21 +400,45 @@ float geometry_schlick_ggx(float normal_direction, float roughness) {
   float k = remapped * remapped / 8.0;
   return normal_direction / max(normal_direction * (1.0 - k) + k, 0.000001);
 }
+
+struct MicrofacetLobes {
+  vec3 fresnel;
+  vec3 specular;
+};
+
+MicrofacetLobes evaluate_microfacet_lobes(
+  vec3 normal,
+  vec3 view_direction,
+  vec3 light_direction,
+  vec3 reflectance,
+  float roughness,
+  float normal_view,
+  float normal_light
+) {
+  vec3 half_direction = normalize(view_direction + light_direction);
+  vec3 fresnel = fresnel_schlick(
+    max(dot(half_direction, view_direction), 0.0),
+    reflectance
+  );
+  float distribution = distribution_ggx(normal, half_direction, roughness);
+  float geometry = geometry_schlick_ggx(normal_view, roughness)
+    * geometry_schlick_ggx(normal_light, roughness);
+  vec3 specular = distribution * geometry * fresnel
+    / max(4.0 * normal_view * normal_light, 0.000001);
+  return MicrofacetLobes(fresnel, specular);
+}
 `
 
 const STANDARD_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
-#define MAX_DIRECTIONAL_LIGHTS ${webGL2DirectionalLightLimit}
 uniform vec4 u_color;
 uniform float u_metallic;
 uniform float u_roughness;
 uniform vec3 u_ambient_light;
-uniform int u_directional_light_count;
-uniform vec3 u_direction_to_lights[MAX_DIRECTIONAL_LIGHTS];
-uniform vec3 u_directional_light_colors[MAX_DIRECTIONAL_LIGHTS];
 in vec3 world_normal;
 out vec4 output_color;
 ${SHADOW_FRAGMENT_INPUTS}
+${DIRECT_LIGHT_FRAGMENT_INPUTS}
 ${ENVIRONMENT_FRAGMENT_INPUTS}
 ${MICROFACET_FRAGMENT_INPUTS}
 
@@ -351,30 +450,27 @@ void main() {
   vec3 base_color = u_color.rgb;
   vec3 reflectance = mix(vec3(0.04), base_color, u_metallic);
   vec3 result = u_ambient_light * base_color * (1.0 - u_metallic);
-  for (int index = 0; index < MAX_DIRECTIONAL_LIGHTS; index++) {
-    if (index >= u_directional_light_count) break;
-    vec3 light_direction = u_direction_to_lights[index];
+  for (int index = 0; index < MAX_DIRECT_LIGHTS; index++) {
+    if (index >= direct_light_count()) break;
+    DirectLightSample light = direct_light_sample(index);
+    vec3 light_direction = light.direction_to_light;
     float normal_light = max(dot(normal, light_direction), 0.0);
     if (normal_light <= 0.0) continue;
-    vec3 half_direction = normalize(view_direction + light_direction);
-    vec3 fresnel = fresnel_schlick(
-      max(dot(half_direction, view_direction), 0.0),
-      reflectance
+    MicrofacetLobes lobes = evaluate_microfacet_lobes(
+      normal,
+      view_direction,
+      light_direction,
+      reflectance,
+      u_roughness,
+      normal_view,
+      normal_light
     );
-    float distribution = distribution_ggx(normal, half_direction, u_roughness);
-    float geometry = geometry_schlick_ggx(normal_view, u_roughness)
-      * geometry_schlick_ggx(normal_light, u_roughness);
-    vec3 specular = distribution * geometry * fresnel
-      / max(4.0 * normal_view * normal_light, 0.000001);
     // Keep diffuse intensity compatible with LambertMaterial's normalized light scale.
-    vec3 diffuse = (1.0 - fresnel) * (1.0 - u_metallic) * base_color;
-    vec3 transmittance = index == u_shadow_light_index
-      ? shadow_transmittance()
-      : vec3(1.0);
-    result += (diffuse + specular)
-      * u_directional_light_colors[index]
+    vec3 diffuse = (1.0 - lobes.fresnel) * (1.0 - u_metallic) * base_color;
+    result += (diffuse + lobes.specular)
+      * light.radiance
       * normal_light
-      * transmittance;
+      * direct_light_transmittance(light);
   }
   if (u_has_environment) {
     vec3 reflected_direction = normalize(reflect(-view_direction, normal));
@@ -390,12 +486,8 @@ void main() {
 
 const GLASS_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
-#define MAX_DIRECTIONAL_LIGHTS ${webGL2DirectionalLightLimit}
 uniform vec4 u_color;
 uniform vec3 u_ambient_light;
-uniform int u_directional_light_count;
-uniform vec3 u_direction_to_lights[MAX_DIRECTIONAL_LIGHTS];
-uniform vec3 u_directional_light_colors[MAX_DIRECTIONAL_LIGHTS];
 uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform sampler2D u_scene_color;
@@ -409,6 +501,7 @@ uniform float u_thickness;
 in vec3 world_normal;
 out vec4 output_color;
 ${SHADOW_FRAGMENT_INPUTS}
+${DIRECT_LIGHT_FRAGMENT_INPUTS}
 ${ENVIRONMENT_FRAGMENT_INPUTS}
 ${VOLUME_ATTENUATION_GLSL}
 ${MICROFACET_FRAGMENT_INPUTS}
@@ -454,30 +547,26 @@ void main() {
   float fresnel = fresnel_schlick(normal_view, vec3(f0)).r;
   vec3 illumination = u_ambient_light;
   vec3 direct_specular = vec3(0.0);
-  for (int index = 0; index < MAX_DIRECTIONAL_LIGHTS; index++) {
-    if (index >= u_directional_light_count) break;
-    vec3 light_direction = u_direction_to_lights[index];
+  for (int index = 0; index < MAX_DIRECT_LIGHTS; index++) {
+    if (index >= direct_light_count()) break;
+    DirectLightSample light = direct_light_sample(index);
+    vec3 light_direction = light.direction_to_light;
     float diffuse = max(dot(normal, light_direction), 0.0);
-    vec3 transmittance = index == u_shadow_light_index
-      ? shadow_transmittance()
-      : vec3(1.0);
-    illumination += u_directional_light_colors[index] * diffuse * transmittance;
+    vec3 transmittance = direct_light_transmittance(light);
+    illumination += light.radiance * diffuse * transmittance;
     if (diffuse <= 0.0) continue;
-    vec3 half_direction = normalize(view_direction + light_direction);
-    vec3 light_fresnel = fresnel_schlick(
-      max(dot(half_direction, view_direction), 0.0),
-      vec3(f0)
-    );
-    float distribution = distribution_ggx(normal, half_direction, u_roughness);
-    float geometry = geometry_schlick_ggx(normal_view, u_roughness)
-      * geometry_schlick_ggx(diffuse, u_roughness);
-    direct_specular += u_directional_light_colors[index]
+    direct_specular += light.radiance
       * transmittance
       * diffuse
-      * distribution
-      * geometry
-      * light_fresnel
-      / max(4.0 * normal_view * diffuse, 0.000001);
+      * evaluate_microfacet_lobes(
+        normal,
+        view_direction,
+        light_direction,
+        vec3(f0),
+        u_roughness,
+        normal_view,
+        diffuse
+      ).specular;
   }
   vec3 view_position = (u_view * vec4(world_position, 1.0)).xyz;
   vec3 view_normal = normalize(mat3(u_view) * normal);
@@ -662,6 +751,26 @@ function createPipeline(
         program,
         "u_directional_light_colors[0]"
       ),
+      pointLightCountLocation: requireUniform(
+        context,
+        program,
+        "u_point_light_count"
+      ),
+      pointLightPositionsLocation: requireUniform(
+        context,
+        program,
+        "u_point_light_positions[0]"
+      ),
+      pointLightColorsLocation: requireUniform(
+        context,
+        program,
+        "u_point_light_colors[0]"
+      ),
+      pointLightRangesLocation: requireUniform(
+        context,
+        program,
+        "u_point_light_ranges[0]"
+      ),
       shadowLightIndexLocation: requireUniform(context, program, "u_shadow_light_index"),
       shadowViewProjectionLocation: requireUniform(
         context,
@@ -826,7 +935,10 @@ function uploadChangedGeometry(
 function lightingSnapshot(lights: readonly WebGLLight[]): LightingSnapshot {
   const ambient = new Float32Array(3)
   const directions: number[] = []
-  const colors: number[] = []
+  const directionalColors: number[] = []
+  const pointPositions: number[] = []
+  const pointColors: number[] = []
+  const pointRanges: number[] = []
   lights.forEach((light) => {
     const color = linearizeSrgbColor(light.getColor())
     if (light.kind === "ambient") {
@@ -835,23 +947,42 @@ function lightingSnapshot(lights: readonly WebGLLight[]): LightingSnapshot {
       ambient[2] += color[2] * light.intensity
       return
     }
-    if (directions.length / 3 >= webGL2DirectionalLightLimit) {
+    if (light.kind === "directional") {
+      if (directions.length / 3 >= webGL2DirectionalLightLimit) {
+        throw new RangeError(
+          `WebGL2 lit rendering supports at most ${webGL2DirectionalLightLimit} directional lights`
+        )
+      }
+      directions.push(...light.getDirectionToLight())
+      directionalColors.push(
+        color[0] * light.intensity,
+        color[1] * light.intensity,
+        color[2] * light.intensity
+      )
+      return
+    }
+    if (pointPositions.length / 3 >= webGL2PointLightLimit) {
       throw new RangeError(
-        `WebGL2 lit rendering supports at most ${webGL2DirectionalLightLimit} directional lights`
+        `WebGL2 lit rendering supports at most ${webGL2PointLightLimit} point lights`
       )
     }
-    directions.push(...light.getDirectionToLight())
-    colors.push(
+    pointPositions.push(...light.getPosition())
+    pointColors.push(
       color[0] * light.intensity,
       color[1] * light.intensity,
       color[2] * light.intensity
     )
+    pointRanges.push(light.range ?? 0)
   })
   return {
     ambient,
     directionToLights: new Float32Array(directions),
-    directionalColors: new Float32Array(colors),
+    directionalColors: new Float32Array(directionalColors),
     directionalCount: directions.length / 3,
+    pointPositions: new Float32Array(pointPositions),
+    pointColors: new Float32Array(pointColors),
+    pointRanges: new Float32Array(pointRanges),
+    pointCount: pointPositions.length / 3,
   }
 }
 
@@ -1318,6 +1449,12 @@ export class WebGL2SceneRuntime {
         pipeline.directionalLightColorsLocation,
         lighting.directionalColors
       )
+    }
+    context.uniform1i(pipeline.pointLightCountLocation, lighting.pointCount)
+    if (lighting.pointCount > 0) {
+      context.uniform3fv(pipeline.pointLightPositionsLocation, lighting.pointPositions)
+      context.uniform3fv(pipeline.pointLightColorsLocation, lighting.pointColors)
+      context.uniform1fv(pipeline.pointLightRangesLocation, lighting.pointRanges)
     }
     context.uniform1i(pipeline.shadowLightIndexLocation, shadow?.lightIndex ?? -1)
     context.uniform1f(pipeline.shadowBiasLocation, shadow?.bias ?? 0)

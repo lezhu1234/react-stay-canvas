@@ -13,7 +13,7 @@ import {
   StandardMaterial,
   UnlitMaterial,
 } from "../src/stay/webgl2/material"
-import { AmbientLight, DirectionalLight } from "../src/stay/webgl2/light"
+import { AmbientLight, DirectionalLight, PointLight } from "../src/stay/webgl2/light"
 import { EnvironmentMap } from "../src/stay/webgl2/environmentMap"
 import { PerspectiveCamera } from "../src/stay/webgl2/perspectiveCamera"
 import { WebGL2SceneRuntime } from "../src/stay/webgl2/sceneRuntime"
@@ -599,8 +599,8 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
       String(source).includes("environment_radiance(reflected_direction, u_roughness)")
       && String(source).includes("reflect(-view_direction, normal)")
-      && String(source).includes("direct_specular += u_directional_light_colors[index]")
-      && String(source).includes("distribution_ggx(normal, half_direction, u_roughness)")
+      && String(source).includes("direct_specular += light.radiance")
+      && String(source).includes("evaluate_microfacet_lobes(")
       && String(source).includes("min(premultiplied_color, vec3(alpha))")
       && String(source).includes("scene_color.rgb / scene_color.a")
       && String(source).includes("surface_color * (alpha - fresnel)")
@@ -800,6 +800,104 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.dispose()
   })
 
+  it("applies bounded inverse-square PointLight radiance to every lit material", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const point = new PointLight({
+      position: [1, 2, 3],
+      color: [0.5, 0.75, 1],
+      intensity: 8,
+      range: 6,
+    })
+    const meshes = [
+      new Mesh({ geometry: litTriangle(), material: new LambertMaterial() }),
+      new Mesh({ geometry: litTriangle(-0.1), material: new StandardMaterial() }),
+      new Mesh({ geometry: litTriangle(-0.2), material: new GlassMaterial() }),
+    ]
+
+    runtime.render(meshes, camera(), [point])
+
+    const fragmentSources = gl.spies.shaderSource.mock.calls
+      .map(([, source]) => String(source))
+      .filter((source) => source.includes("uniform int u_point_light_count"))
+    expect(fragmentSources).toHaveLength(3)
+    const lambertSource = fragmentSources.find((source) =>
+      !source.includes("uniform float u_metallic")
+      && !source.includes("uniform float u_thickness"))
+    const standardSource = fragmentSources.find((source) =>
+      source.includes("uniform float u_metallic"))
+    const glassSource = fragmentSources.find((source) =>
+      source.includes("uniform float u_thickness"))
+    expect(fragmentSources.every((source) =>
+      source.includes("u_point_light_positions[index] - world_position")
+      && source.includes("offset_to_light / sqrt(distance_squared)")
+      && source.includes("1.0 / max(distance_squared, 0.000001)")
+      && source.includes("1.0 - distance_range_squared * distance_range_squared")
+      && source.includes("point_light_sample(")))
+      .toBe(true)
+    expect(lambertSource).toContain("DirectLightSample light = direct_light_sample(index)")
+    expect(lambertSource).toContain("illumination += light.radiance")
+    expect(standardSource).toContain("DirectLightSample light = direct_light_sample(index)")
+    expect(standardSource)
+      .toContain("result += (diffuse + lobes.specular)")
+    expect(glassSource).toContain("DirectLightSample light = direct_light_sample(index)")
+    expect(glassSource).toContain("direct_specular += light.radiance")
+    expect(gl.spies.uniform3fv.mock.calls).toContainEqual([
+      expect.anything(),
+      new Float32Array([1, 2, 3]),
+    ])
+    expect(gl.spies.uniform3fv.mock.calls).toContainEqual([
+      expect.anything(),
+      new Float32Array([
+        srgbChannelToLinear(0.5) * 8,
+        srgbChannelToLinear(0.75) * 8,
+        8,
+      ]),
+    ])
+    expect(gl.spies.uniform1fv.mock.calls).toContainEqual([
+      expect.anything(),
+      new Float32Array([6]),
+    ])
+    runtime.dispose()
+  })
+
+  it("validates PointLight state and the independent forward-light limit", () => {
+    const position: [number, number, number] = [1, 2, 3]
+    const light = new PointLight({ position })
+    const changes: number[] = []
+    light.subscribeChanges(() => changes.push(changes.length + 1))
+    position[0] = 99
+    expect(light.getPosition()).toEqual([1, 2, 3])
+    const copy = light.getPosition() as [number, number, number]
+    copy[0] = 88
+    expect(light.getPosition()).toEqual([1, 2, 3])
+    expect(light.range).toBeUndefined()
+    light.setPosition([1, 2, 3])
+    light.setRange(undefined)
+    expect(changes).toHaveLength(0)
+    light.setPosition([2, 3, 4])
+    light.setRange(10)
+    light.setRange(undefined)
+    expect(changes).toHaveLength(3)
+    expect(() => new PointLight({ position: [Number.NaN, 0, 0] }))
+      .toThrow("position[0] must be finite")
+    expect(() => new PointLight({ position: [1e100, 0, 0] }))
+      .toThrow("position[0] exceeds Float32 range")
+    expect(() => new PointLight({ position: [0, 0, 0], range: 0 }))
+      .toThrow("range must be greater than 0")
+
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const points = Array.from({ length: 5 }, (_, index) =>
+      new PointLight({ position: [index, 0, 1] }))
+    expect(() => runtime.render([
+      new Mesh({ geometry: litTriangle(), material: new LambertMaterial() }),
+    ], camera(), points)).toThrow("at most 4 point lights")
+    runtime.dispose()
+  })
+
   it("renders one persistent directional shadow map before the main pass", () => {
     const canvas = document.createElement("canvas")
     canvas.width = 240
@@ -829,9 +927,10 @@ describe("internal WebGL2 scene runtime", () => {
         filterRadius: 1.5,
       },
     })
+    const point = new PointLight({ position: [1, 2, 3], intensity: 4 })
 
-    runtime.render([caster, receiver], camera(), [light])
-    runtime.render([caster, receiver], camera(), [light])
+    runtime.render([caster, receiver], camera(), [point, light])
+    runtime.render([caster, receiver], camera(), [point, light])
 
     expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)

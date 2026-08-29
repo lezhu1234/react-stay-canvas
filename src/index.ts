@@ -27,13 +27,14 @@ export type {
   StandardMaterialProps,
   UnlitMaterialProps,
 } from "./stay/webgl2/material"
-export { AmbientLight, DirectionalLight } from "./stay/webgl2/light"
+export { AmbientLight, DirectionalLight, PointLight } from "./stay/webgl2/light"
 export type {
   AmbientLightProps,
   DirectionalLightProps,
   DirectionalShadow,
   DirectionalShadowProps,
   LightColor,
+  PointLightProps,
   WebGLLight,
 } from "./stay/webgl2/light"
 export { EnvironmentMap } from "./stay/webgl2/environmentMap"

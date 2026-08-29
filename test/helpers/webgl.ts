@@ -149,6 +149,7 @@ export function createRecordingWebGLContext(
     texParameteri: vi.fn(),
     pixelStorei: vi.fn(),
     uniform1i: vi.fn(),
+    uniform1fv: vi.fn(),
     uniform2f: vi.fn(),
     uniform3fv: vi.fn(),
     uniform1f: vi.fn(),

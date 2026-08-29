@@ -6,6 +6,7 @@ import {
   LambertMaterial,
   Mesh,
   PerspectiveCamera,
+  PointLight,
   StayWebGLChild,
   StandardMaterial,
   type StayTools,
@@ -68,6 +69,18 @@ const key = new DirectionalLight({
     filterRadius: 1.5,
   },
 })
+const point = new PointLight({
+  position: [1, 2, 3],
+  color: [1, 0.8, 0.6],
+  intensity: 12,
+  range: 8,
+})
+point.setPosition([2, 3, 4])
+point.setColor([0.9, 0.8, 0.7])
+point.setIntensity(10)
+point.setRange(undefined)
+const pointPosition = point.getPosition()
+const pointRange: number | undefined = point.range
 const environment = new EnvironmentMap({
   width: 4,
   height: 2,
@@ -80,7 +93,7 @@ const layer: WebGL2LayerConfig = {
   backend: "webgl2",
   camera,
   environment,
-  lights: [ambient, key],
+  lights: [ambient, key, point],
 }
 key.setDirectionToLight([0.2, 0.4, 1])
 key.setShadow({
@@ -117,5 +130,7 @@ void glassRoughness
 void glassThickness
 void standardMetallic
 void standardRoughness
+void pointPosition
+void pointRange
 void WebGL2SceneRuntime
 void WebGL2LayerRuntime

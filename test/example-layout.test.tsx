@@ -2,7 +2,12 @@
 import React, { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { Rectangle, StayCanvas, type StayTools } from "react-stay-canvas"
+import {
+  Rectangle,
+  StayCanvas,
+  type MeshGeometryInput,
+  type StayTools,
+} from "react-stay-canvas"
 
 import {
   Button,
@@ -27,8 +32,12 @@ import {
   expandRangeToAspect,
 } from "../example/src/examples/simple/CoordinateStack"
 import {
+  createPlaneBevelFaceProfile,
   createPlaneBasis,
+  planeVolumeGeometry,
   rectMeshGeometry,
+  roundedRectMeshGeometry,
+  roundedRectSegments,
 } from "../example/src/examples/simple/coordinateSceneModel"
 import {
   createFiniteProjectiveMapping,
@@ -63,6 +72,44 @@ let originalClientWidth: PropertyDescriptor | undefined
 let viewportHeight = 480
 let viewportWidth = 920
 let webGL2Contexts = new Map<HTMLCanvasElement, ReturnType<typeof createRecordingWebGL2Context>>()
+
+function expectValidIndexedGeometry(geometry: MeshGeometryInput) {
+  const positions = Array.from(geometry.positions)
+  const normals = Array.from(geometry.normals ?? [])
+  const indices = Array.from(geometry.indices ?? [])
+  const vertexCount = positions.length / 3
+
+  expect(positions.every(Number.isFinite)).toBe(true)
+  expect(normals.every(Number.isFinite)).toBe(true)
+  expect(normals).toHaveLength(positions.length)
+  expect(indices.length % 3).toBe(0)
+  expect(indices.every((index) => Number.isInteger(index) && index >= 0 && index < vertexCount))
+    .toBe(true)
+
+  for (let offset = 0; offset < indices.length; offset += 3) {
+    const [firstIndex, secondIndex, thirdIndex] = indices.slice(offset, offset + 3)
+    const point = (index: number) => positions.slice(index * 3, index * 3 + 3)
+    const first = point(firstIndex)
+    const second = point(secondIndex)
+    const third = point(thirdIndex)
+    const along = second.map((value, index) => value - first[index])
+    const across = third.map((value, index) => value - first[index])
+    const faceNormal = [
+      along[1] * across[2] - along[2] * across[1],
+      along[2] * across[0] - along[0] * across[2],
+      along[0] * across[1] - along[1] * across[0],
+    ]
+    const area = Math.hypot(...faceNormal)
+    const storedNormal = normals.slice(firstIndex * 3, firstIndex * 3 + 3)
+    const alignment = faceNormal.reduce(
+      (sum, value, index) => sum + value * storedNormal[index],
+      0,
+    )
+
+    expect(area).toBeGreaterThan(1e-8)
+    expect(alignment).toBeGreaterThan(0)
+  }
+}
 
 beforeEach(() => {
   ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
@@ -198,6 +245,49 @@ describe("Example Canvas workspace", () => {
     const dot = faceNormal.reduce((sum, value, index) => sum + value * normals[index], 0)
 
     expect(dot).toBeGreaterThan(0)
+  })
+
+  it("builds rounded glass faces and bevels without degenerate triangles", () => {
+    const plane = createPlaneDefinitions(1012, 524).client
+    const basis = createPlaneBasis(plane)
+    const bevelRadius = 0.09
+    const segments = 3
+    const face = createPlaneBevelFaceProfile(plane, basis, bevelRadius)
+    const roundedFace = roundedRectMeshGeometry(
+      plane,
+      basis,
+      face.rect,
+      face.radiusX,
+      face.radiusY,
+      segments,
+      bevelRadius,
+    )
+    const roundedBevel = planeVolumeGeometry(
+      plane,
+      basis,
+      bevelRadius * 2,
+      bevelRadius,
+      segments,
+    )
+
+    expect(roundedRectSegments(face.rect, face.radiusX, face.radiusY, segments))
+      .toHaveLength(4 * (segments + 1))
+    expectValidIndexedGeometry(roundedFace)
+    expectValidIndexedGeometry(roundedBevel)
+
+    const facePositions = Array.from(roundedFace.positions).slice(3)
+    const bevelPositions = Array.from(roundedBevel.positions)
+    const bevelPoints = Array.from(
+      { length: bevelPositions.length / 3 },
+      (_, index) => bevelPositions.slice(index * 3, index * 3 + 3),
+    )
+    for (let offset = 0; offset < facePositions.length; offset += 3) {
+      const point = facePositions.slice(offset, offset + 3)
+      const joinsBevel = bevelPoints.some((candidate) => candidate.every(
+        (value, index) => Math.abs(value - point[index]) < 1e-10,
+      ))
+      expect(joinsBevel).toBe(true)
+    }
   })
 
   it("defines a bounded Content scene and connects all corresponding plane corners", () => {

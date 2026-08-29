@@ -47,8 +47,7 @@ interface UnlitPipelineResources {
   readonly colorLocation: WebGLUniformLocation
 }
 
-interface LambertPipelineResources {
-  readonly kind: "lambert"
+interface LitPipelineBaseResources {
   readonly program: WebGLProgram
   readonly viewProjectionLocation: WebGLUniformLocation
   readonly modelLocation: WebGLUniformLocation
@@ -70,45 +69,44 @@ interface LambertPipelineResources {
   readonly receiveShadowLocation: WebGLUniformLocation
 }
 
-interface GlassPipelineResources {
-  readonly kind: "glass"
-  readonly program: WebGLProgram
-  readonly viewProjectionLocation: WebGLUniformLocation
-  readonly modelLocation: WebGLUniformLocation
-  readonly normalMatrixLocation: WebGLUniformLocation
-  readonly colorLocation: WebGLUniformLocation
-  readonly ambientLightLocation: WebGLUniformLocation
-  readonly directionalLightCountLocation: WebGLUniformLocation
-  readonly directionToLightsLocation: WebGLUniformLocation
-  readonly directionalLightColorsLocation: WebGLUniformLocation
+interface EnvironmentPipelineResources {
   readonly cameraPositionLocation: WebGLUniformLocation
-  readonly viewLocation: WebGLUniformLocation
-  readonly projectionLocation: WebGLUniformLocation
-  readonly sceneColorLocation: WebGLUniformLocation
-  readonly sceneColorMaxLodLocation: WebGLUniformLocation
   readonly environmentMapLocation: WebGLUniformLocation
   readonly environmentIntensityLocation: WebGLUniformLocation
   readonly environmentMaxLodLocation: WebGLUniformLocation
   readonly hasEnvironmentLocation: WebGLUniformLocation
+}
+
+interface LambertPipelineResources extends LitPipelineBaseResources {
+  readonly kind: "lambert"
+}
+
+interface StandardPipelineResources
+  extends LitPipelineBaseResources, EnvironmentPipelineResources {
+  readonly kind: "standard"
+  readonly metallicLocation: WebGLUniformLocation
+  readonly roughnessLocation: WebGLUniformLocation
+}
+
+interface GlassPipelineResources
+  extends LitPipelineBaseResources, EnvironmentPipelineResources {
+  readonly kind: "glass"
+  readonly viewLocation: WebGLUniformLocation
+  readonly projectionLocation: WebGLUniformLocation
+  readonly sceneColorLocation: WebGLUniformLocation
+  readonly sceneColorMaxLodLocation: WebGLUniformLocation
   readonly attenuationColorLocation: WebGLUniformLocation
   readonly hasVolumeAttenuationLocation: WebGLUniformLocation
   readonly logAttenuationExponentLocation: WebGLUniformLocation
   readonly iorLocation: WebGLUniformLocation
   readonly roughnessLocation: WebGLUniformLocation
   readonly thicknessLocation: WebGLUniformLocation
-  readonly shadowLightIndexLocation: WebGLUniformLocation
-  readonly shadowViewProjectionLocation: WebGLUniformLocation
-  readonly shadowMapLocation: WebGLUniformLocation
-  readonly hasOpaqueShadowMapLocation: WebGLUniformLocation
-  readonly transmissiveShadowDepthMapLocation: WebGLUniformLocation
-  readonly transmissiveShadowColorMapLocation: WebGLUniformLocation
-  readonly hasTransmissiveShadowMapLocation: WebGLUniformLocation
-  readonly shadowFilterStepLocation: WebGLUniformLocation
-  readonly shadowBiasLocation: WebGLUniformLocation
-  readonly receiveShadowLocation: WebGLUniformLocation
 }
 
-type LitPipelineResources = LambertPipelineResources | GlassPipelineResources
+type LitPipelineResources =
+  | LambertPipelineResources
+  | StandardPipelineResources
+  | GlassPipelineResources
 type PipelineResources = UnlitPipelineResources | LitPipelineResources
 
 interface MeshResources {
@@ -275,6 +273,105 @@ void main() {
 }
 `
 
+const ENVIRONMENT_FRAGMENT_INPUTS = `
+uniform vec3 u_camera_position;
+uniform sampler2D u_environment_map;
+uniform float u_environment_intensity;
+uniform float u_environment_max_lod;
+uniform bool u_has_environment;
+
+vec3 environment_radiance(vec3 direction, float roughness) {
+  vec2 environment_uv = vec2(
+    atan(direction.z, direction.x) / 6.28318530718 + 0.5,
+    0.5 - asin(clamp(direction.y, -1.0, 1.0)) / 3.14159265359
+  );
+  return textureLod(
+    u_environment_map,
+    environment_uv,
+    roughness * u_environment_max_lod
+  ).rgb * u_environment_intensity;
+}
+`
+
+const STANDARD_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+#define MAX_DIRECTIONAL_LIGHTS ${webGL2DirectionalLightLimit}
+const float PI = 3.14159265359;
+uniform vec4 u_color;
+uniform float u_metallic;
+uniform float u_roughness;
+uniform vec3 u_ambient_light;
+uniform int u_directional_light_count;
+uniform vec3 u_direction_to_lights[MAX_DIRECTIONAL_LIGHTS];
+uniform vec3 u_directional_light_colors[MAX_DIRECTIONAL_LIGHTS];
+in vec3 world_normal;
+out vec4 output_color;
+${SHADOW_FRAGMENT_INPUTS}
+${ENVIRONMENT_FRAGMENT_INPUTS}
+
+vec3 fresnel_schlick(float cosine, vec3 reflectance) {
+  return reflectance + (1.0 - reflectance) * pow(1.0 - cosine, 5.0);
+}
+
+float distribution_ggx(vec3 normal, vec3 half_direction, float roughness) {
+  float alpha = max(roughness * roughness, 0.002025);
+  float alpha_squared = alpha * alpha;
+  float normal_half = max(dot(normal, half_direction), 0.0);
+  float denominator = normal_half * normal_half * (alpha_squared - 1.0) + 1.0;
+  return alpha_squared / max(PI * denominator * denominator, 0.000001);
+}
+
+float geometry_schlick_ggx(float normal_direction, float roughness) {
+  float remapped = roughness + 1.0;
+  float k = remapped * remapped / 8.0;
+  return normal_direction / max(normal_direction * (1.0 - k) + k, 0.000001);
+}
+
+void main() {
+  vec3 normal = normalize(world_normal);
+  if (!gl_FrontFacing) normal = -normal;
+  vec3 view_direction = normalize(u_camera_position - world_position);
+  float normal_view = max(dot(normal, view_direction), 0.0);
+  vec3 base_color = u_color.rgb;
+  vec3 reflectance = mix(vec3(0.04), base_color, u_metallic);
+  vec3 result = u_ambient_light * base_color * (1.0 - u_metallic);
+  for (int index = 0; index < MAX_DIRECTIONAL_LIGHTS; index++) {
+    if (index >= u_directional_light_count) break;
+    vec3 light_direction = u_direction_to_lights[index];
+    float normal_light = max(dot(normal, light_direction), 0.0);
+    if (normal_light <= 0.0) continue;
+    vec3 half_direction = normalize(view_direction + light_direction);
+    vec3 fresnel = fresnel_schlick(
+      max(dot(half_direction, view_direction), 0.0),
+      reflectance
+    );
+    float distribution = distribution_ggx(normal, half_direction, u_roughness);
+    float geometry = geometry_schlick_ggx(normal_view, u_roughness)
+      * geometry_schlick_ggx(normal_light, u_roughness);
+    vec3 specular = distribution * geometry * fresnel
+      / max(4.0 * normal_view * normal_light, 0.000001);
+    // Keep diffuse intensity compatible with LambertMaterial's normalized light scale.
+    vec3 diffuse = (1.0 - fresnel) * (1.0 - u_metallic) * base_color;
+    vec3 transmittance = index == u_shadow_light_index
+      ? shadow_transmittance()
+      : vec3(1.0);
+    result += (diffuse + specular)
+      * u_directional_light_colors[index]
+      * normal_light
+      * transmittance;
+  }
+  if (u_has_environment) {
+    vec3 reflected_direction = normalize(reflect(-view_direction, normal));
+    vec3 fresnel = fresnel_schlick(normal_view, reflectance);
+    result += environment_radiance(
+      reflected_direction,
+      u_roughness
+    ) * fresnel;
+  }
+  output_color = vec4(result, 1.0);
+}
+`
+
 const GLASS_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 #define MAX_DIRECTIONAL_LIGHTS ${webGL2DirectionalLightLimit}
@@ -283,15 +380,10 @@ uniform vec3 u_ambient_light;
 uniform int u_directional_light_count;
 uniform vec3 u_direction_to_lights[MAX_DIRECTIONAL_LIGHTS];
 uniform vec3 u_directional_light_colors[MAX_DIRECTIONAL_LIGHTS];
-uniform vec3 u_camera_position;
 uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform sampler2D u_scene_color;
 uniform float u_scene_color_max_lod;
-uniform sampler2D u_environment_map;
-uniform float u_environment_intensity;
-uniform float u_environment_max_lod;
-uniform bool u_has_environment;
 uniform vec3 u_attenuation_color;
 uniform bool u_has_volume_attenuation;
 uniform float u_log_attenuation_exponent;
@@ -301,6 +393,7 @@ uniform float u_thickness;
 in vec3 world_normal;
 out vec4 output_color;
 ${SHADOW_FRAGMENT_INPUTS}
+${ENVIRONMENT_FRAGMENT_INPUTS}
 ${VOLUME_ATTENUATION_GLSL}
 
 void main() {
@@ -347,15 +440,7 @@ void main() {
   vec3 reflection_color = vec3(1.0);
   if (u_has_environment) {
     vec3 reflected_direction = normalize(reflect(-view_direction, normal));
-    vec2 environment_uv = vec2(
-      atan(reflected_direction.z, reflected_direction.x) / 6.28318530718 + 0.5,
-      0.5 - asin(clamp(reflected_direction.y, -1.0, 1.0)) / 3.14159265359
-    );
-    reflection_color = textureLod(
-      u_environment_map,
-      environment_uv,
-      u_roughness * u_environment_max_lod
-    ).rgb * u_environment_intensity;
+    reflection_color = environment_radiance(reflected_direction, u_roughness);
   }
   if (u_has_environment) {
     float alpha = u_color.a + (1.0 - u_color.a) * fresnel;
@@ -419,25 +504,50 @@ function requireUniform(
   return location
 }
 
+function pipelineShaderSources(kind: MeshMaterial["kind"]) {
+  if (kind === "unlit") {
+    return { vertex: UNLIT_VERTEX_SHADER, fragment: UNLIT_FRAGMENT_SHADER }
+  }
+  if (kind === "lambert") {
+    return { vertex: LAMBERT_VERTEX_SHADER, fragment: LAMBERT_FRAGMENT_SHADER }
+  }
+  if (kind === "standard") {
+    return { vertex: LAMBERT_VERTEX_SHADER, fragment: STANDARD_FRAGMENT_SHADER }
+  }
+  return { vertex: GLASS_VERTEX_SHADER, fragment: GLASS_FRAGMENT_SHADER }
+}
+
+function environmentPipelineLocations(
+  context: WebGL2RenderingContext,
+  program: WebGLProgram,
+): EnvironmentPipelineResources {
+  return {
+    cameraPositionLocation: requireUniform(context, program, "u_camera_position"),
+    environmentMapLocation: requireUniform(context, program, "u_environment_map"),
+    environmentIntensityLocation: requireUniform(
+      context,
+      program,
+      "u_environment_intensity",
+    ),
+    environmentMaxLodLocation: requireUniform(
+      context,
+      program,
+      "u_environment_max_lod",
+    ),
+    hasEnvironmentLocation: requireUniform(context, program, "u_has_environment"),
+  }
+}
+
 function createPipeline(
   context: WebGL2RenderingContext,
   kind: MeshMaterial["kind"]
 ): PipelineResources {
-  const vertexSource = kind === "unlit"
-    ? UNLIT_VERTEX_SHADER
-    : kind === "lambert"
-      ? LAMBERT_VERTEX_SHADER
-      : GLASS_VERTEX_SHADER
-  const fragmentSource = kind === "unlit"
-    ? UNLIT_FRAGMENT_SHADER
-    : kind === "lambert"
-      ? LAMBERT_FRAGMENT_SHADER
-      : GLASS_FRAGMENT_SHADER
-  const vertexShader = compileShader(context, context.VERTEX_SHADER, vertexSource)
+  const sources = pipelineShaderSources(kind)
+  const vertexShader = compileShader(context, context.VERTEX_SHADER, sources.vertex)
   let fragmentShader: WebGLShader | undefined
   let program: WebGLProgram | undefined
   try {
-    fragmentShader = compileShader(context, context.FRAGMENT_SHADER, fragmentSource)
+    fragmentShader = compileShader(context, context.FRAGMENT_SHADER, sources.fragment)
     program = context.createProgram() ?? undefined
     if (!program) throw new Error("Unable to create WebGL2 program")
     context.attachShader(program, vertexShader)
@@ -518,26 +628,24 @@ function createPipeline(
       receiveShadowLocation: requireUniform(context, program, "u_receive_shadow"),
     }
     if (kind === "lambert") return { kind, ...litPipeline }
+    const environmentPipeline = environmentPipelineLocations(context, program)
+    if (kind === "standard") {
+      return {
+        kind,
+        ...litPipeline,
+        ...environmentPipeline,
+        metallicLocation: requireUniform(context, program, "u_metallic"),
+        roughnessLocation: requireUniform(context, program, "u_roughness"),
+      }
+    }
     return {
       kind,
       ...litPipeline,
-      cameraPositionLocation: requireUniform(context, program, "u_camera_position"),
+      ...environmentPipeline,
       viewLocation: requireUniform(context, program, "u_view"),
       projectionLocation: requireUniform(context, program, "u_projection"),
       sceneColorLocation: requireUniform(context, program, "u_scene_color"),
       sceneColorMaxLodLocation: requireUniform(context, program, "u_scene_color_max_lod"),
-      environmentMapLocation: requireUniform(context, program, "u_environment_map"),
-      environmentIntensityLocation: requireUniform(
-        context,
-        program,
-        "u_environment_intensity"
-      ),
-      environmentMaxLodLocation: requireUniform(
-        context,
-        program,
-        "u_environment_max_lod"
-      ),
-      hasEnvironmentLocation: requireUniform(context, program, "u_has_environment"),
       attenuationColorLocation: requireUniform(context, program, "u_attenuation_color"),
       hasVolumeAttenuationLocation: requireUniform(
         context,
@@ -659,7 +767,7 @@ function lightingSnapshot(lights: readonly WebGLLight[]): LightingSnapshot {
     }
     if (directions.length / 3 >= webGL2DirectionalLightLimit) {
       throw new RangeError(
-        `WebGL2 Lambert rendering supports at most ${webGL2DirectionalLightLimit} directional lights`
+        `WebGL2 lit rendering supports at most ${webGL2DirectionalLightLimit} directional lights`
       )
     }
     directions.push(...light.getDirectionToLight())
@@ -726,6 +834,12 @@ function buildRenderQueues(meshes: readonly Mesh[], camera: PerspectiveCamera) {
   return { opaque, transparent }
 }
 
+function renderQueuesUseEnvironment(queues: ReturnType<typeof buildRenderQueues>) {
+  const usesEnvironment = ({ material }: DrawItem) =>
+    material.kind === "standard" || material.kind === "glass"
+  return queues.opaque.some(usesEnvironment) || queues.transparent.some(usesEnvironment)
+}
+
 /**
  * @internal Owns one WebGL2 context's derived GPU cache. Mesh, Material, Light,
  * and Camera CPU state stay authoritative; restoration recreates handles lazily.
@@ -777,7 +891,7 @@ export class WebGL2SceneRuntime {
     const sceneColor = queues.transparent.length > 0
       ? this.#sceneColorResources(width, height)
       : undefined
-    const environmentTexture = sceneColor && environment
+    const environmentTexture = environment && renderQueuesUseEnvironment(queues)
       ? this.#environmentTextureResources(environment)
       : undefined
     this.#configureFrame(width, height)
@@ -795,11 +909,15 @@ export class WebGL2SceneRuntime {
         if (pipeline.kind !== "unlit") {
           lighting ??= lightingSnapshot(lights)
           this.#applyLitFrameUniforms(pipeline, viewProjection, lighting, shadow)
-          if (pipeline.kind === "glass") {
-            context.uniform3fv(
-              pipeline.cameraPositionLocation,
-              new Float32Array(camera.getPosition())
+          if (pipeline.kind === "standard" || pipeline.kind === "glass") {
+            this.#applyEnvironmentFrameUniforms(
+              pipeline,
+              camera,
+              environment,
+              environmentTexture,
             )
+          }
+          if (pipeline.kind === "glass") {
             context.uniformMatrix4fv(pipeline.viewLocation, false, view)
             context.uniformMatrix4fv(pipeline.projectionLocation, false, projection)
             context.uniform1i(pipeline.sceneColorLocation, 1)
@@ -808,24 +926,6 @@ export class WebGL2SceneRuntime {
             context.uniform1f(
               pipeline.sceneColorMaxLodLocation,
               sceneColor?.maxMipLevel ?? 0,
-            )
-            context.uniform1i(pipeline.environmentMapLocation, 2)
-            context.uniform1i(
-              pipeline.hasEnvironmentLocation,
-              environmentTexture ? 1 : 0,
-            )
-            context.uniform1f(
-              pipeline.environmentIntensityLocation,
-              environment?.intensity ?? 0,
-            )
-            context.uniform1f(
-              pipeline.environmentMaxLodLocation,
-              environmentTexture?.maxMipLevel ?? 0,
-            )
-            context.activeTexture(context.TEXTURE2)
-            context.bindTexture(
-              context.TEXTURE_2D,
-              environmentTexture?.texture ?? null,
             )
           }
         }
@@ -853,6 +953,10 @@ export class WebGL2SceneRuntime {
         )
       }
       context.uniform4fv(pipeline.colorLocation, new Float32Array(material.color))
+      if (pipeline.kind === "standard" && material.kind === "standard") {
+        context.uniform1f(pipeline.metallicLocation, material.metallic)
+        context.uniform1f(pipeline.roughnessLocation, material.roughness)
+      }
       if (pipeline.kind === "glass" && material.kind === "glass") {
         context.uniform3fv(
           pipeline.attenuationColorLocation,
@@ -1134,11 +1238,13 @@ export class WebGL2SceneRuntime {
     context.uniformMatrix4fv(pipeline.viewProjectionLocation, false, viewProjection)
     context.uniform3fv(pipeline.ambientLightLocation, lighting.ambient)
     context.uniform1i(pipeline.directionalLightCountLocation, lighting.directionalCount)
-    context.uniform3fv(pipeline.directionToLightsLocation, lighting.directionToLights)
-    context.uniform3fv(
-      pipeline.directionalLightColorsLocation,
-      lighting.directionalColors
-    )
+    if (lighting.directionalCount > 0) {
+      context.uniform3fv(pipeline.directionToLightsLocation, lighting.directionToLights)
+      context.uniform3fv(
+        pipeline.directionalLightColorsLocation,
+        lighting.directionalColors
+      )
+    }
     context.uniform1i(pipeline.shadowLightIndexLocation, shadow?.lightIndex ?? -1)
     context.uniform1f(pipeline.shadowBiasLocation, shadow?.bias ?? 0)
     context.uniform1i(pipeline.shadowMapLocation, 0)
@@ -1174,6 +1280,29 @@ export class WebGL2SceneRuntime {
         shadow.lightViewProjection
       )
     }
+    context.activeTexture(context.TEXTURE0)
+  }
+
+  #applyEnvironmentFrameUniforms(
+    pipeline: StandardPipelineResources | GlassPipelineResources,
+    camera: PerspectiveCamera,
+    environment: EnvironmentMap | undefined,
+    environmentTexture: EnvironmentTextureResources | undefined,
+  ) {
+    const context = this.#context
+    context.uniform3fv(
+      pipeline.cameraPositionLocation,
+      new Float32Array(camera.getPosition()),
+    )
+    context.uniform1i(pipeline.environmentMapLocation, 2)
+    context.uniform1i(pipeline.hasEnvironmentLocation, environmentTexture ? 1 : 0)
+    context.uniform1f(pipeline.environmentIntensityLocation, environment?.intensity ?? 0)
+    context.uniform1f(
+      pipeline.environmentMaxLodLocation,
+      environmentTexture?.maxMipLevel ?? 0,
+    )
+    context.activeTexture(context.TEXTURE2)
+    context.bindTexture(context.TEXTURE_2D, environmentTexture?.texture ?? null)
     context.activeTexture(context.TEXTURE0)
   }
 

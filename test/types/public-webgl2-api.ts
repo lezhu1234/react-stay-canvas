@@ -7,6 +7,7 @@ import {
   Mesh,
   PerspectiveCamera,
   StayWebGLChild,
+  StandardMaterial,
   type StayTools,
   type StayWebGLSceneFragment,
   type GlassAttenuationColor,
@@ -30,6 +31,14 @@ const mesh = new Mesh({
 })
 mesh.setModelMatrix(translationMatrix4(0.2, 0, 0))
 mesh.setMaterial(new LambertMaterial({ color: [0.3, 0.6, 1, 1] }))
+const standard = new StandardMaterial({
+  color: [0.72, 0.76, 0.8, 1],
+  metallic: 0.1,
+  roughness: 0.28,
+})
+const standardMetallic: number = standard.metallic
+const standardRoughness: number = standard.roughness
+mesh.setMaterial(standard)
 const glass = new GlassMaterial({
   attenuationColor: [0.82, 0.94, 1],
   attenuationDistance: 1.2,
@@ -106,5 +115,7 @@ void glassAttenuationColor
 void glassAttenuationDistance
 void glassRoughness
 void glassThickness
+void standardMetallic
+void standardRoughness
 void WebGL2SceneRuntime
 void WebGL2LayerRuntime

@@ -131,7 +131,8 @@ the default framebuffer, whose opaque color and depth remain intact. This separa
 framebuffer feedback without replacing the layer's multisampled render target. The scene-color target
 generates a mip chain after each opaque resolve so Glass roughness can filter transmission without a
 second scene pass. An optional layer-owned equirectangular RGBA8 `EnvironmentMap` supplies world-space
-reflection radiance through a second persistent mipmapped texture; intensity changes are uniform-only,
+reflection radiance to opaque `StandardMaterial` and transparent `GlassMaterial` through a persistent
+mipmapped texture; intensity changes are uniform-only,
 while pixel revision changes re-upload that texture. Both textures are derived GPU state and are
 forgotten on context loss. Glass applies immutable material-owned Beer-Lambert attenuation to the
 refracted scene color. `attenuationColor` is the remaining per-channel transmission after
@@ -148,8 +149,8 @@ refraction, and sampling outside the WebGL2 layer remain outside this runtime.
 
 The native backend does not consume Shape RenderPlans, Canvas2D raster surfaces, projective Shape
 placements, or Shape `zIndex`. Depth is authoritative inside a WebGL2 layer. Mesh history and scene
-transfer deep-copy CPU geometry, normals, model matrices, and material values, including Glass
-roughness and volume attenuation; Camera, EnvironmentMap, and Light state is display configuration and is neither historical
+transfer deep-copy CPU geometry, normals, model matrices, and material values, including Standard
+metallic-roughness and Glass roughness/volume attenuation; Camera, EnvironmentMap, and Light state is display configuration and is neither historical
 nor transferred.
 
 ## Documentation boundary

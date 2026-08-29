@@ -29,7 +29,6 @@ import {
 import {
   createPlaneBasis,
   rectMeshGeometry,
-  transmissionBackdropGeometry,
 } from "../example/src/examples/simple/coordinateSceneModel"
 import {
   createFiniteProjectiveMapping,
@@ -171,25 +170,6 @@ describe("Example Canvas workspace", () => {
       expect(definition.worldQuad[2][1]).toBe(groundHeight)
       expect(definition.worldQuad[3][1]).toBe(groundHeight)
     }
-  })
-
-  it("places one shared neutral transmission reference behind every glass plane", () => {
-    const planes = Object.values(createPlaneDefinitions(1200, 520))
-    const geometry = transmissionBackdropGeometry(planes)
-
-    expect(geometry.positions).toHaveLength(planes.length * 4 * 3)
-    expect(geometry.indices).toHaveLength(planes.length * 6)
-    planes.forEach((plane, planeIndex) => {
-      const basis = createPlaneBasis(plane)
-      const origin = plane.worldQuad[0]
-      const offset = planeIndex * 12
-      for (let vertex = 0; vertex < 4; vertex++) {
-        const position = geometry.positions.slice(offset + vertex * 3, offset + vertex * 3 + 3)
-        const normalDistance = position.reduce((sum, value, index) =>
-          sum + (value - origin[index]) * basis.normal[index], 0)
-        expect(normalDistance).toBeCloseTo(-0.2)
-      }
-    })
   })
 
   it("keeps plane triangle winding aligned with the stored front-face normal", () => {

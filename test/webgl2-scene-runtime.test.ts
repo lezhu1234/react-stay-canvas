@@ -10,6 +10,7 @@ import { Mesh } from "../src/stay/webgl2/mesh"
 import {
   GlassMaterial,
   LambertMaterial,
+  StandardMaterial,
   UnlitMaterial,
 } from "../src/stay/webgl2/material"
 import { AmbientLight, DirectionalLight } from "../src/stay/webgl2/light"
@@ -387,17 +388,74 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.dispose()
   })
 
-  it("keeps the direct default-framebuffer path when a scene has no Glass", () => {
+  it("keeps the direct default-framebuffer path when no material uses environment", () => {
     const canvas = document.createElement("canvas")
     const gl = createRecordingWebGL2Context(canvas)
     const runtime = new WebGL2SceneRuntime(gl.context)
     const opaque = new Mesh({ geometry: triangle(), material: unlit([0.2, 0.5, 0.9, 1]) })
 
-    runtime.render([opaque], camera())
+    runtime.render([opaque], camera(), [], new EnvironmentMap(environmentImage()))
 
     expect(gl.spies.createTexture).not.toHaveBeenCalled()
     expect(gl.spies.createFramebuffer).not.toHaveBeenCalled()
     expect(gl.spies.blitFramebuffer).not.toHaveBeenCalled()
+    runtime.dispose()
+  })
+
+  it("renders Standard material through the opaque path with persistent environment state", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const environment = new EnvironmentMap({ ...environmentImage(), intensity: 0.7 })
+    const mesh = new Mesh({
+      geometry: litTriangle(),
+      material: new StandardMaterial({
+        color: [0.65, 0.7, 0.75, 1],
+        metallic: 0.2,
+        roughness: 0.3,
+      }),
+      receiveShadow: true,
+    })
+
+    runtime.render([mesh], camera(), [new AmbientLight()], environment)
+    runtime.render([mesh], camera(), [new AmbientLight()], environment)
+
+    const standardSource = gl.spies.shaderSource.mock.calls.find(([, source]) =>
+      String(source).includes("distribution_ggx")
+      && String(source).includes("environment_radiance"))?.[1]
+    expect(String(standardSource)).toContain("mix(vec3(0.04), base_color, u_metallic)")
+    expect(gl.spies.createProgram).toHaveBeenCalledOnce()
+    expect(gl.spies.createTexture).toHaveBeenCalledOnce()
+    expect(gl.spies.createFramebuffer).not.toHaveBeenCalled()
+    expect(gl.spies.blitFramebuffer).not.toHaveBeenCalled()
+    expect(gl.spies.texImage2D).toHaveBeenCalledOnce()
+    expect(gl.spies.generateMipmap).toHaveBeenCalledOnce()
+    expect(gl.spies.uniform3fv.mock.calls.every(([, value]) => value.length > 0))
+      .toBe(true)
+    expect(gl.spies.uniform1f.mock.calls)
+      .toContainEqual([expect.anything(), Math.fround(0.2)])
+    expect(gl.spies.uniform1f.mock.calls)
+      .toContainEqual([expect.anything(), Math.fround(0.3)])
+    expect(gl.spies.uniform1f.mock.calls)
+      .toContainEqual([expect.anything(), Math.fround(0.7)])
+
+    mesh.setMaterial(new StandardMaterial({
+      color: [0.65, 0.7, 0.75, 1],
+      metallic: 0.25,
+      roughness: 0.35,
+    }))
+    runtime.render([mesh], camera(), [new AmbientLight()], environment)
+    expect(gl.spies.createProgram).toHaveBeenCalledOnce()
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(3)
+    expect(gl.spies.createTexture).toHaveBeenCalledOnce()
+
+    environment.setIntensity(0.5)
+    runtime.render([mesh], camera(), [new AmbientLight()], environment)
+    expect(gl.spies.createTexture).toHaveBeenCalledOnce()
+    expect(gl.spies.texImage2D).toHaveBeenCalledOnce()
+    expect(gl.spies.uniform1f.mock.calls)
+      .toContainEqual([expect.anything(), Math.fround(0.5)])
     runtime.dispose()
   })
 
@@ -420,7 +478,7 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.render([glass], camera(), [new AmbientLight()], environment)
 
     expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
-      String(source).includes("textureLod(\n      u_environment_map")
+      String(source).includes("environment_radiance(reflected_direction, u_roughness)")
       && String(source).includes("reflect(-view_direction, normal)")
       && String(source).includes("scene_color.rgb / scene_color.a")
       && String(source).includes("surface_color * (alpha - fresnel)")
@@ -941,7 +999,10 @@ describe("internal WebGL2 scene runtime", () => {
     })).toThrow("filterRadius must be finite")
   })
 
-  it("rejects incomplete Lambert CPU state before committing Mesh changes", () => {
+  it("rejects incomplete lit CPU state before committing Mesh changes", () => {
+    const defaultStandard = new StandardMaterial()
+    expect(defaultStandard.metallic).toBe(0)
+    expect(defaultStandard.roughness).toBe(1)
     const defaultGlass = new GlassMaterial()
     expect(defaultGlass.attenuationColor).toEqual([1, 1, 1])
     expect(defaultGlass.attenuationDistance).toBeUndefined()
@@ -953,6 +1014,10 @@ describe("internal WebGL2 scene runtime", () => {
     expect(() => new Mesh({
       geometry: triangle(),
       material: new LambertMaterial(),
+    })).toThrow("requires normals")
+    expect(() => new Mesh({
+      geometry: triangle(),
+      material: new StandardMaterial(),
     })).toThrow("requires normals")
     expect(() => new Mesh({
       geometry: {
@@ -974,6 +1039,14 @@ describe("internal WebGL2 scene runtime", () => {
     expect(mesh.getModelMatrix()).toEqual(identityMatrix4())
     expect(() => new UnlitMaterial({ color: [1, 1, 1, 0.5] }))
       .toThrow("alpha must be 1")
+    expect(() => new StandardMaterial({ color: [1, 1, 1, 0.5] }))
+      .toThrow("alpha must be 1")
+    expect(() => new StandardMaterial({ metallic: -0.1 }))
+      .toThrow("metallic must be between 0 and 1")
+    expect(() => new StandardMaterial({ metallic: Number.NaN }))
+      .toThrow("metallic must be finite")
+    expect(() => new StandardMaterial({ roughness: 1.1 }))
+      .toThrow("roughness must be between 0 and 1")
     expect(() => new GlassMaterial({ color: [1, 1, 1, 1] }))
       .toThrow("greater than 0 and less than 1")
     expect(() => new GlassMaterial({ color: [1, 1, 1, 0] }))
@@ -990,6 +1063,8 @@ describe("internal WebGL2 scene runtime", () => {
       .toThrow("roughness must be between 0 and 1")
     expect(() => new GlassMaterial({ roughness: 1.1 }))
       .toThrow("roughness must be between 0 and 1")
+    expect(() => new GlassMaterial({ roughness: null as never }))
+      .toThrow("roughness must be finite")
     expect(() => new GlassMaterial({ attenuationColor: [-0.1, 0.5, 1] }))
       .toThrow("attenuationColor must be between 0 and 1")
     expect(() => new GlassMaterial({ attenuationColor: [0.1, Number.NaN, 1] }))
@@ -1024,7 +1099,9 @@ describe("internal WebGL2 scene runtime", () => {
     expect(() => mesh.setMaterial({
       kind: "lambert",
       color: [1, 1, 1, 1],
-    } as never)).toThrow("must be an UnlitMaterial, LambertMaterial, or GlassMaterial")
+    } as never)).toThrow(
+      "must be an UnlitMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
+    )
   })
 
   it("derives an inverse-transpose normal matrix for non-uniform scale", () => {

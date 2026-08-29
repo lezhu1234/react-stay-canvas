@@ -4,7 +4,12 @@ import { ChildrenStore } from "../src/stay/children/childrenStore"
 import { captureChildHistory } from "../src/stay/historySnapshot"
 import { identityMatrix4, translationMatrix4 } from "../src/stay/webgl2/math3D"
 import { Mesh } from "../src/stay/webgl2/mesh"
-import { GlassMaterial, LambertMaterial, UnlitMaterial } from "../src/stay/webgl2/material"
+import {
+  GlassMaterial,
+  LambertMaterial,
+  StandardMaterial,
+  UnlitMaterial,
+} from "../src/stay/webgl2/material"
 import { StayWebGLChild } from "../src/stay/webgl2/stayWebGLChild"
 import {
   stayWebGLChildHistory,
@@ -203,6 +208,41 @@ describe("internal Stay WebGL Child runtime", () => {
         thickness: 0.18,
       })
     )
+    original.destroy()
+    restored.destroy()
+  })
+
+  it("captures Standard material values in History and scene transfer", () => {
+    const original = new StayWebGLChild({
+      id: "standard-source",
+      className: "polished-floor",
+      layer: 0,
+      meshes: [new Mesh({
+        geometry: { ...triangle(), normals },
+        material: new StandardMaterial({
+          color: [0.6, 0.65, 0.7, 1],
+          metallic: 0.15,
+          roughness: 0.28,
+        }),
+      })],
+    })
+
+    const snapshot = captureStayWebGLChildSnapshot(original)
+    expect(snapshot.meshes[0].material).toEqual({
+      kind: "standard",
+      color: [0.6, 0.65, 0.7, 1],
+      metallic: Math.fround(0.15),
+      roughness: Math.fround(0.28),
+    })
+    const restored = restoreStayWebGLChildSnapshot(snapshot)
+    expect(captureStayWebGLSceneChild(restored).meshes[0].material)
+      .toEqual(snapshot.meshes[0].material)
+    restored.meshes[0].setMaterial(new StandardMaterial({ metallic: 0.8 }))
+    expect(original.meshes[0].getMaterial()).toEqual(new StandardMaterial({
+      color: [0.6, 0.65, 0.7, 1],
+      metallic: 0.15,
+      roughness: 0.28,
+    }))
     original.destroy()
     restored.destroy()
   })

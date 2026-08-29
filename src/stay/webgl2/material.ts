@@ -9,6 +9,14 @@ export interface LambertMaterialProps {
   readonly color?: MeshColor
 }
 
+export interface StandardMaterialProps {
+  readonly color?: MeshColor
+  /** Metalness from 0 (dielectric) to 1 (metal). */
+  readonly metallic?: number
+  /** Micro-surface blur from 0 (sharp) to 1 (fully rough). */
+  readonly roughness?: number
+}
+
 export interface GlassMaterialProps {
   /** Color white light becomes after travelling attenuationDistance world units. */
   readonly attenuationColor?: GlassAttenuationColor
@@ -99,13 +107,13 @@ function copyThickness(value = 0.1) {
   return copied
 }
 
-function copyRoughness(value = 0) {
+function copyUnitInterval(value: number, name: string) {
   if (Number.isFinite(value) && (value < 0 || value > 1)) {
-    throw new RangeError("GlassMaterial roughness must be between 0 and 1")
+    throw new RangeError(`${name} must be between 0 and 1`)
   }
-  const copied = copyFloat32(value, "GlassMaterial roughness")
+  const copied = copyFloat32(value, name)
   if (copied < 0 || copied > 1) {
-    throw new RangeError("GlassMaterial roughness must be between 0 and 1")
+    throw new RangeError(`${name} must be between 0 and 1`)
   }
   return copied
 }
@@ -145,6 +153,22 @@ export class LambertMaterial {
   }
 }
 
+/** An immutable opaque metallic-roughness material lit by scene and environment light. */
+export class StandardMaterial {
+  readonly kind = "standard"
+  readonly color: MeshColor
+  readonly metallic: number
+  readonly roughness: number
+  readonly #materialBrand = "standard"
+
+  constructor({ color, metallic = 0, roughness = 1 }: StandardMaterialProps = {}) {
+    this.color = copyOpaqueColor(color, "StandardMaterial color")
+    this.metallic = copyUnitInterval(metallic, "StandardMaterial metallic")
+    this.roughness = copyUnitInterval(roughness, "StandardMaterial roughness")
+    Object.freeze(this)
+  }
+}
+
 /** An immutable lit refractive material rendered in the transparent queue. */
 export class GlassMaterial {
   readonly kind = "glass"
@@ -161,24 +185,34 @@ export class GlassMaterial {
     attenuationDistance,
     color,
     ior,
-    roughness,
+    roughness = 0,
     thickness,
   }: GlassMaterialProps = {}) {
     this.attenuationColor = copyAttenuationColor(attenuationColor)
     this.attenuationDistance = copyAttenuationDistance(attenuationDistance)
     this.color = copyGlassColor(color)
     this.ior = copyIndexOfRefraction(ior)
-    this.roughness = copyRoughness(roughness)
+    this.roughness = copyUnitInterval(roughness, "GlassMaterial roughness")
     this.thickness = copyThickness(thickness)
     Object.freeze(this)
   }
 }
 
-export type MeshMaterial = UnlitMaterial | LambertMaterial | GlassMaterial
+export type MeshMaterial =
+  | UnlitMaterial
+  | LambertMaterial
+  | StandardMaterial
+  | GlassMaterial
 
 export type MeshMaterialSnapshot = Readonly<
   | { kind: "unlit"; color: MeshColor }
   | { kind: "lambert"; color: MeshColor }
+  | {
+    kind: "standard"
+    color: MeshColor
+    metallic: number
+    roughness: number
+  }
   | {
     kind: "glass"
     attenuationColor: GlassAttenuationColor
@@ -193,6 +227,13 @@ export type MeshMaterialSnapshot = Readonly<
 export function copyMeshMaterial(material: MeshMaterial): MeshMaterial {
   if (material instanceof UnlitMaterial) return new UnlitMaterial({ color: material.color })
   if (material instanceof LambertMaterial) return new LambertMaterial({ color: material.color })
+  if (material instanceof StandardMaterial) {
+    return new StandardMaterial({
+      color: material.color,
+      metallic: material.metallic,
+      roughness: material.roughness,
+    })
+  }
   if (material instanceof GlassMaterial) {
     return new GlassMaterial({
       attenuationColor: material.attenuationColor,
@@ -204,11 +245,19 @@ export function copyMeshMaterial(material: MeshMaterial): MeshMaterial {
     })
   }
   throw new TypeError(
-    "Mesh material must be an UnlitMaterial, LambertMaterial, or GlassMaterial"
+    "Mesh material must be an UnlitMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
   )
 }
 
 export function captureMeshMaterial(material: MeshMaterial): MeshMaterialSnapshot {
+  if (material instanceof StandardMaterial) {
+    return {
+      kind: material.kind,
+      color: [...material.color],
+      metallic: material.metallic,
+      roughness: material.roughness,
+    }
+  }
   if (material instanceof GlassMaterial) {
     return {
       kind: material.kind,
@@ -226,6 +275,13 @@ export function captureMeshMaterial(material: MeshMaterial): MeshMaterialSnapsho
 export function materializeMeshMaterial(snapshot: MeshMaterialSnapshot): MeshMaterial {
   if (snapshot.kind === "unlit") return new UnlitMaterial({ color: snapshot.color })
   if (snapshot.kind === "lambert") return new LambertMaterial({ color: snapshot.color })
+  if (snapshot.kind === "standard") {
+    return new StandardMaterial({
+      color: snapshot.color,
+      metallic: snapshot.metallic,
+      roughness: snapshot.roughness,
+    })
+  }
   if (snapshot.kind === "glass") {
     return new GlassMaterial({
       attenuationColor: snapshot.attenuationColor,
@@ -241,7 +297,9 @@ export function materializeMeshMaterial(snapshot: MeshMaterialSnapshot): MeshMat
 
 /** @internal Lit materials require normals and an affine invertible model matrix. */
 export function meshMaterialUsesLighting(material: MeshMaterial) {
-  return material instanceof LambertMaterial || material instanceof GlassMaterial
+  return material instanceof LambertMaterial
+    || material instanceof StandardMaterial
+    || material instanceof GlassMaterial
 }
 
 /** @internal Only GlassMaterial participates in the transparent render queue. */

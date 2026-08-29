@@ -14,6 +14,7 @@ export type {
 export {
   GlassMaterial,
   LambertMaterial,
+  StandardMaterial,
   UnlitMaterial,
 } from "./stay/webgl2/material"
 export type {
@@ -23,6 +24,7 @@ export type {
   MeshColor,
   MeshMaterial,
   MeshMaterialSnapshot,
+  StandardMaterialProps,
   UnlitMaterialProps,
 } from "./stay/webgl2/material"
 export { AmbientLight, DirectionalLight } from "./stay/webgl2/light"

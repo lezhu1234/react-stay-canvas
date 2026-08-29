@@ -7,10 +7,10 @@ import {
   EnvironmentMap,
   GlassMaterial,
   type GlassAttenuationColor,
-  LambertMaterial,
   Line,
   Mesh,
   StayCanvas,
+  StandardMaterial,
   StayText,
   UnlitMaterial,
   type Coordinate,
@@ -47,7 +47,6 @@ import {
   PLANE_GRID_ROWS,
   projectPlanePoint,
   rectMeshGeometry,
-  transmissionBackdropGeometry,
   transparentMeshColor,
   type PlaneBasis,
   type PlaneDefinition,
@@ -72,9 +71,9 @@ const PLANE_GLASS_ATTENUATION: Readonly<Record<PlaneName, {
   color: GlassAttenuationColor
   distance: number
 }>> = {
-  client: { color: [0.72, 0.95, 1], distance: 0.8 },
-  view: { color: [0.48, 0.72, 1], distance: 0.55 },
-  content: { color: [0.52, 1, 0.68], distance: 0.45 },
+  client: { color: [0.56, 0.92, 1], distance: 0.4 },
+  view: { color: [0.34, 0.58, 1], distance: 0.32 },
+  content: { color: [0.32, 1, 0.55], distance: 0.3 },
 }
 
 const unlitMaterial = (color: ReturnType<typeof rgba>) =>
@@ -111,20 +110,20 @@ function createCoordinateEnvironment() {
       const offset = (y * width + x) * 4
       data[offset] = Math.min(
         255,
-        Math.round(72 + horizon * 4 - ground * 2 + windowLight * 180),
+        Math.round(48 + horizon * 5 - ground * 4 + windowLight * 195),
       )
       data[offset + 1] = Math.min(
         255,
-        Math.round(75 + horizon * 3 - ground * 2 + windowLight * 178),
+        Math.round(46 + horizon * 4 - ground * 4 + windowLight * 190),
       )
       data[offset + 2] = Math.min(
         255,
-        Math.round(78 + horizon * 2 - ground * 1.5 + windowLight * 172),
+        Math.round(44 + horizon * 3 - ground * 3 + windowLight * 184),
       )
       data[offset + 3] = 255
     }
   }
-  return new EnvironmentMap({ width, height, data, intensity: 3.2 })
+  return new EnvironmentMap({ width, height, data, intensity: 1.55 })
 }
 
 export type CoordinateMappingFocus = "view-client" | "content-view"
@@ -145,7 +144,6 @@ type PlaneMeshes = {
 
 type PlaneOverlay = {
   title: StayText
-  dimension: StayText
   originValue: StayText
   xLabel: StayText
   yLabel: StayText
@@ -331,7 +329,7 @@ function createPlaneRuntime(
       plane,
       basis,
       frameSegments(plane.width, plane.height),
-      1.45,
+      1.15,
       PANEL_FACE_OFFSET + 0.004,
     ),
     material: unlitMaterial(plane.stroke),
@@ -345,7 +343,7 @@ function createPlaneRuntime(
   })
   const grid = new Mesh({
     geometry: lineMeshGeometry(plane, basis, gridSegments(plane), 0.8, PANEL_FACE_OFFSET + 0.006),
-    material: glassMaterial({ ...plane.stroke, a: 0.08 }),
+    material: glassMaterial({ ...plane.stroke, a: 0.045 }),
   })
   const axes = new Mesh({
     geometry: lineMeshGeometry(plane, basis, [
@@ -375,17 +373,6 @@ function createPlaneRuntime(
     textBaseline: "bottom",
     font: { size: titleSize, fontWeight: 700 },
     fillConfig: { color: plane.stroke },
-  })
-  const dimension = new StayText({
-    x: plane.labelX,
-    y: plane.labelY + detailSize + 13,
-    text: "0 × 0",
-    layer: OVERLAY_LAYER,
-    zIndex: 20,
-    textAlign: "center",
-    textBaseline: "bottom",
-    font: { size: detailSize, fontWeight: 500 },
-    fillConfig: { color: colors.gray },
   })
   const originValue = createOverlayText(plane, { x: 16, y: 7 }, {
     text: "0,0",
@@ -454,7 +441,6 @@ function createPlaneRuntime(
   }
   const overlay: PlaneOverlay = {
     title,
-    dimension,
     originValue,
     xLabel,
     yLabel,
@@ -548,11 +534,11 @@ export function CoordinateStack({
   const camera = useMemo(() => createCoordinateCamera(), [])
   const environment = useMemo(() => createCoordinateEnvironment(), [])
   const lights = useMemo(() => [
-    new AmbientLight({ color: [0.84, 0.91, 0.95], intensity: 0.32 }),
+    new AmbientLight({ color: [0.86, 0.9, 0.91], intensity: 0.16 }),
     new DirectionalLight({
       directionToLight: [0.72, 0.96, 0.5],
       color: [1, 0.92, 0.8],
-      intensity: 0.9,
+      intensity: 1.35,
       shadow: {
         target: [0, -0.4, -7.2],
         distance: 11,
@@ -560,15 +546,15 @@ export function CoordinateStack({
         height: 10,
         near: 0.1,
         far: 26,
-        mapSize: 256,
+        mapSize: 512,
         bias: 0.001,
-        filterRadius: 4,
+        filterRadius: 2.5,
       },
     }),
     new DirectionalLight({
       directionToLight: [-0.62, 0.2, 0.76],
       color: [0.57, 0.72, 1],
-      intensity: 0.08,
+      intensity: 0.2,
     }),
   ], [])
   const layers = useMemo<CanvasLayerConfig[]>(() => [
@@ -617,10 +603,6 @@ export function CoordinateStack({
       }
       plane.overlay.title.update({
         fillConfig: { color: { ...plane.stroke, a: isActive ? 1 : 0.68 } },
-      })
-      plane.overlay.dimension.update({
-        text: `${Math.round(range.width)} × ${Math.round(range.height)} · R ${PLANE_GLASS_ROUGHNESS[name].toFixed(2)} · AD ${PLANE_GLASS_ATTENUATION[name].distance.toFixed(2)}`,
-        fillConfig: { color: rgba(78, 89, 104, isActive ? 0.72 : 0.5) },
       })
       plane.overlay.dot.update({
         ...(contentPoint ?? { x: 0, y: 0 }),
@@ -710,11 +692,12 @@ export function CoordinateStack({
     const planes = {} as Record<PlaneName, PlaneRuntime>
     const meshes: Mesh[] = [new Mesh({
       geometry: floorMeshGeometry(),
-      material: new LambertMaterial({ color: [0.93, 0.95, 0.94, 1] }),
+      material: new StandardMaterial({
+        color: [0.62, 0.6, 0.56, 1],
+        metallic: 0,
+        roughness: 0.52,
+      }),
       receiveShadow: true,
-    }), new Mesh({
-      geometry: transmissionBackdropGeometry(Object.values(definitions)),
-      material: new UnlitMaterial({ color: [0.89, 0.9, 0.895, 1] }),
     })]
     const overlays: Array<Circle | Line | StayText> = []
 

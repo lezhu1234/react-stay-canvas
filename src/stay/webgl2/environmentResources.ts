@@ -40,7 +40,7 @@ export function uploadEnvironmentTexture(
   context.texImage2D(
     context.TEXTURE_2D,
     0,
-    context.RGBA8,
+    context.SRGB8_ALPHA8,
     image.width,
     image.height,
     0,

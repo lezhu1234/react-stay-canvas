@@ -2,7 +2,13 @@ import { vi } from "vitest"
 
 export function createRecordingWebGLContext(
   canvas: HTMLCanvasElement,
-  options: { lost?: boolean; maxTextureSize?: number } = {}
+  options: {
+    lost?: boolean
+    maxTextureSize?: number
+    samples?: number
+    supportedSamples?: readonly number[]
+    contextAttributes?: Partial<WebGLContextAttributes>
+  } = {}
 ) {
   let lost = options.lost ?? false
   let nextHandle = 0
@@ -26,6 +32,7 @@ export function createRecordingWebGLContext(
     READ_FRAMEBUFFER: 0x8ca8,
     DRAW_FRAMEBUFFER: 0x8ca9,
     FRAMEBUFFER_COMPLETE: 0x8cd5,
+    RENDERBUFFER: 0x8d41,
     COLOR_ATTACHMENT0: 0x8ce0,
     DEPTH_ATTACHMENT: 0x8d00,
     CULL_FACE: 0x0b44,
@@ -62,16 +69,34 @@ export function createRecordingWebGLContext(
     UNPACK_PREMULTIPLY_ALPHA_WEBGL: 0x9241,
     RGBA: 0x1908,
     RGBA8: 0x8058,
+    SRGB8_ALPHA8: 0x8c43,
     UNSIGNED_BYTE: 0x1401,
     UNSIGNED_INT: 0x1405,
     DEPTH_COMPONENT: 0x1902,
     DEPTH_COMPONENT24: 0x81a6,
     MAX_TEXTURE_SIZE: 0x0d33,
+    SAMPLES: 0x80a9,
     NO_ERROR: 0,
     CONTEXT_LOST_WEBGL: 0x9242,
     isContextLost: vi.fn(() => lost),
     getError: vi.fn(() => 0),
-    getParameter: vi.fn(() => options.maxTextureSize ?? 4096),
+    getParameter: vi.fn((name: number) =>
+      name === 0x80a9 ? (options.samples ?? 4) : (options.maxTextureSize ?? 4096)),
+    getContextAttributes: vi.fn(() => ({
+      alpha: true,
+      antialias: true,
+      depth: true,
+      desynchronized: false,
+      failIfMajorPerformanceCaveat: false,
+      powerPreference: "default",
+      premultipliedAlpha: true,
+      preserveDrawingBuffer: false,
+      stencil: false,
+      xrCompatible: false,
+      ...options.contextAttributes,
+    })),
+    getInternalformatParameter: vi.fn(() =>
+      new Int32Array(options.supportedSamples ?? [4, 2, 1])),
     createShader: vi.fn(handle),
     shaderSource: vi.fn(),
     compileShader: vi.fn(),
@@ -90,11 +115,17 @@ export function createRecordingWebGLContext(
     deleteTexture: vi.fn(),
     createFramebuffer: vi.fn(handle),
     deleteFramebuffer: vi.fn(),
+    createRenderbuffer: vi.fn(handle),
+    deleteRenderbuffer: vi.fn(),
     getAttribLocation: vi.fn((_: unknown, name: string) =>
       name === "a_clip_position" ? 0 : 1),
     getUniformLocation: vi.fn(() => handle()),
     bindFramebuffer: vi.fn(),
     framebufferTexture2D: vi.fn(),
+    bindRenderbuffer: vi.fn(),
+    renderbufferStorage: vi.fn(),
+    renderbufferStorageMultisample: vi.fn(),
+    framebufferRenderbuffer: vi.fn(),
     drawBuffers: vi.fn(),
     readBuffer: vi.fn(),
     checkFramebufferStatus: vi.fn(() => 0x8cd5),
@@ -125,6 +156,7 @@ export function createRecordingWebGLContext(
     generateMipmap: vi.fn(),
     blitFramebuffer: vi.fn(),
     drawElements: vi.fn(),
+    drawArrays: vi.fn(),
   }
   return {
     context: spies as unknown as WebGLRenderingContext,
@@ -135,7 +167,13 @@ export function createRecordingWebGLContext(
 
 export function createRecordingWebGL2Context(
   canvas: HTMLCanvasElement,
-  options: { lost?: boolean; maxTextureSize?: number } = {}
+  options: {
+    lost?: boolean
+    maxTextureSize?: number
+    samples?: number
+    supportedSamples?: readonly number[]
+    contextAttributes?: Partial<WebGLContextAttributes>
+  } = {}
 ) {
   const recording = createRecordingWebGLContext(canvas, options)
   let nextVertexArray = 10_000

@@ -16,13 +16,13 @@ export const PLANE_ASPECT_RATIO = 4 / 3
 export const PLANE_GRID_COLUMNS = 6
 export const PLANE_GRID_ROWS = 5
 
-const CAMERA_FIELD_OF_VIEW = Math.PI / 3
-const CAMERA_POSITION_X = 4.95
+const CAMERA_FIELD_OF_VIEW = Math.PI / 3.4
+const CAMERA_POSITION_X = 4.2
 const GROUND_HEIGHT = -2.8
 const PANEL_LAYOUT = [
-  { centerX: -4.5, depth: 7.6, worldWidth: 4, worldHeight: 6.2, yaw: 0.14, logicalScale: 1 },
-  { centerX: 0.7, depth: 7.2, worldWidth: 3.7, worldHeight: 5.8, yaw: 0.2, logicalScale: 0.92 },
-  { centerX: 5.25, depth: 6.9, worldWidth: 3.4, worldHeight: 5.45, yaw: 0.25, logicalScale: 0.86 },
+  { centerX: -2.6, depth: 8.8, worldWidth: 4.3, worldHeight: 6.6, yaw: 0.04, logicalScale: 1 },
+  { centerX: 2.4, depth: 7.8, worldWidth: 4.2, worldHeight: 5.8, yaw: 0.16, logicalScale: 0.96 },
+  { centerX: 6.1, depth: 7, worldWidth: 3.1, worldHeight: 5.1, yaw: 0.28, logicalScale: 0.92 },
 ] as const
 
 export type PlaneName = "client" | "view" | "content"
@@ -209,22 +209,6 @@ export function floorMeshGeometry(): MeshGeometryInput {
   ]
   const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
   appendQuad(builder, points, [0, 1, 0])
-  return builder
-}
-
-export function transmissionBackdropGeometry(
-  planes: readonly PlaneDefinition[],
-): MeshGeometryInput {
-  const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
-  planes.forEach((plane) => {
-    const basis = createPlaneBasis(plane)
-    appendPlaneQuad(builder, plane, basis, pointsForRect({
-      x: 0,
-      y: plane.height * 0.87,
-      width: plane.width,
-      height: plane.height * 0.018,
-    }), -0.2)
-  })
   return builder
 }
 

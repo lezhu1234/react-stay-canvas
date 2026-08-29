@@ -288,7 +288,7 @@ describe("internal WebGL2 scene runtime", () => {
 
     expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
       String(source).includes("refract(incident, view_normal, 1.0 / u_ior)")
-      && String(source).includes("if (u_has_volume_attenuation)")
+      && String(source).includes("volume_attenuation(")
       && String(source).includes("uniform float u_log_attenuation_exponent")
       && String(source).includes("if (color <= 0.0) return 0.0")
       && String(source).includes("if (color >= 1.0) return 1.0")
@@ -675,6 +675,103 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.dispose()
     expect(gl.spies.deleteFramebuffer).toHaveBeenCalledOnce()
     expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
+  })
+
+  it("casts Glass volume attenuation through a persistent transmissive shadow map", () => {
+    const canvas = document.createElement("canvas")
+    canvas.width = 240
+    canvas.height = 160
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const caster = new Mesh({
+      geometry: litTriangle(),
+      material: new GlassMaterial({
+        attenuationColor: [0.2, 0.65, 0.95],
+        attenuationDistance: 0.5,
+        thickness: 0.25,
+      }),
+      castShadow: true,
+    })
+    const receiver = new Mesh({
+      geometry: litTriangle(-1),
+      material: new LambertMaterial(),
+      receiveShadow: true,
+    })
+    const light = new DirectionalLight({
+      directionToLight: [0.4, 0.7, 1],
+      shadow: { mapSize: 256 },
+    })
+
+    runtime.render([caster, receiver], camera(), [light])
+    runtime.render([caster, receiver], camera(), [light])
+
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(3)
+    expect(gl.spies.texImage2D).toHaveBeenCalledWith(
+      gl.spies.TEXTURE_2D,
+      0,
+      gl.spies.RGBA8,
+      256,
+      256,
+      0,
+      gl.spies.RGBA,
+      gl.spies.UNSIGNED_BYTE,
+      null,
+    )
+    expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
+      String(source).includes("out vec4 output_transmittance")
+      && String(source).includes("u_surface_transmission * volume_attenuation(")))
+      .toBe(true)
+    expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
+      String(source).includes("vec3 shadow_transmittance()")
+      && String(source).includes("u_transmissive_shadow_color_map")))
+      .toBe(true)
+    expect(gl.spies.drawElements).toHaveBeenCalledTimes(6)
+
+    runtime.dispose()
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(2)
+    expect(gl.spies.deleteTexture).toHaveBeenCalledTimes(3)
+  })
+
+  it("keeps opaque occlusion independent from the nearest Glass transmittance", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const opaqueCaster = new Mesh({ geometry: triangle(), castShadow: true })
+    const glassCaster = new Mesh({
+      geometry: litTriangle(-0.25),
+      material: new GlassMaterial({
+        attenuationColor: [0.5, 0.8, 1],
+        attenuationDistance: 1,
+        thickness: 0.4,
+      }),
+      castShadow: true,
+    })
+    const receiver = new Mesh({
+      geometry: litTriangle(-1),
+      material: new LambertMaterial(),
+      receiveShadow: true,
+    })
+    const light = new DirectionalLight({
+      directionToLight: [0.4, 0.7, 1],
+      shadow: { mapSize: 128 },
+    })
+
+    runtime.render([opaqueCaster, glassCaster, receiver], camera(), [light])
+
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(4)
+    expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
+      String(source).includes("bool opaque_blocked")
+      && String(source).includes("bool glass_blocked")
+      && String(source).includes("opaque_blocked")
+      && String(source).includes("? vec3(0.0)")))
+      .toBe(true)
+    expect(gl.spies.drawElements).toHaveBeenCalledTimes(5)
+
+    runtime.dispose()
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.deleteTexture).toHaveBeenCalledTimes(4)
   })
 
   it("rebuilds shadow resources for map-size changes and context restore", () => {

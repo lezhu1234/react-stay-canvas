@@ -119,6 +119,13 @@ describe("public native WebGL2 layer backend", () => {
     expect(stage.draw({ now: 2 }).updatedLayers).toEqual([0])
     key.setShadow({ target: [0, 0, 0], width: 6, height: 4 })
     expect(stage.draw({ now: 2.5 }).updatedLayers).toEqual([0])
+    key.setShadow({
+      target: [0, 0, 0],
+      width: 6,
+      height: 4,
+      filterRadius: 2,
+    })
+    expect(stage.draw({ now: 2.75 }).updatedLayers).toEqual([0])
     ambient.setIntensity(0.45)
     expect(stage.draw({ now: 3 }).updatedLayers).toEqual([0])
     expect(gl?.spies.bufferData).toHaveBeenCalledTimes(3)

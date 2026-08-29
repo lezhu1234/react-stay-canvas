@@ -196,10 +196,16 @@ export function createShadowMapResources(
   let framebuffer: WebGLFramebuffer | undefined
   try {
     context.bindTexture(context.TEXTURE_2D, depthTexture)
-    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MIN_FILTER, context.NEAREST)
-    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MAG_FILTER, context.NEAREST)
+    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MIN_FILTER, context.LINEAR)
+    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MAG_FILTER, context.LINEAR)
     context.texParameteri(context.TEXTURE_2D, context.TEXTURE_WRAP_S, context.CLAMP_TO_EDGE)
     context.texParameteri(context.TEXTURE_2D, context.TEXTURE_WRAP_T, context.CLAMP_TO_EDGE)
+    context.texParameteri(
+      context.TEXTURE_2D,
+      context.TEXTURE_COMPARE_MODE,
+      context.COMPARE_REF_TO_TEXTURE,
+    )
+    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_COMPARE_FUNC, context.LEQUAL)
     context.texImage2D(
       context.TEXTURE_2D,
       0,
@@ -258,10 +264,16 @@ export function createTransmissiveShadowMapResources(
   let framebuffer: WebGLFramebuffer | undefined
   try {
     context.bindTexture(context.TEXTURE_2D, depthTexture)
-    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MIN_FILTER, context.NEAREST)
-    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MAG_FILTER, context.NEAREST)
+    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MIN_FILTER, context.LINEAR)
+    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MAG_FILTER, context.LINEAR)
     context.texParameteri(context.TEXTURE_2D, context.TEXTURE_WRAP_S, context.CLAMP_TO_EDGE)
     context.texParameteri(context.TEXTURE_2D, context.TEXTURE_WRAP_T, context.CLAMP_TO_EDGE)
+    context.texParameteri(
+      context.TEXTURE_2D,
+      context.TEXTURE_COMPARE_MODE,
+      context.COMPARE_REF_TO_TEXTURE,
+    )
+    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_COMPARE_FUNC, context.LEQUAL)
     context.texImage2D(
       context.TEXTURE_2D,
       0,
@@ -274,8 +286,8 @@ export function createTransmissiveShadowMapResources(
       null,
     )
     context.bindTexture(context.TEXTURE_2D, transmittanceTexture)
-    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MIN_FILTER, context.NEAREST)
-    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MAG_FILTER, context.NEAREST)
+    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MIN_FILTER, context.LINEAR)
+    context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MAG_FILTER, context.LINEAR)
     context.texParameteri(context.TEXTURE_2D, context.TEXTURE_WRAP_S, context.CLAMP_TO_EDGE)
     context.texParameteri(context.TEXTURE_2D, context.TEXTURE_WRAP_T, context.CLAMP_TO_EDGE)
     context.texImage2D(

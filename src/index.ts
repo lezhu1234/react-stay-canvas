@@ -17,6 +17,7 @@ export {
   UnlitMaterial,
 } from "./stay/webgl2/material"
 export type {
+  GlassAttenuationColor,
   GlassMaterialProps,
   LambertMaterialProps,
   MeshColor,

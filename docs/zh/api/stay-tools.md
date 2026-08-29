@@ -51,13 +51,17 @@ const glass = new GlassMaterial({
   ior: 1.46,
   roughness: 0.24,
   thickness: 0.18,
+  attenuationColor: [0.72, 0.9, 1],
+  attenuationDistance: 0.8,
 })
 mesh.setMaterial(glass)
 ```
 
 `UnlitMaterial` 与 `LambertMaterial` 都不透明，color alpha 必须为 `1`。`GlassMaterial` 的 alpha 必须严格位于 `0` 与 `1` 之间，`ior` 必须大于 `1`（默认 `1.5`），`roughness` 位于 `0` 到 `1`（默认 `0`），`thickness` 是非负的 world-space 距离（默认 `0.1`）。renderer 会用这些值计算带光照的 Fresnel 边缘，以及对本图层 opaque WebGL2 scene color 的屏幕空间折射。roughness 会选择逐级过滤后的 scene-color 和 environment mip：零表示清晰，一表示使用可用的最宽模糊。厚度为零时仍保留透射和 Fresnel，只是不偏移屏幕采样位置。
 
-Scene-color 折射刻意限制在当前图层内：它可以扭曲同一 WebGL2 图层中更早绘制的 opaque Mesh。WebGL2 layer config 提供 `EnvironmentMap` 时，Glass 还会按 world-space 经纬反射方向采样它，并使用同一个 roughness LOD。environment 属于图层显示状态，不进入 Material History 或场景传输。折射仍不能采样 Canvas 后面的 DOM/CSS 内容或其他透明 Mesh；当前 LDR mip-chain 模型也不提供 HDR 预过滤辐射、吸收或物理多表面透射。
+体积吸收遵循 Beer-Lambert 透射模型。`attenuationColor` 表示光线在介质内经过 `attenuationDistance` 个 world unit 后剩余的 RGB 颜色，因此每个通道的透射率为 `attenuationColor ** (thickness / attenuationDistance)`。attenuation color 默认白色；不传 `attenuationDistance` 表示无限距离，即不发生吸收。显式距离必须为正的有限数，颜色通道必须是 `0` 到 `1` 的有限数。`color` 仍描述玻璃边界的 tint，attenuation 则描述体积内部的损耗。当前材质直接把 `thickness` 当作完整传播距离，不会根据 Mesh 几何或厚度纹理推导路径长度。
+
+Scene-color 折射刻意限制在当前图层内：它可以扭曲同一 WebGL2 图层中更早绘制的 opaque Mesh。WebGL2 layer config 提供 `EnvironmentMap` 时，Glass 还会按 world-space 经纬反射方向采样它，并使用同一个 roughness LOD。environment 属于图层显示状态，不进入 Material History 或场景传输。折射仍不能采样 Canvas 后面的 DOM/CSS 内容或其他透明 Mesh；当前 LDR mip-chain 模型也不提供 HDR 预过滤辐射或物理多表面透射。
 
 renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 depth write，再按局部包围盒中心变换到相机 view space 后的深度稳定地从远到近绘制。这是行业常用的对象级透明方案：彼此分离、不相交的表面能稳定合成；相交透明 Mesh 和自身重叠几何仍可能需要拆分 geometry，或等待后续 order-independent transparency。
 

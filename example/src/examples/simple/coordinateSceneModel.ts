@@ -212,6 +212,22 @@ export function floorMeshGeometry(): MeshGeometryInput {
   return builder
 }
 
+export function transmissionBackdropGeometry(
+  planes: readonly PlaneDefinition[],
+): MeshGeometryInput {
+  const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
+  planes.forEach((plane) => {
+    const basis = createPlaneBasis(plane)
+    appendPlaneQuad(builder, plane, basis, pointsForRect({
+      x: 0,
+      y: plane.height * 0.87,
+      width: plane.width,
+      height: plane.height * 0.018,
+    }), -0.2)
+  })
+  return builder
+}
+
 export function contactShadowReceiverGeometry(
   planes: readonly PlaneDefinition[],
 ): MeshGeometryInput {

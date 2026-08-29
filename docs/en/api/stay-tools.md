@@ -51,13 +51,17 @@ const glass = new GlassMaterial({
   ior: 1.46,
   roughness: 0.24,
   thickness: 0.18,
+  attenuationColor: [0.72, 0.9, 1],
+  attenuationDistance: 0.8,
 })
 mesh.setMaterial(glass)
 ```
 
 `UnlitMaterial` and `LambertMaterial` are opaque and require color alpha `1`. `GlassMaterial` requires alpha strictly between `0` and `1`, `ior` greater than `1` (default `1.5`), `roughness` from `0` to `1` (default `0`), and non-negative `thickness` in world units (default `0.1`). The renderer uses those values for a lit Fresnel edge and screen-space refraction through the layer's opaque WebGL2 scene color. Roughness selects progressively filtered scene-color and environment mip levels; zero is sharp and one selects the broadest available blur. A zero thickness keeps transmission and Fresnel shading but samples the undisplaced screen position.
 
-Scene-color refraction is intentionally layer-local: it can bend opaque WebGL2 Meshes rendered earlier in the same layer. When the WebGL2 layer config supplies an `EnvironmentMap`, Glass also samples its world-space equirectangular reflection direction and applies the same roughness LOD. The environment belongs to layer display state, not Material History or scene transfer. Refraction still cannot sample DOM/CSS content behind the Canvas or other transparent Meshes, and the current LDR mip-chain model does not provide HDR prefiltered radiance, absorption, or physical multi-surface transmission.
+Volume absorption follows Beer-Lambert transmission. `attenuationColor` is the RGB color that remains after traveling `attenuationDistance` world units, so transmission for a channel is `attenuationColor ** (thickness / attenuationDistance)`. The attenuation color defaults to white. Omitting `attenuationDistance` means infinite distance and therefore no absorption. A supplied distance must be positive and finite; attenuation channels must be finite values from `0` to `1`. `color` remains the boundary tint, while attenuation describes loss inside the volume. The current material treats `thickness` as the complete travel distance rather than deriving it from mesh geometry or a thickness texture.
+
+Scene-color refraction is intentionally layer-local: it can bend opaque WebGL2 Meshes rendered earlier in the same layer. When the WebGL2 layer config supplies an `EnvironmentMap`, Glass also samples its world-space equirectangular reflection direction and applies the same roughness LOD. The environment belongs to layer display state, not Material History or scene transfer. Refraction still cannot sample DOM/CSS content behind the Canvas or other transparent Meshes, and the current LDR mip-chain model does not provide HDR prefiltered radiance or physical multi-surface transmission.
 
 The renderer draws opaque Meshes first. Glass Meshes keep depth testing, disable depth writes, and are stable-sorted back to front by their transformed local bounding-box center in camera view space. This is standard object-level transparency: separate non-intersecting surfaces compose predictably, while intersecting transparent Meshes and self-overlapping geometry may require geometry splitting or a future order-independent transparency path.
 

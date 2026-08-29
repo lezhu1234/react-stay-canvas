@@ -1,4 +1,5 @@
 export type MeshColor = readonly [number, number, number, number]
+export type GlassAttenuationColor = readonly [number, number, number]
 
 export interface UnlitMaterialProps {
   readonly color?: MeshColor
@@ -9,6 +10,10 @@ export interface LambertMaterialProps {
 }
 
 export interface GlassMaterialProps {
+  /** Color white light becomes after travelling attenuationDistance world units. */
+  readonly attenuationColor?: GlassAttenuationColor
+  /** Optional world-space distance used by Beer-Lambert volume attenuation. */
+  readonly attenuationDistance?: number
   readonly color?: MeshColor
   /** Refractive index of the glass medium. Must be greater than 1. */
   readonly ior?: number
@@ -56,6 +61,21 @@ function copyGlassColor(
   return copied
 }
 
+function copyAttenuationColor(
+  color: GlassAttenuationColor = [1, 1, 1],
+): GlassAttenuationColor {
+  const copied: [number, number, number] = [color[0], color[1], color[2]]
+  copied.forEach((value, index) => {
+    if (!Number.isFinite(value)) {
+      throw new TypeError(`GlassMaterial attenuationColor[${index}] must be finite`)
+    }
+    if (value < 0 || value > 1) {
+      throw new RangeError("GlassMaterial attenuationColor must be between 0 and 1")
+    }
+  })
+  return Object.freeze(copied)
+}
+
 function copyFloat32(value: number, name: string) {
   if (!Number.isFinite(value)) throw new TypeError(`${name} must be finite`)
   const copied = Math.fround(value)
@@ -90,6 +110,17 @@ function copyRoughness(value = 0) {
   return copied
 }
 
+function copyAttenuationDistance(value?: number) {
+  if (value === undefined) return undefined
+  const copied = copyFloat32(value, "GlassMaterial attenuationDistance")
+  if (copied <= 0) {
+    throw new RangeError(
+      "GlassMaterial attenuationDistance must be greater than 0 in Float32 range"
+    )
+  }
+  return copied
+}
+
 /** An immutable opaque material that ignores scene lights. */
 export class UnlitMaterial {
   readonly kind = "unlit"
@@ -117,13 +148,24 @@ export class LambertMaterial {
 /** An immutable lit refractive material rendered in the transparent queue. */
 export class GlassMaterial {
   readonly kind = "glass"
+  readonly attenuationColor: GlassAttenuationColor
+  readonly attenuationDistance?: number
   readonly color: MeshColor
   readonly ior: number
   readonly roughness: number
   readonly thickness: number
   readonly #materialBrand = "glass"
 
-  constructor({ color, ior, roughness, thickness }: GlassMaterialProps = {}) {
+  constructor({
+    attenuationColor,
+    attenuationDistance,
+    color,
+    ior,
+    roughness,
+    thickness,
+  }: GlassMaterialProps = {}) {
+    this.attenuationColor = copyAttenuationColor(attenuationColor)
+    this.attenuationDistance = copyAttenuationDistance(attenuationDistance)
     this.color = copyGlassColor(color)
     this.ior = copyIndexOfRefraction(ior)
     this.roughness = copyRoughness(roughness)
@@ -139,6 +181,8 @@ export type MeshMaterialSnapshot = Readonly<
   | { kind: "lambert"; color: MeshColor }
   | {
     kind: "glass"
+    attenuationColor: GlassAttenuationColor
+    attenuationDistance?: number
     color: MeshColor
     ior: number
     roughness: number
@@ -151,6 +195,8 @@ export function copyMeshMaterial(material: MeshMaterial): MeshMaterial {
   if (material instanceof LambertMaterial) return new LambertMaterial({ color: material.color })
   if (material instanceof GlassMaterial) {
     return new GlassMaterial({
+      attenuationColor: material.attenuationColor,
+      attenuationDistance: material.attenuationDistance,
       color: material.color,
       ior: material.ior,
       roughness: material.roughness,
@@ -166,6 +212,8 @@ export function captureMeshMaterial(material: MeshMaterial): MeshMaterialSnapsho
   if (material instanceof GlassMaterial) {
     return {
       kind: material.kind,
+      attenuationColor: [...material.attenuationColor],
+      attenuationDistance: material.attenuationDistance,
       color: [...material.color],
       ior: material.ior,
       roughness: material.roughness,
@@ -180,6 +228,8 @@ export function materializeMeshMaterial(snapshot: MeshMaterialSnapshot): MeshMat
   if (snapshot.kind === "lambert") return new LambertMaterial({ color: snapshot.color })
   if (snapshot.kind === "glass") {
     return new GlassMaterial({
+      attenuationColor: snapshot.attenuationColor,
+      attenuationDistance: snapshot.attenuationDistance,
       color: snapshot.color,
       ior: snapshot.ior,
       roughness: snapshot.roughness,

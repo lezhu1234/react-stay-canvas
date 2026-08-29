@@ -237,7 +237,7 @@ const fragment = sourceTools.webgl.exportChildren(
 const imported = targetTools.webgl.importChildren(fragment)
 ```
 
-每个导入的 Child 都会获得新 id，以及独立的 Mesh geometry、normals、model matrix 和 material 值。目标 WebGL2 layer config 继续拥有自己的 camera、environment 与 lights；这些显示状态不会被传输。Mesh geometry 已经位于原生场景 world space，因此该传输没有二维 `area` 或 Child placement。
+每个导入的 Child 都会获得新 id，以及独立的 Mesh geometry、normals、model matrix 和 material 值，其中包含 Glass roughness 与体积吸收配置。目标 WebGL2 layer config 继续拥有自己的 camera、environment 与 lights；这些显示状态不会被传输。Mesh geometry 已经位于原生场景 world space，因此该传输没有二维 `area` 或 Child placement。
 
 ## 把区域渲染到独立 Canvas
 

@@ -132,9 +132,27 @@ describe("internal WebGL2 scene runtime", () => {
     mesh.setGeometry(triangle())
     mesh.setModelMatrix(identityMatrix4())
     mesh.setMaterial(unlit([0, 1, 0, 1]))
+    const glassMesh = new Mesh({
+      geometry: litTriangle(),
+      material: new GlassMaterial({
+        attenuationColor: [0.7, 0.85, 1],
+        attenuationDistance: 1.2,
+        roughness: 0.24,
+        thickness: 0.18,
+      }),
+    })
+    const glassChanges: number[] = []
+    glassMesh.subscribeChanges(() => glassChanges.push(glassMesh.geometryRevision))
+    glassMesh.setMaterial(new GlassMaterial({
+      attenuationColor: [0.7, 0.85, 1],
+      attenuationDistance: 1.2,
+      roughness: 0.24,
+      thickness: 0.18,
+    }))
     runtime.render([mesh], camera())
 
     expect(changes).toEqual([])
+    expect(glassChanges).toEqual([])
     expect(mesh.geometryRevision).toBe(0)
     expect(gl.spies.bufferData).toHaveBeenCalledTimes(3)
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(2)
@@ -257,6 +275,8 @@ describe("internal WebGL2 scene runtime", () => {
     const glass = new Mesh({
       geometry: litTriangle(),
       material: new GlassMaterial({
+        attenuationColor: [0.7, 0.85, 1],
+        attenuationDistance: 1.2,
         color: [0.6, 0.85, 1, 0.2],
         ior: 1.46,
         thickness: 0.18,
@@ -267,7 +287,13 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.render([glass, opaque], camera(), [new AmbientLight()])
 
     expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
-      String(source).includes("refract(incident, view_normal, 1.0 / u_ior)")))
+      String(source).includes("refract(incident, view_normal, 1.0 / u_ior)")
+      && String(source).includes("if (u_has_volume_attenuation)")
+      && String(source).includes("uniform float u_log_attenuation_exponent")
+      && String(source).includes("if (color <= 0.0) return 0.0")
+      && String(source).includes("if (color >= 1.0) return 1.0")
+      && String(source).includes("exp(clamp(log_attenuation_exponent, -80.0, 80.0))")
+      && String(source).includes("u_color.rgb * volume_transmittance")))
       .toBe(true)
     expect(gl.spies.createTexture).toHaveBeenCalledOnce()
     expect(gl.spies.createFramebuffer).toHaveBeenCalledOnce()
@@ -295,6 +321,17 @@ describe("internal WebGL2 scene runtime", () => {
       .toContainEqual([expect.anything(), Math.fround(1.46)])
     expect(gl.spies.uniform1f.mock.calls)
       .toContainEqual([expect.anything(), Math.fround(0.18)])
+    expect(gl.spies.uniform1i.mock.calls)
+      .toContainEqual([expect.anything(), 1])
+    expect(gl.spies.uniform1f.mock.calls.some(([, value]) =>
+      Math.abs(value - Math.fround(
+        Math.log(Math.fround(0.18)) - Math.log(Math.fround(1.2))
+      )) < 1e-6))
+      .toBe(true)
+    expect(gl.spies.uniform3fv.mock.calls.some(([, value]) =>
+      Array.from(value as Float32Array).every((component, index) =>
+        component === new Float32Array([0.7, 0.85, 1])[index])))
+      .toBe(true)
 
     canvas.width = 320
     canvas.height = 180
@@ -307,6 +344,47 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.dispose()
     expect(gl.spies.deleteTexture).toHaveBeenCalledTimes(2)
     expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(2)
+  })
+
+  it("uploads finite logarithmic attenuation for valid Float32 endpoint ratios", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const minimumFloat32 = 2 ** -149
+    const maximumFloat32 = 3.4028234663852886e38
+    const materials = [
+      new GlassMaterial({
+        attenuationColor: [1, 0.5, 0],
+        attenuationDistance: minimumFloat32,
+        thickness: 0.1,
+      }),
+      new GlassMaterial({
+        attenuationColor: [1, 0.5, 0],
+        attenuationDistance: maximumFloat32,
+        thickness: minimumFloat32,
+      }),
+    ]
+
+    runtime.render([
+      new Mesh({ geometry: triangle(-1), material: unlit([1, 1, 1, 1]) }),
+      ...materials.map((material) => new Mesh({ geometry: litTriangle(), material })),
+    ], camera(), [new AmbientLight()])
+
+    const expectedLogExponents = [
+      Math.log(Math.fround(0.1)) - Math.log(minimumFloat32),
+      Math.log(minimumFloat32) - Math.log(maximumFloat32),
+    ]
+    expect(expectedLogExponents.every(Number.isFinite)).toBe(true)
+    expect(expectedLogExponents[0]).toBeGreaterThan(0)
+    expect(expectedLogExponents[1]).toBeLessThan(0)
+    for (const expected of expectedLogExponents) {
+      expect(gl.spies.uniform1f.mock.calls.some(([, value]) =>
+        Math.abs(value - expected) < 1e-6))
+        .toBe(true)
+    }
+    expect(gl.spies.uniform1i.mock.calls.filter(([, value]) => value === 1).length)
+      .toBeGreaterThanOrEqual(2)
+    runtime.dispose()
   })
 
   it("keeps the direct default-framebuffer path when a scene has no Glass", () => {
@@ -722,6 +800,14 @@ describe("internal WebGL2 scene runtime", () => {
   })
 
   it("rejects incomplete Lambert CPU state before committing Mesh changes", () => {
+    const defaultGlass = new GlassMaterial()
+    expect(defaultGlass.attenuationColor).toEqual([1, 1, 1])
+    expect(defaultGlass.attenuationDistance).toBeUndefined()
+    expect(new GlassMaterial({
+      attenuationColor: [0, 0.5, 1],
+      attenuationDistance: 1,
+      thickness: 0,
+    }).thickness).toBe(0)
     expect(() => new Mesh({
       geometry: triangle(),
       material: new LambertMaterial(),
@@ -762,6 +848,18 @@ describe("internal WebGL2 scene runtime", () => {
       .toThrow("roughness must be between 0 and 1")
     expect(() => new GlassMaterial({ roughness: 1.1 }))
       .toThrow("roughness must be between 0 and 1")
+    expect(() => new GlassMaterial({ attenuationColor: [-0.1, 0.5, 1] }))
+      .toThrow("attenuationColor must be between 0 and 1")
+    expect(() => new GlassMaterial({ attenuationColor: [0.1, Number.NaN, 1] }))
+      .toThrow("attenuationColor[1] must be finite")
+    expect(() => new GlassMaterial({ attenuationDistance: 0 }))
+      .toThrow("attenuationDistance must be greater than 0")
+    expect(() => new GlassMaterial({ attenuationDistance: -0.1 }))
+      .toThrow("attenuationDistance must be greater than 0")
+    expect(() => new GlassMaterial({ attenuationDistance: Number.MIN_VALUE }))
+      .toThrow("attenuationDistance must be greater than 0 in Float32 range")
+    expect(() => new GlassMaterial({ attenuationDistance: Number.MAX_VALUE }))
+      .toThrow("attenuationDistance exceeds Float32 range")
     expect(() => new GlassMaterial({ thickness: -0.1 }))
       .toThrow("thickness must be greater than or equal to 0")
     expect(() => new GlassMaterial({ thickness: -Number.MIN_VALUE }))

@@ -237,7 +237,7 @@ const fragment = sourceTools.webgl.exportChildren(
 const imported = targetTools.webgl.importChildren(fragment)
 ```
 
-Each imported Child receives a new id and independent Mesh geometry, normals, model matrices, and material values. The target WebGL2 layer config continues to own its camera, environment, and lights; that display state is not transferred. Mesh transfer has no 2D `area` or Child placement because its geometry already lives in the native scene's world space.
+Each imported Child receives a new id and independent Mesh geometry, normals, model matrices, and material values, including Glass roughness and volume-attenuation settings. The target WebGL2 layer config continues to own its camera, environment, and lights; that display state is not transferred. Mesh transfer has no 2D `area` or Child placement because its geometry already lives in the native scene's world space.
 
 ## Render a region to a standalone Canvas
 

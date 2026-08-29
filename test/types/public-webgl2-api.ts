@@ -9,6 +9,7 @@ import {
   StayWebGLChild,
   type StayTools,
   type StayWebGLSceneFragment,
+  type GlassAttenuationColor,
   type WebGL2LayerConfig,
   translationMatrix4,
 } from "react-stay-canvas"
@@ -30,11 +31,15 @@ const mesh = new Mesh({
 mesh.setModelMatrix(translationMatrix4(0.2, 0, 0))
 mesh.setMaterial(new LambertMaterial({ color: [0.3, 0.6, 1, 1] }))
 const glass = new GlassMaterial({
+  attenuationColor: [0.82, 0.94, 1],
+  attenuationDistance: 1.2,
   color: [0.6, 0.85, 1, 0.2],
   ior: 1.46,
   roughness: 0.24,
   thickness: 0.18,
 })
+const glassAttenuationColor: GlassAttenuationColor = glass.attenuationColor
+const glassAttenuationDistance: number | undefined = glass.attenuationDistance
 const glassIor: number = glass.ior
 const glassRoughness: number = glass.roughness
 const glassThickness: number = glass.thickness
@@ -85,6 +90,8 @@ void camera
 void child
 void layer
 void glassIor
+void glassAttenuationColor
+void glassAttenuationDistance
 void glassRoughness
 void glassThickness
 void WebGL2SceneRuntime

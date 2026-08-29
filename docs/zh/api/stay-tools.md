@@ -65,7 +65,7 @@ Scene-color 折射刻意限制在当前图层内：它可以扭曲同一 WebGL2 
 
 renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 depth write，再按局部包围盒中心变换到相机 view space 后的深度稳定地从远到近绘制。这是行业常用的对象级透明方案：彼此分离、不相交的表面能稳定合成；相交透明 Mesh 和自身重叠几何仍可能需要拆分 geometry，或等待后续 order-independent transparency。
 
-阴影行为是显式的 CPU Mesh 状态。`castShadow` 与 `receiveShadow` 都默认 `false`，运行时分别通过 `setCastShadow()`、`setReceiveShadow()` 修改。带光照的 receiver 会采样图层方向光的 shadow map；Glass 可以接收阴影。若对 Glass 显式开启投影，当前只承诺二值几何轮廓，不模拟彩色或透射阴影。History 与场景传输会保留阴影标志，且修改标志不会推进 geometry revision。
+阴影行为是显式的 CPU Mesh 状态。`castShadow` 与 `receiveShadow` 都默认 `false`，运行时分别通过 `setCastShadow()`、`setReceiveShadow()` 修改。带光照的 receiver 会采样图层方向光的 shadow map；Glass 既可以接收，也可以投射阴影。不透明 caster 会截断直射光；Glass caster 则把已有的边界透射率（`1 - color alpha`）与自身 `attenuationColor`、`attenuationDistance`、`thickness` 算出的 Beer-Lambert RGB 相乘。`color` 的 RGB 仍只描述边界 tint，不会成为第二套阴影颜色来源。当前有界 shadow-map 模型在每个光空间 texel 只保存最近的一层 Glass caster，多个重叠透射体还不会累积；不透明遮挡使用独立 depth map，因此即使 opaque caster 位于 Glass 后方，也仍会正确截断光线。History 与场景传输会保留阴影标志，且修改标志不会推进 geometry revision。
 
 未配置任何 Light 时 Lambert 会变暗。Glass 仍保留 scene-color 透射和 Fresnel 边缘，但直接受光的 tint 会变暗；需要这部分表面光照时请显式添加环境光或方向光，不依赖隐藏的默认灯组。
 
@@ -79,7 +79,7 @@ renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 dep
 | `webgl.exportChildren(children)` | 捕获带 source id、深度隔离的 CPU Mesh 片段 |
 | `webgl.importChildren(fragment)` | 生成新的 Child id 与独立 Mesh 状态 |
 
-包入口导出 `Mesh`、`UnlitMaterial`、`LambertMaterial`、`GlassMaterial`、`EnvironmentMap`、`AmbientLight`、`DirectionalLight`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、scene-color/environment/shadow target、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、通用材质纹理、彩色/透射阴影、order-independent transparency 和 Canvas 截图暂不属于这个接口。
+包入口导出 `Mesh`、`UnlitMaterial`、`LambertMaterial`、`GlassMaterial`、`EnvironmentMap`、`AmbientLight`、`DirectionalLight`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、scene-color/environment/shadow target、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、通用材质纹理、多层透射阴影、order-independent transparency 和 Canvas 截图暂不属于这个接口。
 
 ## 状态与显示
 

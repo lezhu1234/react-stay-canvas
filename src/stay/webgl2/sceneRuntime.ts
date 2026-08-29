@@ -28,9 +28,17 @@ import {
 import {
   createShadowMapResources,
   createShadowPipeline,
+  createTransmissiveShadowMapResources,
+  createTransmissiveShadowPipeline,
   type ShadowMapResources,
   type ShadowPipelineResources,
+  type TransmissiveShadowMapResources,
+  type TransmissiveShadowPipelineResources,
 } from "./shadowResources"
+import {
+  VOLUME_ATTENUATION_GLSL,
+  volumeAttenuationUniforms,
+} from "./volumeAttenuation"
 
 interface UnlitPipelineResources {
   readonly kind: "unlit"
@@ -53,6 +61,11 @@ interface LambertPipelineResources {
   readonly shadowLightIndexLocation: WebGLUniformLocation
   readonly shadowViewProjectionLocation: WebGLUniformLocation
   readonly shadowMapLocation: WebGLUniformLocation
+  readonly hasOpaqueShadowMapLocation: WebGLUniformLocation
+  readonly transmissiveShadowDepthMapLocation: WebGLUniformLocation
+  readonly transmissiveShadowColorMapLocation: WebGLUniformLocation
+  readonly hasTransmissiveShadowMapLocation: WebGLUniformLocation
+  readonly shadowTexelSizeLocation: WebGLUniformLocation
   readonly shadowBiasLocation: WebGLUniformLocation
   readonly receiveShadowLocation: WebGLUniformLocation
 }
@@ -86,6 +99,11 @@ interface GlassPipelineResources {
   readonly shadowLightIndexLocation: WebGLUniformLocation
   readonly shadowViewProjectionLocation: WebGLUniformLocation
   readonly shadowMapLocation: WebGLUniformLocation
+  readonly hasOpaqueShadowMapLocation: WebGLUniformLocation
+  readonly transmissiveShadowDepthMapLocation: WebGLUniformLocation
+  readonly transmissiveShadowColorMapLocation: WebGLUniformLocation
+  readonly hasTransmissiveShadowMapLocation: WebGLUniformLocation
+  readonly shadowTexelSizeLocation: WebGLUniformLocation
   readonly shadowBiasLocation: WebGLUniformLocation
   readonly receiveShadowLocation: WebGLUniformLocation
 }
@@ -113,7 +131,9 @@ interface ShadowFrame {
   readonly lightIndex: number
   readonly lightViewProjection: Matrix4
   readonly bias: number
-  readonly resources: ShadowMapResources
+  readonly mapSize: number
+  readonly opaque?: ShadowMapResources
+  readonly transmissive?: TransmissiveShadowMapResources
 }
 
 interface DrawItem {
@@ -183,29 +203,40 @@ const SHADOW_FRAGMENT_INPUTS = `
 uniform int u_shadow_light_index;
 uniform mat4 u_shadow_view_projection;
 uniform sampler2D u_shadow_map;
+uniform bool u_has_opaque_shadow_map;
+uniform sampler2D u_transmissive_shadow_depth_map;
+uniform sampler2D u_transmissive_shadow_color_map;
+uniform bool u_has_transmissive_shadow_map;
+uniform vec2 u_shadow_texel_size;
 uniform float u_shadow_bias;
 uniform bool u_receive_shadow;
 in vec3 world_position;
 
-float shadow_visibility() {
-  if (!u_receive_shadow || u_shadow_light_index < 0) return 1.0;
+vec3 shadow_transmittance() {
+  if (!u_receive_shadow || u_shadow_light_index < 0) return vec3(1.0);
   vec4 light_clip = u_shadow_view_projection * vec4(world_position, 1.0);
   vec3 shadow_coordinate = light_clip.xyz / light_clip.w * 0.5 + 0.5;
   if (shadow_coordinate.x < 0.0 || shadow_coordinate.x > 1.0
       || shadow_coordinate.y < 0.0 || shadow_coordinate.y > 1.0
-      || shadow_coordinate.z < 0.0 || shadow_coordinate.z > 1.0) return 1.0;
-  vec2 texel = 1.0 / vec2(textureSize(u_shadow_map, 0));
-  float visible = 0.0;
+      || shadow_coordinate.z < 0.0 || shadow_coordinate.z > 1.0) return vec3(1.0);
+  vec3 transmitted = vec3(0.0);
   for (int y = -1; y <= 1; y++) {
     for (int x = -1; x <= 1; x++) {
-      float stored_depth = texture(
-        u_shadow_map,
-        shadow_coordinate.xy + vec2(float(x), float(y)) * texel
-      ).r;
-      visible += shadow_coordinate.z - u_shadow_bias <= stored_depth ? 1.0 : 0.0;
+      vec2 sample_uv = shadow_coordinate.xy
+        + vec2(float(x), float(y)) * u_shadow_texel_size;
+      bool opaque_blocked = u_has_opaque_shadow_map
+        && shadow_coordinate.z - u_shadow_bias > texture(u_shadow_map, sample_uv).r;
+      bool glass_blocked = u_has_transmissive_shadow_map
+        && shadow_coordinate.z - u_shadow_bias
+          > texture(u_transmissive_shadow_depth_map, sample_uv).r;
+      transmitted += opaque_blocked
+        ? vec3(0.0)
+        : glass_blocked
+          ? texture(u_transmissive_shadow_color_map, sample_uv).rgb
+          : vec3(1.0);
     }
   }
-  return visible / 9.0;
+  return transmitted / 9.0;
 }
 `
 
@@ -228,8 +259,10 @@ void main() {
   for (int index = 0; index < MAX_DIRECTIONAL_LIGHTS; index++) {
     if (index >= u_directional_light_count) break;
     float diffuse = max(dot(normal, u_direction_to_lights[index]), 0.0);
-    float visibility = index == u_shadow_light_index ? shadow_visibility() : 1.0;
-    illumination += u_directional_light_colors[index] * diffuse * visibility;
+    vec3 transmittance = index == u_shadow_light_index
+      ? shadow_transmittance()
+      : vec3(1.0);
+    illumination += u_directional_light_colors[index] * diffuse * transmittance;
   }
   output_color = vec4(u_color.rgb * illumination, 1.0);
 }
@@ -261,14 +294,7 @@ uniform float u_thickness;
 in vec3 world_normal;
 out vec4 output_color;
 ${SHADOW_FRAGMENT_INPUTS}
-
-float volume_attenuation_channel(float color, float log_attenuation_exponent) {
-  if (color <= 0.0) return 0.0;
-  if (color >= 1.0) return 1.0;
-  // Beyond this range every non-endpoint Float32 channel rounds to its 0 or 1 limit.
-  float attenuation_exponent = exp(clamp(log_attenuation_exponent, -80.0, 80.0));
-  return exp(log(color) * attenuation_exponent);
-}
+${VOLUME_ATTENUATION_GLSL}
 
 void main() {
   vec3 normal = normalize(world_normal);
@@ -277,8 +303,10 @@ void main() {
   for (int index = 0; index < MAX_DIRECTIONAL_LIGHTS; index++) {
     if (index >= u_directional_light_count) break;
     float diffuse = max(dot(normal, u_direction_to_lights[index]), 0.0);
-    float visibility = index == u_shadow_light_index ? shadow_visibility() : 1.0;
-    illumination += u_directional_light_colors[index] * diffuse * visibility;
+    vec3 transmittance = index == u_shadow_light_index
+      ? shadow_transmittance()
+      : vec3(1.0);
+    illumination += u_directional_light_colors[index] * diffuse * transmittance;
   }
   vec3 view_direction = normalize(u_camera_position - world_position);
   float cosine = abs(dot(normal, view_direction));
@@ -300,14 +328,11 @@ void main() {
   );
   vec3 lit_tint = u_color.rgb * illumination;
   float transmission = scene_color.a * (1.0 - u_color.a) * (1.0 - fresnel);
-  vec3 volume_transmittance = vec3(1.0);
-  if (u_has_volume_attenuation) {
-    volume_transmittance = vec3(
-      volume_attenuation_channel(u_attenuation_color.r, u_log_attenuation_exponent),
-      volume_attenuation_channel(u_attenuation_color.g, u_log_attenuation_exponent),
-      volume_attenuation_channel(u_attenuation_color.b, u_log_attenuation_exponent)
-    );
-  }
+  vec3 volume_transmittance = volume_attenuation(
+    u_attenuation_color,
+    u_has_volume_attenuation,
+    u_log_attenuation_exponent
+  );
   vec3 refracted_color = scene_color.a > 0.00001
     ? scene_color.rgb / scene_color.a * u_color.rgb * volume_transmittance
     : vec3(0.0);
@@ -457,6 +482,27 @@ function createPipeline(
         "u_shadow_view_projection"
       ),
       shadowMapLocation: requireUniform(context, program, "u_shadow_map"),
+      hasOpaqueShadowMapLocation: requireUniform(
+        context,
+        program,
+        "u_has_opaque_shadow_map",
+      ),
+      transmissiveShadowDepthMapLocation: requireUniform(
+        context,
+        program,
+        "u_transmissive_shadow_depth_map",
+      ),
+      transmissiveShadowColorMapLocation: requireUniform(
+        context,
+        program,
+        "u_transmissive_shadow_color_map",
+      ),
+      hasTransmissiveShadowMapLocation: requireUniform(
+        context,
+        program,
+        "u_has_transmissive_shadow_map",
+      ),
+      shadowTexelSizeLocation: requireUniform(context, program, "u_shadow_texel_size"),
       shadowBiasLocation: requireUniform(context, program, "u_shadow_bias"),
       receiveShadowLocation: requireUniform(context, program, "u_receive_shadow"),
     }
@@ -679,6 +725,8 @@ export class WebGL2SceneRuntime {
   readonly #meshes = new Map<Mesh, MeshResources>()
   #shadowPipeline?: ShadowPipelineResources
   #shadowMap?: ShadowMapResources
+  #transmissiveShadowPipeline?: TransmissiveShadowPipelineResources
+  #transmissiveShadowMap?: TransmissiveShadowMapResources
   #sceneColor?: SceneColorResources
   #environmentTexture?: EnvironmentTextureResources
   #disposed = false
@@ -799,19 +847,14 @@ export class WebGL2SceneRuntime {
           pipeline.attenuationColorLocation,
           new Float32Array(material.attenuationColor),
         )
-        const hasVolumeAttenuation = material.attenuationDistance !== undefined
-          && material.thickness > 0
-        const logAttenuationExponent = material.attenuationDistance === undefined
-          || material.thickness === 0
-          ? 0
-          : Math.log(material.thickness) - Math.log(material.attenuationDistance)
+        const attenuation = volumeAttenuationUniforms(material)
         context.uniform1i(
           pipeline.hasVolumeAttenuationLocation,
-          hasVolumeAttenuation ? 1 : 0,
+          attenuation.enabled ? 1 : 0,
         )
         context.uniform1f(
           pipeline.logAttenuationExponentLocation,
-          logAttenuationExponent,
+          attenuation.logExponent,
         )
         context.uniform1f(pipeline.iorLocation, material.ior)
         context.uniform1f(pipeline.roughnessLocation, material.roughness)
@@ -838,6 +881,10 @@ export class WebGL2SceneRuntime {
       context.disable(context.BLEND)
       context.bindFramebuffer(context.FRAMEBUFFER, null)
       context.activeTexture(context.TEXTURE2)
+      context.bindTexture(context.TEXTURE_2D, null)
+      context.activeTexture(context.TEXTURE4)
+      context.bindTexture(context.TEXTURE_2D, null)
+      context.activeTexture(context.TEXTURE3)
       context.bindTexture(context.TEXTURE_2D, null)
       context.activeTexture(context.TEXTURE1)
       context.bindTexture(context.TEXTURE_2D, null)
@@ -931,51 +978,43 @@ export class WebGL2SceneRuntime {
     selected: ReturnType<typeof findShadowLight>
   ): ShadowFrame | undefined {
     if (!selected) return undefined
-    const casters = meshes.filter((mesh) => mesh.castShadow)
+    const opaqueCasters = meshes.filter((mesh) =>
+      mesh.castShadow && mesh.getMaterial().kind !== "glass")
+    const transmissiveCasters = meshes.filter((mesh) =>
+      mesh.castShadow && mesh.getMaterial().kind === "glass")
     const hasLitReceiver = meshes.some((mesh) =>
       mesh.receiveShadow && mesh.getMaterial().kind !== "unlit")
-    if (casters.length === 0 || !hasLitReceiver) {
+    if ((opaqueCasters.length === 0 && transmissiveCasters.length === 0)
+        || !hasLitReceiver) {
       return undefined
     }
     const shadow = selected.light.getShadow()
     const lightViewProjection = directionalLightShadowViewProjection(selected.light)
     if (!shadow || !lightViewProjection) return undefined
-    const resources = this.#shadowMapResources(shadow.mapSize)
-    const pipeline = this.#shadowPipelineResources()
     const context = this.#context
-    context.bindFramebuffer(context.FRAMEBUFFER, resources.framebuffer)
-    context.viewport(0, 0, shadow.mapSize, shadow.mapSize)
-    context.colorMask(false, false, false, false)
-    context.disable(context.BLEND)
-    context.enable(context.DEPTH_TEST)
-    context.depthFunc(context.LEQUAL)
-    context.depthMask(true)
-    context.clearDepth(1)
-    context.clear(context.DEPTH_BUFFER_BIT)
-    context.useProgram(pipeline.program)
+    let opaque: ShadowMapResources | undefined
+    let transmissive: TransmissiveShadowMapResources | undefined
     try {
-      casters.forEach((mesh) => {
-        const meshResources = this.#meshResources(mesh)
-        uploadChangedGeometry(context, mesh, meshResources)
-        context.bindVertexArray(meshResources.vertexArray)
-        context.uniformMatrix4fv(
-          pipeline.modelLightViewProjectionLocation,
-          false,
-          multiplyMatrix4(lightViewProjection, mesh.getModelMatrix())
+      if (opaqueCasters.length > 0) {
+        opaque = this.#shadowMapResources(shadow.mapSize)
+        this.#renderOpaqueShadowCasters(opaqueCasters, lightViewProjection, opaque)
+      }
+      if (transmissiveCasters.length > 0) {
+        transmissive = this.#transmissiveShadowMapResources(shadow.mapSize)
+        this.#renderTransmissiveShadowCasters(
+          transmissiveCasters,
+          lightViewProjection,
+          transmissive,
         )
-        context.drawElements(
-          context.TRIANGLES,
-          meshResources.indexCount,
-          context.UNSIGNED_SHORT,
-          0
-        )
-      })
+      }
       assertNoWebGLError(context, "shadow pass")
       return {
         lightIndex: selected.lightIndex,
         lightViewProjection,
         bias: shadow.bias,
-        resources,
+        mapSize: shadow.mapSize,
+        opaque,
+        transmissive,
       }
     } finally {
       context.bindVertexArray(null)
@@ -984,6 +1023,85 @@ export class WebGL2SceneRuntime {
       context.colorMask(true, true, true, true)
       context.depthMask(true)
     }
+  }
+
+  #renderOpaqueShadowCasters(
+    casters: readonly Mesh[],
+    lightViewProjection: Matrix4,
+    resources: ShadowMapResources,
+  ) {
+    const context = this.#context
+    const pipeline = this.#shadowPipelineResources()
+    context.bindFramebuffer(context.FRAMEBUFFER, resources.framebuffer)
+    this.#configureShadowPass(resources.mapSize, false)
+    context.clear(context.DEPTH_BUFFER_BIT)
+    context.useProgram(pipeline.program)
+    casters.forEach((mesh) => {
+      this.#drawShadowMesh(mesh, lightViewProjection, pipeline)
+    })
+  }
+
+  #renderTransmissiveShadowCasters(
+    casters: readonly Mesh[],
+    lightViewProjection: Matrix4,
+    resources: TransmissiveShadowMapResources,
+  ) {
+    const context = this.#context
+    const pipeline = this.#transmissiveShadowPipelineResources()
+    context.bindFramebuffer(context.FRAMEBUFFER, resources.framebuffer)
+    this.#configureShadowPass(resources.mapSize, true)
+    context.clearColor(1, 1, 1, 1)
+    context.clear(context.COLOR_BUFFER_BIT | context.DEPTH_BUFFER_BIT)
+    context.useProgram(pipeline.program)
+    casters.forEach((mesh) => {
+      const material = mesh.getMaterial()
+      if (material.kind !== "glass") return
+      const attenuation = volumeAttenuationUniforms(material)
+      context.uniform3fv(pipeline.attenuationColorLocation, attenuation.color)
+      context.uniform1i(
+        pipeline.hasVolumeAttenuationLocation,
+        attenuation.enabled ? 1 : 0,
+      )
+      context.uniform1f(
+        pipeline.logAttenuationExponentLocation,
+        attenuation.logExponent,
+      )
+      context.uniform1f(pipeline.surfaceTransmissionLocation, 1 - material.color[3])
+      this.#drawShadowMesh(mesh, lightViewProjection, pipeline)
+    })
+  }
+
+  #configureShadowPass(mapSize: number, writesColor: boolean) {
+    const context = this.#context
+    context.viewport(0, 0, mapSize, mapSize)
+    context.colorMask(writesColor, writesColor, writesColor, writesColor)
+    context.disable(context.BLEND)
+    context.enable(context.DEPTH_TEST)
+    context.depthFunc(context.LEQUAL)
+    context.depthMask(true)
+    context.clearDepth(1)
+  }
+
+  #drawShadowMesh(
+    mesh: Mesh,
+    lightViewProjection: Matrix4,
+    pipeline: ShadowPipelineResources,
+  ) {
+    const context = this.#context
+    const resources = this.#meshResources(mesh)
+    uploadChangedGeometry(context, mesh, resources)
+    context.bindVertexArray(resources.vertexArray)
+    context.uniformMatrix4fv(
+      pipeline.modelLightViewProjectionLocation,
+      false,
+      multiplyMatrix4(lightViewProjection, mesh.getModelMatrix()),
+    )
+    context.drawElements(
+      context.TRIANGLES,
+      resources.indexCount,
+      context.UNSIGNED_SHORT,
+      0,
+    )
   }
 
   #pipeline(kind: MeshMaterial["kind"]) {
@@ -1012,20 +1130,45 @@ export class WebGL2SceneRuntime {
     context.uniform1i(pipeline.shadowLightIndexLocation, shadow?.lightIndex ?? -1)
     context.uniform1f(pipeline.shadowBiasLocation, shadow?.bias ?? 0)
     context.uniform1i(pipeline.shadowMapLocation, 0)
+    context.uniform1i(pipeline.hasOpaqueShadowMapLocation, shadow?.opaque ? 1 : 0)
+    context.uniform1i(pipeline.transmissiveShadowDepthMapLocation, 3)
+    context.uniform1i(pipeline.transmissiveShadowColorMapLocation, 4)
+    context.uniform1i(
+      pipeline.hasTransmissiveShadowMapLocation,
+      shadow?.transmissive ? 1 : 0,
+    )
+    const texelSize = shadow ? 1 / shadow.mapSize : 0
+    context.uniform2f(pipeline.shadowTexelSizeLocation, texelSize, texelSize)
+    context.activeTexture(context.TEXTURE0)
+    context.bindTexture(context.TEXTURE_2D, shadow?.opaque?.depthTexture ?? null)
+    context.activeTexture(context.TEXTURE3)
+    context.bindTexture(
+      context.TEXTURE_2D,
+      shadow?.transmissive?.depthTexture ?? null,
+    )
+    context.activeTexture(context.TEXTURE4)
+    context.bindTexture(
+      context.TEXTURE_2D,
+      shadow?.transmissive?.transmittanceTexture ?? null,
+    )
     if (shadow) {
       context.uniformMatrix4fv(
         pipeline.shadowViewProjectionLocation,
         false,
         shadow.lightViewProjection
       )
-      context.activeTexture(context.TEXTURE0)
-      context.bindTexture(context.TEXTURE_2D, shadow.resources.depthTexture)
     }
+    context.activeTexture(context.TEXTURE0)
   }
 
   #shadowPipelineResources() {
     this.#shadowPipeline ??= createShadowPipeline(this.#context)
     return this.#shadowPipeline
+  }
+
+  #transmissiveShadowPipelineResources() {
+    this.#transmissiveShadowPipeline ??= createTransmissiveShadowPipeline(this.#context)
+    return this.#transmissiveShadowPipeline
   }
 
   #shadowMapResources(mapSize: number) {
@@ -1034,6 +1177,19 @@ export class WebGL2SceneRuntime {
     this.#shadowMap = undefined
     const created = createShadowMapResources(this.#context, mapSize)
     this.#shadowMap = created
+    return created
+  }
+
+  #transmissiveShadowMapResources(mapSize: number) {
+    if (this.#transmissiveShadowMap?.mapSize === mapSize) {
+      return this.#transmissiveShadowMap
+    }
+    if (this.#transmissiveShadowMap) {
+      this.#deleteTransmissiveShadowMap(this.#transmissiveShadowMap)
+    }
+    this.#transmissiveShadowMap = undefined
+    const created = createTransmissiveShadowMapResources(this.#context, mapSize)
+    this.#transmissiveShadowMap = created
     return created
   }
 
@@ -1098,6 +1254,12 @@ export class WebGL2SceneRuntime {
     this.#context.deleteTexture(resources.depthTexture)
   }
 
+  #deleteTransmissiveShadowMap(resources: TransmissiveShadowMapResources) {
+    this.#context.deleteFramebuffer(resources.framebuffer)
+    this.#context.deleteTexture(resources.depthTexture)
+    this.#context.deleteTexture(resources.transmittanceTexture)
+  }
+
   #deleteSceneColor(resources: SceneColorResources) {
     this.#context.deleteFramebuffer(resources.framebuffer)
     this.#context.deleteTexture(resources.texture)
@@ -1113,13 +1275,21 @@ export class WebGL2SceneRuntime {
     this.#pipelines.forEach((pipeline) => this.#context.deleteProgram(pipeline.program))
     this.#pipelines.clear()
     if (this.#shadowPipeline) this.#context.deleteProgram(this.#shadowPipeline.program)
+    if (this.#transmissiveShadowPipeline) {
+      this.#context.deleteProgram(this.#transmissiveShadowPipeline.program)
+    }
     if (this.#shadowMap) this.#deleteShadowMap(this.#shadowMap)
+    if (this.#transmissiveShadowMap) {
+      this.#deleteTransmissiveShadowMap(this.#transmissiveShadowMap)
+    }
     if (this.#sceneColor) this.#deleteSceneColor(this.#sceneColor)
     if (this.#environmentTexture) {
       this.#deleteEnvironmentTexture(this.#environmentTexture)
     }
     this.#shadowPipeline = undefined
     this.#shadowMap = undefined
+    this.#transmissiveShadowPipeline = undefined
+    this.#transmissiveShadowMap = undefined
     this.#sceneColor = undefined
     this.#environmentTexture = undefined
   }
@@ -1129,6 +1299,8 @@ export class WebGL2SceneRuntime {
     this.#pipelines.clear()
     this.#shadowPipeline = undefined
     this.#shadowMap = undefined
+    this.#transmissiveShadowPipeline = undefined
+    this.#transmissiveShadowMap = undefined
     this.#sceneColor = undefined
     this.#environmentTexture = undefined
   }

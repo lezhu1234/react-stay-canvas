@@ -7,6 +7,7 @@ import {
   EnvironmentMap,
   GlassMaterial,
   type GlassAttenuationColor,
+  LambertMaterial,
   Line,
   Mesh,
   StayCanvas,
@@ -33,7 +34,6 @@ import {
   visibleContentRange,
 } from "./coordinateLabModel"
 import {
-  contactShadowReceiverGeometry,
   createCoordinateCamera,
   createPlaneBasis,
   createPlaneDefinitions,
@@ -63,7 +63,6 @@ const WEBGL_LAYER = 0
 const OVERLAY_LAYER = 1
 const PANEL_THICKNESS = 0.18
 const PANEL_FACE_OFFSET = PANEL_THICKNESS / 2
-const CONTACT_CASTER_HEIGHT = 14
 const PLANE_GLASS_ROUGHNESS: Readonly<Record<PlaneName, number>> = {
   client: 0.02,
   view: 0.38,
@@ -133,7 +132,6 @@ export type CoordinateMappingFocus = "view-client" | "content-view"
 type PlaneMeshes = {
   frameFill: Mesh
   frameDepth: Mesh
-  contactCaster: Mesh
   frameBackEdges: Mesh
   frameEdges: Mesh
   frameHighlight: Mesh
@@ -305,6 +303,7 @@ function createPlaneRuntime(
       panelRoughness,
       panelAttenuation,
     ),
+    castShadow: true,
     receiveShadow: true,
   })
   const frameDepth = new Mesh({
@@ -316,16 +315,6 @@ function createPlaneRuntime(
       panelAttenuation,
     ),
     receiveShadow: true,
-  })
-  const contactCaster = new Mesh({
-    geometry: rectMeshGeometry(plane, basis, {
-      x: 0,
-      y: plane.height - CONTACT_CASTER_HEIGHT,
-      width: plane.width,
-      height: CONTACT_CASTER_HEIGHT,
-    }, PANEL_FACE_OFFSET + 0.002),
-    material: glassMaterial({ ...plane.stroke, a: 0.012 }),
-    castShadow: true,
   })
   const frameBackEdges = new Mesh({
     geometry: lineMeshGeometry(
@@ -453,7 +442,6 @@ function createPlaneRuntime(
   const meshes: PlaneMeshes = {
     frameFill,
     frameDepth,
-    contactCaster,
     frameBackEdges,
     frameEdges,
     frameHighlight,
@@ -721,20 +709,11 @@ export function CoordinateStack({
     const planes = {} as Record<PlaneName, PlaneRuntime>
     const meshes: Mesh[] = [new Mesh({
       geometry: floorMeshGeometry(),
-      material: new GlassMaterial({
-        color: [0.86, 0.9, 0.88, 0.01],
-        roughness: 0.46,
-      }),
+      material: new LambertMaterial({ color: [0.93, 0.95, 0.94, 1] }),
+      receiveShadow: true,
     }), new Mesh({
       geometry: transmissionBackdropGeometry(Object.values(definitions)),
       material: new UnlitMaterial({ color: [0.89, 0.9, 0.895, 1] }),
-    }), new Mesh({
-      geometry: contactShadowReceiverGeometry(Object.values(definitions)),
-      material: new GlassMaterial({
-        color: [0.32, 0.46, 0.42, 0.035],
-        roughness: 0.72,
-      }),
-      receiveShadow: true,
     })]
     const overlays: Array<Circle | Line | StayText> = []
 

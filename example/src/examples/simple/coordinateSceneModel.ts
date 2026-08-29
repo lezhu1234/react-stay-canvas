@@ -228,47 +228,6 @@ export function transmissionBackdropGeometry(
   return builder
 }
 
-export function contactShadowReceiverGeometry(
-  planes: readonly PlaneDefinition[],
-): MeshGeometryInput {
-  const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
-  const shadowOffset: Vector3 = [-0.62, 0.008, -0.42]
-  planes.forEach((plane) => {
-    const bottomRight = plane.worldQuad[2]
-    const bottomLeft = plane.worldQuad[3]
-    const edgeX = bottomRight[0] - bottomLeft[0]
-    const edgeZ = bottomRight[2] - bottomLeft[2]
-    const edgeLength = Math.hypot(edgeX, edgeZ)
-    const marginX = edgeX / edgeLength * 0.08
-    const marginZ = edgeZ / edgeLength * 0.08
-    const nearLeft: Vector3 = [bottomLeft[0] - marginX, bottomLeft[1] + 0.008, bottomLeft[2] - marginZ]
-    const nearRight: Vector3 = [bottomRight[0] + marginX, bottomRight[1] + 0.008, bottomRight[2] + marginZ]
-    const farRight: Vector3 = [
-      nearRight[0] + shadowOffset[0],
-      nearRight[1] + shadowOffset[1],
-      nearRight[2] + shadowOffset[2],
-    ]
-    const farLeft: Vector3 = [
-      nearLeft[0] + shadowOffset[0],
-      nearLeft[1] + shadowOffset[1],
-      nearLeft[2] + shadowOffset[2],
-    ]
-    const baseIndex = builder.positions.length / 3
-    builder.positions.push(...nearLeft, ...nearRight, ...farRight, ...farLeft)
-    builder.normals.push(
-      0, 1, 0,
-      0, 1, 0,
-      0, 0.4, 0.92,
-      0, 0.4, 0.92,
-    )
-    builder.indices.push(
-      baseIndex, baseIndex + 1, baseIndex + 2,
-      baseIndex, baseIndex + 2, baseIndex + 3,
-    )
-  })
-  return builder
-}
-
 export function planeWorldPoint(
   plane: PlaneDefinition,
   basis: PlaneBasis,

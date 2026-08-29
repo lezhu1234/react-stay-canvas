@@ -30,6 +30,8 @@ export interface DirectionalShadowProps {
   readonly far?: number
   readonly mapSize?: number
   readonly bias?: number
+  /** Fixed PCF tap radius in shadow-map texels. Zero collapses taps to one hardware-PCF footprint. */
+  readonly filterRadius?: number
 }
 
 export interface DirectionalShadow {
@@ -42,6 +44,7 @@ export interface DirectionalShadow {
   readonly far: number
   readonly mapSize: number
   readonly bias: number
+  readonly filterRadius: number
 }
 
 function copyColor(color: LightColor = [1, 1, 1], name: string): LightColor {
@@ -90,6 +93,14 @@ function positive(value: number, name: string) {
   return copied
 }
 
+function nonNegative(value: number, name: string) {
+  finite(value, name)
+  if (value < 0) throw new RangeError(`${name} must not be negative`)
+  const copied = Math.fround(value)
+  if (!Number.isFinite(copied)) throw new RangeError(`${name} exceeds Float32 range`)
+  return copied
+}
+
 function defaultShadowUp(directionToLight: Vector3): Vector3 {
   return Math.abs(directionToLight[1]) > 0.999 ? [0, 0, 1] : [0, 1, 0]
 }
@@ -120,6 +131,10 @@ function copyShadow(
   if (bias < 0 || bias > 1) {
     throw new RangeError("DirectionalLight shadow bias must be between 0 and 1")
   }
+  const filterRadius = nonNegative(
+    shadow.filterRadius ?? 1,
+    "DirectionalLight shadow filterRadius",
+  )
   const copied: DirectionalShadow = {
     target,
     up,
@@ -130,6 +145,7 @@ function copyShadow(
     far,
     mapSize,
     bias: Math.fround(bias),
+    filterRadius,
   }
   shadowViewProjection(directionToLight, copied)
   return copied
@@ -160,7 +176,8 @@ function shadowsEqual(first?: DirectionalShadow, second?: DirectionalShadow) {
     && first.near === second.near
     && first.far === second.far
     && first.mapSize === second.mapSize
-    && first.bias === second.bias)
+    && first.bias === second.bias
+    && first.filterRadius === second.filterRadius)
 }
 
 function valuesEqual(first: ArrayLike<number>, second: ArrayLike<number>) {

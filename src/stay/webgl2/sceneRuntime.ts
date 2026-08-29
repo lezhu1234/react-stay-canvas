@@ -65,7 +65,7 @@ interface LambertPipelineResources {
   readonly transmissiveShadowDepthMapLocation: WebGLUniformLocation
   readonly transmissiveShadowColorMapLocation: WebGLUniformLocation
   readonly hasTransmissiveShadowMapLocation: WebGLUniformLocation
-  readonly shadowTexelSizeLocation: WebGLUniformLocation
+  readonly shadowFilterStepLocation: WebGLUniformLocation
   readonly shadowBiasLocation: WebGLUniformLocation
   readonly receiveShadowLocation: WebGLUniformLocation
 }
@@ -103,7 +103,7 @@ interface GlassPipelineResources {
   readonly transmissiveShadowDepthMapLocation: WebGLUniformLocation
   readonly transmissiveShadowColorMapLocation: WebGLUniformLocation
   readonly hasTransmissiveShadowMapLocation: WebGLUniformLocation
-  readonly shadowTexelSizeLocation: WebGLUniformLocation
+  readonly shadowFilterStepLocation: WebGLUniformLocation
   readonly shadowBiasLocation: WebGLUniformLocation
   readonly receiveShadowLocation: WebGLUniformLocation
 }
@@ -132,6 +132,7 @@ interface ShadowFrame {
   readonly lightViewProjection: Matrix4
   readonly bias: number
   readonly mapSize: number
+  readonly filterRadius: number
   readonly opaque?: ShadowMapResources
   readonly transmissive?: TransmissiveShadowMapResources
 }
@@ -200,14 +201,15 @@ void main() {
 `
 
 const SHADOW_FRAGMENT_INPUTS = `
+precision highp sampler2DShadow;
 uniform int u_shadow_light_index;
 uniform mat4 u_shadow_view_projection;
-uniform sampler2D u_shadow_map;
+uniform sampler2DShadow u_shadow_map;
 uniform bool u_has_opaque_shadow_map;
-uniform sampler2D u_transmissive_shadow_depth_map;
+uniform sampler2DShadow u_transmissive_shadow_depth_map;
 uniform sampler2D u_transmissive_shadow_color_map;
 uniform bool u_has_transmissive_shadow_map;
-uniform vec2 u_shadow_texel_size;
+uniform vec2 u_shadow_filter_step;
 uniform float u_shadow_bias;
 uniform bool u_receive_shadow;
 in vec3 world_position;
@@ -219,21 +221,26 @@ vec3 shadow_transmittance() {
   if (shadow_coordinate.x < 0.0 || shadow_coordinate.x > 1.0
       || shadow_coordinate.y < 0.0 || shadow_coordinate.y > 1.0
       || shadow_coordinate.z < 0.0 || shadow_coordinate.z > 1.0) return vec3(1.0);
+  float receiver_depth = shadow_coordinate.z - u_shadow_bias;
   vec3 transmitted = vec3(0.0);
   for (int y = -1; y <= 1; y++) {
     for (int x = -1; x <= 1; x++) {
       vec2 sample_uv = shadow_coordinate.xy
-        + vec2(float(x), float(y)) * u_shadow_texel_size;
-      bool opaque_blocked = u_has_opaque_shadow_map
-        && shadow_coordinate.z - u_shadow_bias > texture(u_shadow_map, sample_uv).r;
-      bool glass_blocked = u_has_transmissive_shadow_map
-        && shadow_coordinate.z - u_shadow_bias
-          > texture(u_transmissive_shadow_depth_map, sample_uv).r;
-      transmitted += opaque_blocked
-        ? vec3(0.0)
-        : glass_blocked
-          ? texture(u_transmissive_shadow_color_map, sample_uv).rgb
-          : vec3(1.0);
+        + vec2(float(x), float(y)) * u_shadow_filter_step;
+      float opaque_visibility = u_has_opaque_shadow_map
+        ? texture(u_shadow_map, vec3(sample_uv, receiver_depth))
+        : 1.0;
+      float glass_visibility = u_has_transmissive_shadow_map
+        ? texture(u_transmissive_shadow_depth_map, vec3(sample_uv, receiver_depth))
+        : 1.0;
+      vec3 glass_transmittance = u_has_transmissive_shadow_map
+        ? texture(u_transmissive_shadow_color_map, sample_uv).rgb
+        : vec3(1.0);
+      transmitted += opaque_visibility * mix(
+        glass_transmittance,
+        vec3(1.0),
+        glass_visibility
+      );
     }
   }
   return transmitted / 9.0;
@@ -502,7 +509,11 @@ function createPipeline(
         program,
         "u_has_transmissive_shadow_map",
       ),
-      shadowTexelSizeLocation: requireUniform(context, program, "u_shadow_texel_size"),
+      shadowFilterStepLocation: requireUniform(
+        context,
+        program,
+        "u_shadow_filter_step",
+      ),
       shadowBiasLocation: requireUniform(context, program, "u_shadow_bias"),
       receiveShadowLocation: requireUniform(context, program, "u_receive_shadow"),
     }
@@ -1013,6 +1024,7 @@ export class WebGL2SceneRuntime {
         lightViewProjection,
         bias: shadow.bias,
         mapSize: shadow.mapSize,
+        filterRadius: shadow.filterRadius,
         opaque,
         transmissive,
       }
@@ -1137,8 +1149,12 @@ export class WebGL2SceneRuntime {
       pipeline.hasTransmissiveShadowMapLocation,
       shadow?.transmissive ? 1 : 0,
     )
-    const texelSize = shadow ? 1 / shadow.mapSize : 0
-    context.uniform2f(pipeline.shadowTexelSizeLocation, texelSize, texelSize)
+    const filterStep = shadow ? shadow.filterRadius / shadow.mapSize : 0
+    context.uniform2f(
+      pipeline.shadowFilterStepLocation,
+      filterStep,
+      filterStep,
+    )
     context.activeTexture(context.TEXTURE0)
     context.bindTexture(context.TEXTURE_2D, shadow?.opaque?.depthTexture ?? null)
     context.activeTexture(context.TEXTURE3)

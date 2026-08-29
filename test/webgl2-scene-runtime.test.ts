@@ -643,6 +643,7 @@ describe("internal WebGL2 scene runtime", () => {
         far: 20,
         mapSize: 512,
         bias: 0.002,
+        filterRadius: 1.5,
       },
     })
 
@@ -671,6 +672,22 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.colorMask.mock.calls).toContainEqual([false, false, false, false])
     expect(gl.spies.colorMask.mock.calls).toContainEqual([true, true, true, true])
     expect(gl.spies.uniform1i.mock.calls).toContainEqual([expect.anything(), 0])
+    expect(gl.spies.uniform2f.mock.calls).toContainEqual([
+      expect.anything(),
+      1.5 / 512,
+      1.5 / 512,
+    ])
+    expect(gl.spies.texParameteri.mock.calls).toContainEqual([
+      gl.spies.TEXTURE_2D,
+      gl.spies.TEXTURE_COMPARE_MODE,
+      gl.spies.COMPARE_REF_TO_TEXTURE,
+    ])
+    expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
+      String(source).includes("precision highp sampler2DShadow")
+      && String(source).includes("uniform sampler2DShadow u_shadow_map")
+      && String(source).includes("u_shadow_filter_step")
+      && String(source).includes("texture(u_shadow_map, vec3(sample_uv, receiver_depth))")))
+      .toBe(true)
 
     runtime.dispose()
     expect(gl.spies.deleteFramebuffer).toHaveBeenCalledOnce()
@@ -762,11 +779,13 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(3)
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(4)
     expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
-      String(source).includes("bool opaque_blocked")
-      && String(source).includes("bool glass_blocked")
-      && String(source).includes("opaque_blocked")
-      && String(source).includes("? vec3(0.0)")))
+      String(source).includes("float opaque_visibility")
+      && String(source).includes("float glass_visibility")
+      && String(source).includes("opaque_visibility * mix(")))
       .toBe(true)
+    expect(gl.spies.texParameteri.mock.calls.filter(([, name, value]) =>
+      name === gl.spies.TEXTURE_COMPARE_MODE
+      && value === gl.spies.COMPARE_REF_TO_TEXTURE)).toHaveLength(2)
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(5)
 
     runtime.dispose()
@@ -790,7 +809,17 @@ describe("internal WebGL2 scene runtime", () => {
     })
 
     runtime.render([caster, receiver], camera(), [light])
-    light.setShadow({ mapSize: 512 })
+    light.setShadow({ mapSize: 256, filterRadius: 2 })
+    runtime.render([caster, receiver], camera(), [light])
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledOnce()
+    expect(gl.spies.deleteFramebuffer).not.toHaveBeenCalled()
+    expect(gl.spies.uniform2f.mock.calls).toContainEqual([
+      expect.anything(),
+      2 / 256,
+      2 / 256,
+    ])
+
+    light.setShadow({ mapSize: 512, filterRadius: 2 })
     runtime.render([caster, receiver], camera(), [light])
     expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
     expect(gl.spies.deleteFramebuffer).toHaveBeenCalledOnce()
@@ -894,6 +923,22 @@ describe("internal WebGL2 scene runtime", () => {
       directionToLight: [0, 0, 1],
       shadow: { mapSize: 10.5 },
     })).toThrow("positive integer")
+    expect(new DirectionalLight({
+      directionToLight: [0, 0, 1],
+      shadow: {},
+    }).getShadow()?.filterRadius).toBe(1)
+    expect(new DirectionalLight({
+      directionToLight: [0, 0, 1],
+      shadow: { filterRadius: 0 },
+    }).getShadow()?.filterRadius).toBe(0)
+    expect(() => new DirectionalLight({
+      directionToLight: [0, 0, 1],
+      shadow: { filterRadius: -0.1 },
+    })).toThrow("filterRadius must not be negative")
+    expect(() => new DirectionalLight({
+      directionToLight: [0, 0, 1],
+      shadow: { filterRadius: Number.POSITIVE_INFINITY },
+    })).toThrow("filterRadius must be finite")
   })
 
   it("rejects incomplete Lambert CPU state before committing Mesh changes", () => {

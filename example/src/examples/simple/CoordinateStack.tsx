@@ -560,8 +560,9 @@ export function CoordinateStack({
         height: 10,
         near: 0.1,
         far: 26,
-        mapSize: 512,
+        mapSize: 256,
         bias: 0.001,
+        filterRadius: 4,
       },
     }),
     new DirectionalLight({

@@ -51,7 +51,13 @@ const ambient = new AmbientLight({ color: [0.9, 0.95, 1], intensity: 0.3 })
 const key = new DirectionalLight({
   directionToLight: [0.2, 0.4, 1],
   intensity: 0.8,
-  shadow: { target: [0, 0, 0], width: 6, height: 4, mapSize: 1024 },
+  shadow: {
+    target: [0, 0, 0],
+    width: 6,
+    height: 4,
+    mapSize: 1024,
+    filterRadius: 1.5,
+  },
 })
 const environment = new EnvironmentMap({
   width: 4,
@@ -68,7 +74,13 @@ const layer: WebGL2LayerConfig = {
   lights: [ambient, key],
 }
 key.setDirectionToLight([0.2, 0.4, 1])
-key.setShadow({ target: [0, 0, -1], distance: 8, near: 0.1, far: 20 })
+key.setShadow({
+  target: [0, 0, -1],
+  distance: 8,
+  near: 0.1,
+  far: 20,
+  filterRadius: 0,
+})
 
 declare const tools: StayTools
 const child: StayWebGLChild = tools.webgl.appendChild({

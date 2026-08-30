@@ -67,22 +67,22 @@ const STACK_WIDTH = 240
 const STACK_HEIGHT = 120
 const WEBGL_LAYER = 0
 const OVERLAY_LAYER = 1
-const PANEL_THICKNESS = 0.18
+const PANEL_THICKNESS = 0.24
 const PANEL_FACE_OFFSET = PANEL_THICKNESS / 2
-const PANEL_BEVEL_RADIUS = 0.09
+const PANEL_BEVEL_RADIUS = 0.12
 const PANEL_BEVEL_SEGMENTS = 6
 const PLANE_GLASS_ROUGHNESS: Readonly<Record<PlaneName, number>> = {
-  client: 0.02,
-  view: 0.38,
-  content: 0.76,
+  client: 0.06,
+  view: 0.09,
+  content: 0.12,
 }
 const PLANE_GLASS_ATTENUATION: Readonly<Record<PlaneName, {
   color: GlassAttenuationColor
   distance: number
 }>> = {
-  client: { color: [0.18, 0.74, 1], distance: 0.4 },
-  view: { color: [0.07, 0.27, 1], distance: 0.32 },
-  content: { color: [0.06, 1, 0.25], distance: 0.3 },
+  client: { color: [0.55, 0.9, 1], distance: 1.5 },
+  view: { color: [0.45, 0.65, 1], distance: 1.35 },
+  content: { color: [0.5, 1, 0.68], distance: 1.4 },
 }
 
 const unlitMaterial = (color: ReturnType<typeof rgba>) =>
@@ -119,20 +119,20 @@ function createCoordinateEnvironment() {
       const offset = (y * width + x) * 4
       data[offset] = Math.min(
         255,
-        Math.round(48 + horizon * 5 - ground * 4 + windowLight * 195),
+        Math.round(178 + horizon * 20 - ground * 18 + windowLight * 70),
       )
       data[offset + 1] = Math.min(
         255,
-        Math.round(46 + horizon * 4 - ground * 4 + windowLight * 190),
+        Math.round(174 + horizon * 18 - ground * 17 + windowLight * 68),
       )
       data[offset + 2] = Math.min(
         255,
-        Math.round(44 + horizon * 3 - ground * 3 + windowLight * 184),
+        Math.round(166 + horizon * 15 - ground * 15 + windowLight * 64),
       )
       data[offset + 3] = 255
     }
   }
-  return new EnvironmentMap({ width, height, data, intensity: 1.7 })
+  return new EnvironmentMap({ width, height, data, intensity: 1.18 })
 }
 
 export type CoordinateMappingFocus = "view-client" | "content-view"
@@ -270,7 +270,7 @@ function createPlaneRuntime(
 ): { meshes: Mesh[]; overlays: Array<Circle | Line | StayText>; runtime: PlaneRuntime } {
   const basis = createPlaneBasis(plane)
   const presentation = planePresentationMetrics(plane)
-  const axisColor = rgba(49, 65, 61, 0.48)
+  const axisColor = rgba(49, 65, 61, 0.42)
   const panelRoughness = PLANE_GLASS_ROUGHNESS[name]
   const panelAttenuation = PLANE_GLASS_ATTENUATION[name]
   const face = createPlaneBevelFaceProfile(plane, basis, PANEL_BEVEL_RADIUS)
@@ -303,7 +303,7 @@ function createPlaneRuntime(
       PANEL_BEVEL_SEGMENTS,
     ),
     material: glassMaterial(
-      { ...plane.stroke, a: 0.32 },
+      { ...plane.stroke, a: 0.42 },
       PANEL_THICKNESS,
       panelRoughness,
       panelAttenuation,
@@ -318,7 +318,7 @@ function createPlaneRuntime(
       y1: Math.max(face.rect.y, Math.min(face.rect.y + face.rect.height, segment.y1)),
       y2: Math.max(face.rect.y, Math.min(face.rect.y + face.rect.height, segment.y2)),
     })), 0.5, PANEL_FACE_OFFSET + 0.006),
-    material: unlitMaterial(rgba(57, 72, 68, 0.2)),
+    material: unlitMaterial(rgba(57, 72, 68, 0.25)),
   })
   const axes = new Mesh({
     geometry: lineMeshGeometry(plane, basis, [
@@ -331,7 +331,7 @@ function createPlaneRuntime(
     ], 1, PANEL_FACE_OFFSET + 0.008),
     material: unlitMaterial(axisColor),
   })
-  const shapeFill = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.36)) })
+  const shapeFill = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.44)) })
   const shapeEdges = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 1)) })
   const viewportFill = name === "content" ? new Mesh({
     geometry: emptyMeshGeometry(),
@@ -361,7 +361,7 @@ function createPlaneRuntime(
     zIndex: 5,
     textBaseline: "top",
     font: { size: presentation.rangeSize, fontWeight: 600 },
-    fillConfig: { color: rgba(49, 65, 61, detailsVisible ? 0.6 : 0) },
+    fillConfig: { color: rgba(49, 65, 61, detailsVisible ? 0.68 : 0) },
   })
   const pointGuide = new Line({
     x1: 0,
@@ -483,11 +483,11 @@ export function CoordinateStack({
   const camera = useMemo(() => createCoordinateCamera(), [])
   const environment = useMemo(() => createCoordinateEnvironment(), [])
   const lights = useMemo(() => [
-    new AmbientLight({ color: [0.86, 0.9, 0.91], intensity: 0.14 }),
+    new AmbientLight({ color: [0.9, 0.92, 0.91], intensity: 0.22 }),
     new DirectionalLight({
       directionToLight: [0.72, 0.96, 0.5],
       color: [1, 0.96, 0.9],
-      intensity: 1.05,
+      intensity: 1.3,
       shadow: {
         target: [0, -0.4, -7.2],
         distance: 11,
@@ -503,13 +503,13 @@ export function CoordinateStack({
     new PointLight({
       position: [-3.8, 4.4, -5.8],
       color: [1, 0.93, 0.82],
-      intensity: 30,
+      intensity: 24,
       range: 9,
     }),
     new PointLight({
       position: [7.2, 3.2, -5.2],
       color: [0.72, 0.88, 1],
-      intensity: 18,
+      intensity: 14,
       range: 8,
     }),
   ], [])
@@ -551,15 +551,15 @@ export function CoordinateStack({
       if (materialFocusChanged) {
         plane.meshes.frameFill.setMaterial(glassMaterial({
           ...plane.fill,
-          a: isActive ? plane.fill.a : plane.fill.a * 0.72,
+          a: isActive ? plane.fill.a : plane.fill.a * 0.88,
         }, PANEL_THICKNESS, PLANE_GLASS_ROUGHNESS[name], PLANE_GLASS_ATTENUATION[name]))
         plane.meshes.frameDepth.setMaterial(glassMaterial({
           ...plane.stroke,
-          a: isActive ? 0.32 : 0.22,
+          a: isActive ? 0.5 : 0.42,
         }, PANEL_THICKNESS, PLANE_GLASS_ROUGHNESS[name], PLANE_GLASS_ATTENUATION[name]))
       }
       plane.overlay.title.update({
-        fillConfig: { color: { ...plane.stroke, a: isActive ? 1 : 0.68 } },
+        fillConfig: { color: { ...plane.stroke, a: isActive ? 1 : 0.78 } },
       })
       const guideStart = contentPoint
         ? projectPlanePoint(plane, { x: localPoint.x, y: 0 })
@@ -648,7 +648,7 @@ export function CoordinateStack({
       start: Readonly<Vector3> | undefined,
       end: Readonly<Vector3> | undefined,
     ) => runtime.signalMeshes[index].setGeometry(
-      start && end ? worldLineMeshGeometry(start, end, 0.045) : emptyMeshGeometry(),
+      start && end ? worldLineMeshGeometry(start, end, 0.085) : emptyMeshGeometry(),
     )
     updateSignalMesh(0, worldPoints.client, worldPoints.view)
     updateSignalMesh(1, worldPoints.view, worldPoints.content)

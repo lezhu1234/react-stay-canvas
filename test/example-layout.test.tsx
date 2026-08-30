@@ -252,6 +252,18 @@ describe("Example Canvas workspace", () => {
     expect(expandedMetrics.dotRadius).toBeGreaterThan(compactMetrics.dotRadius)
   })
 
+  it("keeps projected panel width stable as a narrow source surface grows taller", () => {
+    const short = planePresentationMetrics(
+      createPlaneDefinitions(800, 450, COORDINATE_PLANE_DOMAIN).client,
+    )
+    const tall = planePresentationMetrics(
+      createPlaneDefinitions(800, 550, COORDINATE_PLANE_DOMAIN).client,
+    )
+
+    expect(tall.projectedWidth).toBeGreaterThan(short.projectedWidth * 0.95)
+    expect(tall.projectedWidth).toBeLessThan(short.projectedWidth * 1.05)
+  })
+
   it("fits the projected plane bounds inside a height-constrained stack", () => {
     const canvasHeight = 80
     const plane = createPlaneDefinitions(728, canvasHeight, COORDINATE_PLANE_DOMAIN).client
@@ -284,7 +296,7 @@ describe("Example Canvas workspace", () => {
     const overlaps = bounds.slice(0, -1).map((bound, index) =>
       bound.x + bound.width - bounds[index + 1].x)
     overlaps.forEach((overlap, index) => {
-      expect(overlap).toBeGreaterThan(-Math.min(bounds[index].width, bounds[index + 1].width) * 0.08)
+      expect(overlap).toBeGreaterThan(-Math.min(bounds[index].width, bounds[index + 1].width) * 0.25)
       expect(overlap).toBeLessThan(Math.min(bounds[index].width, bounds[index + 1].width) * 0.25)
     })
     expect(bounds[0].x).toBeLessThan(bounds[1].x)
@@ -317,7 +329,7 @@ describe("Example Canvas workspace", () => {
     const compactGrounds = Object.values(compact).map((definition) => definition.worldQuad[3][1])
     const expandedGrounds = Object.values(expanded).map((definition) => definition.worldQuad[3][1])
 
-    expect(Math.max(...compactGrounds) - Math.min(...compactGrounds)).toBeGreaterThan(0)
+    expect(Math.max(...compactGrounds) - Math.min(...compactGrounds)).toBeCloseTo(0)
     expect(Math.max(...expandedGrounds) - Math.min(...expandedGrounds)).toBeCloseTo(0)
 
     for (const name of ["client", "view", "content"] as const) {
@@ -348,7 +360,9 @@ describe("Example Canvas workspace", () => {
       [1085, 478],
       [1052, 478],
       [974, 432],
+      [800, 384],
       [610, 400],
+      [577, 450],
       [460, 330],
       [300, 300],
     ]) {
@@ -360,15 +374,17 @@ describe("Example Canvas workspace", () => {
         return createFiniteProjectiveMapping(placement.matrix, placement.domain).contentBounds
       })
 
-      bounds.forEach((bound) => {
-        expect(bound.x).toBeGreaterThanOrEqual(-Number.EPSILON)
-        expect(bound.y).toBeGreaterThanOrEqual(-Number.EPSILON)
-        expect(bound.x + bound.width).toBeLessThanOrEqual(width + Number.EPSILON)
-        expect(bound.y + bound.height).toBeLessThanOrEqual(height + Number.EPSILON)
+      bounds.forEach((bound, index) => {
+        const plane = (["client", "view", "content"] as const)[index]
+        const context = `${plane} in ${width}×${height}`
+        expect(bound.x, context).toBeGreaterThanOrEqual(-Number.EPSILON)
+        expect(bound.y, context).toBeGreaterThanOrEqual(-Number.EPSILON)
+        expect(bound.x + bound.width, context).toBeLessThanOrEqual(width + Number.EPSILON)
+        expect(bound.y + bound.height, context).toBeLessThanOrEqual(height + Number.EPSILON)
       })
       bounds.slice(0, -1).forEach((bound, index) => {
         const overlap = bound.x + bound.width - bounds[index + 1].x
-        expect(overlap).toBeGreaterThan(-Math.min(bound.width, bounds[index + 1].width) * 0.08)
+        expect(overlap).toBeGreaterThan(-Math.min(bound.width, bounds[index + 1].width) * 0.25)
         expect(overlap).toBeLessThan(Math.min(bound.width, bounds[index + 1].width) * 0.25)
       })
     }

@@ -21,18 +21,20 @@ export const PLANE_GRID_ROWS = 5
 
 const CAMERA_FIELD_OF_VIEW = Math.PI / 3.4
 const CAMERA_POSITION_X = 4.2
-const COMPACT_GROUND_HEIGHT = -2.4
-const EXPANDED_GROUND_HEIGHT = -2.1
+const COMPACT_GROUND_HEIGHT = -3
+const EXPANDED_GROUND_HEIGHT = -2.8
 const EXPANDED_LAYOUT_SCALE = 0.76
-const COMPACT_PANEL_HEIGHT_TRIM = 0.75
+const COMPACT_PANEL_HEIGHT_TRIM = 0.85
 const SOURCE_FIT_MIN_SCALE = 0.28
-const SOURCE_FIT_REFERENCE_HEIGHT = 550
-const SOURCE_FIT_REFERENCE_WIDTH = 1080
+const SHORT_SURFACE_REFERENCE_HEIGHT = 420
+const SHORT_SURFACE_REFERENCE_WIDTH = 880
+const SOURCE_FIT_REFERENCE_HEIGHT = 560
+const SOURCE_FIT_REFERENCE_WIDTH = 1200
 const BEVEL_FACE_CORNER_RATIO = 0.28
 const PANEL_LAYOUT = [
-  { centerX: 0.1, depth: 7.4, worldWidth: 4.9, worldHeight: 6.6, yaw: 0.05, verticalOffset: 0.25 },
-  { centerX: 5.3, depth: 9.2, worldWidth: 4.9, worldHeight: 6.6, yaw: 0.08, verticalOffset: 0.72 },
-  { centerX: 11.4, depth: 11.2, worldWidth: 4.9, worldHeight: 6.6, yaw: 0.11, verticalOffset: 0.88 },
+  { centerX: 0.75, depth: 7.5, worldWidth: 4.4, worldHeight: 7.7, yaw: 0.18, verticalOffset: 0 },
+  { centerX: 5.55, depth: 9, worldWidth: 4.4, worldHeight: 7.7, yaw: 0.28, verticalOffset: 0 },
+  { centerX: 10.85, depth: 10.7, worldWidth: 4.4, worldHeight: 7.7, yaw: 0.38, verticalOffset: 0 },
 ] as const
 
 export type PlaneName = CoordinatePlaneName
@@ -75,18 +77,48 @@ function progressBetween(value: number, start: number, end: number) {
   return Math.min(1, Math.max(0, (value - start) / (end - start)))
 }
 
+function sourceFitScale(width: number, height: number) {
+  // The vertical-FOV camera makes projected pixel size grow with surface height.
+  // Short surfaces therefore use a smaller reference footprint and an explicit
+  // world-scale cap so their on-screen panels stay readable without changing
+  // the logical coordinate domain.
+  const shortSurfaceMix = 1 - progressBetween(height, 450, 550)
+  const referenceWidth = SOURCE_FIT_REFERENCE_WIDTH
+    + (SHORT_SURFACE_REFERENCE_WIDTH - SOURCE_FIT_REFERENCE_WIDTH) * shortSurfaceMix
+  const referenceHeight = SOURCE_FIT_REFERENCE_HEIGHT
+    + (SHORT_SURFACE_REFERENCE_HEIGHT - SOURCE_FIT_REFERENCE_HEIGHT) * shortSurfaceMix
+  const shortSurfaceScaleLimit = 1 - shortSurfaceMix * 0.18
+
+  return Math.max(
+    SOURCE_FIT_MIN_SCALE,
+    Math.min(
+      1,
+      shortSurfaceScaleLimit,
+      width / referenceWidth,
+      height / referenceHeight,
+    ),
+  )
+}
+
+function sourceStageExpansion(width: number, height: number) {
+  return Math.min(
+    progressBetween(width, 1250, 1390),
+    progressBetween(height, 439, 453),
+  )
+}
+
 export const planePalette = {
   client: {
-    fill: rgba(90, 190, 236, 0.14),
-    stroke: rgba(77, 178, 224, 0.9),
+    fill: rgba(123, 207, 231, 0.1),
+    stroke: rgba(62, 159, 190, 0.96),
   },
   view: {
-    fill: rgba(72, 114, 235, 0.15),
-    stroke: rgba(67, 112, 230, 0.92),
+    fill: rgba(108, 145, 225, 0.1),
+    stroke: rgba(60, 99, 199, 0.96),
   },
   content: {
-    fill: rgba(51, 180, 121, 0.14),
-    stroke: rgba(45, 151, 108, 0.92),
+    fill: rgba(106, 187, 137, 0.1),
+    stroke: rgba(43, 132, 84, 0.96),
   },
 } as const
 
@@ -116,19 +148,9 @@ export function createPlaneDefinitions(
 ): Record<PlaneName, PlaneDefinition> {
   const aspect = width / Math.max(1, height)
   const halfFieldHeight = Math.tan(CAMERA_FIELD_OF_VIEW / 2)
-  const sourceFitScale = Math.max(
-    SOURCE_FIT_MIN_SCALE,
-    Math.min(
-      1,
-      width / SOURCE_FIT_REFERENCE_WIDTH,
-      height / SOURCE_FIT_REFERENCE_HEIGHT,
-    ),
-  )
+  const fitScale = sourceFitScale(width, height)
   const panelStageScale = Math.min(1.08, 1 + Math.max(0, height - 80) / 800)
-  const stageExpansion = Math.min(
-    progressBetween(width, 1250, 1390),
-    progressBetween(height, 439, 453),
-  )
+  const stageExpansion = sourceStageExpansion(width, height)
   const layoutScale = 1 + (EXPANDED_LAYOUT_SCALE - 1) * stageExpansion
   const groundHeight = COMPACT_GROUND_HEIGHT
     + (EXPANDED_GROUND_HEIGHT - COMPACT_GROUND_HEIGHT) * stageExpansion
@@ -152,12 +174,12 @@ export function createPlaneDefinitions(
     const horizontal: Vector3 = [Math.cos(yaw), 0, -Math.sin(yaw)]
     const expandedCenterX = CAMERA_POSITION_X + (centerX - CAMERA_POSITION_X) * layoutScale
     const scaledCenterX = CAMERA_POSITION_X
-      + (expandedCenterX - CAMERA_POSITION_X) * sourceFitScale
-    const halfWidth = worldWidth * panelStageScale * layoutScale * sourceFitScale / 2
+      + (expandedCenterX - CAMERA_POSITION_X) * fitScale
+    const halfWidth = worldWidth * panelStageScale * layoutScale * fitScale / 2
     const scaledHeight = (
       worldHeight * panelStageScale * layoutScale
       - COMPACT_PANEL_HEIGHT_TRIM * (1 - stageExpansion)
-    ) * sourceFitScale
+    ) * fitScale
     const bottomHeight = groundHeight + verticalOffset * (1 - stageExpansion)
     const leftBottom: Vector3 = [
       scaledCenterX - horizontal[0] * halfWidth,
@@ -237,11 +259,11 @@ export function planePresentationMetrics(
   )
 
   return {
-    detailSize: Math.max(6, Math.min(12, projectedWidth * 0.038)),
-    dotRadius: Math.max(3.5, Math.min(7, projectedWidth * 0.018)),
+    detailSize: Math.max(6, Math.min(13, projectedWidth * 0.042)),
+    dotRadius: Math.max(3.5, Math.min(7.2, projectedWidth * 0.02)),
     projectedWidth,
-    rangeSize: Math.max(6, Math.min(10, projectedWidth * 0.03)),
-    titleSize: Math.max(8, Math.min(16, projectedWidth * 0.05)),
+    rangeSize: Math.max(6, Math.min(11, projectedWidth * 0.033)),
+    titleSize: Math.max(8, Math.min(18, projectedWidth * 0.055)),
     valueOffset: Math.max(6, Math.min(10, projectedWidth * 0.025)),
   }
 }

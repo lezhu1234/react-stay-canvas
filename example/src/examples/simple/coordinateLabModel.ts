@@ -21,6 +21,20 @@ export const LAB_CONTENT_BOUNDS: Readonly<Rect> = {
   height: 360,
 }
 
+export type CoordinatePlaneDomain = Readonly<{
+  width: number
+  height: number
+}>
+
+export type CoordinatePlaneName = "client" | "view" | "content"
+
+// This is the diagram's logical drawing domain, not a physical panel size.
+// Keeping it stable prevents stage composition changes from altering ranges.
+export const COORDINATE_PLANE_DOMAIN: CoordinatePlaneDomain = Object.freeze({
+  width: 280,
+  height: 368.1003570269393,
+})
+
 export type LineSegment = {
   x1: number
   y1: number
@@ -98,6 +112,49 @@ export function clientReferenceRange(probe: CoordinateProbe, includedRect?: Read
     width: right - x,
     height: bottom - y,
   }
+}
+
+export function expandRangeToAspect(range: Readonly<Rect>, aspect: number): Rect {
+  const width = Math.max(1, range.width)
+  const height = Math.max(1, range.height)
+  const currentAspect = width / height
+  if (Math.abs(currentAspect - aspect) < 0.0001) return { ...range, width, height }
+  if (currentAspect < aspect) {
+    const expandedWidth = height * aspect
+    return { x: range.x - (expandedWidth - width) / 2, y: range.y, width: expandedWidth, height }
+  }
+  const expandedHeight = width / aspect
+  return { x: range.x, y: range.y - (expandedHeight - height) / 2, width, height: expandedHeight }
+}
+
+export function coordinatePlaneRange(
+  name: CoordinatePlaneName,
+  domain: CoordinatePlaneDomain,
+  probe: CoordinateProbe,
+  clientRange: Readonly<Rect>,
+): Rect {
+  const range = name === "client"
+    ? clientRange
+    : name === "view"
+      ? { x: 0, y: 0, width: probe.viewSize.width, height: probe.viewSize.height }
+      : contentReferenceRange(probe)
+  return expandRangeToAspect(range, domain.width / domain.height)
+}
+
+export function projectCoordinatePlanePoint(
+  value: Readonly<Coordinate>,
+  range: Readonly<Rect>,
+  domain: CoordinatePlaneDomain,
+) {
+  return projectPointToRange(value, range, domain)
+}
+
+export function projectCoordinatePlaneRect(
+  value: Readonly<Rect>,
+  range: Readonly<Rect>,
+  domain: CoordinatePlaneDomain,
+) {
+  return projectRectToRange(value, range, domain)
 }
 
 export function containsRect(outer: Readonly<Rect>, inner: Readonly<Rect>) {

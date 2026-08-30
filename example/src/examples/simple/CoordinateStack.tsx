@@ -11,12 +11,12 @@ import {
   Mesh,
   PointLight,
   StayCanvas,
-  StandardMaterial,
   StayText,
   UnlitMaterial,
   type Coordinate,
   type Rect,
   type StayTools,
+  type Vector3,
   type ViewportState,
 } from "react-stay-canvas"
 
@@ -41,16 +41,17 @@ import {
   createPlaneDefinitions,
   emptyMeshGeometry,
   expandRangeToAspect,
-  floorMeshGeometry,
   lineMeshGeometry,
   meshColor,
   planeVolumeGeometry,
+  planeWorldPoint,
   PLANE_GRID_COLUMNS,
   PLANE_GRID_ROWS,
   projectPlanePoint,
   rectMeshGeometry,
   roundedRectMeshGeometry,
   transparentMeshColor,
+  worldLineMeshGeometry,
   type PlaneBasis,
   type PlaneDefinition,
   type PlaneName,
@@ -149,6 +150,9 @@ type PlaneOverlay = {
   originValue: StayText
   xLabel: StayText
   yLabel: StayText
+  xMidValue: StayText
+  yMidValue: StayText
+  pointGuide: Line
   dot: Circle
   value: StayText
   viewportLabel?: StayText
@@ -164,7 +168,7 @@ type StackRuntime = {
   planes: Record<PlaneName, PlaneRuntime>
   clientViewLinks: [Line, Line, Line, Line]
   viewContentLinks: [Line, Line, Line, Line]
-  rays: [Line, Line]
+  signalMeshes: [Mesh, Mesh]
   materialFocus?: CoordinateMappingFocus
 }
 
@@ -280,8 +284,8 @@ function createPlaneRuntime(
 ): { meshes: Mesh[]; overlays: Array<Circle | Line | StayText>; runtime: PlaneRuntime } {
   const basis = createPlaneBasis(plane)
   const titleSize = Math.max(13, Math.min(16, plane.width * 0.065))
-  const detailSize = Math.max(9, Math.min(11, plane.width * 0.045))
-  const axisColor = rgba(78, 89, 104, 0.24)
+  const detailSize = Math.max(10, Math.min(12, plane.width * 0.045))
+  const axisColor = rgba(49, 65, 61, 0.48)
   const panelRoughness = PLANE_GLASS_ROUGHNESS[name]
   const panelAttenuation = PLANE_GLASS_ATTENUATION[name]
   const face = createPlaneBevelFaceProfile(plane, basis, PANEL_BEVEL_RADIUS)
@@ -328,25 +332,25 @@ function createPlaneRuntime(
       x2: Math.max(face.rect.x, Math.min(face.rect.x + face.rect.width, segment.x2)),
       y1: Math.max(face.rect.y, Math.min(face.rect.y + face.rect.height, segment.y1)),
       y2: Math.max(face.rect.y, Math.min(face.rect.y + face.rect.height, segment.y2)),
-    })), 0.8, PANEL_FACE_OFFSET + 0.006),
-    material: glassMaterial({ ...plane.stroke, a: 0.045 }),
+    })), 0.5, PANEL_FACE_OFFSET + 0.006),
+    material: unlitMaterial(rgba(57, 72, 68, 0.2)),
   })
   const axes = new Mesh({
     geometry: lineMeshGeometry(plane, basis, [
       { x1: 12, y1: 20, x2: plane.width - 14, y2: 20 },
       { x1: 12, y1: 20, x2: 12, y2: plane.height - 12 },
-    ], 0.9, PANEL_FACE_OFFSET + 0.008),
-    material: glassMaterial(axisColor),
+    ], 0.8, PANEL_FACE_OFFSET + 0.008),
+    material: unlitMaterial(axisColor),
   })
-  const shapeFill = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.13)) })
-  const shapeEdges = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.9)) })
+  const shapeFill = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.36)) })
+  const shapeEdges = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 1)) })
   const viewportFill = name === "content" ? new Mesh({
     geometry: emptyMeshGeometry(),
     material: glassMaterial(rgba(70, 143, 77, 0.018)),
   }) : undefined
   const viewportEdges = name === "content" ? new Mesh({
     geometry: emptyMeshGeometry(),
-    material: glassMaterial(rgba(70, 143, 77, 0.18)),
+    material: unlitMaterial(rgba(47, 138, 104, 0.62)),
   }) : undefined
 
   const title = new StayText({
@@ -360,36 +364,60 @@ function createPlaneRuntime(
     font: { size: titleSize, fontWeight: 700 },
     fillConfig: { color: plane.stroke },
   })
-  const originValue = createOverlayText(plane, { x: 16, y: 7 }, {
+  const originValue = createOverlayText(plane, { x: 16, y: 30 }, {
     text: "0,0",
     zIndex: 5,
     textBaseline: "top",
     font: { size: detailSize },
-    fillConfig: { color: colors.gray },
+    fillConfig: { color: rgba(62, 76, 82, 0.76) },
   })
-  const xLabel = createOverlayText(plane, { x: plane.width - 8, y: 14 }, {
-    text: "X",
+  const xLabel = createOverlayText(plane, { x: plane.width - 8, y: 30 }, {
+    text: "x 0",
     zIndex: 5,
     textAlign: "right",
     textBaseline: "top",
     font: { size: detailSize, fontWeight: 700 },
-    fillConfig: { color: colors.gray },
+    fillConfig: { color: rgba(62, 76, 82, 0.76) },
   })
   const yLabel = createOverlayText(plane, { x: 6, y: plane.height - 5 }, {
-    text: "Y",
+    text: "y 0",
     zIndex: 5,
     textBaseline: "bottom",
     font: { size: detailSize, fontWeight: 700 },
-    fillConfig: { color: colors.gray },
+    fillConfig: { color: rgba(62, 76, 82, 0.76) },
+  })
+  const xMidValue = createOverlayText(plane, { x: plane.width / 2, y: 30 }, {
+    text: "0",
+    zIndex: 5,
+    textAlign: "center",
+    textBaseline: "top",
+    font: { size: detailSize },
+    fillConfig: { color: rgba(62, 76, 82, 0.68) },
+  })
+  const yMidValue = createOverlayText(plane, { x: 6, y: plane.height / 2 }, {
+    text: "0",
+    zIndex: 5,
+    textBaseline: "middle",
+    font: { size: detailSize },
+    fillConfig: { color: rgba(62, 76, 82, 0.68) },
+  })
+  const pointGuide = new Line({
+    x1: 0,
+    y1: 0,
+    x2: 0,
+    y2: 0,
+    layer: OVERLAY_LAYER,
+    zIndex: 9,
+    strokeConfig: { color: rgba(229, 109, 72, 0), lineWidth: 1.2, dash: [5, 6] },
   })
   const dot = new Circle({
     x: 0,
     y: 0,
-    radius: Math.max(3, Math.min(5, plane.width * 0.022)),
+    radius: Math.max(5, Math.min(7, plane.width * 0.028)),
     layer: OVERLAY_LAYER,
     zIndex: 10,
     fillConfig: { color: colors.orange },
-    strokeConfig: { color: colors.paper, lineWidth: 1.5 },
+    strokeConfig: { color: colors.paper, lineWidth: 2 },
   })
   const value = new StayText({
     x: 0,
@@ -404,12 +432,12 @@ function createPlaneRuntime(
   const viewportLabel = name === "content" ? new StayText({
     x: 0,
     y: 0,
-    text: "VIEWPORT",
+    text: "VISIBLE VIEW",
     layer: OVERLAY_LAYER,
     zIndex: 6,
     textBaseline: "top",
     font: { size: detailSize, fontWeight: 700 },
-    fillConfig: { color: rgba(70, 143, 77, 0.4) },
+    fillConfig: { color: rgba(47, 138, 104, 0.72) },
   }) : undefined
 
   const meshes: PlaneMeshes = {
@@ -427,13 +455,16 @@ function createPlaneRuntime(
     originValue,
     xLabel,
     yLabel,
+    xMidValue,
+    yMidValue,
+    pointGuide,
     dot,
     value,
     viewportLabel,
   }
   return {
     meshes: Object.values(meshes).filter((mesh): mesh is Mesh => Boolean(mesh)),
-    overlays: Object.values(overlay).filter((shape): shape is Circle | StayText => Boolean(shape)),
+    overlays: Object.values(overlay).filter((shape): shape is Circle | Line | StayText => Boolean(shape)),
     runtime: { ...plane, basis, meshes, overlay },
   }
 }
@@ -442,7 +473,7 @@ function updateShapeProjection(plane: PlaneRuntime, rect: Rect) {
   const clip = { x: 0, y: 0, width: plane.width, height: plane.height }
   const visible = clippedRect(rect, clip)
   updateMeshRect(plane.meshes.shapeFill, plane, visible, 0.006)
-  updateMeshLines(plane.meshes.shapeEdges, plane, clippedRectEdges(rect, clip), 1.4, 0.008)
+  updateMeshLines(plane.meshes.shapeEdges, plane, clippedRectEdges(rect, clip), 1.8, 0.008)
 }
 
 function updateViewportProjection(plane: PlaneRuntime, rect: Rect) {
@@ -462,7 +493,7 @@ function updateViewportProjection(plane: PlaneRuntime, rect: Rect) {
     : { x: 0, y: 0 }
   viewportLabel.update({
     ...labelPoint,
-    fillConfig: { color: rgba(70, 143, 77, labelVisible ? 0.4 : 0) },
+    fillConfig: { color: rgba(70, 143, 77, labelVisible ? 0.28 : 0) },
   })
 }
 
@@ -490,8 +521,8 @@ function updateCornerLinks(
       x2: end.x,
       y2: end.y,
       strokeConfig: {
-        color: rgba(78, 89, 104, active ? 0.2 : 0.065),
-        lineWidth: active ? 1 : 0.8,
+        color: rgba(78, 89, 104, active ? 0.1 : 0.025),
+        lineWidth: active ? 0.9 : 0.7,
         dash: [4, 6],
       },
     })
@@ -562,6 +593,7 @@ export function CoordinateStack({
     if (!runtime) return
     const shapeProjection = projectContentRect(sample, currentViewport)
     const points: Partial<Record<PlaneName, Coordinate>> = {}
+    const worldPoints: Partial<Record<PlaneName, Vector3>> = {}
     const ranges = {} as Record<PlaneName, PlaneRange>
     const materialFocusChanged = runtime.materialFocus !== mappingFocus
 
@@ -577,6 +609,22 @@ export function CoordinateStack({
       const localShape = rectOnPlane(plane, shapeProjection[name], range)
       const isActive = planeIsActive(name, mappingFocus)
 
+      plane.overlay.originValue.update({
+        text: `x ${Math.round(range.x)} · y ${Math.round(range.y)}`,
+      })
+      plane.overlay.xMidValue.update({
+        text: `${Math.round(range.x + range.width / 2)}`,
+      })
+      plane.overlay.xLabel.update({
+        text: `x ${Math.round(range.x + range.width)}`,
+      })
+      plane.overlay.yMidValue.update({
+        text: `${Math.round(range.y + range.height / 2)}`,
+      })
+      plane.overlay.yLabel.update({
+        text: `y ${Math.round(range.y + range.height)}`,
+      })
+
       if (materialFocusChanged) {
         plane.meshes.frameFill.setMaterial(glassMaterial({
           ...plane.fill,
@@ -589,6 +637,23 @@ export function CoordinateStack({
       }
       plane.overlay.title.update({
         fillConfig: { color: { ...plane.stroke, a: isActive ? 1 : 0.68 } },
+      })
+      const guideStart = contentPoint
+        ? projectPlanePoint(plane, { x: localPoint.x, y: 0 })
+        : undefined
+      const guideEnd = contentPoint
+        ? projectPlanePoint(plane, { x: localPoint.x, y: plane.height })
+        : undefined
+      plane.overlay.pointGuide.update({
+        x1: guideStart?.x ?? 0,
+        y1: guideStart?.y ?? 0,
+        x2: guideEnd?.x ?? 0,
+        y2: guideEnd?.y ?? 0,
+        strokeConfig: {
+          color: rgba(229, 109, 72, contentPoint ? 0.42 : 0),
+          lineWidth: 1.2,
+          dash: [5, 6],
+        },
       })
       plane.overlay.dot.update({
         ...(contentPoint ?? { x: 0, y: 0 }),
@@ -611,7 +676,10 @@ export function CoordinateStack({
         )
       }
       updateShapeProjection(plane, localShape)
-      if (contentPoint) points[name] = contentPoint
+      if (contentPoint) {
+        points[name] = contentPoint
+        worldPoints[name] = planeWorldPoint(plane, plane.basis, localPoint, PANEL_FACE_OFFSET + 0.012)
+      }
     }
 
     const clientViewActive = mappingFocus === "view-client"
@@ -646,21 +714,15 @@ export function CoordinateStack({
       !clientViewActive,
       containsRect(ranges.content, visibleContent),
     )
-    const updateRay = (
-      line: Line,
-      start: Coordinate | undefined,
-      end: Coordinate | undefined,
-      alpha: number,
-      lineWidth: number,
-    ) => line.update({
-      x1: start?.x ?? 0,
-      y1: start?.y ?? 0,
-      x2: end?.x ?? 0,
-      y2: end?.y ?? 0,
-      strokeConfig: { color: rgba(224, 102, 61, start && end ? alpha : 0), lineWidth },
-    })
-    updateRay(runtime.rays[0], points.client, points.view, clientViewActive ? 0.88 : 0.48, clientViewActive ? 1.7 : 1.2)
-    updateRay(runtime.rays[1], points.view, points.content, clientViewActive ? 0.48 : 0.88, clientViewActive ? 1.2 : 1.7)
+    const updateSignalMesh = (
+      index: 0 | 1,
+      start: Readonly<Vector3> | undefined,
+      end: Readonly<Vector3> | undefined,
+    ) => runtime.signalMeshes[index].setGeometry(
+      start && end ? worldLineMeshGeometry(start, end, 0.045) : emptyMeshGeometry(),
+    )
+    updateSignalMesh(0, worldPoints.client, worldPoints.view)
+    updateSignalMesh(1, worldPoints.view, worldPoints.content)
     const contentPoint = points.content
     if (contentPoint && viewToClientRef.current) {
       onContentPointClientChange?.(viewToClientRef.current(contentPoint))
@@ -676,15 +738,7 @@ export function CoordinateStack({
     const definitions = createPlaneDefinitions(canvasArea.width, canvasArea.height)
     const planeNames: PlaneName[] = ["client", "view", "content"]
     const planes = {} as Record<PlaneName, PlaneRuntime>
-    const meshes: Mesh[] = [new Mesh({
-      geometry: floorMeshGeometry(),
-      material: new StandardMaterial({
-        color: [0.68, 0.65, 0.59, 1],
-        metallic: 0,
-        roughness: 0.5,
-      }),
-      receiveShadow: true,
-    })]
+    const meshes: Mesh[] = []
     const overlays: Array<Circle | Line | StayText> = []
 
     planeNames.forEach((name) => {
@@ -705,16 +759,16 @@ export function CoordinateStack({
     })) as [Line, Line, Line, Line]
     const clientViewLinks = createMappingLinks()
     const viewContentLinks = createMappingLinks()
-    const rayStyle = { color: rgba(224, 102, 61, 0.72), lineWidth: 1.4 }
-    const rays: [Line, Line] = [
-      new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: OVERLAY_LAYER, zIndex: 9, strokeConfig: rayStyle }),
-      new Line({ x1: 0, y1: 0, x2: 0, y2: 0, layer: OVERLAY_LAYER, zIndex: 9, strokeConfig: rayStyle }),
+    const signalMeshes: [Mesh, Mesh] = [
+      new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(224, 102, 61, 0.94)) }),
+      new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(224, 102, 61, 0.94)) }),
     ]
-    overlays.push(...clientViewLinks, ...viewContentLinks, ...rays)
+    meshes.push(...signalMeshes)
+    overlays.push(...clientViewLinks, ...viewContentLinks)
 
     tools.webgl.appendChild({ className: "coordinate-native-scene", layer: WEBGL_LAYER, meshes })
     tools.appendChild({ className: "coordinate-scene-overlay", shape: overlays })
-    runtimeRef.current = { planes, clientViewLinks, viewContentLinks, rays }
+    runtimeRef.current = { planes, clientViewLinks, viewContentLinks, signalMeshes }
     update(probe, viewport)
   }
 

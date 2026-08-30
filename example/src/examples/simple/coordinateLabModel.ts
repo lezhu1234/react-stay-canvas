@@ -70,17 +70,17 @@ export function visibleContentRange(
 
 export function contentReferenceRange(probe: CoordinateProbe): Rect {
   return {
-    x: -probe.viewSize.width,
-    y: -probe.viewSize.height,
-    width: probe.viewSize.width * 3,
-    height: probe.viewSize.height * 3,
+    x: LAB_CONTENT_BOUNDS.x,
+    y: LAB_CONTENT_BOUNDS.y,
+    width: Math.max(LAB_CONTENT_BOUNDS.width, probe.viewSize.width),
+    height: Math.max(LAB_CONTENT_BOUNDS.height, probe.viewSize.height),
   }
 }
 
 export function clientReferenceRange(probe: CoordinateProbe, includedRect?: Readonly<Rect>): Rect {
-  const horizontalPadding = probe.surface.width * 0.25
-  const topPadding = probe.surface.height
-  const bottomPadding = probe.surface.height * 0.1
+  const horizontalPadding = probe.surface.width * 0.18
+  const topPadding = probe.surface.height * 0.22
+  const bottomPadding = probe.surface.height * 0.12
   const x = probe.surface.left - horizontalPadding
   const y = probe.surface.top - topPadding
   const baseRight = probe.surface.left + probe.surface.width + horizontalPadding

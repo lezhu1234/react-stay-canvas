@@ -50,6 +50,7 @@ const CSS_SCALE_MAX = 1
 const CSS_OFFSET_MAX = 96
 const VIEWPORT_MIN_SCALE = 0.4
 const INITIAL_VIEWPORT_SCALE = 1.25
+const OUTPUT_BRIDGE_ARROW_PROGRESS = 0.34
 const INITIAL_CONTENT_POINT: Readonly<Coordinate> = {
   x: LAB_SHAPE.x + LAB_SHAPE.width / 2,
   y: LAB_SHAPE.y - 35,
@@ -408,6 +409,12 @@ export default function CoordinatesExample() {
   const shapeProjection = projectContentRect(probe, viewport)
   const visibleContent = visibleContentRange(probe, viewport)
   const visibleWindowIsContained = containsRect(contentReferenceRange(probe), visibleContent)
+  const bridgeDirectionPoint = stackAnchor && liveAnchor
+    ? {
+        x: stackAnchor.x + (liveAnchor.x - stackAnchor.x) * OUTPUT_BRIDGE_ARROW_PROGRESS,
+        y: stackAnchor.y + (liveAnchor.y - stackAnchor.y) * OUTPUT_BRIDGE_ARROW_PROGRESS,
+      }
+    : undefined
   const viewWidthFormula = `${LAB_SHAPE.width} × ${viewport.scale.toFixed(2)} = ${Math.round(shapeProjection.view.width)}`
   const clientWidthFormula = `${Math.round(shapeProjection.view.width)} ÷ ${probe.surface.scaleX.toFixed(2)} = ${Math.round(shapeProjection.client.width)}`
 
@@ -445,6 +452,9 @@ export default function CoordinatesExample() {
               <div>
                 <small>Output</small>
                 <h3>Live Canvas</h3>
+                <span className="coordinate-live-range">
+                  Content frame · x {Math.round(visibleContent.x)}—{Math.round(visibleContent.x + visibleContent.width)} · y {Math.round(visibleContent.y)}—{Math.round(visibleContent.y + visibleContent.height)}
+                </span>
               </div>
             </header>
             <CanvasSurface
@@ -470,6 +480,19 @@ export default function CoordinatesExample() {
         </div>
         {stackAnchor && liveAnchor && (
           <svg aria-hidden="true" className="coordinate-space-bridge">
+            <defs>
+              <marker
+                id="coordinate-output-arrow"
+                markerHeight="8"
+                markerUnits="userSpaceOnUse"
+                markerWidth="8"
+                orient="auto"
+                refX="4"
+                refY="4"
+              >
+                <path d="M 0 0 L 8 4 L 0 8 Z" fill="rgba(229, 109, 72, 0.9)" />
+              </marker>
+            </defs>
             <line
               className="coordinate-space-bridge-glow"
               x1={stackAnchor.x}
@@ -477,12 +500,10 @@ export default function CoordinatesExample() {
               y1={stackAnchor.y}
               y2={liveAnchor.y}
             />
-            <line
+            <polyline
               className="coordinate-space-bridge-line"
-              x1={stackAnchor.x}
-              x2={liveAnchor.x}
-              y1={stackAnchor.y}
-              y2={liveAnchor.y}
+              markerMid="url(#coordinate-output-arrow)"
+              points={`${stackAnchor.x},${stackAnchor.y} ${bridgeDirectionPoint?.x},${bridgeDirectionPoint?.y} ${liveAnchor.x},${liveAnchor.y}`}
             />
           </svg>
         )}
@@ -504,7 +525,7 @@ export default function CoordinatesExample() {
             </div>
             <span className="coordinate-flow-arrow" aria-hidden="true">→</span>
             <div className="coordinate-flow-value coordinate-flow-result">
-              <span>Content</span><strong>{formatPoint(probe.content)}</strong><small>{text("Scene result", "场景结果")}</small>
+              <span>Content</span><strong>{formatPoint(probe.content)}</strong><small>{text("Scene coordinates", "场景坐标")}</small>
             </div>
           </div>
           <div className="coordinate-flow-operation">
@@ -519,8 +540,8 @@ export default function CoordinatesExample() {
             <code>[({formatPoint(probe.view)}) - ({Math.round(viewport.x)}, {Math.round(viewport.y)})] ÷ {viewport.scale.toFixed(2)}</code>
           </div>
           <p className="coordinate-event-sample">
-            <span>{mappingFocus === "view-client" ? "VIEW → CLIENT" : "CONTENT → VIEW"}</span>
-            e.point <code>{formatPoint(eventPoint)}</code>
+            <span>Canvas event · Content · e.point</span>
+            <code>{formatPoint(eventPoint)}</code>
           </p>
         </div>
 

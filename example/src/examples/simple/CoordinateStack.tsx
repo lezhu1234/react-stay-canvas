@@ -147,15 +147,10 @@ type PlaneMeshes = {
 
 type PlaneOverlay = {
   title: StayText
-  originValue: StayText
-  xLabel: StayText
-  yLabel: StayText
-  xMidValue: StayText
-  yMidValue: StayText
+  rangeValue: StayText
   pointGuide: Line
   dot: Circle
   value: StayText
-  viewportLabel?: StayText
 }
 
 type PlaneRuntime = PlaneDefinition & {
@@ -269,15 +264,6 @@ function updateMeshLines(
   mesh.setGeometry(lineMeshGeometry(plane, plane.basis, segments, width, depthOffset))
 }
 
-function createOverlayText(
-  plane: PlaneDefinition,
-  point: Coordinate,
-  props: Omit<ConstructorParameters<typeof StayText>[0], "x" | "y" | "layer">,
-) {
-  const projected = projectPlanePoint(plane, point)
-  return new StayText({ ...projected, ...props, layer: OVERLAY_LAYER })
-}
-
 function createPlaneRuntime(
   name: PlaneName,
   plane: PlaneDefinition,
@@ -285,6 +271,7 @@ function createPlaneRuntime(
   const basis = createPlaneBasis(plane)
   const titleSize = Math.max(13, Math.min(16, plane.width * 0.065))
   const detailSize = Math.max(10, Math.min(12, plane.width * 0.045))
+  const rangeSize = Math.max(9, Math.min(10, plane.width * 0.04))
   const axisColor = rgba(49, 65, 61, 0.48)
   const panelRoughness = PLANE_GLASS_ROUGHNESS[name]
   const panelAttenuation = PLANE_GLASS_ATTENUATION[name]
@@ -337,9 +324,13 @@ function createPlaneRuntime(
   })
   const axes = new Mesh({
     geometry: lineMeshGeometry(plane, basis, [
-      { x1: 12, y1: 20, x2: plane.width - 14, y2: 20 },
-      { x1: 12, y1: 20, x2: 12, y2: plane.height - 12 },
-    ], 0.8, PANEL_FACE_OFFSET + 0.008),
+      { x1: 18, y1: 24, x2: plane.width - 16, y2: 24 },
+      { x1: plane.width - 16, y1: 24, x2: plane.width - 23, y2: 20 },
+      { x1: plane.width - 16, y1: 24, x2: plane.width - 23, y2: 28 },
+      { x1: 18, y1: 24, x2: 18, y2: plane.height - 16 },
+      { x1: 18, y1: plane.height - 16, x2: 14, y2: plane.height - 23 },
+      { x1: 18, y1: plane.height - 16, x2: 22, y2: plane.height - 23 },
+    ], 1, PANEL_FACE_OFFSET + 0.008),
     material: unlitMaterial(axisColor),
   })
   const shapeFill = new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(54, 105, 221, 0.36)) })
@@ -364,42 +355,15 @@ function createPlaneRuntime(
     font: { size: titleSize, fontWeight: 700 },
     fillConfig: { color: plane.stroke },
   })
-  const originValue = createOverlayText(plane, { x: 16, y: 30 }, {
-    text: "0,0",
+  const rangePoint = projectPlanePoint(plane, { x: 28, y: 38 })
+  const rangeValue = new StayText({
+    ...rangePoint,
+    text: "x 0—0 · y 0—0",
+    layer: OVERLAY_LAYER,
     zIndex: 5,
     textBaseline: "top",
-    font: { size: detailSize },
-    fillConfig: { color: rgba(62, 76, 82, 0.76) },
-  })
-  const xLabel = createOverlayText(plane, { x: plane.width - 8, y: 30 }, {
-    text: "x 0",
-    zIndex: 5,
-    textAlign: "right",
-    textBaseline: "top",
-    font: { size: detailSize, fontWeight: 700 },
-    fillConfig: { color: rgba(62, 76, 82, 0.76) },
-  })
-  const yLabel = createOverlayText(plane, { x: 6, y: plane.height - 5 }, {
-    text: "y 0",
-    zIndex: 5,
-    textBaseline: "bottom",
-    font: { size: detailSize, fontWeight: 700 },
-    fillConfig: { color: rgba(62, 76, 82, 0.76) },
-  })
-  const xMidValue = createOverlayText(plane, { x: plane.width / 2, y: 30 }, {
-    text: "0",
-    zIndex: 5,
-    textAlign: "center",
-    textBaseline: "top",
-    font: { size: detailSize },
-    fillConfig: { color: rgba(62, 76, 82, 0.68) },
-  })
-  const yMidValue = createOverlayText(plane, { x: 6, y: plane.height / 2 }, {
-    text: "0",
-    zIndex: 5,
-    textBaseline: "middle",
-    font: { size: detailSize },
-    fillConfig: { color: rgba(62, 76, 82, 0.68) },
+    font: { size: rangeSize, fontWeight: 600 },
+    fillConfig: { color: rgba(49, 65, 61, 0.6) },
   })
   const pointGuide = new Line({
     x1: 0,
@@ -429,17 +393,6 @@ function createPlaneRuntime(
     font: { size: detailSize, fontWeight: 700 },
     fillConfig: { color: colors.orange },
   })
-  const viewportLabel = name === "content" ? new StayText({
-    x: 0,
-    y: 0,
-    text: "VISIBLE VIEW",
-    layer: OVERLAY_LAYER,
-    zIndex: 6,
-    textBaseline: "top",
-    font: { size: detailSize, fontWeight: 700 },
-    fillConfig: { color: rgba(47, 138, 104, 0.72) },
-  }) : undefined
-
   const meshes: PlaneMeshes = {
     frameFill,
     frameDepth,
@@ -452,15 +405,10 @@ function createPlaneRuntime(
   }
   const overlay: PlaneOverlay = {
     title,
-    originValue,
-    xLabel,
-    yLabel,
-    xMidValue,
-    yMidValue,
+    rangeValue,
     pointGuide,
     dot,
     value,
-    viewportLabel,
   }
   return {
     meshes: Object.values(meshes).filter((mesh): mesh is Mesh => Boolean(mesh)),
@@ -478,23 +426,11 @@ function updateShapeProjection(plane: PlaneRuntime, rect: Rect) {
 
 function updateViewportProjection(plane: PlaneRuntime, rect: Rect) {
   const { viewportFill, viewportEdges } = plane.meshes
-  const viewportLabel = plane.overlay.viewportLabel
-  if (!viewportFill || !viewportEdges || !viewportLabel) return
+  if (!viewportFill || !viewportEdges) return
   const clip = { x: 0, y: 0, width: plane.width, height: plane.height }
   const visible = clippedRect(rect, clip)
   updateMeshRect(viewportFill, plane, visible, 0.005)
   updateMeshLines(viewportEdges, plane, visible ? cornerSegments(visible) : [], 1.4, 0.007)
-  const labelVisible = visible && visible.width >= 52 && visible.height >= 24
-  const labelPoint = visible
-    ? projectPlanePoint(plane, {
-        x: visible.x + 7,
-        y: Math.min(plane.height - 18, visible.y + visible.height + 8),
-      })
-    : { x: 0, y: 0 }
-  viewportLabel.update({
-    ...labelPoint,
-    fillConfig: { color: rgba(70, 143, 77, labelVisible ? 0.28 : 0) },
-  })
 }
 
 function updateCornerLinks(
@@ -609,20 +545,8 @@ export function CoordinateStack({
       const localShape = rectOnPlane(plane, shapeProjection[name], range)
       const isActive = planeIsActive(name, mappingFocus)
 
-      plane.overlay.originValue.update({
-        text: `x ${Math.round(range.x)} · y ${Math.round(range.y)}`,
-      })
-      plane.overlay.xMidValue.update({
-        text: `${Math.round(range.x + range.width / 2)}`,
-      })
-      plane.overlay.xLabel.update({
-        text: `x ${Math.round(range.x + range.width)}`,
-      })
-      plane.overlay.yMidValue.update({
-        text: `${Math.round(range.y + range.height / 2)}`,
-      })
-      plane.overlay.yLabel.update({
-        text: `y ${Math.round(range.y + range.height)}`,
+      plane.overlay.rangeValue.update({
+        text: `x ${Math.round(range.x)}—${Math.round(range.x + range.width)} · y ${Math.round(range.y)}—${Math.round(range.y + range.height)}`,
       })
 
       if (materialFocusChanged) {

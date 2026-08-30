@@ -814,6 +814,7 @@ input:focus-visible {
   stroke: rgba(229, 109, 72, 0.72);
   stroke-width: 1.6;
   stroke-dasharray: 6 7;
+  stroke-linecap: round;
 }
 
 .coordinate-hero {
@@ -1200,6 +1201,16 @@ input:focus-visible {
 
 .coordinate-live-heading p {
   margin: 7px 0 0;
+}
+
+.coordinate-live-heading .coordinate-live-range {
+  display: block;
+  margin: 7px 0 0;
+  color: rgba(41, 63, 59, 0.58);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
 }
 
 .coordinate-stack-surface,

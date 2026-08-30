@@ -112,7 +112,7 @@ Shape-specific until the native scene has a raycast contract, but it continues t
 ActionRouter, EventRuntime, Listener registry, state stores, and DOM input adapter.
 
 `StayWebGLChild` owns ordered CPU `Mesh` geometry, model, and immutable material values on one
-WebGL2 layer. `PerspectiveCamera`, `EnvironmentMap`, `AmbientLight`, and `DirectionalLight` belong to that layer's
+WebGL2 layer. `PerspectiveCamera`, `EnvironmentMap`, `AmbientLight`, `DirectionalLight`, and `PointLight` belong to that layer's
 public display configuration. `WebGL2LayerRuntime` subscribes their CPU mutations and owns context loss/restoration and one
 `WebGL2SceneRuntime`; the scene runtime owns only derived program/VAO/buffer/target caches. Resize retains
 live cache objects when the resolver returns the same context. Context restoration forgets invalid
@@ -121,7 +121,8 @@ Mesh geometry revision; material, light, model, and camera changes never upload 
 Directional shadow camera state remains Light-owned, while per-Mesh cast/receive flags participate
 in History and scene transfer. One persistent depth texture/framebuffer is derived per shadowed
 layer and recreated only for a map-size or context-lifecycle change; the core never auto-fits the
-explicit orthographic shadow frustum to scene content.
+explicit orthographic shadow frustum to scene content. Point lights use world-space positions and
+inverse-square attenuation with an optional smooth finite range; they do not own shadow resources.
 
 Each native frame derives two queues from the same ordered CPU Mesh list. Non-empty scenes render
 into one persistent linear RGBA8 scene target instead of the browser framebuffer. Its draw framebuffer

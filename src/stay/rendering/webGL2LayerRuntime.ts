@@ -6,6 +6,7 @@ import type { Mesh } from "../webgl2/mesh"
 import type { EnvironmentMap } from "../webgl2/environmentMap"
 import {
   webGL2DirectionalLightLimit,
+  webGL2PointLightLimit,
   type WebGLLight,
 } from "../webgl2/light"
 import { WebGL2SceneRuntime } from "../webgl2/sceneRuntime"
@@ -43,6 +44,14 @@ export class WebGL2LayerRuntime {
     ) {
       throw new RangeError(
         `WebGL2 layer ${this.index} supports at most ${webGL2DirectionalLightLimit} directional lights`
+      )
+    }
+    if (
+      this.#lights.filter((light) => light.kind === "point").length
+      > webGL2PointLightLimit
+    ) {
+      throw new RangeError(
+        `WebGL2 layer ${this.index} supports at most ${webGL2PointLightLimit} point lights`
       )
     }
     if (

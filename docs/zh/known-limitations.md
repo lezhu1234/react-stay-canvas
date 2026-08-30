@@ -10,7 +10,7 @@
 - `Point.getBound()` 尚未实现。正常渲染会先按边界判断 viewport，因此追加 Point 会在绘制前抛错；它仍可单独作为几何工具使用。
 - `StayImage` 会在构造、更新和复制时保留显式源裁剪尺寸，但自定义 `swidth`、`sheight` 尚未纳入 transition，时间线插值帧不会保留它们。
 - 类型接受 `CircleAttr.stroke`、`CircleAttr.fill` 和 `StayText.decoration`，但它们不会产生对应的稳定绘制效果。Circle 样式请使用 `strokeConfig` 和 `fillConfig`。
-- 原生 WebGL2 支持带 depth 的索引三角形 Mesh、线性 LDR RGBA8 scene target、不透明 unlit/Lambert 材质、带 roughness 与显式 Beer-Lambert 体积吸收的 scene-color 折射 Glass 材质、sRGB RGBA8 经纬环境反射、逐顶点法线、环境光、每层最多四个方向光，以及可配置固定 PCF 半径的不透明加最近一层透射方向光 shadow map。Glass 使用一份显式传播距离和稳定的对象级从远到近排序，并且只采样同一图层内的 opaque WebGL2 scene color；从几何或纹理推导厚度、相交透明 Mesh、自身重叠、透明物互相折射、DOM/CSS 折射或反射、随距离变化的半影、HDR scene radiance、exposure 或 tone mapping、HDR 预过滤环境、通用材质纹理、重叠透射 shadow caster 的累积、order-independent transparency 和 WebGL2 区域截图尚未提供。
+- 原生 WebGL2 支持带 depth 的索引三角形 Mesh、线性 LDR RGBA8 scene target、不透明 unlit/Lambert 材质、带 roughness 与显式 Beer-Lambert 体积吸收的 scene-color 折射 Glass 材质、sRGB RGBA8 经纬环境反射、逐顶点法线、环境光、每层最多四个方向光、每层最多四个带可选 range 的平方反比点光，以及可配置固定 PCF 半径的不透明加最近一层透射方向光 shadow map。Glass 使用一份显式传播距离和稳定的对象级从远到近排序，并且只采样同一图层内的 opaque WebGL2 scene color；点光阴影、从几何或纹理推导厚度、相交透明 Mesh、自身重叠、透明物互相折射、DOM/CSS 折射或反射、随距离变化的半影、HDR scene radiance、exposure 或 tone mapping、HDR 预过滤环境、通用材质纹理、重叠透射 shadow caster 的累积、order-independent transparency 和 WebGL2 区域截图尚未提供。
 
 ## 动画与历史
 

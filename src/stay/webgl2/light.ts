@@ -9,6 +9,8 @@ import {
 export type LightColor = readonly [number, number, number]
 /** @internal Current opaque forward-pipeline capacity. */
 export const webGL2DirectionalLightLimit = 4
+/** @internal Current opaque forward-pipeline capacity. */
+export const webGL2PointLightLimit = 4
 
 export interface AmbientLightProps {
   readonly color?: LightColor
@@ -18,6 +20,13 @@ export interface AmbientLightProps {
 export interface DirectionalLightProps extends AmbientLightProps {
   readonly directionToLight: Vector3
   readonly shadow?: DirectionalShadowProps
+}
+
+export interface PointLightProps extends AmbientLightProps {
+  /** World-space light position. */
+  readonly position: Vector3
+  /** Optional finite influence range. Outside the range, radiance is zero. */
+  readonly range?: number
 }
 
 export interface DirectionalShadowProps {
@@ -76,6 +85,17 @@ function copyVector(vector: Vector3, name: string): Vector3 {
   const copied: Vector3 = [vector[0], vector[1], vector[2]]
   copied.forEach((value, index) => finite(value, `${name}[${index}]`))
   return copied
+}
+
+function copyUploadVector(vector: Vector3, name: string): Vector3 {
+  const copied = copyVector(vector, name)
+  return copied.map((value, index) => {
+    const component = Math.fround(value)
+    if (!Number.isFinite(component)) {
+      throw new RangeError(`${name}[${index}] exceeds Float32 range`)
+    }
+    return component
+  }) as [number, number, number]
 }
 
 function finite(value: number, name: string) {
@@ -202,27 +222,28 @@ abstract class ObservableLight {
   }
 }
 
-/** Layer-owned uniform ambient illumination. */
-export class AmbientLight extends ObservableLight {
-  readonly kind = "ambient"
+abstract class ObservableColoredLight extends ObservableLight {
   #color: LightColor
   #intensity: number
 
-  constructor({ color, intensity }: AmbientLightProps = {}) {
+  protected constructor(
+    { color, intensity }: AmbientLightProps,
+    private readonly lightName: string,
+  ) {
     super()
-    this.#color = copyColor(color, "AmbientLight color")
-    this.#intensity = copyIntensity(intensity, "AmbientLight intensity")
+    this.#color = copyColor(color, `${lightName} color`)
+    this.#intensity = copyIntensity(intensity, `${lightName} intensity`)
   }
 
   setColor(color: LightColor) {
-    const next = copyColor(color, "AmbientLight color")
+    const next = copyColor(color, `${this.lightName} color`)
     if (valuesEqual(this.#color, next)) return
     this.#color = next
     this.notifyChange()
   }
 
   setIntensity(intensity: number) {
-    const next = copyIntensity(intensity, "AmbientLight intensity")
+    const next = copyIntensity(intensity, `${this.lightName} intensity`)
     if (this.#intensity === next) return
     this.#intensity = next
     this.notifyChange()
@@ -237,20 +258,25 @@ export class AmbientLight extends ObservableLight {
   }
 }
 
+/** Layer-owned uniform ambient illumination. */
+export class AmbientLight extends ObservableColoredLight {
+  readonly kind = "ambient"
+
+  constructor({ color, intensity }: AmbientLightProps = {}) {
+    super({ color, intensity }, "AmbientLight")
+  }
+}
+
 /** Layer-owned directional illumination expressed as a normalized world-space direction to the light. */
-export class DirectionalLight extends ObservableLight {
+export class DirectionalLight extends ObservableColoredLight {
   readonly kind = "directional"
   #directionToLight: Vector3
-  #color: LightColor
-  #intensity: number
   #shadow?: DirectionalShadow
   #shadowUsesDefaultUp = false
 
   constructor({ directionToLight, color, intensity, shadow }: DirectionalLightProps) {
-    super()
+    super({ color, intensity }, "DirectionalLight")
     this.#directionToLight = copyDirection(directionToLight)
-    this.#color = copyColor(color, "DirectionalLight color")
-    this.#intensity = copyIntensity(intensity, "DirectionalLight intensity")
     this.#shadow = shadow ? copyShadow(shadow, this.#directionToLight) : undefined
     this.#shadowUsesDefaultUp = shadow !== undefined && shadow.up === undefined
   }
@@ -277,30 +303,8 @@ export class DirectionalLight extends ObservableLight {
     this.notifyChange()
   }
 
-  setColor(color: LightColor) {
-    const next = copyColor(color, "DirectionalLight color")
-    if (valuesEqual(this.#color, next)) return
-    this.#color = next
-    this.notifyChange()
-  }
-
-  setIntensity(intensity: number) {
-    const next = copyIntensity(intensity, "DirectionalLight intensity")
-    if (this.#intensity === next) return
-    this.#intensity = next
-    this.notifyChange()
-  }
-
   getDirectionToLight(): Vector3 {
     return [...this.#directionToLight]
-  }
-
-  getColor(): LightColor {
-    return [...this.#color]
-  }
-
-  get intensity() {
-    return this.#intensity
   }
 
   getShadow(): DirectionalShadow | undefined {
@@ -314,6 +318,41 @@ export class DirectionalLight extends ObservableLight {
 
 }
 
+/** Layer-owned point illumination emitted from a world-space position. */
+export class PointLight extends ObservableColoredLight {
+  readonly kind = "point"
+  #position: Vector3
+  #range?: number
+
+  constructor({ position, color, intensity, range }: PointLightProps) {
+    super({ color, intensity }, "PointLight")
+    this.#position = copyUploadVector(position, "PointLight position")
+    this.#range = range === undefined ? undefined : positive(range, "PointLight range")
+  }
+
+  setPosition(position: Vector3) {
+    const next = copyUploadVector(position, "PointLight position")
+    if (valuesEqual(this.#position, next)) return
+    this.#position = next
+    this.notifyChange()
+  }
+
+  setRange(range?: number) {
+    const next = range === undefined ? undefined : positive(range, "PointLight range")
+    if (this.#range === next) return
+    this.#range = next
+    this.notifyChange()
+  }
+
+  getPosition(): Vector3 {
+    return [...this.#position]
+  }
+
+  get range() {
+    return this.#range
+  }
+}
+
 /** @internal Keeps derived shadow matrices out of the public Light state surface. */
 export function directionalLightShadowViewProjection(
   light: DirectionalLight
@@ -324,4 +363,4 @@ export function directionalLightShadowViewProjection(
     : undefined
 }
 
-export type WebGLLight = AmbientLight | DirectionalLight
+export type WebGLLight = AmbientLight | DirectionalLight | PointLight

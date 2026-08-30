@@ -9,6 +9,7 @@ import {
   LambertMaterial,
   Mesh,
   PerspectiveCamera,
+  PointLight,
   Rectangle,
   Root,
   UnlitMaterial,
@@ -94,11 +95,12 @@ describe("public native WebGL2 layer backend", () => {
       directionToLight: [0, 0, 1],
       intensity: 0.8,
     })
+    const point = new PointLight({ position: [1, 2, 3], range: 8 })
     const { stage } = createStage({
       layers: [{
         backend: "webgl2",
         camera: camera(),
-        lights: [ambient, key],
+        lights: [ambient, key, point],
         context: (canvas) => {
           gl ??= createRecordingWebGL2Context(canvas)
           return gl.context
@@ -128,11 +130,15 @@ describe("public native WebGL2 layer backend", () => {
     expect(stage.draw({ now: 2.75 }).updatedLayers).toEqual([0])
     ambient.setIntensity(0.45)
     expect(stage.draw({ now: 3 }).updatedLayers).toEqual([0])
+    point.setPosition([2, 3, 4])
+    point.setRange(10)
+    expect(stage.draw({ now: 3.5 }).updatedLayers).toEqual([0])
     expect(gl?.spies.bufferData).toHaveBeenCalledTimes(3)
 
     stage.destroy()
     key.setIntensity(0.5)
     ambient.setColor([0.9, 0.9, 1])
+    point.setIntensity(2)
   })
 
   it("maps EnvironmentMap changes onto layer dirtiness without rebuilding geometry", () => {
@@ -473,6 +479,13 @@ describe("public native WebGL2 layer backend", () => {
         directionToLight: [0, 0, 1],
       })),
     }] })).toThrow("supports at most 4 directional lights")
+    expect(() => createStage({ layers: [{
+      backend: "webgl2",
+      camera: camera(),
+      lights: Array.from({ length: 5 }, (_, index) => new PointLight({
+        position: [index, 0, 1],
+      })),
+    }] })).toThrow("supports at most 4 point lights")
     expect(() => createStage({ layers: [{
       backend: "webgl2",
       camera: camera(),

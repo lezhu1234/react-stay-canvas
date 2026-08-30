@@ -9,6 +9,7 @@ import {
   type GlassAttenuationColor,
   Line,
   Mesh,
+  PointLight,
   StayCanvas,
   StandardMaterial,
   StayText,
@@ -127,7 +128,7 @@ function createCoordinateEnvironment() {
       data[offset + 3] = 255
     }
   }
-  return new EnvironmentMap({ width, height, data, intensity: 1.65 })
+  return new EnvironmentMap({ width, height, data, intensity: 1.7 })
 }
 
 export type CoordinateMappingFocus = "view-client" | "content-view"
@@ -520,7 +521,7 @@ export function CoordinateStack({
     new DirectionalLight({
       directionToLight: [0.72, 0.96, 0.5],
       color: [1, 0.96, 0.9],
-      intensity: 1.9,
+      intensity: 1.05,
       shadow: {
         target: [0, -0.4, -7.2],
         distance: 11,
@@ -533,10 +534,17 @@ export function CoordinateStack({
         filterRadius: 2.5,
       },
     }),
-    new DirectionalLight({
-      directionToLight: [-0.62, 0.2, 0.76],
-      color: [0.78, 0.86, 1],
-      intensity: 0.16,
+    new PointLight({
+      position: [-3.8, 4.4, -5.8],
+      color: [1, 0.93, 0.82],
+      intensity: 30,
+      range: 9,
+    }),
+    new PointLight({
+      position: [7.2, 3.2, -5.2],
+      color: [0.72, 0.88, 1],
+      intensity: 18,
+      range: 8,
     }),
   ], [])
   const layers = useMemo<CanvasLayerConfig[]>(() => [

@@ -120,7 +120,7 @@ export const catalog: ExampleDefinition[] = [
     title: l("Coordinate spaces and viewport", "坐标空间与视口"),
     shortTitle: l("Coordinates", "坐标"),
     summary: l("See one fixed Content Shape projected into View and Client while viewport zoom changes only its visible footprint.", "观察固定不变的 Content Shape 如何投影到 View 与 Client，并验证 viewport 缩放只改变显示结果。"),
-    features: ["Content → View → Client", "Native WebGL2 scene", "Child placement", "e.point", "tools.viewport"],
+    features: ["Content → View → Client", "Native WebGL2 scene", "PointLight", "Child placement", "e.point", "tools.viewport"],
     component: CoordinatesExample,
   },
   {

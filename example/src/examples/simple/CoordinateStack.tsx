@@ -676,10 +676,11 @@ export function CoordinateStack({
     const definitions = createPlaneDefinitions(canvasArea.width, canvasArea.height)
     const planeNames: PlaneName[] = ["client", "view", "content"]
     const planes = {} as Record<PlaneName, PlaneRuntime>
+    const groundHeight = definitions.client.worldQuad[3][1]
     const meshes: Mesh[] = [new Mesh({
-      geometry: floorMeshGeometry(),
+      geometry: floorMeshGeometry(groundHeight),
       material: new StandardMaterial({
-        color: [0.68, 0.65, 0.59, 1],
+        color: [0.8, 0.8, 0.77, 1],
         metallic: 0,
         roughness: 0.5,
       }),

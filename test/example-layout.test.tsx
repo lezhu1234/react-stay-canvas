@@ -218,6 +218,34 @@ describe("Example Canvas workspace", () => {
     }
   })
 
+  it("expands the coordinate stage downward without moving its top edge", () => {
+    const compact = createPlaneDefinitions(1220, 385)
+    const expanded = createPlaneDefinitions(1390, 453)
+    const wideButShort = createPlaneDefinitions(1390, 385)
+    const narrowButTall = createPlaneDefinitions(1220, 455)
+
+    for (const name of ["client", "view", "content"] as const) {
+      const compactTop = compact[name].worldQuad[0][1]
+      const expandedTop = expanded[name].worldQuad[0][1]
+      const compactGround = compact[name].worldQuad[3][1]
+      const expandedGround = expanded[name].worldQuad[3][1]
+
+      expect(expandedGround).toBeLessThan(compactGround)
+      expect(expandedTop).toBeCloseTo(compactTop)
+      expect(wideButShort[name].worldQuad[3][1]).toBe(compactGround)
+      expect(narrowButTall[name].worldQuad[3][1]).toBe(compactGround)
+
+      const placement = expanded[name].placement
+      expect(placement.type).toBe("projective")
+      if (placement.type !== "projective") continue
+      const bounds = createFiniteProjectiveMapping(placement.matrix, placement.domain).contentBounds
+      expect(bounds.x).toBeGreaterThanOrEqual(-Number.EPSILON)
+      expect(bounds.y).toBeGreaterThanOrEqual(-Number.EPSILON)
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(1390 + Number.EPSILON)
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(453 + Number.EPSILON)
+    }
+  })
+
   it("keeps plane triangle winding aligned with the stored front-face normal", () => {
     const plane = createPlaneDefinitions(1012, 524).client
     const basis = createPlaneBasis(plane)

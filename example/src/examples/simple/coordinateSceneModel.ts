@@ -18,12 +18,13 @@ export const PLANE_GRID_ROWS = 5
 
 const CAMERA_FIELD_OF_VIEW = Math.PI / 3.4
 const CAMERA_POSITION_X = 4.2
-const GROUND_HEIGHT = -2.8
+const COMPACT_GROUND_HEIGHT = -2.4
+const EXPANDED_GROUND_HEIGHT = -3.15
 const BEVEL_FACE_CORNER_RATIO = 0.28
 const PANEL_LAYOUT = [
-  { centerX: -2.6, depth: 8.8, worldWidth: 4.3, worldHeight: 6.6, yaw: 0.04, logicalScale: 1 },
-  { centerX: 2.4, depth: 7.8, worldWidth: 4.2, worldHeight: 5.8, yaw: 0.16, logicalScale: 0.96 },
-  { centerX: 6.1, depth: 7, worldWidth: 3.1, worldHeight: 5.1, yaw: 0.28, logicalScale: 0.92 },
+  { centerX: -5.05, depth: 8.8, worldWidth: 4.95, worldHeight: 6.9, yaw: 0.04, logicalScale: 1 },
+  { centerX: 1.4, depth: 7.8, worldWidth: 4.85, worldHeight: 6.1, yaw: 0.16, logicalScale: 0.96 },
+  { centerX: 6.2, depth: 7, worldWidth: 3.8, worldHeight: 5.4, yaw: 0.28, logicalScale: 0.92 },
 ] as const
 
 export type PlaneName = "client" | "view" | "content"
@@ -52,6 +53,10 @@ export type PlaneBevelFaceProfile = {
   rect: Rect
   radiusX: number
   radiusY: number
+}
+
+function progressBetween(value: number, start: number, end: number) {
+  return Math.min(1, Math.max(0, (value - start) / (end - start)))
 }
 
 export const planePalette = {
@@ -95,6 +100,13 @@ export function createPlaneDefinitions(
   const logicalBaseWidth = Math.max(120, Math.min(280, height * 0.58))
   const aspect = width / Math.max(1, height)
   const halfFieldHeight = Math.tan(CAMERA_FIELD_OF_VIEW / 2)
+  const panelStageScale = Math.min(1.08, 1 + Math.max(0, height - 80) / 800)
+  const stageExpansion = Math.min(
+    progressBetween(width, 1250, 1390),
+    progressBetween(height, 439, 453),
+  )
+  const groundHeight = COMPACT_GROUND_HEIGHT
+    + (EXPANDED_GROUND_HEIGHT - COMPACT_GROUND_HEIGHT) * stageExpansion
 
   const projectWorldPoint = (point: Vector3): Coordinate => {
     const depth = -point[2]
@@ -112,20 +124,22 @@ export function createPlaneDefinitions(
     yaw,
   }: typeof PANEL_LAYOUT[number]): [Vector3, Vector3, Vector3, Vector3] => {
     const horizontal: Vector3 = [Math.cos(yaw), 0, -Math.sin(yaw)]
-    const halfWidth = worldWidth / 2
+    const halfWidth = worldWidth * panelStageScale / 2
+    const scaledHeight = worldHeight * panelStageScale
+      + EXPANDED_GROUND_HEIGHT - groundHeight
     const leftBottom: Vector3 = [
       centerX - horizontal[0] * halfWidth,
-      GROUND_HEIGHT,
+      groundHeight,
       -depth - horizontal[2] * halfWidth,
     ]
     const rightBottom: Vector3 = [
       centerX + horizontal[0] * halfWidth,
-      GROUND_HEIGHT,
+      groundHeight,
       -depth + horizontal[2] * halfWidth,
     ]
     return [
-      [leftBottom[0], GROUND_HEIGHT + worldHeight, leftBottom[2]],
-      [rightBottom[0], GROUND_HEIGHT + worldHeight, rightBottom[2]],
+      [leftBottom[0], groundHeight + scaledHeight, leftBottom[2]],
+      [rightBottom[0], groundHeight + scaledHeight, rightBottom[2]],
       rightBottom,
       leftBottom,
     ]
@@ -207,12 +221,12 @@ export function createPlaneBasis(plane: PlaneDefinition): PlaneBasis {
   }
 }
 
-export function floorMeshGeometry(): MeshGeometryInput {
+export function floorMeshGeometry(groundHeight: number): MeshGeometryInput {
   const points: Vector3[] = [
-    [-9, GROUND_HEIGHT, -3.2],
-    [9, GROUND_HEIGHT, -3.2],
-    [24, GROUND_HEIGHT, -19],
-    [-24, GROUND_HEIGHT, -19],
+    [-30, groundHeight, -0.8],
+    [30, groundHeight, -0.8],
+    [32, groundHeight, -19],
+    [-32, groundHeight, -19],
   ]
   const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
   appendQuad(builder, points, [0, 1, 0])

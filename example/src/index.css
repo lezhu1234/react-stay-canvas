@@ -768,9 +768,9 @@ input:focus-visible {
     radial-gradient(ellipse at 27% 94%, rgba(73, 116, 185, 0.12), transparent 36%),
     linear-gradient(
       180deg,
-      transparent 0 67%,
-      rgba(202, 205, 198, 0.34) 70%,
-      rgba(177, 183, 176, 0.62) 100%
+      transparent 0 56%,
+      rgba(204, 201, 191, 0.28) 63%,
+      rgba(177, 174, 164, 0.92) 100%
     );
 }
 
@@ -789,6 +789,23 @@ input:focus-visible {
     linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(204, 230, 240, 0.08));
   filter: blur(2px);
   opacity: 0.38;
+}
+
+.coordinate-stage::after {
+  position: absolute;
+  z-index: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 44%;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(194, 189, 176, 0.08),
+    rgba(181, 177, 166, 0.82) 36%,
+    rgba(174, 172, 163, 0.94) 100%
+  );
 }
 
 .coordinate-space-bridge {
@@ -824,7 +841,7 @@ input:focus-visible {
   z-index: 4;
   top: 30px;
   left: 20px;
-  width: 350px;
+  width: 430px;
   pointer-events: none;
 }
 
@@ -843,7 +860,7 @@ input:focus-visible {
   margin: 0;
   color: #063b26;
   font-family: "Arial Narrow", "PingFang SC", "Noto Sans CJK SC", sans-serif;
-  font-size: clamp(42px, 3vw, 54px);
+  font-size: clamp(58px, 4.1vw, 72px);
   font-weight: 650;
   letter-spacing: -0.055em;
   line-height: 1.02;
@@ -1063,8 +1080,8 @@ input:focus-visible {
   min-width: 0;
   min-height: 0;
   padding: var(--coordinate-workspace-top) 12px 0 4px;
-  grid-template-columns: minmax(0, 1.8fr) minmax(400px, 0.92fr);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 28px;
   overflow: hidden;
 }
 
@@ -1091,11 +1108,14 @@ input:focus-visible {
 }
 
 .coordinate-live-exhibit {
-  --coordinate-live-ground-gap: clamp(34px, 4.8vh, 48px);
+  --coordinate-live-ground-gap: clamp(120px, 14vh, 140px);
+  --coordinate-live-top-gap: 45px;
   z-index: 2;
   box-sizing: border-box;
+  height: calc(100% - var(--coordinate-live-top-gap));
   grid-column: 2;
   grid-template-rows: minmax(0, 1fr);
+  margin-top: var(--coordinate-live-top-gap);
   padding-bottom: var(--coordinate-live-ground-gap);
 }
 
@@ -1226,9 +1246,11 @@ input:focus-visible {
   overflow: hidden;
   overflow-y: hidden;
   padding: 10px 16px;
+  margin-inline: 30px;
   grid-template-columns: minmax(310px, 1fr) minmax(390px, 1.18fr) minmax(330px, 0.92fr);
   grid-template-areas: "display mapping viewport";
   gap: 0;
+  transform: translateY(-60px);
   border: 1px solid rgba(72, 112, 101, 0.15);
   border-top-color: rgba(255, 255, 255, 0.88);
   border-right-color: rgba(255, 255, 255, 0.68);
@@ -1501,8 +1523,8 @@ input:focus-visible {
 @media (max-width: 1565px) {
   .coordinate-workspace {
     padding-inline: 14px;
-    grid-template-columns: minmax(480px, 1.55fr) minmax(330px, 0.82fr);
-    gap: 22px;
+    grid-template-columns: minmax(480px, 1fr) 400px;
+    gap: 30px;
   }
 
   .coordinate-console {
@@ -1591,12 +1613,19 @@ input:focus-visible {
     padding-top: var(--coordinate-workspace-top);
   }
 
+  .coordinate-live-exhibit {
+    --coordinate-live-ground-gap: clamp(30px, 6vh, 44px);
+    --coordinate-live-top-gap: 20px;
+  }
+
   .coordinate-stack-exhibit {
+    bottom: 24px;
     padding-top: 28px;
   }
 
   .coordinate-console {
     padding-block: 5px;
+    transform: translateY(-12px);
   }
 
   .coordinate-operation-group .toolbar .control-button {
@@ -1644,10 +1673,12 @@ input:focus-visible {
 
   .coordinate-live-exhibit {
     --coordinate-live-ground-gap: 8px;
+    --coordinate-live-top-gap: 0px;
     grid-template-rows: minmax(0, 1fr);
   }
 
   .coordinate-stack-exhibit {
+    bottom: 0;
     padding-top: 0;
   }
 
@@ -1663,6 +1694,7 @@ input:focus-visible {
   .coordinate-console {
     padding-block: 6px;
     overflow-y: auto;
+    transform: none;
   }
 
   .coordinate-operation-group .toolbar .control-button {

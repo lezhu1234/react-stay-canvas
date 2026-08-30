@@ -37,6 +37,7 @@ import {
   planeVolumeGeometry,
   rectMeshGeometry,
   roundedRectMeshGeometry,
+  worldLineMeshGeometry,
 } from "../example/src/examples/simple/coordinateSceneModel"
 import {
   createFiniteProjectiveMapping,
@@ -198,7 +199,7 @@ describe("Example Canvas workspace", () => {
       .toBeLessThanOrEqual(canvasHeight + Number.EPSILON)
   })
 
-  it("grounds the three coordinate planes as separated descending depth stages", () => {
+  it("stages equivalent coordinate planes as a separated perspective sequence", () => {
     const definitions = createPlaneDefinitions(1012, 524)
     const bounds = (["client", "view", "content"] as const).map((name) => {
       const placement = definitions[name].placement
@@ -209,29 +210,44 @@ describe("Example Canvas workspace", () => {
 
     expect(bounds[0].y).toBeLessThan(bounds[1].y)
     expect(bounds[1].y).toBeLessThan(bounds[2].y)
+    expect(bounds[0].width).toBeGreaterThan(bounds[1].width)
+    expect(bounds[1].width).toBeGreaterThan(bounds[2].width)
     expect(bounds[0].x + bounds[0].width).toBeLessThan(bounds[1].x)
     expect(bounds[1].x + bounds[1].width).toBeLessThan(bounds[2].x)
-    const groundHeight = definitions.client.worldQuad[3][1]
-    for (const definition of Object.values(definitions)) {
-      expect(definition.worldQuad[2][1]).toBe(groundHeight)
-      expect(definition.worldQuad[3][1]).toBe(groundHeight)
-    }
+    expect(bounds[0].x).toBeLessThan(bounds[1].x)
+    expect(bounds[1].x).toBeLessThan(bounds[2].x)
+    expect(bounds[0].y + bounds[0].height).toBeGreaterThan(bounds[1].y + bounds[1].height)
+    expect(bounds[1].y + bounds[1].height).toBeGreaterThan(bounds[2].y + bounds[2].height)
+    const dimensions = Object.values(definitions).map((definition) => ({
+      width: Math.hypot(
+        definition.worldQuad[1][0] - definition.worldQuad[0][0],
+        definition.worldQuad[1][2] - definition.worldQuad[0][2],
+      ),
+      height: definition.worldQuad[3][1] - definition.worldQuad[0][1],
+    }))
+    dimensions.slice(1).forEach((dimension) => {
+      expect(dimension.width).toBeCloseTo(dimensions[0].width)
+      expect(dimension.height).toBeCloseTo(dimensions[0].height)
+    })
   })
 
-  it("expands the coordinate stage downward without moving its top edge", () => {
+  it("scales the expanded coordinate world to the full-height surface without clipping", () => {
     const compact = createPlaneDefinitions(1220, 385)
-    const expanded = createPlaneDefinitions(1390, 453)
+    const expandedHeight = 578
+    const expanded = createPlaneDefinitions(1390, expandedHeight)
     const wideButShort = createPlaneDefinitions(1390, 385)
-    const narrowButTall = createPlaneDefinitions(1220, 455)
+    const narrowButTall = createPlaneDefinitions(1220, expandedHeight)
 
     for (const name of ["client", "view", "content"] as const) {
-      const compactTop = compact[name].worldQuad[0][1]
-      const expandedTop = expanded[name].worldQuad[0][1]
       const compactGround = compact[name].worldQuad[3][1]
       const expandedGround = expanded[name].worldQuad[3][1]
+      const worldWidth = (definition: typeof compact[typeof name]) => Math.hypot(
+        definition.worldQuad[1][0] - definition.worldQuad[0][0],
+        definition.worldQuad[1][2] - definition.worldQuad[0][2],
+      )
 
-      expect(expandedGround).toBeLessThan(compactGround)
-      expect(expandedTop).toBeCloseTo(compactTop)
+      expect(expandedGround).toBeGreaterThan(compactGround)
+      expect(worldWidth(expanded[name])).toBeLessThan(worldWidth(compact[name]))
       expect(wideButShort[name].worldQuad[3][1]).toBe(compactGround)
       expect(narrowButTall[name].worldQuad[3][1]).toBe(compactGround)
 
@@ -242,7 +258,7 @@ describe("Example Canvas workspace", () => {
       expect(bounds.x).toBeGreaterThanOrEqual(-Number.EPSILON)
       expect(bounds.y).toBeGreaterThanOrEqual(-Number.EPSILON)
       expect(bounds.x + bounds.width).toBeLessThanOrEqual(1390 + Number.EPSILON)
-      expect(bounds.y + bounds.height).toBeLessThanOrEqual(453 + Number.EPSILON)
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(expandedHeight + Number.EPSILON)
     }
   })
 
@@ -272,6 +288,16 @@ describe("Example Canvas workspace", () => {
     const dot = faceNormal.reduce((sum, value, index) => sum + value * normals[index], 0)
 
     expect(dot).toBeGreaterThan(0)
+  })
+
+  it("builds the cross-plane signal as valid WebGL world geometry", () => {
+    expectValidIndexedGeometry(worldLineMeshGeometry(
+      [-2.4, 0.6, -7.6],
+      [1.1, 0.4, -8.8],
+      0.045,
+    ))
+    expect(() => worldLineMeshGeometry([0, 0, 0], [1, 0, -1], 0))
+      .toThrow("world line width must be a positive finite number")
   })
 
   it("builds rounded glass faces and bevels without degenerate triangles", () => {
@@ -356,7 +382,12 @@ describe("Example Canvas workspace", () => {
       content: { x: 0, y: 0 },
       viewSize: { width: 320, height: 240 },
       surface: { left: 100, top: 50, width: 640, height: 480, scaleX: 0.5, scaleY: 0.5 },
-    })).toEqual({ x: -60, y: -430, width: 960, height: 1008 })
+    })).toEqual({
+      x: -15.199999999999989,
+      y: -55.599999999999994,
+      width: 870.4000000000001,
+      height: 643.2,
+    })
 
     const initialProbe = {
       client: { x: 420, y: 320 },
@@ -578,7 +609,7 @@ describe("Example Canvas workspace", () => {
       .toBeNull()
     expect(container.querySelector(".coordinate-hero")?.textContent).toContain("One point,")
     expect(container.querySelector(".coordinate-hero")?.textContent).toContain("three spaces.")
-    expect(workspace?.querySelector(".coordinate-live-heading")?.textContent).toContain("CLIENT SPACE")
+    expect(workspace?.querySelector(".coordinate-live-heading")?.textContent).toBe("OutputLive Canvas")
     const evidence = container.querySelector<HTMLElement>(".coordinate-evidence")
     const evidenceToggle = container.querySelector<HTMLButtonElement>(".coordinate-evidence-toggle")
     expect(evidence?.hidden).toBe(true)
@@ -691,7 +722,7 @@ describe("Example Canvas workspace", () => {
       .find((button) => button.textContent === "pan")
     act(() => identityPan?.click())
     expect(stackCard?.classList.contains("coordinate-focus-content-view")).toBe(true)
-    expect(proofValue("Viewport")).toBe("40, 20 / 100%")
+    expect(proofValue("Viewport")).toBe("40, 20 / 125%")
     act(() => {
       setInputValue(scaleXInput, "100")
       setInputValue(scaleYInput, "100")
@@ -702,7 +733,7 @@ describe("Example Canvas workspace", () => {
       .toBe(canvasBeforeIdentity)
     expect(canvasBeforeIdentity?.width).toBe(1150)
     expect(canvasBeforeIdentity?.height).toBe(600)
-    expect(proofValue("Viewport")).toBe("40, 20 / 100%")
+    expect(proofValue("Viewport")).toBe("40, 20 / 125%")
     expect(proofValue("Content Shape geometry")).toBe(contentGeometry)
     act(() => {
       resetCss?.click()
@@ -721,7 +752,7 @@ describe("Example Canvas workspace", () => {
     act(() => frames.splice(0).forEach((frame) => frame(16)))
     expect(proofValue("Content Shape geometry")).toBe(contentGeometry)
     expect(proofValue("View projection")).not.toBe(viewProjection)
-    expect(proofValue("View projection")).toContain("228×144")
+    expect(proofValue("View projection")).toContain("285×180")
     expect(proofValue("Client footprint")).not.toBe(clientFootprint)
     expect(proofValue("Visible Content window")).not.toBe(visibleWindow)
     expect(webGL2Contexts.get(stackLayers![0])?.spies.drawElements.mock.calls.length)
@@ -734,13 +765,13 @@ describe("Example Canvas workspace", () => {
     const zoomOut = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
       .find((button) => button.textContent === "zoom out")
     act(() => {
-      for (let click = 0; click < 6; click += 1) zoomOut?.click()
+      for (let click = 0; click < 8; click += 1) zoomOut?.click()
     })
     expect(proofValue("Viewport")).toContain("40%")
     expect(proofRows
       .find((item) => item.querySelector("dt")?.textContent === "Visible Content window")
       ?.querySelector("small")?.textContent)
-      .toContain("Fully shown in the fixed reference")
+      .toContain("Extends beyond the fixed reference")
     expect(proofValue("Content Shape geometry")).toBe(contentGeometry)
     act(() => reset?.click())
 
@@ -791,7 +822,7 @@ describe("Example Canvas workspace", () => {
       expect([...container.querySelectorAll(".coordinate-zoom-proof dl > div")]
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
         ?.querySelector("dd")?.textContent)
-        .toBe("35, -21 / 40%")
+        .toBe("0, 0 / 40%")
     } finally {
       globalThis.ResizeObserver = originalResizeObserver
     }
@@ -912,7 +943,7 @@ describe("Example Canvas workspace", () => {
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
       expect(container.querySelector(".coordinate-flow-client strong")?.textContent).toBe("150, 130")
       expect(viewBeforeCancellation).toBe("163, 125")
-      expect(viewportBeforeCancellation?.querySelector("dd")?.textContent).toBe("63, 38 / 100%")
+      expect(viewportBeforeCancellation?.querySelector("dd")?.textContent).toBe("63, 38 / 125%")
       expect(container.querySelector(".coordinate-flow-operation span")?.textContent)
         .toContain("inverse CSS scale")
       expect(container.querySelector(".coordinate-flow-operation code")?.textContent)
@@ -927,7 +958,7 @@ describe("Example Canvas workspace", () => {
       const viewportAfterCancellation = [...container.querySelectorAll(".coordinate-zoom-proof dl > div")]
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
       expect(container.querySelector(".coordinate-flow-view strong")?.textContent).toBe(viewBeforeCancellation)
-      expect(viewportAfterCancellation?.querySelector("dd")?.textContent).toBe("0, 0 / 100%")
+      expect(viewportAfterCancellation?.querySelector("dd")?.textContent).toBe("0, 0 / 125%")
 
       act(() => {
         top.dispatchEvent(pointer("pointerdown", 200, 200, { button: 0, buttons: 1 }))
@@ -939,13 +970,13 @@ describe("Example Canvas workspace", () => {
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
       const eventPoint = container.querySelector(".coordinate-event-sample code")
       expect(container.querySelector(".coordinate-flow-view strong")?.textContent).toBe("275, 250")
-      expect(viewportAfterRelease?.querySelector("dd")?.textContent).toBe("50, 38 / 100%")
-      expect(eventPoint?.textContent).toBe("225, 213")
+      expect(viewportAfterRelease?.querySelector("dd")?.textContent).toBe("50, 38 / 125%")
+      expect(eventPoint?.textContent).toBe("180, 170")
 
       const reset = [...container.querySelectorAll<HTMLButtonElement>(".toolbar button")]
         .find((button) => button.textContent === "reset")
       act(() => reset?.click())
-      expect(eventPoint?.textContent).toBe("225, 213")
+      expect(eventPoint?.textContent).toBe("180, 170")
 
       act(() => {
         top.dispatchEvent(new WheelEvent("wheel", {
@@ -956,7 +987,7 @@ describe("Example Canvas workspace", () => {
           deltaY: -100,
         }))
       })
-      expect(eventPoint?.textContent).toBe("75, 75")
+      expect(eventPoint?.textContent).toBe("60, 60")
     } finally {
       restorePointerEvents()
     }

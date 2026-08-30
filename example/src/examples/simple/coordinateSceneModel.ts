@@ -12,19 +12,20 @@ import {
 import { rgba } from "../../components/DemoKit"
 import type { LineSegment } from "./coordinateLabModel"
 
-export const PLANE_ASPECT_RATIO = 4 / 3
 export const PLANE_GRID_COLUMNS = 6
 export const PLANE_GRID_ROWS = 5
 
 const CAMERA_FIELD_OF_VIEW = Math.PI / 3.4
 const CAMERA_POSITION_X = 4.2
 const COMPACT_GROUND_HEIGHT = -2.4
-const EXPANDED_GROUND_HEIGHT = -3.15
+const EXPANDED_GROUND_HEIGHT = -2.1
+const EXPANDED_LAYOUT_SCALE = 0.818
+const COMPACT_PANEL_HEIGHT_TRIM = 0.75
 const BEVEL_FACE_CORNER_RATIO = 0.28
 const PANEL_LAYOUT = [
-  { centerX: -5.05, depth: 8.8, worldWidth: 4.95, worldHeight: 6.9, yaw: 0.04, logicalScale: 1 },
-  { centerX: 1.4, depth: 7.8, worldWidth: 4.85, worldHeight: 6.1, yaw: 0.16, logicalScale: 0.96 },
-  { centerX: 6.2, depth: 7, worldWidth: 3.8, worldHeight: 5.4, yaw: 0.28, logicalScale: 0.92 },
+  { centerX: -3.39, depth: 7.6, worldWidth: 4.34, worldHeight: 6.4, yaw: 0.04, logicalScale: 1, verticalOffset: 0 },
+  { centerX: 1.09, depth: 8.8, worldWidth: 4.34, worldHeight: 6.4, yaw: 0.08, logicalScale: 1, verticalOffset: 0.38 },
+  { centerX: 6.13, depth: 10.2, worldWidth: 4.34, worldHeight: 6.4, yaw: 0.12, logicalScale: 1, verticalOffset: 0.37 },
 ] as const
 
 export type PlaneName = "client" | "view" | "content"
@@ -61,15 +62,15 @@ function progressBetween(value: number, start: number, end: number) {
 
 export const planePalette = {
   client: {
-    fill: rgba(90, 190, 236, 0.18),
+    fill: rgba(90, 190, 236, 0.14),
     stroke: rgba(77, 178, 224, 0.9),
   },
   view: {
-    fill: rgba(72, 114, 235, 0.19),
+    fill: rgba(72, 114, 235, 0.15),
     stroke: rgba(67, 112, 230, 0.92),
   },
   content: {
-    fill: rgba(51, 180, 121, 0.18),
+    fill: rgba(51, 180, 121, 0.14),
     stroke: rgba(45, 151, 108, 0.92),
   },
 } as const
@@ -105,6 +106,7 @@ export function createPlaneDefinitions(
     progressBetween(width, 1250, 1390),
     progressBetween(height, 439, 453),
   )
+  const layoutScale = 1 + (EXPANDED_LAYOUT_SCALE - 1) * stageExpansion
   const groundHeight = COMPACT_GROUND_HEIGHT
     + (EXPANDED_GROUND_HEIGHT - COMPACT_GROUND_HEIGHT) * stageExpansion
 
@@ -122,24 +124,27 @@ export function createPlaneDefinitions(
     worldWidth,
     worldHeight,
     yaw,
+    verticalOffset,
   }: typeof PANEL_LAYOUT[number]): [Vector3, Vector3, Vector3, Vector3] => {
     const horizontal: Vector3 = [Math.cos(yaw), 0, -Math.sin(yaw)]
-    const halfWidth = worldWidth * panelStageScale / 2
-    const scaledHeight = worldHeight * panelStageScale
-      + EXPANDED_GROUND_HEIGHT - groundHeight
+    const scaledCenterX = CAMERA_POSITION_X + (centerX - CAMERA_POSITION_X) * layoutScale
+    const halfWidth = worldWidth * panelStageScale * layoutScale / 2
+    const scaledHeight = worldHeight * panelStageScale * layoutScale
+      - COMPACT_PANEL_HEIGHT_TRIM * (1 - stageExpansion)
+    const bottomHeight = groundHeight + verticalOffset
     const leftBottom: Vector3 = [
-      centerX - horizontal[0] * halfWidth,
-      groundHeight,
+      scaledCenterX - horizontal[0] * halfWidth,
+      bottomHeight,
       -depth - horizontal[2] * halfWidth,
     ]
     const rightBottom: Vector3 = [
-      centerX + horizontal[0] * halfWidth,
-      groundHeight,
+      scaledCenterX + horizontal[0] * halfWidth,
+      bottomHeight,
       -depth + horizontal[2] * halfWidth,
     ]
     return [
-      [leftBottom[0], groundHeight + scaledHeight, leftBottom[2]],
-      [rightBottom[0], groundHeight + scaledHeight, rightBottom[2]],
+      [leftBottom[0], bottomHeight + scaledHeight, leftBottom[2]],
+      [rightBottom[0], bottomHeight + scaledHeight, rightBottom[2]],
       rightBottom,
       leftBottom,
     ]
@@ -148,8 +153,18 @@ export function createPlaneDefinitions(
   const definition = (name: PlaneName, index: number): PlaneDefinition => {
     const layout = PANEL_LAYOUT[index]
     const planeWidth = logicalBaseWidth * layout.logicalScale
-    const planeHeight = planeWidth / PLANE_ASPECT_RATIO
     const worldQuad = panelWorldQuad(layout)
+    const worldWidth = Math.hypot(
+      worldQuad[1][0] - worldQuad[0][0],
+      worldQuad[1][1] - worldQuad[0][1],
+      worldQuad[1][2] - worldQuad[0][2],
+    )
+    const worldHeight = Math.hypot(
+      worldQuad[3][0] - worldQuad[0][0],
+      worldQuad[3][1] - worldQuad[0][1],
+      worldQuad[3][2] - worldQuad[0][2],
+    )
+    const planeHeight = planeWidth * worldHeight / worldWidth
     const [topLeft, topRight, bottomRight, bottomLeft] = worldQuad.map(projectWorldPoint) as QuadPoints
     return {
       width: planeWidth,
@@ -221,18 +236,6 @@ export function createPlaneBasis(plane: PlaneDefinition): PlaneBasis {
   }
 }
 
-export function floorMeshGeometry(groundHeight: number): MeshGeometryInput {
-  const points: Vector3[] = [
-    [-30, groundHeight, -0.8],
-    [30, groundHeight, -0.8],
-    [32, groundHeight, -19],
-    [-32, groundHeight, -19],
-  ]
-  const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
-  appendQuad(builder, points, [0, 1, 0])
-  return builder
-}
-
 export function planeWorldPoint(
   plane: PlaneDefinition,
   basis: PlaneBasis,
@@ -249,6 +252,36 @@ export function planeWorldPoint(
     basis.origin[2] + basis.horizontal[2] * horizontal + basis.vertical[2] * vertical
       + basis.normal[2] * depthOffset,
   ]
+}
+
+export function worldLineMeshGeometry(
+  start: Readonly<Vector3>,
+  end: Readonly<Vector3>,
+  width: number,
+): MeshGeometryInput {
+  if (!Number.isFinite(width) || width <= 0) {
+    throw new RangeError("world line width must be a positive finite number")
+  }
+  const deltaX = end[0] - start[0]
+  const deltaY = end[1] - start[1]
+  const screenPlaneLength = Math.hypot(deltaX, deltaY)
+  if (screenPlaneLength < 1e-8) return emptyMeshGeometry()
+  const halfWidth = width / 2
+  const perpendicularX = deltaY / screenPlaneLength * halfWidth
+  const perpendicularY = -deltaX / screenPlaneLength * halfWidth
+  const offset = (point: Readonly<Vector3>, direction: 1 | -1): Vector3 => [
+    point[0] + perpendicularX * direction,
+    point[1] + perpendicularY * direction,
+    point[2],
+  ]
+  const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
+  appendQuadWithComputedNormal(builder, [
+    offset(start, 1),
+    offset(end, 1),
+    offset(end, -1),
+    offset(start, -1),
+  ])
+  return builder
 }
 
 type GeometryBuilder = {

@@ -49,9 +49,10 @@ const DEFAULT_CSS_DISPLAY: Readonly<CssDisplayTransform> = {
 const CSS_SCALE_MAX = 1
 const CSS_OFFSET_MAX = 96
 const VIEWPORT_MIN_SCALE = 0.4
+const INITIAL_VIEWPORT_SCALE = 1.25
 const INITIAL_CONTENT_POINT: Readonly<Coordinate> = {
   x: LAB_SHAPE.x + LAB_SHAPE.width / 2,
-  y: LAB_SHAPE.y,
+  y: LAB_SHAPE.y - 35,
 }
 
 function ConsoleLabel({ children }: { children: string }) {
@@ -123,18 +124,17 @@ function surfaceFrame({
 const scaleFactors = ({ scaleX, scaleY }: CoordinateProbe["surface"]) =>
   `(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)})`
 
-function fitContentViewport(width: number, height: number): Readonly<ViewportState> {
-  if (width >= LAB_CONTENT_BOUNDS.width && height >= LAB_CONTENT_BOUNDS.height) {
-    return { x: 0, y: 0, scale: 1 }
-  }
-
-  const scale = Math.max(
-    VIEWPORT_MIN_SCALE,
-    Math.min(1, width / LAB_CONTENT_BOUNDS.width, height / LAB_CONTENT_BOUNDS.height),
-  )
+function initialContentViewport(width: number, height: number): Readonly<ViewportState> {
+  const safeRight = LAB_SHAPE.x + LAB_SHAPE.width + 24
+  const safeBottom = LAB_SHAPE.y + LAB_SHAPE.height + 24
+  const scale = Math.max(VIEWPORT_MIN_SCALE, Math.min(
+    INITIAL_VIEWPORT_SCALE,
+    width / safeRight,
+    height / safeBottom,
+  ))
   return {
-    x: (width - LAB_CONTENT_BOUNDS.width * scale) / 2,
-    y: (height - LAB_CONTENT_BOUNDS.height * scale) / 2,
+    x: 0,
+    y: 0,
     scale,
   }
 }
@@ -175,9 +175,13 @@ export default function CoordinatesExample() {
     const marker = markerRef.current
     if (!marker) return
     marker.dot.update(point)
-    marker.horizontal.update({ x1: point.x - 18, y1: point.y, x2: point.x + 18, y2: point.y })
-    marker.vertical.update({ x1: point.x, y1: point.y - 18, x2: point.x, y2: point.y + 18 })
-    marker.label.update({ x: point.x + 14, y: point.y - 22 })
+    marker.horizontal.update({ x1: -600, y1: point.y, x2: 1400, y2: point.y })
+    marker.vertical.update({ x1: point.x, y1: -600, x2: point.x, y2: 1200 })
+    marker.label.update({
+      x: point.x + 12,
+      y: point.y - 12,
+      text: `(${formatPoint(point)})`,
+    })
     updateLiveAnchor(point)
   }
 
@@ -310,10 +314,10 @@ export default function CoordinatesExample() {
     toolsRef.current = tools
     const grid = new Map<string, Line>()
     for (let x = -600; x <= 1400; x += 50) {
-      grid.set(`x:${x}`, new Line({ x1: x, y1: -600, x2: x, y2: 1200, zIndex: -10, strokeConfig: { color: { r: 78, g: 89, b: 104, a: 0.07 }, lineWidth: x === 0 ? 2 : 1 } }))
+      grid.set(`x:${x}`, new Line({ x1: x, y1: -600, x2: x, y2: 1200, zIndex: -10, strokeConfig: { color: { r: 78, g: 89, b: 104, a: 0.035 }, lineWidth: x === 0 ? 1.5 : 0.8 } }))
     }
     for (let y = -600; y <= 1200; y += 50) {
-      grid.set(`y:${y}`, new Line({ x1: -600, y1: y, x2: 1400, y2: y, zIndex: -10, strokeConfig: { color: { r: 78, g: 89, b: 104, a: 0.07 }, lineWidth: y === 0 ? 2 : 1 } }))
+      grid.set(`y:${y}`, new Line({ x1: -600, y1: y, x2: 1400, y2: y, zIndex: -10, strokeConfig: { color: { r: 78, g: 89, b: 104, a: 0.035 }, lineWidth: y === 0 ? 1.5 : 0.8 } }))
     }
     const gridChild = tools.appendChild({ className: "coordinate-grid", shape: grid })
     surfaceCanvasRef.current = gridChild.canvas
@@ -321,25 +325,14 @@ export default function CoordinatesExample() {
       ...current,
       viewSize: { width: gridChild.canvas.width, height: gridChild.canvas.height },
     }))
-    const shapeCenterX = LAB_SHAPE.x + LAB_SHAPE.width / 2
-    const shapeCenterY = LAB_SHAPE.y + LAB_SHAPE.height / 2
     tools.appendChild({
       className: "coordinate-content-bounds",
       shape: [
         new Rectangle({
           ...LAB_CONTENT_BOUNDS,
           zIndex: -5,
-          fillConfig: { color: rgba(44, 137, 91, 0.006) },
-          strokeConfig: { color: rgba(44, 137, 91, 0.14), lineWidth: 1.2 },
-        }),
-        new StayText({
-          x: LAB_CONTENT_BOUNDS.x + 12,
-          y: LAB_CONTENT_BOUNDS.y + 12,
-          text: text("Demo Content bounds", "Demo Content 边界"),
-          textBaseline: "top",
-          zIndex: -4,
-          font: { size: 12, fontWeight: 700 },
-          fillConfig: { color: rgba(44, 137, 91, 0.22) },
+          fillConfig: { color: rgba(44, 137, 91, 0.004) },
+          strokeConfig: { color: rgba(44, 137, 91, 0.08), lineWidth: 1 },
         }),
       ],
     })
@@ -356,26 +349,25 @@ export default function CoordinatesExample() {
           fillConfig: { color: rgba(39, 51, 67, 0.16) },
           strokeConfig: { color: rgba(39, 51, 67, 0), lineWidth: 0 },
         }),
-        new Rectangle({ ...LAB_SHAPE, fillConfig: { color: colors.blueSoft }, strokeConfig: { color: colors.blue, lineWidth: 2 } }),
-        new Line({
-          x1: LAB_SHAPE.x + 18,
-          y1: LAB_SHAPE.y + 38,
-          x2: LAB_SHAPE.x + LAB_SHAPE.width - 18,
-          y2: LAB_SHAPE.y + 38,
-          strokeConfig: { color: rgba(54, 105, 221, 0.28), lineWidth: 1 },
-        }),
-        new StayText({ x: shapeCenterX, y: shapeCenterY - 8, text: text("Same Shape", "同一个 Shape"), textAlign: "center", textBaseline: "middle", font: { size: 18, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
-        new StayText({ x: shapeCenterX, y: shapeCenterY + 24, text: `Content ${formatRect(LAB_SHAPE)}`, textAlign: "center", textBaseline: "middle", font: { size: 12 }, fillConfig: { color: colors.gray } }),
+        new Rectangle({ ...LAB_SHAPE, fillConfig: { color: rgba(54, 105, 221, 0.26) }, strokeConfig: { color: colors.blue, lineWidth: 2.4 } }),
       ],
     })
-    const dot = new Circle({ x: 0, y: 0, radius: 6, zIndex: 20, fillConfig: { color: colors.orange } })
-    const horizontal = new Line({ x1: -18, y1: 0, x2: 18, y2: 0, zIndex: 19, strokeConfig: { color: colors.orange, lineWidth: 2 } })
-    const vertical = new Line({ x1: 0, y1: -18, x2: 0, y2: 18, zIndex: 19, strokeConfig: { color: colors.orange, lineWidth: 2 } })
-    const label = new StayText({ x: 14, y: -22, text: "e.point (Content)", textBaseline: "bottom", font: { size: 11, fontWeight: 700 }, zIndex: 20, fillConfig: { color: colors.orange } })
+    const dot = new Circle({
+      x: 0,
+      y: 0,
+      radius: 7.5,
+      zIndex: 20,
+      fillConfig: { color: colors.orange },
+      strokeConfig: { color: colors.paper, lineWidth: 2.5 },
+    })
+    const markerGuideStyle = { color: rgba(229, 109, 72, 0.48), lineWidth: 1.2, dash: [6, 6] }
+    const horizontal = new Line({ x1: -600, y1: 0, x2: 1400, y2: 0, zIndex: 19, strokeConfig: markerGuideStyle })
+    const vertical = new Line({ x1: 0, y1: -600, x2: 0, y2: 1200, zIndex: 19, strokeConfig: markerGuideStyle })
+    const label = new StayText({ x: 12, y: -12, text: "(0, 0)", textBaseline: "bottom", font: { size: 11, fontWeight: 700 }, zIndex: 20, fillConfig: { color: colors.orange } })
     markerRef.current = { dot, horizontal, vertical, label }
     tools.appendChild({ className: "coordinate-marker", shape: [dot, horizontal, vertical, label] })
     const surface = surfaceFrame(gridChild.canvas.getSurfaceMetrics())
-    const homeViewport = fitContentViewport(gridChild.canvas.width, gridChild.canvas.height)
+    const homeViewport = initialContentViewport(gridChild.canvas.width, gridChild.canvas.height)
     homeViewportRef.current = homeViewport
     const currentViewport = tools.viewport.restore(homeViewport)
     const content = { ...INITIAL_CONTENT_POINT }
@@ -432,6 +424,10 @@ export default function CoordinatesExample() {
             "The same point, expressed and mapped across three coordinate spaces.",
             "同一个点在不同坐标空间中的表达与映射关系。",
           )}</span>
+          <div className="coordinate-legend" aria-label={text("Diagram legend", "图示图例")}>
+            <span><i className="coordinate-legend-point" />Point</span>
+            <span><i className="coordinate-legend-shape" />Shape</span>
+          </div>
         </header>
         <div className="coordinate-workspace">
           <CoordinateStack
@@ -447,10 +443,9 @@ export default function CoordinatesExample() {
           <section className={`coordinate-live-exhibit coordinate-focus-${mappingFocus}`}>
             <header className="coordinate-live-heading">
               <div>
+                <small>Output</small>
                 <h3>Live Canvas</h3>
-                <span>CLIENT SPACE</span>
               </div>
-              <p>{Math.round(probe.viewSize.width)} × {Math.round(probe.viewSize.height)}</p>
             </header>
             <CanvasSurface
               canvasDisplayTransform={cssDisplay}

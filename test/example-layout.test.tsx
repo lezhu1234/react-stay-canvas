@@ -609,7 +609,8 @@ describe("Example Canvas workspace", () => {
       .toBeNull()
     expect(container.querySelector(".coordinate-hero")?.textContent).toContain("One point,")
     expect(container.querySelector(".coordinate-hero")?.textContent).toContain("three spaces.")
-    expect(workspace?.querySelector(".coordinate-live-heading")?.textContent).toBe("OutputLive Canvas")
+    expect(workspace?.querySelector(".coordinate-live-heading h3")?.textContent).toBe("Live Canvas")
+    expect(workspace?.querySelector(".coordinate-live-range")?.textContent).toContain("Content frame")
     const evidence = container.querySelector<HTMLElement>(".coordinate-evidence")
     const evidenceToggle = container.querySelector<HTMLButtonElement>(".coordinate-evidence-toggle")
     expect(evidence?.hidden).toBe(true)
@@ -631,7 +632,7 @@ describe("Example Canvas workspace", () => {
     expect(flow?.textContent).toContain("Coordinates")
     expect(flow?.textContent).toContain("Subtract the Canvas DOM origin")
     expect(flow?.textContent).toContain("Undo viewport offset and scale")
-    expect(flow?.textContent).toContain("Scene result")
+    expect(flow?.textContent).toContain("Scene coordinates")
     expect(flow?.textContent).not.toContain("The coordinate exposed as e.point")
     expect(flow?.textContent).not.toContain("1 · Client")
 
@@ -682,9 +683,11 @@ describe("Example Canvas workspace", () => {
     const scaleYInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS scale Y"]')
     const offsetXInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS translate X"]')
     const offsetYInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS translate Y"]')
-    const bridgeEndpointBeforeCss = container
-      .querySelector<SVGLineElement>(".coordinate-space-bridge-line")
-      ?.getAttribute("x2")
+    const bridgeBeforeCss = container
+      .querySelector<SVGPolylineElement>(".coordinate-space-bridge-line")
+      ?.getAttribute("points")
+    expect(container.querySelector(".coordinate-space-bridge-line")?.getAttribute("marker-mid"))
+      .toBe("url(#coordinate-output-arrow)")
     const setInputValue = (input: HTMLInputElement | null, value: string) => {
       const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
       setValue?.call(input, value)
@@ -700,8 +703,8 @@ describe("Example Canvas workspace", () => {
     expect(displayTransform?.style.transform).toBe("translate(32px, 24px) scale(0.65, 0.9)")
     expect(workspace?.querySelector(".coordinate-live-exhibit .canvas-viewport-label")?.textContent)
       .toBe("CLIENT DOM · 65% × 90%")
-    expect(container.querySelector(".coordinate-space-bridge-line")?.getAttribute("x2"))
-      .not.toBe(bridgeEndpointBeforeCss)
+    expect(container.querySelector(".coordinate-space-bridge-line")?.getAttribute("points"))
+      .not.toBe(bridgeBeforeCss)
     expect(proofRows
       .find((item) => item.querySelector("dt")?.textContent === "CSS View to Client")
       ?.querySelector("code")?.textContent)

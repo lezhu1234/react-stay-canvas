@@ -3,6 +3,8 @@ import {
   DirectionalLight,
   EnvironmentMap,
   GlassMaterial,
+  ImageMaterial,
+  ImageTexture,
   LambertMaterial,
   Mesh,
   PerspectiveCamera,
@@ -13,6 +15,7 @@ import {
   type StayWebGLSceneFragment,
   type GlassAttenuationColor,
   type WebGL2LayerConfig,
+  type PlanarReflection,
   translationMatrix4,
 } from "react-stay-canvas"
 
@@ -29,6 +32,21 @@ const mesh = new Mesh({
   material: new LambertMaterial({ color: [0.2, 0.5, 0.9, 1] }),
   castShadow: true,
   receiveShadow: true,
+})
+const pixels = new Uint8Array([
+  255, 0, 0, 255,
+  0, 255, 0, 255,
+  0, 0, 255, 255,
+  255, 255, 255, 255,
+])
+const imageTexture = new ImageTexture({ width: 2, height: 2, data: pixels })
+const imageMesh = new Mesh({
+  geometry: {
+    positions: [-1, 1, 0, 1, 1, 0, 1, -1, 0, -1, -1, 0],
+    uvs: [0, 0, 1, 0, 1, 1, 0, 1],
+    indices: [0, 1, 2, 0, 2, 3],
+  },
+  material: new ImageMaterial({ texture: imageTexture }),
 })
 mesh.setModelMatrix(translationMatrix4(0.2, 0, 0))
 mesh.setMaterial(new LambertMaterial({ color: [0.3, 0.6, 1, 1] }))
@@ -56,6 +74,13 @@ const glassThickness: number = glass.thickness
 mesh.setMaterial(glass)
 mesh.setCastShadow(false)
 mesh.setReceiveShadow(true)
+mesh.setMaterial(standard)
+mesh.setPlanarReflection({
+  localPlane: { point: [0, 0, 0], normal: [0, 1, 0] },
+  resolutionScale: 0.5,
+})
+const planarReflection: PlanarReflection | undefined = mesh.getPlanarReflection()
+mesh.setPlanarReflection(undefined)
 
 const ambient = new AmbientLight({ color: [0.9, 0.95, 1], intensity: 0.3 })
 const key = new DirectionalLight({
@@ -122,6 +147,7 @@ import { WebGL2LayerRuntime } from "react-stay-canvas"
 
 void camera
 void child
+void imageMesh
 void layer
 void glassIor
 void glassAttenuationColor
@@ -132,5 +158,6 @@ void standardMetallic
 void standardRoughness
 void pointPosition
 void pointRange
+void planarReflection
 void WebGL2SceneRuntime
 void WebGL2LayerRuntime

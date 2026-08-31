@@ -13,10 +13,11 @@ import {
   type ViewportState,
 } from "react-stay-canvas"
 
-import { Button, CanvasSurface, colors, rgba, Toolbar } from "../../components/DemoKit"
+import { CanvasSurface, colors, rgba } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition } from "../actionEventGuards"
 import { CoordinateStack, type CoordinateMappingFocus } from "./CoordinateStack"
+import { createCoordinateSceneLayout } from "./coordinateSceneModel"
 import {
   containsRect,
   clientReferenceRange,
@@ -25,9 +26,10 @@ import {
   formatRect,
   LAB_CONTENT_BOUNDS,
   LAB_SHAPE,
-  projectContentRect,
+  readCoordinateEvidence,
+  type CoordinateEvidence,
+  type CoordinateEventEvidence,
   type CoordinateProbe,
-  visibleContentRange,
 } from "./coordinateLabModel"
 
 const isSpacePressed = (keys: Set<string>) => keys.has(" ") || keys.has("Spacebar")
@@ -42,21 +44,17 @@ type CssDisplayTransform = {
 const DEFAULT_CSS_DISPLAY: Readonly<CssDisplayTransform> = {
   offsetX: 0,
   offsetY: 0,
-  scaleX: 0.8,
-  scaleY: 0.8,
+  scaleX: 0.85,
+  scaleY: 0.85,
 }
 
-const CSS_SCALE_MAX = 1
-const CSS_OFFSET_MAX = 96
 const VIEWPORT_MIN_SCALE = 0.4
-const INITIAL_VIEWPORT_SCALE = 1.25
+const INITIAL_VIEWPORT_SCALE = 1.1
 const INITIAL_CONTENT_POINT: Readonly<Coordinate> = {
   x: LAB_SHAPE.x + LAB_SHAPE.width / 2,
-  y: LAB_SHAPE.y - 35,
-}
-
-function ConsoleLabel({ children }: { children: string }) {
-  return <span className="coordinate-console-label">{children}</span>
+  // Keep the real sample just above the Shape so the truthful projections form
+  // one readable path through the physically equivalent staged planes.
+  y: LAB_SHAPE.y - 15,
 }
 
 const INITIAL_PROBE: CoordinateProbe = {
@@ -66,8 +64,6 @@ const INITIAL_PROBE: CoordinateProbe = {
   viewSize: { width: 320, height: 440 },
   surface: { left: 0, top: 0, width: 320, height: 440, scaleX: 1, scaleY: 1 },
 }
-
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 const spaceMoveEnd: EventProps<string> = {
   name: "moveend",
@@ -124,6 +120,23 @@ function surfaceFrame({
 const scaleFactors = ({ scaleX, scaleY }: CoordinateProbe["surface"]) =>
   `(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)})`
 
+const coordinatesMatch = (
+  first: Readonly<Coordinate>,
+  second: Readonly<Coordinate>,
+  tolerance = 0.01,
+) => Math.abs(first.x - second.x) <= tolerance
+  && Math.abs(first.y - second.y) <= tolerance
+
+function clientRangeForProbe(
+  probe: Readonly<CoordinateProbe>,
+  _cssDisplay: Readonly<CssDisplayTransform>,
+) {
+  // Freeze a legible Client-space window around the initial real DOM surface.
+  // Subsequent CSS controls move that surface inside this window instead of
+  // shrinking the default evidence to reserve every possible future extreme.
+  return clientReferenceRange(probe)
+}
+
 function initialContentViewport(width: number, height: number): Readonly<ViewportState> {
   const safeRight = LAB_SHAPE.x + LAB_SHAPE.width + 24
   const safeBottom = LAB_SHAPE.y + LAB_SHAPE.height + 24
@@ -141,39 +154,83 @@ function initialContentViewport(width: number, height: number): Readonly<Viewpor
 
 export default function CoordinatesExample() {
   const { text } = useI18n()
-  const stageRef = useRef<HTMLElement | null>(null)
   const toolsRef = useRef<StayTools>()
+  const liveExhibitRef = useRef<HTMLElement | null>(null)
   const homeViewportRef = useRef<Readonly<ViewportState>>({ x: 0, y: 0, scale: 1 })
   const surfaceCanvasRef = useRef<ReturnType<StayTools["appendChild"]>["canvas"]>()
-  const markerRef = useRef<{ dot: Circle; horizontal: Line; vertical: Line; label: StayText }>()
+  const contentBoundsRef = useRef<Rectangle>()
+  const contentShapeRef = useRef<Rectangle>()
+  const markerRef = useRef<{ halo: Circle; dot: Circle; horizontal: Line; vertical: Line; label: StayText }>()
   const markerContentRef = useRef<Readonly<Coordinate>>(INITIAL_CONTENT_POINT)
   const [cssDisplay, setCssDisplay] = useState<CssDisplayTransform>({ ...DEFAULT_CSS_DISPLAY })
+  const cssDisplayRef = useRef<Readonly<CssDisplayTransform>>(cssDisplay)
+  cssDisplayRef.current = cssDisplay
   const [clientRange, setClientRange] = useState(() => clientReferenceRange(INITIAL_PROBE))
   const [probe, setProbe] = useState<CoordinateProbe>(INITIAL_PROBE)
-  const [eventPoint, setEventPoint] = useState<Coordinate>({ x: 0, y: 0 })
+  const [coordinateEvidence, setCoordinateEvidence] = useState<CoordinateEvidence>()
+  const [eventEvidence, setEventEvidence] = useState<CoordinateEventEvidence>()
   const [viewport, setViewport] = useState<Readonly<ViewportState>>({ x: 0, y: 0, scale: 1 })
   const [mappingFocus, setMappingFocus] = useState<CoordinateMappingFocus>("view-client")
   const [evidenceOpen, setEvidenceOpen] = useState(false)
-  const [stackAnchor, setStackAnchor] = useState<Coordinate>()
-  const [liveAnchor, setLiveAnchor] = useState<Coordinate>()
+  const [sceneLayout, setSceneLayout] = useState(() => createCoordinateSceneLayout(1280, 720))
 
-  const stagePointFromClient = (point: Readonly<Coordinate>) => {
-    const rect = stageRef.current?.getBoundingClientRect()
-    if (!rect) return undefined
-    return { x: point.x - rect.left, y: point.y - rect.top }
+  const captureCoordinateEvidence = (
+    tools: StayTools,
+    canvas: NonNullable<typeof surfaceCanvasRef.current>,
+  ) => {
+    const contentShape = contentShapeRef.current
+    const contentBounds = contentBoundsRef.current
+    if (!contentShape || !contentBounds) return
+    setCoordinateEvidence(readCoordinateEvidence(tools.coordinates, {
+      width: canvas.width,
+      height: canvas.height,
+    }, contentShape.getBound(), contentBounds.getBound()))
   }
 
-  const updateLiveAnchor = (point: Readonly<Coordinate>) => {
+  const syncLiveSurface = (updatesClientReference: boolean) => {
+    const canvas = surfaceCanvasRef.current
     const tools = toolsRef.current
-    if (!tools) return
-    const stagePoint = stagePointFromClient(tools.coordinates.contentToClient(point))
-    if (stagePoint) setLiveAnchor(stagePoint)
+    if (!canvas || !tools) return
+    const content = markerContentRef.current
+    const view = tools.coordinates.contentToView(content)
+    const client = tools.coordinates.viewToClient(view)
+    const nextProbe = {
+      client,
+      view,
+      content,
+      viewSize: { width: canvas.width, height: canvas.height },
+      surface: surfaceFrame(canvas.getSurfaceMetrics()),
+    }
+    setProbe(nextProbe)
+    if (updatesClientReference) {
+      setClientRange(clientRangeForProbe(nextProbe, cssDisplayRef.current))
+    }
+    captureCoordinateEvidence(tools, canvas)
   }
+
+  useLayoutEffect(() => {
+    const output = liveExhibitRef.current
+    if (!output) return
+    const sync = () => syncLiveSurface(true)
+    sync()
+    window.addEventListener("resize", sync)
+    window.addEventListener("scroll", sync, { passive: true })
+    const observer = typeof ResizeObserver === "undefined"
+      ? undefined
+      : new ResizeObserver(sync)
+    observer?.observe(output)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener("resize", sync)
+      window.removeEventListener("scroll", sync)
+    }
+  }, [])
 
   const moveMarker = (point: Coordinate) => {
     markerContentRef.current = point
     const marker = markerRef.current
     if (!marker) return
+    marker.halo.update(point)
     marker.dot.update(point)
     marker.horizontal.update({ x1: -600, y1: point.y, x2: 1400, y2: point.y })
     marker.vertical.update({ x1: point.x, y1: -600, x2: point.x, y2: 1200 })
@@ -182,39 +239,44 @@ export default function CoordinatesExample() {
       y: point.y - 12,
       text: `(${formatPoint(point)})`,
     })
-    updateLiveAnchor(point)
   }
 
   const syncProbeWithViewport = (viewport: Readonly<ViewportState>) => {
     setViewport(viewport)
     const tools = toolsRef.current
+    const canvas = surfaceCanvasRef.current
     if (!tools) return
     setProbe((current) => {
       const content = tools.coordinates.viewToContent(current.view)
       moveMarker(content)
       return { ...current, content }
     })
+    if (canvas) captureCoordinateEvidence(tools, canvas)
   }
 
   useLayoutEffect(() => {
-    const canvas = surfaceCanvasRef.current
-    const tools = toolsRef.current
-    if (!canvas || !tools) return
-    const surface = surfaceFrame(canvas.getSurfaceMetrics())
-    setProbe((current) => ({
-      ...current,
-      client: tools.coordinates.viewToClient(current.view),
-      surface,
-      viewSize: { width: canvas.width, height: canvas.height },
-    }))
-    updateLiveAnchor(markerContentRef.current)
+    syncLiveSurface(false)
   }, [cssDisplay])
+
+  useLayoutEffect(() => {
+    // The root Canvas owns the physical Output placement. Re-sample the live
+    // Canvas after that placement commits so the displayed Client coordinate
+    // and the cross-canvas signal share the same current DOM frame.
+    syncLiveSurface(true)
+  }, [
+    sceneLayout.output.height,
+    sceneLayout.output.width,
+    sceneLayout.output.x,
+    sceneLayout.output.y,
+    sceneLayout.outputHeaderHeight,
+  ])
 
   const listeners = useMemo<ListenerProps[]>(() => {
     const observe = (
       { e, originEvent, canvas, tools }: Parameters<ListenerProps["callback"]>[0],
       updateMarker = true,
       nextViewport?: Readonly<ViewportState>,
+      recordsEventEvidence = true,
     ) => {
       if (!hasPointerPosition(e) || !(originEvent instanceof MouseEvent)) return false
       const client = { x: originEvent.clientX, y: originEvent.clientY }
@@ -229,8 +291,15 @@ export default function CoordinatesExample() {
         viewSize: { width: canvas.width, height: canvas.height },
         surface: surfaceFrame(canvas.getSurfaceMetrics()),
       })
-      setEventPoint(e.point)
+      if (recordsEventEvidence) {
+        setEventEvidence({
+          point: e.point,
+          facadeContent: content,
+          matchesFacade: coordinatesMatch(e.point, content),
+        })
+      }
       setViewport(viewport)
+      captureCoordinateEvidence(tools, canvas)
       return true
     }
 
@@ -254,8 +323,18 @@ export default function CoordinatesExample() {
           },
           move: () => {
             setMappingFocus("content-view")
+            if (hasPointerPosition(props.e) && props.originEvent instanceof MouseEvent) {
+              const eventClient = { x: props.originEvent.clientX, y: props.originEvent.clientY }
+              const eventView = props.tools.coordinates.clientToView(eventClient)
+              const eventFacadeContent = props.tools.coordinates.viewToContent(eventView)
+              setEventEvidence({
+                point: props.e.point,
+                facadeContent: eventFacadeContent,
+                matchesFacade: coordinatesMatch(props.e.point, eventFacadeContent),
+              })
+            }
             const viewport = props.tools.viewport.panBy(props.e.movement ?? { x: 0, y: 0 })
-            observe(props, true, viewport)
+            observe(props, true, viewport, false)
             return props.composeStore
           },
           moveend: () => {
@@ -264,7 +343,6 @@ export default function CoordinatesExample() {
               : props.tools.viewport.get()
             const keepsLastClientSample = props.e.cancelled || props.originEvent.type === "lostpointercapture"
             if (keepsLastClientSample) {
-              if (hasPointerPosition(props.e)) setEventPoint(props.e.point)
               syncProbeWithViewport(viewport)
             } else if (!observe(props, true, viewport)) {
               syncProbeWithViewport(viewport)
@@ -282,9 +360,15 @@ export default function CoordinatesExample() {
           if (!hasPointerPosition(e) || e.deltaY === undefined || !(originEvent instanceof MouseEvent)) return
           originEvent.preventDefault()
           setMappingFocus("content-view")
-          const viewport = tools.viewport.zoomBy(Math.max(0.1, 1 - e.deltaY * 0.001), e.point)
           const client = { x: originEvent.clientX, y: originEvent.clientY }
           const view = tools.coordinates.clientToView(client)
+          const eventFacadeContent = tools.coordinates.viewToContent(view)
+          setEventEvidence({
+            point: e.point,
+            facadeContent: eventFacadeContent,
+            matchesFacade: coordinatesMatch(e.point, eventFacadeContent),
+          })
+          const viewport = tools.viewport.zoomBy(Math.max(0.1, 1 - e.deltaY * 0.001), e.point)
           const content = tools.coordinates.viewToContent(view)
           moveMarker(content)
           setProbe({
@@ -294,8 +378,8 @@ export default function CoordinatesExample() {
             viewSize: { width: canvas.width, height: canvas.height },
             surface: surfaceFrame(canvas.getSurfaceMetrics()),
           })
-          setEventPoint(e.point)
           setViewport(viewport)
+          captureCoordinateEvidence(tools, canvas)
         },
       },
       {
@@ -314,28 +398,68 @@ export default function CoordinatesExample() {
     toolsRef.current = tools
     const grid = new Map<string, Line>()
     for (let x = -600; x <= 1400; x += 50) {
-      grid.set(`x:${x}`, new Line({ x1: x, y1: -600, x2: x, y2: 1200, zIndex: -10, strokeConfig: { color: { r: 78, g: 89, b: 104, a: 0.035 }, lineWidth: x === 0 ? 1.5 : 0.8 } }))
+      grid.set(`x:${x}`, new Line({ x1: x, y1: -600, x2: x, y2: 1200, zIndex: -10, strokeConfig: { color: { r: 91, g: 111, b: 116, a: 0.22 }, lineWidth: x === 0 ? 1.4 : 0.75 } }))
     }
     for (let y = -600; y <= 1200; y += 50) {
-      grid.set(`y:${y}`, new Line({ x1: -600, y1: y, x2: 1400, y2: y, zIndex: -10, strokeConfig: { color: { r: 78, g: 89, b: 104, a: 0.035 }, lineWidth: y === 0 ? 1.5 : 0.8 } }))
+      grid.set(`y:${y}`, new Line({ x1: -600, y1: y, x2: 1400, y2: y, zIndex: -10, strokeConfig: { color: { r: 91, g: 111, b: 116, a: 0.22 }, lineWidth: y === 0 ? 1.4 : 0.75 } }))
     }
     const gridChild = tools.appendChild({ className: "coordinate-grid", shape: grid })
+    const axisColor = rgba(45, 54, 53, 0.68)
+    tools.appendChild({
+      className: "coordinate-live-axes",
+      shape: [
+        new Line({ x1: 0, y1: 360, x2: 350, y2: 360, zIndex: -8, strokeConfig: { color: axisColor, lineWidth: 1.3 } }),
+        new Line({ x1: 350, y1: 360, x2: 340, y2: 355, zIndex: -8, strokeConfig: { color: axisColor, lineWidth: 1.3 } }),
+        new Line({ x1: 350, y1: 360, x2: 340, y2: 365, zIndex: -8, strokeConfig: { color: axisColor, lineWidth: 1.3 } }),
+        new Line({ x1: 0, y1: 0, x2: 0, y2: 360, zIndex: -8, strokeConfig: { color: axisColor, lineWidth: 1.3 } }),
+        new Line({ x1: 0, y1: 360, x2: -5, y2: 350, zIndex: -8, strokeConfig: { color: axisColor, lineWidth: 1.3 } }),
+        new Line({ x1: 0, y1: 360, x2: 5, y2: 350, zIndex: -8, strokeConfig: { color: axisColor, lineWidth: 1.3 } }),
+        new StayText({ x: 334, y: 340, text: "X", zIndex: -7, font: { size: 12, fontWeight: 700 }, fillConfig: { color: axisColor } }),
+        new StayText({ x: 10, y: 12, text: "Y ↓", zIndex: -7, font: { size: 12, fontWeight: 700 }, fillConfig: { color: axisColor } }),
+        ...([0, 100, 200, 300, 400] as const).map((value) => new StayText({
+          x: value,
+          y: 342,
+          text: String(value),
+          zIndex: -7,
+          textAlign: "center",
+          textBaseline: "top",
+          font: { size: 9, fontWeight: 520, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" },
+          fillConfig: { color: rgba(45, 54, 53, 0.68) },
+        })),
+        ...([0, 100, 200, 300] as const).map((value) => new StayText({
+          x: 10,
+          y: value,
+          text: String(value),
+          zIndex: -7,
+          textAlign: "left",
+          textBaseline: "middle",
+          font: { size: 9, fontWeight: 520, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" },
+          fillConfig: { color: rgba(45, 54, 53, 0.68) },
+        })),
+      ],
+    })
     surfaceCanvasRef.current = gridChild.canvas
     setProbe((current) => ({
       ...current,
       viewSize: { width: gridChild.canvas.width, height: gridChild.canvas.height },
     }))
+    const contentBounds = new Rectangle({
+      ...LAB_CONTENT_BOUNDS,
+      zIndex: -5,
+      fillConfig: { color: rgba(47, 138, 104, 0.006) },
+      strokeConfig: { color: rgba(47, 138, 104, 0.18), lineWidth: 1 },
+    })
+    contentBoundsRef.current = contentBounds
     tools.appendChild({
       className: "coordinate-content-bounds",
-      shape: [
-        new Rectangle({
-          ...LAB_CONTENT_BOUNDS,
-          zIndex: -5,
-          fillConfig: { color: rgba(44, 137, 91, 0.004) },
-          strokeConfig: { color: rgba(44, 137, 91, 0.08), lineWidth: 1 },
-        }),
-      ],
+      shape: [contentBounds],
     })
+    const contentShape = new Rectangle({
+      ...LAB_SHAPE,
+      fillConfig: { color: rgba(54, 105, 221, 0.55) },
+      strokeConfig: { color: rgba(89, 145, 255, 1), lineWidth: 1.8 },
+    })
+    contentShapeRef.current = contentShape
     tools.appendChild({
       className: "coordinate-object",
       shape: [
@@ -345,12 +469,20 @@ export default function CoordinatesExample() {
           width: LAB_SHAPE.width,
           height: LAB_SHAPE.height,
           zIndex: -1,
-          filter: "blur(8px)",
-          fillConfig: { color: rgba(39, 51, 67, 0.16) },
+          filter: "blur(6px)",
+          fillConfig: { color: rgba(65, 118, 240, 0.2) },
           strokeConfig: { color: rgba(39, 51, 67, 0), lineWidth: 0 },
         }),
-        new Rectangle({ ...LAB_SHAPE, fillConfig: { color: rgba(54, 105, 221, 0.26) }, strokeConfig: { color: colors.blue, lineWidth: 2.4 } }),
+        contentShape,
       ],
+    })
+    const halo = new Circle({
+      x: 0,
+      y: 0,
+      radius: 13,
+      zIndex: 19,
+      fillConfig: { color: rgba(229, 109, 72, 0.1) },
+      strokeConfig: { color: rgba(229, 109, 72, 0.65), lineWidth: 1.5 },
     })
     const dot = new Circle({
       x: 0,
@@ -363,9 +495,9 @@ export default function CoordinatesExample() {
     const markerGuideStyle = { color: rgba(229, 109, 72, 0.48), lineWidth: 1.2, dash: [6, 6] }
     const horizontal = new Line({ x1: -600, y1: 0, x2: 1400, y2: 0, zIndex: 19, strokeConfig: markerGuideStyle })
     const vertical = new Line({ x1: 0, y1: -600, x2: 0, y2: 1200, zIndex: 19, strokeConfig: markerGuideStyle })
-    const label = new StayText({ x: 12, y: -12, text: "(0, 0)", textBaseline: "bottom", font: { size: 11, fontWeight: 700 }, zIndex: 20, fillConfig: { color: colors.orange } })
-    markerRef.current = { dot, horizontal, vertical, label }
-    tools.appendChild({ className: "coordinate-marker", shape: [dot, horizontal, vertical, label] })
+    const label = new StayText({ x: 12, y: -12, text: "(0, 0)", textBaseline: "bottom", font: { size: 13, fontWeight: 700 }, zIndex: 20, fillConfig: { color: colors.orange } })
+    markerRef.current = { halo, dot, horizontal, vertical, label }
+    tools.appendChild({ className: "coordinate-marker", shape: [halo, dot, horizontal, vertical, label] })
     const surface = surfaceFrame(gridChild.canvas.getSurfaceMetrics())
     const homeViewport = initialContentViewport(gridChild.canvas.width, gridChild.canvas.height)
     homeViewportRef.current = homeViewport
@@ -383,13 +515,8 @@ export default function CoordinatesExample() {
       surface,
     }
     setProbe(initialProbe)
-    setClientRange(clientReferenceRange(initialProbe, {
-      x: surface.left + CSS_OFFSET_MAX - DEFAULT_CSS_DISPLAY.offsetX,
-      y: surface.top + CSS_OFFSET_MAX - DEFAULT_CSS_DISPLAY.offsetY,
-      width: gridChild.canvas.width * CSS_SCALE_MAX,
-      height: gridChild.canvas.height * CSS_SCALE_MAX,
-    }))
-    setEventPoint(content)
+    captureCoordinateEvidence(tools, gridChild.canvas)
+    setClientRange(clientRangeForProbe(initialProbe, DEFAULT_CSS_DISPLAY))
   }
 
   const changeViewport = (action: (tools: StayTools) => Readonly<ViewportState>) => {
@@ -405,237 +532,174 @@ export default function CoordinatesExample() {
     setCssDisplay((current) => ({ ...current, ...patch }))
   }
 
-  const shapeProjection = projectContentRect(probe, viewport)
-  const visibleContent = visibleContentRange(probe, viewport)
-  const visibleWindowIsContained = containsRect(contentReferenceRange(probe), visibleContent)
-  const viewWidthFormula = `${LAB_SHAPE.width} × ${viewport.scale.toFixed(2)} = ${Math.round(shapeProjection.view.width)}`
-  const clientWidthFormula = `${Math.round(shapeProjection.view.width)} ÷ ${probe.surface.scaleX.toFixed(2)} = ${Math.round(shapeProjection.client.width)}`
+  const shapeProjection = coordinateEvidence?.shape
+  const visibleContent = coordinateEvidence?.visibleContent
+  const visibleWindowIsContained = visibleContent
+    ? containsRect(contentReferenceRange(probe), visibleContent)
+    : false
+  const viewWidthFormula = shapeProjection
+    ? `tools.coordinates.contentToView · ${Math.round(shapeProjection.view.width)} px`
+    : "measuring"
+  const clientWidthFormula = shapeProjection
+    ? `tools.coordinates.contentToClient · ${Math.round(shapeProjection.client.width)} px`
+    : "measuring"
 
   return (
     <div className="coordinate-experience">
-      <section className="coordinate-stage" ref={stageRef}>
-        <header className="coordinate-hero">
-          <p>{text("Coordinate laboratory · 01", "坐标实验室 · 01")}</p>
-          <h2>
-            <span>{text("One point,", "一个点，")}</span>
-            <span>{text("three spaces.", "三个空间。")}</span>
-          </h2>
-          <span>{text(
-            "The same point, expressed and mapped across three coordinate spaces.",
-            "同一个点在不同坐标空间中的表达与映射关系。",
-          )}</span>
-          <div className="coordinate-legend" aria-label={text("Diagram legend", "图示图例")}>
-            <span><i className="coordinate-legend-point" />Point</span>
-            <span><i className="coordinate-legend-shape" />Shape</span>
-          </div>
-        </header>
-        <div className="coordinate-workspace">
-          <CoordinateStack
-            clientRange={clientRange}
-            mappingFocus={mappingFocus}
-            onContentPointClientChange={(point) => {
-              const stagePoint = stagePointFromClient(point)
-              if (stagePoint) setStackAnchor(stagePoint)
-            }}
-            probe={probe}
-            viewport={viewport}
-          />
-          <section className={`coordinate-live-exhibit coordinate-focus-${mappingFocus}`}>
-            <header className="coordinate-live-heading">
-              <div>
-                <small>Output</small>
-                <h3>Live Canvas</h3>
-                <span className="coordinate-live-range">
-                  Content frame · x {Math.round(visibleContent.x)}—{Math.round(visibleContent.x + visibleContent.width)} · y {Math.round(visibleContent.y)}—{Math.round(visibleContent.y + visibleContent.height)}
-                </span>
-              </div>
-            </header>
-            <CanvasSurface
-              canvasDisplayTransform={cssDisplay}
-              className="coordinate-live-surface"
-              fitInitialDisplayTransformToViewport
-              shrinkToViewport
-              viewportLabel={`CLIENT DOM · ${Math.round(cssDisplay.scaleX * 100)}% × ${Math.round(cssDisplay.scaleY * 100)}%`}
-            >
-              <StayCanvas
-                className="demo-canvas coordinate-canvas"
-                eventList={[spaceStartMove]}
-                height={360}
-                layers={2}
-                listenerList={listeners}
-                mounted={mounted}
-                passive={false}
-                viewport={{ minScale: VIEWPORT_MIN_SCALE, maxScale: 3 }}
-                width={480}
-              />
-            </CanvasSurface>
-          </section>
-        </div>
-        {stackAnchor && liveAnchor && (
-          <svg aria-hidden="true" className="coordinate-space-bridge">
-            <line
-              className="coordinate-space-bridge-glow"
-              x1={stackAnchor.x}
-              x2={liveAnchor.x}
-              y1={stackAnchor.y}
-              y2={liveAnchor.y}
+      <CoordinateStack
+        clientRange={clientRange}
+        coordinateEvidence={coordinateEvidence}
+        evidenceOpen={evidenceOpen}
+        cssDisplay={cssDisplay}
+        eventEvidence={eventEvidence}
+        mappingFocus={mappingFocus}
+        onCssDisplayChange={updateCssDisplay}
+        onEvidenceToggle={() => setEvidenceOpen((open) => !open)}
+        onSceneLayoutChange={setSceneLayout}
+        onViewportAction={(action) => {
+          if (action === "zoom-in") {
+            changeViewport((tools) => tools.viewport.zoomBy(1.2))
+          } else if (action === "zoom-out") {
+            changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))
+          } else if (action === "pan") {
+            changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))
+          } else {
+            changeViewport((tools) => tools.viewport.restore(homeViewportRef.current))
+          }
+        }}
+        probe={probe}
+        viewport={viewport}
+      />
+      <header className="coordinate-hero coordinate-semantic-only">
+        <p>{text("Coordinate laboratory · 01", "坐标实验室 · 01")}</p>
+        <h2>
+          <span>{text("One point,", "一个点，")}</span>
+          <span>{text("three spaces.", "三个空间。")}</span>
+        </h2>
+        <span>{text(
+          "One point and one Shape, mapped across three coordinate spaces and rendered on Live Canvas.",
+          "同一点与同一 Shape，在三个坐标空间中映射，最终呈现于 Live Canvas。",
+        )}</span>
+      </header>
+      <section className="coordinate-stage">
+        <section
+          className={`coordinate-live-exhibit coordinate-focus-${mappingFocus}`}
+          ref={liveExhibitRef}
+          style={{
+            height: sceneLayout.output.height,
+            left: sceneLayout.output.x,
+            paddingBottom: sceneLayout.outputGroundGap,
+            top: sceneLayout.output.y,
+            width: sceneLayout.output.width,
+            gridTemplateRows: `${sceneLayout.outputHeaderHeight}px minmax(0, 1fr)`,
+          }}
+        >
+          <header className="coordinate-live-heading">
+            <div className="coordinate-semantic-only">
+              <small>Output</small>
+              <h3>Live Canvas</h3>
+              <span className="coordinate-live-range">
+                {visibleContent
+                  ? `Content frame · x ${Math.round(visibleContent.x)}—${Math.round(visibleContent.x + visibleContent.width)} · y ${Math.round(visibleContent.y)}—${Math.round(visibleContent.y + visibleContent.height)}`
+                  : "Content frame · measuring"}
+              </span>
+            </div>
+          </header>
+          <CanvasSurface
+            canvasDisplayTransform={cssDisplay}
+            className="coordinate-live-surface"
+            fitInitialDisplayTransformToViewport
+            shrinkToViewport
+            viewportLabel={`CLIENT DOM · ${Math.round(cssDisplay.scaleX * 100)}% × ${Math.round(cssDisplay.scaleY * 100)}%`}
+          >
+            <StayCanvas
+              className="demo-canvas coordinate-canvas"
+              eventList={[spaceStartMove]}
+              height={360}
+              layers={2}
+              listenerList={listeners}
+              mounted={mounted}
+              passive={false}
+              viewport={{ minScale: VIEWPORT_MIN_SCALE, maxScale: 3 }}
+              width={480}
             />
-            <line
-              className="coordinate-space-bridge-line"
-              x1={stackAnchor.x}
-              x2={liveAnchor.x}
-              y1={stackAnchor.y}
-              y2={liveAnchor.y}
-            />
-          </svg>
-        )}
+          </CanvasSurface>
+        </section>
       </section>
 
-      <footer className="coordinate-console">
-        <div className="coordinate-flow" aria-label={text("Coordinate conversion flow", "坐标转换流程")}>
-          <div className="coordinate-flow-heading">
-            <ConsoleLabel>Coordinates</ConsoleLabel>
-            <small className="coordinate-sync-status">{text("Synchronized", "同步正常")}</small>
-          </div>
-          <div className="coordinate-flow-values">
-            <div className="coordinate-flow-value coordinate-flow-client">
-              <span>Client</span><strong>{formatPoint(probe.client)}</strong><small>{text("Browser", "浏览器")}</small>
+      <footer
+        aria-label={text("Coordinate conversion status", "坐标转换状态")}
+        className="coordinate-console coordinate-semantic-only"
+      >
+        <section
+          aria-label={text("Coordinate conversion flow", "坐标转换流程")}
+          aria-live="polite"
+          className="coordinate-flow"
+        >
+          <h3>Coordinates</h3>
+          <p className="coordinate-sync-status">{eventEvidence
+            ? eventEvidence.matchesFacade
+              ? text("Event matches facade", "事件与 facade 一致")
+              : text("Event differs from facade", "事件与 facade 不一致")
+            : text("Awaiting Canvas event", "等待 Canvas 事件")}</p>
+          <dl className="coordinate-flow-values">
+            <div className="coordinate-flow-client">
+              <dt>Client</dt>
+              <dd><strong>{formatPoint(probe.client)}</strong> · {text("Browser", "浏览器")}</dd>
             </div>
-            <span className="coordinate-flow-arrow" aria-hidden="true">→</span>
-            <div className="coordinate-flow-value coordinate-flow-view">
-              <span>View</span><strong>{formatPoint(probe.view)}</strong><small>Canvas</small>
+            <div className="coordinate-flow-view">
+              <dt>View</dt>
+              <dd><strong>{formatPoint(probe.view)}</strong> · Canvas</dd>
             </div>
-            <span className="coordinate-flow-arrow" aria-hidden="true">→</span>
-            <div className="coordinate-flow-value coordinate-flow-result">
-              <span>Content</span><strong>{formatPoint(probe.content)}</strong><small>{text("Scene coordinates", "场景坐标")}</small>
+            <div className="coordinate-flow-result">
+              <dt>Content</dt>
+              <dd><strong>{formatPoint(probe.content)}</strong> · {text("Scene coordinates", "场景坐标")}</dd>
             </div>
-          </div>
-          <div className="coordinate-flow-operation">
+          </dl>
+          <p className="coordinate-flow-operation">
             <span>{text(
               "Subtract the Canvas DOM origin, then apply the inverse CSS scale",
               "减去 Canvas DOM 原点，再乘 CSS 缩放的倒数（逻辑尺寸 ÷ DOM 尺寸）",
             )}</span>
             <code>[({formatPoint(probe.client)}) - ({Math.round(probe.surface.left)}, {Math.round(probe.surface.top)})] × {scaleFactors(probe.surface)}</code>
-          </div>
-          <div className="coordinate-flow-operation">
+          </p>
+          <p className="coordinate-flow-operation">
             <span>{text("Undo viewport offset and scale", "撤销 viewport 平移与缩放")}</span>
             <code>[({formatPoint(probe.view)}) - ({Math.round(viewport.x)}, {Math.round(viewport.y)})] ÷ {viewport.scale.toFixed(2)}</code>
-          </div>
-          <p className="coordinate-event-sample">
-            <span>Canvas event · Content · e.point</span>
-            <code>{formatPoint(eventPoint)}</code>
           </p>
-        </div>
-
-        <div className="coordinate-operations">
-          <section className="coordinate-operation-group">
-            <div className="coordinate-operation-heading">
-              <strong><ConsoleLabel>CSS display</ConsoleLabel></strong>
-              <code>translate({cssDisplay.offsetX}, {cssDisplay.offsetY}) scale({cssDisplay.scaleX.toFixed(2)}, {cssDisplay.scaleY.toFixed(2)})</code>
+          <dl className="coordinate-control-status">
+            <div>
+              <dt>CSS display</dt>
+              <dd className="coordinate-css-state"><code>translate({cssDisplay.offsetX}, {cssDisplay.offsetY}) scale({cssDisplay.scaleX.toFixed(2)}, {cssDisplay.scaleY.toFixed(2)})</code></dd>
             </div>
-            <label className="coordinate-scale-control">
-              <span>scaleX</span>
-              <input
-                aria-label="CSS scale X"
-                max={CSS_SCALE_MAX * 100}
-                min={50}
-                onChange={(event) => updateCssDisplay({ scaleX: Number(event.target.value) / 100 })}
-                step={5}
-                type="range"
-                value={Math.round(cssDisplay.scaleX * 100)}
-              />
-              <output>{cssDisplay.scaleX.toFixed(3)}</output>
-            </label>
-            <label className="coordinate-scale-control">
-              <span>scaleY</span>
-              <input
-                aria-label="CSS scale Y"
-                max={CSS_SCALE_MAX * 100}
-                min={50}
-                onChange={(event) => updateCssDisplay({ scaleY: Number(event.target.value) / 100 })}
-                step={5}
-                type="range"
-                value={Math.round(cssDisplay.scaleY * 100)}
-              />
-              <output>{cssDisplay.scaleY.toFixed(3)}</output>
-            </label>
-            <div className="coordinate-offset-controls">
-              <label>
-                <span>translateX</span>
-                <input
-                  aria-label="CSS translate X"
-                  max={CSS_OFFSET_MAX}
-                  min={0}
-                  onChange={(event) => updateCssDisplay({ offsetX: clamp(Number(event.target.value), 0, CSS_OFFSET_MAX) })}
-                  step={8}
-                  type="number"
-                  value={cssDisplay.offsetX}
-                />
-              </label>
-              <label>
-                <span>translateY</span>
-                <input
-                  aria-label="CSS translate Y"
-                  max={CSS_OFFSET_MAX}
-                  min={0}
-                  onChange={(event) => updateCssDisplay({ offsetY: clamp(Number(event.target.value), 0, CSS_OFFSET_MAX) })}
-                  step={8}
-                  type="number"
-                  value={cssDisplay.offsetY}
-                />
-              </label>
+            <div>
+              <dt>Viewport</dt>
+              <dd className="coordinate-viewport-state"><code>translate({Math.round(viewport.x)}, {Math.round(viewport.y)}) scale({viewport.scale.toFixed(2)})</code></dd>
             </div>
-            <Button onClick={() => {
-              setMappingFocus("view-client")
-              setCssDisplay({ ...DEFAULT_CSS_DISPLAY })
-            }}>Reset</Button>
-          </section>
-          <section className="coordinate-operation-group">
-            <div className="coordinate-operation-heading">
-              <strong><ConsoleLabel>Viewport</ConsoleLabel></strong>
-              <code>translate({Math.round(viewport.x)}, {Math.round(viewport.y)}) scale({viewport.scale.toFixed(2)})</code>
+            <div>
+              <dt>Evidence</dt>
+              <dd className="coordinate-evidence-state">{evidenceOpen ? "open" : "closed"}</dd>
             </div>
-            <Toolbar>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1.2))}>zoom in</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.zoomBy(1 / 1.2))}>zoom out</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.panBy({ x: 40, y: 20 }))}>pan</Button>
-              <Button onClick={() => changeViewport((tools) => tools.viewport.restore(homeViewportRef.current))}>reset</Button>
-            </Toolbar>
-            <button
-              aria-controls="coordinate-evidence"
-              aria-expanded={evidenceOpen}
-              className="coordinate-evidence-toggle"
-              onClick={() => setEvidenceOpen((open) => !open)}
-              type="button"
-            >
-              <span aria-hidden="true">▤</span>
-              <strong>Evidence</strong>
-            </button>
-          </section>
-        </div>
+          </dl>
+        </section>
       </footer>
 
       <aside
         aria-hidden={!evidenceOpen}
-        className="coordinate-evidence"
+        className="coordinate-evidence coordinate-semantic-only"
         data-open={evidenceOpen ? "true" : "false"}
         hidden={!evidenceOpen}
         id="coordinate-evidence"
       >
         <div className="coordinate-evidence-heading">
           <span>{text("Projection evidence", "投影证据")}</span>
-          <button
-            aria-label={text("Close evidence", "关闭证据面板")}
-            onClick={() => setEvidenceOpen(false)}
-            type="button"
-          >×</button>
         </div>
         <div className="coordinate-zoom-proof" aria-label={text("Zoom cause and effect", "缩放因果证据")}>
           <p>{text("Zoom changes the projection, not the Shape", "缩放改变投影，不改变 Shape")}</p>
           <dl>
           <div className="coordinate-proof-stable">
             <dt>{text("Content Shape geometry", "Content Shape 几何")}</dt>
-            <dd>{formatRect(LAB_SHAPE)}</dd>
+            <dd>{coordinateEvidence ? formatRect(coordinateEvidence.shape.content) : "measuring"}</dd>
             <small>{text(
               `Fixed source data inside explicit Demo Content bounds ${formatRect(LAB_CONTENT_BOUNDS)}. Root itself has no geometry. The logical View stays ${Math.round(probe.viewSize.width)}×${Math.round(probe.viewSize.height)}; CSS controls the current DOM footprint ${Math.round(probe.surface.width)}×${Math.round(probe.surface.height)}.`,
               `固定的源数据，位于显式定义的 Demo Content 边界 ${formatRect(LAB_CONTENT_BOUNDS)} 内。Root 本身没有几何边界。逻辑 View 保持 ${Math.round(probe.viewSize.width)}×${Math.round(probe.viewSize.height)}；当前 DOM 显示尺寸 ${Math.round(probe.surface.width)}×${Math.round(probe.surface.height)} 由 CSS 控制。`,
@@ -659,20 +723,26 @@ export default function CoordinatesExample() {
           </div>
           <div className="coordinate-proof-changing">
             <dt>{text("View projection", "View 中的投影")}</dt>
-            <dd>{formatRect(shapeProjection.view)}</dd>
+            <dd>{shapeProjection ? formatRect(shapeProjection.view) : "measuring"}</dd>
             <code>{viewWidthFormula}</code>
           </div>
           <div className="coordinate-proof-changing">
             <dt>{text("Client footprint", "Client 中的显示区域")}</dt>
-            <dd>{formatRect(shapeProjection.client)}</dd>
+            <dd>{shapeProjection ? formatRect(shapeProjection.client) : "measuring"}</dd>
             <code>{clientWidthFormula}</code>
           </div>
           <div>
             <dt>{text("Visible Content window", "可见 Content 窗口")}</dt>
-            <dd>{formatRect(visibleContent)}</dd>
+            <dd>{visibleContent ? formatRect(visibleContent) : "measuring"}</dd>
             <small>{visibleWindowIsContained
               ? text("Fully shown in the fixed reference. It changes inversely while View stays fixed.", "完整显示在固定参考系中。View 不变时，它会反向变化。")
-              : text("Extends beyond the fixed reference. Only the intersection is filled; no false boundary is drawn.", "超出固定参考系。只填充交集，不绘制伪造边界。")}</small>
+                : text("Extends beyond the fixed reference. Only the intersection is filled; no false boundary is drawn.", "超出固定参考系。只填充交集，不绘制伪造边界。")}</small>
+          </div>
+          <div>
+            <dt>Canvas event · Content · e.point</dt>
+            <dd>{eventEvidence
+              ? `${formatPoint(eventEvidence.point)} · ${eventEvidence.matchesFacade ? "match" : "mismatch"}`
+              : text("Awaiting event", "等待事件")}</dd>
           </div>
           </dl>
         </div>

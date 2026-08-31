@@ -65,6 +65,21 @@ mesh.setMaterial(glass)
 
 `UnlitMaterial`, `LambertMaterial`, and `StandardMaterial` are opaque and require color alpha `1`. `StandardMaterial` uses metallic-roughness lighting. `metallic` defaults to `0`, `roughness` defaults to `1`, and both must be from `0` to `1`. Lambert, Standard, and Glass consume directional and point lights; Standard also consumes directional shadows, the camera view, and an optional `EnvironmentMap`, while continuing to write depth in the opaque pass. Point-light radiance uses `intensity / distance²`; a configured `range` multiplies it by `clamp(1 - (distance / range)^4, 0, 1)`. Replacing a Standard material changes only CPU material values and shader uniforms; it does not advance the geometry revision.
 
+A Standard Mesh may opt into one layer-local planar reflection receiver:
+
+```ts
+const floor = new Mesh({
+  geometry: floorGeometry,
+  material: new StandardMaterial({ roughness: 0.22 }),
+  planarReflection: {
+    localPlane: { point: [0, 0, 0], normal: [0, 1, 0] },
+    resolutionScale: 0.5,
+  },
+})
+```
+
+The plane is expressed in the receiver Mesh's local space and follows its model matrix. The normal is copied and normalized. `resolutionScale` defaults to `0.5` and must be greater than `0` and at most `1`. Use `mesh.setPlanarReflection()` to replace or clear the descriptor and `mesh.getPlanarReflection()` to read a defensive copy. A WebGL2 layer accepts at most one receiver and rejects a second one before rendering mutates GPU state. The reflected pass contains only Meshes from that same WebGL2 layer, excludes the receiver to prevent recursion, and clips geometry on the opposite side of the plane. It does not capture Canvas2D Shapes, DOM content, another WebGL2 layer, or another Canvas.
+
 Material and Light RGB values are authored as sRGB display colors. The renderer converts every material and light color to linear values before shading, stores opaque and premultiplied Glass results in one linear scene target, and encodes the completed frame to sRGB only in the final output pass. Alpha remains linear coverage. `GlassMaterial.attenuationColor` is also linear because it represents a physical transmission ratio rather than a display color.
 
 `GlassMaterial` requires alpha strictly between `0` and `1`, `ior` greater than `1` (default `1.5`), `roughness` from `0` to `1` (default `0`), and non-negative `thickness` in world units (default `0.1`). The renderer uses those values for Fresnel response, directional- and point-light specular highlights, and screen-space refraction through the layer's opaque WebGL2 scene color. Refraction displaces the current fragment by the projected difference between refracted and unrefracted travel, and falls back to the undisplaced sample when that path leaves the scene-color target. Roughness selects progressively filtered scene-color and environment mip levels; zero is sharp and one selects the broadest available blur. A zero thickness keeps transmission and Fresnel shading but samples the undisplaced screen position.
@@ -169,7 +184,7 @@ These legacy methods directly mutate Child/Shape coordinates. They are batch geo
 | `redo()` | Redo one item; logs when none remain |
 | `resetHistory()` | Clear undo/redo and use the current static scene as the new baseline |
 
-Canvas2D and WebGL2 static Children participate in the same History transaction and id namespace. Camera, EnvironmentMap, and Light changes are layer display state and are not recorded. Animated Children do not participate in history. See [Scenes and tools: History transactions](../scene-and-tools.md#history-transactions) for boundaries and examples.
+Canvas2D and WebGL2 static Children participate in the same History transaction and id namespace. Mesh planar-reflection descriptors are included with Mesh state in History and scene transfer. Camera, EnvironmentMap, and Light changes are layer display state and are not recorded. Animated Children do not participate in history. See [Scenes and tools: History transactions](../scene-and-tools.md#history-transactions) for boundaries and examples.
 
 ## Animation
 

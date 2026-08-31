@@ -3,13 +3,13 @@ import type {
   ContentPoint,
   Coordinate,
   Rect,
+  StayCoordinates,
   ViewPoint,
-  ViewportState,
 } from "react-stay-canvas"
 
 export const LAB_SHAPE: Readonly<Rect> = {
   x: 145,
-  y: 155,
+  y: 180,
   width: 190,
   height: 120,
 }
@@ -27,6 +27,12 @@ export type CoordinatePlaneDomain = Readonly<{
 }>
 
 export type CoordinatePlaneName = "client" | "view" | "content"
+
+const PLANE_VERTICAL_RANGE_ALIGNMENT: Readonly<Record<CoordinatePlaneName, number>> = {
+  client: 0.03,
+  view: 0.125,
+  content: 0.13,
+}
 
 // This is the diagram's logical drawing domain, not a physical panel size.
 // Keeping it stable prevents stage composition changes from altering ranges.
@@ -70,15 +76,72 @@ export type RectProjection = {
   content: Rect
 }
 
-export function visibleContentRange(
-  probe: CoordinateProbe,
-  viewport: Readonly<ViewportState>,
+export type CoordinateEvidence = {
+  shape: RectProjection
+  contentBounds: RectProjection
+  visibleContent: Rect
+}
+
+export type CoordinateEventEvidence = {
+  point: Coordinate
+  facadeContent: Coordinate
+  matchesFacade: boolean
+}
+
+type CoordinateEvidenceTools = Pick<
+  StayCoordinates,
+  "contentToClient" | "contentToView" | "viewToContent"
+>
+
+function boundingRect(points: readonly Readonly<Coordinate>[]): Rect {
+  const xs = points.map(({ x }) => x)
+  const ys = points.map(({ y }) => y)
+  const left = Math.min(...xs)
+  const right = Math.max(...xs)
+  const top = Math.min(...ys)
+  const bottom = Math.max(...ys)
+  return { x: left, y: top, width: right - left, height: bottom - top }
+}
+
+function transformRect(
+  rect: Readonly<Rect>,
+  transform: (point: Readonly<Coordinate>) => Readonly<Coordinate>,
 ): Rect {
+  return boundingRect(RECT_CORNERS.map(({ x, y }) => transform({
+    x: rect.x + rect.width * x,
+    y: rect.y + rect.height * y,
+  })))
+}
+
+function projectContentRectWithCoordinates(
+  coordinates: CoordinateEvidenceTools,
+  content: Readonly<Rect>,
+): RectProjection {
   return {
-    x: -viewport.x / viewport.scale,
-    y: -viewport.y / viewport.scale,
-    width: probe.viewSize.width / viewport.scale,
-    height: probe.viewSize.height / viewport.scale,
+    content: { ...content },
+    view: transformRect(content, (point) => coordinates.contentToView(point)),
+    client: transformRect(content, (point) => coordinates.contentToClient(point)),
+  }
+}
+
+/**
+ * Reads every displayed projection from the live StayCanvas coordinate system.
+ * The demo owns only rectangle aggregation; it must not duplicate viewport or
+ * DOM-scale formulas that could remain self-consistent while the library regresses.
+ */
+export function readCoordinateEvidence(
+  coordinates: CoordinateEvidenceTools,
+  viewSize: Readonly<{ width: number; height: number }>,
+  contentShape: Readonly<Rect> = LAB_SHAPE,
+  contentBounds: Readonly<Rect> = LAB_CONTENT_BOUNDS,
+): CoordinateEvidence {
+  return {
+    shape: projectContentRectWithCoordinates(coordinates, contentShape),
+    contentBounds: projectContentRectWithCoordinates(coordinates, contentBounds),
+    visibleContent: transformRect(
+      { x: 0, y: 0, width: viewSize.width, height: viewSize.height },
+      (point) => coordinates.viewToContent(point),
+    ),
   }
 }
 
@@ -92,8 +155,8 @@ export function contentReferenceRange(probe: CoordinateProbe): Rect {
 }
 
 export function clientReferenceRange(probe: CoordinateProbe, includedRect?: Readonly<Rect>): Rect {
-  const horizontalPadding = probe.surface.width * 0.18
-  const topPadding = probe.surface.height * 0.22
+  const horizontalPadding = probe.surface.width * 0.1
+  const topPadding = probe.surface.height * 0.2
   const bottomPadding = probe.surface.height * 0.12
   const x = probe.surface.left - horizontalPadding
   const y = probe.surface.top - topPadding
@@ -138,7 +201,16 @@ export function coordinatePlaneRange(
     : name === "view"
       ? { x: 0, y: 0, width: probe.viewSize.width, height: probe.viewSize.height }
       : contentReferenceRange(probe)
-  return expandRangeToAspect(range, domain.width / domain.height)
+  const fitted = expandRangeToAspect(range, domain.width / domain.height)
+  const verticalSurplus = fitted.height - range.height
+  if (verticalSurplus <= 0) return fitted
+  return {
+    ...fitted,
+    // Each coordinate space owns the same fitted scale. Only the allocation of
+    // unavoidable aspect-ratio padding differs so corresponding geometry stays
+    // legible across the staged physical planes.
+    y: range.y - verticalSurplus * PLANE_VERTICAL_RANGE_ALIGNMENT[name],
+  }
 }
 
 export function projectCoordinatePlanePoint(
@@ -203,12 +275,10 @@ export function projectPointToRange(
 
 export function projectClientPlane(
   probe: CoordinateProbe,
-  viewport: Readonly<ViewportState>,
+  evidence: Readonly<CoordinateEvidence>,
   clientRange: Readonly<Rect>,
   target: Readonly<{ width: number; height: number }>,
 ) {
-  const shapeProjection = projectContentRect(probe, viewport)
-  const boundsProjection = projectContentRect(probe, viewport, LAB_CONTENT_BOUNDS)
   return {
     canvasDom: projectRectToRange({
       x: probe.surface.left,
@@ -216,9 +286,9 @@ export function projectClientPlane(
       width: probe.surface.width,
       height: probe.surface.height,
     }, clientRange, target),
-    contentBounds: projectRectToRange(boundsProjection.client, clientRange, target),
+    contentBounds: projectRectToRange(evidence.contentBounds.client, clientRange, target),
     point: projectPointToRange(probe.client, clientRange, target),
-    shape: projectRectToRange(shapeProjection.client, clientRange, target),
+    shape: projectRectToRange(evidence.shape.client, clientRange, target),
   }
 }
 
@@ -241,29 +311,6 @@ export function clippedRectEdges(rect: Readonly<Rect>, clip: Readonly<Rect>) {
       : undefined,
     rect.x >= clip.x && rect.x <= clip.x + clip.width ? vertical(rect.x) : undefined,
   ]
-}
-
-export function projectContentRect(
-  probe: CoordinateProbe,
-  viewport: Readonly<ViewportState>,
-  content: Readonly<Rect> = LAB_SHAPE,
-): RectProjection {
-  const view = {
-    x: content.x * viewport.scale + viewport.x,
-    y: content.y * viewport.scale + viewport.y,
-    width: content.width * viewport.scale,
-    height: content.height * viewport.scale,
-  }
-  return {
-    content: { ...content },
-    view,
-    client: {
-      x: probe.surface.left + view.x / probe.surface.scaleX,
-      y: probe.surface.top + view.y / probe.surface.scaleY,
-      width: view.width / probe.surface.scaleX,
-      height: view.height / probe.surface.scaleY,
-    },
-  }
 }
 
 export const formatPoint = ({ x, y }: Coordinate) => `${Math.round(x)}, ${Math.round(y)}`

@@ -74,8 +74,9 @@ export function createSceneTargetResources(
   context: WebGL2RenderingContext,
   width: number,
   height: number,
+  { multisample = true }: { readonly multisample?: boolean } = {},
 ): SceneTargetResources {
-  const sampleCount = sceneSampleCount(context)
+  const sampleCount = multisample ? sceneSampleCount(context) : 0
   const colorRenderbuffer = context.createRenderbuffer()
   if (!colorRenderbuffer) throw new Error("Unable to create WebGL2 scene color renderbuffer")
   let depthRenderbuffer: WebGLRenderbuffer | undefined

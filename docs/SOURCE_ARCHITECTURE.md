@@ -118,8 +118,11 @@ public display configuration. `WebGL2LayerRuntime` subscribes their CPU mutation
 live cache objects when the resolver returns the same context. Context restoration forgets invalid
 handles and lazily reconstructs them from CPU Mesh/Camera/Environment/Light state. Geometry normals share the
 Mesh geometry revision; material, light, model, and camera changes never upload geometry buffers.
-Directional shadow camera state remains Light-owned, while per-Mesh cast/receive flags participate
-in History and scene transfer. One persistent depth texture/framebuffer is derived per shadowed
+Directional shadow camera state remains Light-owned, while per-Mesh cast/receive flags and the optional
+local planar-reflection descriptor participate in History and scene transfer. The Mesh owns that
+descriptor because its local plane must follow the same model, undo, import, and dirty lifecycle as
+the receiver; a layer-owned plane plus a Mesh flag would create two competing sources of truth. One
+persistent depth texture/framebuffer is derived per shadowed
 layer and recreated only for a map-size or context-lifecycle change; the core never auto-fits the
 explicit orthographic shadow frustum to scene content. Point lights use world-space positions and
 inverse-square attenuation with an optional smooth finite range; they do not own shadow resources.
@@ -137,6 +140,19 @@ the complete scene resolves into the same texture. One fullscreen output pipelin
 linear color to sRGB, restores the context's straight or premultiplied alpha representation, and
 presents to the default framebuffer. Empty frames clear the default framebuffer without allocating a
 scene target.
+
+At most one Standard Mesh in a WebGL2 layer may own a planar-reflection descriptor. Aggregate
+preflight rejects a second receiver before pruning or allocating GPU resources. When present, the
+runtime derives a world plane through the receiver model matrix and its inverse-transpose, mirrors
+the current camera pose, excludes the receiver, re-sorts the remaining opaque/transparent queues,
+and draws them into a persistent single-sample linear RGBA8 reflection target. Every material shader
+applies the same world-plane fragment clip; this prevents geometry on the rejected half-space from
+leaking into the reflected view without introducing an oblique projection contract. The existing
+directional shadow pass is reused rather than rendered again. Opaque reflection color is resolved and
+mipmapped before reflected Glass, and the complete reflection is resolved and mipmapped again before
+the main Standard receiver projects it from world position. The target follows resize, context, and
+dispose lifecycles but is never allocated when no receiver exists. Reflection remains layer-local and
+cannot capture Canvas2D, DOM, another layer, another Canvas, or itself.
 
 Public Material and Light RGB values are sRGB inputs and become linear CPU uniform values. An optional
 layer-owned equirectangular RGBA8 `EnvironmentMap` uploads as `SRGB8_ALPHA8`, so filtering and mip
@@ -161,8 +177,8 @@ refraction, and sampling outside the WebGL2 layer remain outside this runtime.
 
 The native backend does not consume Shape RenderPlans, Canvas2D raster surfaces, projective Shape
 placements, or Shape `zIndex`. Depth is authoritative inside a WebGL2 layer. Mesh history and scene
-transfer deep-copy CPU geometry, normals, model matrices, and material values, including Standard
-metallic-roughness and Glass roughness/volume attenuation; Camera, EnvironmentMap, and Light state is display configuration and is neither historical
+transfer deep-copy CPU geometry, normals, model matrices, material values, and planar-reflection
+descriptors, including Standard metallic-roughness and Glass roughness/volume attenuation; Camera, EnvironmentMap, and Light state is display configuration and is neither historical
 nor transferred.
 
 ## Documentation boundary

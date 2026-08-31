@@ -1,5 +1,5 @@
 import type { Matrix4 } from "./math3D"
-import { Mesh } from "./mesh"
+import { Mesh, type PlanarReflection } from "./mesh"
 import {
   captureMeshMaterial,
   materializeMeshMaterial,
@@ -10,11 +10,13 @@ import { StayWebGLChild } from "./stayWebGLChild"
 export interface WebGLMeshSnapshot {
   readonly positions: Float32Array
   readonly normals?: Float32Array
+  readonly uvs?: Float32Array
   readonly indices: Uint16Array
   readonly modelMatrix: Matrix4
   readonly material: MeshMaterialSnapshot
   readonly castShadow: boolean
   readonly receiveShadow: boolean
+  readonly planarReflection?: PlanarReflection
 }
 
 export interface StayWebGLChildSnapshot {
@@ -41,11 +43,13 @@ function captureMesh(mesh: Mesh): WebGLMeshSnapshot {
   return {
     positions: geometry.positions,
     normals: geometry.normals,
+    uvs: geometry.uvs,
     indices: geometry.indices,
     modelMatrix: mesh.getModelMatrix(),
     material: captureMeshMaterial(mesh.getMaterial()),
     castShadow: mesh.castShadow,
     receiveShadow: mesh.receiveShadow,
+    planarReflection: mesh.getPlanarReflection(),
   }
 }
 
@@ -54,12 +58,14 @@ function materializeMesh(snapshot: WebGLMeshSnapshot) {
     geometry: {
       positions: snapshot.positions,
       normals: snapshot.normals,
+      uvs: snapshot.uvs,
       indices: snapshot.indices,
     },
     modelMatrix: snapshot.modelMatrix,
     material: materializeMeshMaterial(snapshot.material),
     castShadow: snapshot.castShadow,
     receiveShadow: snapshot.receiveShadow,
+    planarReflection: snapshot.planarReflection,
   })
 }
 

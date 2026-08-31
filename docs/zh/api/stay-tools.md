@@ -65,6 +65,21 @@ mesh.setMaterial(glass)
 
 `UnlitMaterial`、`LambertMaterial` 与 `StandardMaterial` 都不透明，color alpha 必须为 `1`。`StandardMaterial` 使用 metallic-roughness 光照；`metallic` 默认 `0`，`roughness` 默认 `1`，两者都必须位于 `0` 到 `1`。Lambert、Standard 与 Glass 都会消费方向光和点光；Standard 还会消费方向光阴影、相机视线和可选 `EnvironmentMap`，但仍在 opaque pass 中写入 depth。点光 radiance 使用 `intensity / distance²`；配置 `range` 时再乘以 `clamp(1 - (distance / range)^4, 0, 1)`。替换 Standard material 只更新 CPU 材质值和 shader uniform，不会推进 geometry revision。
 
+一个 Standard Mesh 可以显式成为当前图层唯一的平面反射接收面：
+
+```ts
+const floor = new Mesh({
+  geometry: floorGeometry,
+  material: new StandardMaterial({ roughness: 0.22 }),
+  planarReflection: {
+    localPlane: { point: [0, 0, 0], normal: [0, 1, 0] },
+    resolutionScale: 0.5,
+  },
+})
+```
+
+平面位于 receiver Mesh 的局部空间，会随 model matrix 变化；normal 会被复制并归一化。`resolutionScale` 默认 `0.5`，必须大于 `0` 且不超过 `1`。使用 `mesh.setPlanarReflection()` 替换或清除描述符，`mesh.getPlanarReflection()` 返回防御性副本。一个 WebGL2 图层最多允许一个 receiver；第二个 receiver 会在渲染修改 GPU 状态前被拒绝。反射 pass 只包含同一 WebGL2 图层的 Mesh，排除 receiver 以防递归，并裁掉平面另一侧的几何。它不会捕获 Canvas2D Shape、DOM、其他 WebGL2 图层或另一个 Canvas。
+
 Material 与 Light 的 RGB 值按 sRGB 显示颜色传入。renderer 会在着色前把所有材质和灯光颜色转换到线性空间，把 opaque 与预乘 alpha 的 Glass 结果写入同一个线性 scene target，只在最终输出 pass 把完整画面编码为 sRGB。alpha 仍是线性覆盖率；`GlassMaterial.attenuationColor` 表示物理透射比例，因此也保持在线性空间。
 
 `GlassMaterial` 的 alpha 必须严格位于 `0` 与 `1` 之间，`ior` 必须大于 `1`（默认 `1.5`），`roughness` 位于 `0` 到 `1`（默认 `0`），`thickness` 是非负的 world-space 距离（默认 `0.1`）。renderer 会用这些值计算 Fresnel 响应、方向光与点光镜面高光，以及对本图层 opaque WebGL2 scene color 的屏幕空间折射。折射位移取折射路径与未折射路径的投影差；若该路径越出 scene-color target，则退回未偏移采样。roughness 会选择逐级过滤后的 scene-color 和 environment mip：零表示清晰，一表示使用可用的最宽模糊。厚度为零时仍保留透射和 Fresnel，只是不偏移屏幕采样位置。
@@ -169,7 +184,7 @@ renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 dep
 | `redo()` | 重做一个历史项；无可重做项时只输出日志 |
 | `resetHistory()` | 清空 undo/redo，并把当前静态场景作为新的历史基线 |
 
-Canvas2D 与 WebGL2 静态 Child 进入同一 History 事务和 id 命名空间；Camera、EnvironmentMap 与 Light 修改属于图层显示状态，不进入历史。动画 Child 不参与历史。调用边界与示例见[场景与工具：历史记录](../scene-and-tools.md#历史记录)。
+Canvas2D 与 WebGL2 静态 Child 进入同一 History 事务和 id 命名空间；Mesh 的平面反射描述符随 Mesh 状态进入 History 和场景传输。Camera、EnvironmentMap 与 Light 修改属于图层显示状态，不进入历史。动画 Child 不参与历史。调用边界与示例见[场景与工具：历史记录](../scene-and-tools.md#历史记录)。
 
 ## 动画
 

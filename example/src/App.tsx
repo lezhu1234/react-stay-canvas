@@ -101,6 +101,7 @@ export default function App() {
   const path = useHashPath()
   const active = getExampleByPath(path)
   const shellClassName = active?.presentation === "immersive"
+    || active?.presentation === "canvas-only"
     ? "app-shell example-active example-immersive"
     : active ? "app-shell example-active" : "app-shell"
 

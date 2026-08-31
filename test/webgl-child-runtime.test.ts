@@ -3,9 +3,11 @@ import { describe, expect, it, vi } from "vitest"
 import { ChildrenStore } from "../src/stay/children/childrenStore"
 import { captureChildHistory } from "../src/stay/historySnapshot"
 import { identityMatrix4, translationMatrix4 } from "../src/stay/webgl2/math3D"
+import { ImageTexture } from "../src/stay/webgl2/imageTexture"
 import { Mesh } from "../src/stay/webgl2/mesh"
 import {
   GlassMaterial,
+  ImageMaterial,
   LambertMaterial,
   StandardMaterial,
   UnlitMaterial,
@@ -32,6 +34,16 @@ const triangle = (z = 0) => ({
 })
 
 const normals = [0, 0, 1, 0, 0, 1, 0, 0, 1]
+const uvs = [0, 0, 1, 0, 0.5, 1]
+
+const imageTexture = () => new ImageTexture({
+  width: 2,
+  height: 1,
+  data: new Uint8Array([
+    255, 0, 0, 255,
+    0, 0, 255, 255,
+  ]),
+})
 
 const mesh = (z = 0) => new Mesh({
   geometry: triangle(z),
@@ -224,6 +236,10 @@ describe("internal Stay WebGL Child runtime", () => {
           metallic: 0.15,
           roughness: 0.28,
         }),
+        planarReflection: {
+          localPlane: { point: [0, -0.2, 0], normal: [0, 2, 0] },
+          resolutionScale: 0.75,
+        },
       })],
     })
 
@@ -233,6 +249,10 @@ describe("internal Stay WebGL Child runtime", () => {
       color: [0.6, 0.65, 0.7, 1],
       metallic: Math.fround(0.15),
       roughness: Math.fround(0.28),
+    })
+    expect(snapshot.meshes[0].planarReflection).toEqual({
+      localPlane: { point: [0, -0.2, 0], normal: [0, 1, 0] },
+      resolutionScale: 0.75,
     })
     const restored = restoreStayWebGLChildSnapshot(snapshot)
     expect(captureStayWebGLSceneChild(restored).meshes[0].material)
@@ -245,6 +265,65 @@ describe("internal Stay WebGL Child runtime", () => {
     }))
     original.destroy()
     restored.destroy()
+  })
+
+  it("captures image uvs while safely sharing an immutable CPU texture", () => {
+    const texture = imageTexture()
+    const original = new StayWebGLChild({
+      id: "image-source",
+      className: "room-image",
+      layer: 0,
+      meshes: [new Mesh({
+        geometry: { ...triangle(), uvs },
+        material: new ImageMaterial({ texture }),
+      })],
+    })
+
+    const snapshot = captureStayWebGLChildSnapshot(original)
+    const restored = restoreStayWebGLChildSnapshot(snapshot)
+    const restoredMaterial = restored.meshes[0].getMaterial()
+
+    expect(snapshot.meshes[0].uvs).toEqual(new Float32Array(uvs))
+    expect(snapshot.meshes[0].uvs).not.toBe(original.meshes[0].copyGeometrySnapshot().uvs)
+    expect(snapshot.meshes[0].material).toEqual({ kind: "image", texture })
+    expect(restoredMaterial).toBeInstanceOf(ImageMaterial)
+    expect((restoredMaterial as ImageMaterial).texture).toBe(texture)
+    restored.meshes[0].setGeometry({ ...triangle(), uvs: [0, 1, 1, 1, 0.5, 0] })
+    expect(original.meshes[0].copyGeometrySnapshot().uvs).toEqual(new Float32Array(uvs))
+    original.destroy()
+    restored.destroy()
+  })
+
+  it("owns validated planar-reflection state atomically", () => {
+    const changes = vi.fn()
+    const receiver = new Mesh({
+      geometry: { ...triangle(), normals },
+      material: new StandardMaterial(),
+      planarReflection: {
+        localPlane: { point: [0, 0, 0], normal: [0, 4, 0] },
+      },
+    })
+    receiver.subscribeChanges(changes)
+
+    expect(receiver.getPlanarReflection()).toEqual({
+      localPlane: { point: [0, 0, 0], normal: [0, 1, 0] },
+      resolutionScale: 0.5,
+    })
+    expect(() => receiver.setPlanarReflection({
+      localPlane: { point: [0, 0, 0], normal: [0, 0, 0] },
+    })).toThrow("finite non-zero length")
+    expect(() => receiver.setPlanarReflection({
+      localPlane: { point: [0, 0, 0], normal: [0, 1, 0] },
+      resolutionScale: 1.1,
+    })).toThrow("at most 1")
+    expect(() => receiver.setMaterial(new LambertMaterial()))
+      .toThrow("requires a StandardMaterial")
+    expect(receiver.getMaterial()).toEqual(new StandardMaterial())
+    expect(changes).not.toHaveBeenCalled()
+
+    receiver.setPlanarReflection(undefined)
+    receiver.setMaterial(new LambertMaterial())
+    expect(changes).toHaveBeenCalledTimes(2)
   })
 
   it("rejects invalid ownership inputs before subscribing to Mesh state", () => {

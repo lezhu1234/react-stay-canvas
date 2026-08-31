@@ -51,6 +51,7 @@ export function createRecordingWebGLContext(
     TEXTURE2: 0x84c2,
     TEXTURE3: 0x84c3,
     TEXTURE4: 0x84c4,
+    TEXTURE5: 0x84c5,
     TEXTURE_2D: 0x0de1,
     TEXTURE_WRAP_S: 0x2802,
     TEXTURE_WRAP_T: 0x2803,

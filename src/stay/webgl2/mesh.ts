@@ -7,6 +7,7 @@ import {
 import {
   copyMeshMaterial,
   GlassMaterial,
+  ImageMaterial,
   LambertMaterial,
   meshMaterialUsesLighting,
   StandardMaterial,
@@ -14,15 +15,33 @@ import {
   type MeshMaterial,
 } from "./material"
 
+export interface PlanarReflectionPlane {
+  readonly point: readonly [number, number, number]
+  readonly normal: readonly [number, number, number]
+}
+
+export interface PlanarReflectionProps {
+  readonly localPlane: PlanarReflectionPlane
+  readonly resolutionScale?: number
+}
+
+export interface PlanarReflection {
+  readonly localPlane: PlanarReflectionPlane
+  readonly resolutionScale: number
+}
+
 export interface MeshGeometryInput {
   readonly positions: ArrayLike<number>
   readonly normals?: ArrayLike<number>
+  /** One top-origin uv pair per vertex. */
+  readonly uvs?: ArrayLike<number>
   readonly indices: ArrayLike<number>
 }
 
 export interface MeshGeometrySnapshot {
   readonly positions: Float32Array
   readonly normals?: Float32Array
+  readonly uvs?: Float32Array
   readonly indices: Uint16Array
   readonly revision: number
 }
@@ -30,6 +49,51 @@ export interface MeshGeometrySnapshot {
 function finite(value: number, name: string) {
   if (!Number.isFinite(value)) throw new TypeError(`${name} must be finite`)
   return value
+}
+
+function copyVector3(
+  value: readonly [number, number, number],
+  name: string,
+): readonly [number, number, number] {
+  return [
+    finite(value[0], `${name}[0]`),
+    finite(value[1], `${name}[1]`),
+    finite(value[2], `${name}[2]`),
+  ]
+}
+
+function copyPlanarReflection(
+  value: PlanarReflectionProps | PlanarReflection,
+): PlanarReflection {
+  const point = copyVector3(value.localPlane.point, "Planar reflection point")
+  const inputNormal = copyVector3(value.localPlane.normal, "Planar reflection normal")
+  const length = Math.hypot(...inputNormal)
+  if (!Number.isFinite(length) || length === 0) {
+    throw new RangeError("Planar reflection normal must have a finite non-zero length")
+  }
+  const normal: readonly [number, number, number] = [
+    inputNormal[0] / length,
+    inputNormal[1] / length,
+    inputNormal[2] / length,
+  ]
+  const resolutionScale = finite(
+    value.resolutionScale ?? 0.5,
+    "Planar reflection resolutionScale",
+  )
+  if (resolutionScale <= 0 || resolutionScale > 1) {
+    throw new RangeError("Planar reflection resolutionScale must be greater than 0 and at most 1")
+  }
+  return { localPlane: { point, normal }, resolutionScale }
+}
+
+function planarReflectionsEqual(
+  first: PlanarReflection | undefined,
+  second: PlanarReflection | undefined,
+) {
+  return first === second || Boolean(first && second
+    && arrayValuesEqual(first.localPlane.point, second.localPlane.point)
+    && arrayValuesEqual(first.localPlane.normal, second.localPlane.normal)
+    && first.resolutionScale === second.resolutionScale)
 }
 
 function copyGeometry(input: MeshGeometryInput) {
@@ -74,6 +138,19 @@ function copyGeometry(input: MeshGeometryInput) {
     }
   }
   const vertexCount = positions.length / 3
+  let uvs: Float32Array | undefined
+  if (input.uvs !== undefined) {
+    if (input.uvs.length !== vertexCount * 2) {
+      throw new RangeError("Mesh uvs must contain one uv pair per vertex")
+    }
+    uvs = new Float32Array(input.uvs.length)
+    for (let index = 0; index < input.uvs.length; index++) {
+      uvs[index] = finite(input.uvs[index], `Mesh uv ${index}`)
+      if (!Number.isFinite(uvs[index])) {
+        throw new RangeError(`Mesh uv ${index} exceeds Float32 range`)
+      }
+    }
+  }
   const indices = new Uint16Array(input.indices.length)
   for (let index = 0; index < input.indices.length; index++) {
     const value = input.indices[index]
@@ -82,7 +159,7 @@ function copyGeometry(input: MeshGeometryInput) {
     }
     indices[index] = value
   }
-  return { positions, normals, indices, localBoundsCenter: geometryBoundsCenter(positions) }
+  return { positions, normals, uvs, indices, localBoundsCenter: geometryBoundsCenter(positions) }
 }
 
 function geometryBoundsCenter(positions: Float32Array) {
@@ -122,6 +199,7 @@ function arrayValuesEqual(
 export class Mesh {
   #positions: Float32Array
   #normals?: Float32Array
+  #uvs?: Float32Array
   #indices: Uint16Array
   #localBoundsCenter: Float32Array
   #geometryRevision = 0
@@ -129,6 +207,7 @@ export class Mesh {
   #material: MeshMaterial
   #castShadow: boolean
   #receiveShadow: boolean
+  #planarReflection?: PlanarReflection
   readonly #changeListeners = new Set<() => void>()
 
   constructor({
@@ -137,42 +216,52 @@ export class Mesh {
     material,
     castShadow = false,
     receiveShadow = false,
+    planarReflection,
   }: {
     geometry: MeshGeometryInput
     modelMatrix?: ArrayLike<number>
     material?: MeshMaterial
     castShadow?: boolean
     receiveShadow?: boolean
+    planarReflection?: PlanarReflectionProps
   }) {
     const copied = copyGeometry(geometry)
     const copiedMaterial = copyMeshMaterial(material ?? new UnlitMaterial())
     const copiedModelMatrix = copyMatrix4(modelMatrix, "Mesh model matrix")
-    assertLitMeshState(copied, copiedModelMatrix, copiedMaterial)
+    const copiedPlanarReflection = planarReflection
+      ? copyPlanarReflection(planarReflection)
+      : undefined
+    assertMeshState(copied, copiedModelMatrix, copiedMaterial, copiedPlanarReflection)
     this.#positions = copied.positions
     this.#normals = copied.normals
+    this.#uvs = copied.uvs
     this.#indices = copied.indices
     this.#localBoundsCenter = copied.localBoundsCenter
     this.#modelMatrix = copiedModelMatrix
     this.#material = copiedMaterial
     this.#castShadow = copyBoolean(castShadow, "Mesh castShadow")
     this.#receiveShadow = copyBoolean(receiveShadow, "Mesh receiveShadow")
+    this.#planarReflection = copiedPlanarReflection
   }
 
   setGeometry(geometry: MeshGeometryInput) {
     if (
       float32ValuesEqual(this.#positions, geometry.positions)
       && optionalFloat32ValuesEqual(this.#normals, geometry.normals)
+      && optionalFloat32ValuesEqual(this.#uvs, geometry.uvs)
       && arrayValuesEqual(this.#indices, geometry.indices)
     ) return
     const copied = copyGeometry(geometry)
-    assertLitMeshState(copied, this.#modelMatrix, this.#material)
+    assertMeshState(copied, this.#modelMatrix, this.#material, this.#planarReflection)
     if (
       arrayValuesEqual(this.#positions, copied.positions)
       && optionalArrayValuesEqual(this.#normals, copied.normals)
+      && optionalArrayValuesEqual(this.#uvs, copied.uvs)
       && arrayValuesEqual(this.#indices, copied.indices)
     ) return
     this.#positions = copied.positions
     this.#normals = copied.normals
+    this.#uvs = copied.uvs
     this.#indices = copied.indices
     this.#localBoundsCenter = copied.localBoundsCenter
     this.#geometryRevision += 1
@@ -182,7 +271,7 @@ export class Mesh {
   setModelMatrix(modelMatrix: ArrayLike<number>) {
     if (float32ValuesEqual(this.#modelMatrix, modelMatrix)) return
     const copied = copyMatrix4(modelMatrix, "Mesh model matrix")
-    assertLitMeshState(this.#geometryState(), copied, this.#material)
+    assertMeshState(this.#geometryState(), copied, this.#material, this.#planarReflection)
     if (arrayValuesEqual(this.#modelMatrix, copied)) return
     this.#modelMatrix = copied
     this.#notifyChange()
@@ -190,16 +279,17 @@ export class Mesh {
 
   setMaterial(material: MeshMaterial) {
     if (!(material instanceof UnlitMaterial)
+        && !(material instanceof ImageMaterial)
         && !(material instanceof LambertMaterial)
         && !(material instanceof StandardMaterial)
         && !(material instanceof GlassMaterial)) {
       throw new TypeError(
-        "Mesh material must be an UnlitMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
+        "Mesh material must be an UnlitMaterial, ImageMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
       )
     }
     if (materialsEqual(this.#material, material)) return
     const copied = copyMeshMaterial(material)
-    assertLitMeshState(this.#geometryState(), this.#modelMatrix, copied)
+    assertMeshState(this.#geometryState(), this.#modelMatrix, copied, this.#planarReflection)
     if (materialsEqual(this.#material, copied)) return
     this.#material = copied
     this.#notifyChange()
@@ -219,12 +309,25 @@ export class Mesh {
     this.#notifyChange()
   }
 
+  setPlanarReflection(planarReflection?: PlanarReflectionProps) {
+    const copied = planarReflection ? copyPlanarReflection(planarReflection) : undefined
+    assertPlanarReflectionMaterial(this.#material, copied)
+    if (planarReflectionsEqual(this.#planarReflection, copied)) return
+    this.#planarReflection = copied
+    this.#notifyChange()
+  }
+
   get castShadow() {
     return this.#castShadow
   }
 
   get receiveShadow() {
     return this.#receiveShadow
+  }
+
+  getPlanarReflection(): PlanarReflection | undefined {
+    const value = this.#planarReflection
+    return value ? copyPlanarReflection(value) : undefined
   }
 
   get geometryRevision() {
@@ -236,6 +339,7 @@ export class Mesh {
     return {
       positions: this.#positions.slice(),
       normals: this.#normals?.slice(),
+      uvs: this.#uvs?.slice(),
       indices: this.#indices.slice(),
       revision: this.#geometryRevision,
     }
@@ -274,6 +378,7 @@ export class Mesh {
     return {
       positions: this.#positions,
       normals: this.#normals,
+      uvs: this.#uvs,
       indices: this.#indices,
     }
   }
@@ -309,7 +414,12 @@ function optionalFloat32ValuesEqual(
 }
 
 function materialsEqual(first: MeshMaterial, second: MeshMaterial) {
-  if (first.kind !== second.kind || !arrayValuesEqual(first.color, second.color)) return false
+  if (first.kind !== second.kind) return false
+  if (first instanceof ImageMaterial && second instanceof ImageMaterial) {
+    return first.texture === second.texture
+  }
+  if (first instanceof ImageMaterial || second instanceof ImageMaterial) return false
+  if (!arrayValuesEqual(first.color, second.color)) return false
   if (first instanceof StandardMaterial && second instanceof StandardMaterial) {
     return first.metallic === second.metallic
       && first.roughness === second.roughness
@@ -324,12 +434,27 @@ function materialsEqual(first: MeshMaterial, second: MeshMaterial) {
   return true
 }
 
-function assertLitMeshState(
-  geometry: { readonly normals?: ArrayLike<number> },
-  modelMatrix: Matrix4,
-  material: MeshMaterial
+function assertPlanarReflectionMaterial(
+  material: MeshMaterial,
+  planarReflection: PlanarReflection | undefined,
 ) {
-  if (!meshMaterialUsesLighting(material)) return
-  if (!geometry.normals) throw new RangeError("Lit Mesh geometry requires normals")
-  normalMatrix3FromMatrix4(modelMatrix)
+  if (planarReflection && !(material instanceof StandardMaterial)) {
+    throw new RangeError("Planar reflection requires a StandardMaterial receiver")
+  }
+}
+
+function assertMeshState(
+  geometry: { readonly normals?: ArrayLike<number>; readonly uvs?: ArrayLike<number> },
+  modelMatrix: Matrix4,
+  material: MeshMaterial,
+  planarReflection: PlanarReflection | undefined,
+) {
+  if (material instanceof ImageMaterial && !geometry.uvs) {
+    throw new RangeError("ImageMaterial Mesh geometry requires uvs")
+  }
+  if (meshMaterialUsesLighting(material)) {
+    if (!geometry.normals) throw new RangeError("Lit Mesh geometry requires normals")
+    normalMatrix3FromMatrix4(modelMatrix)
+  }
+  assertPlanarReflectionMaterial(material, planarReflection)
 }

@@ -21,7 +21,12 @@ export function createStayWebGLTools(this: Stay<any>): StayWebGLTools {
     const child = new StayWebGLChild(props)
     try {
       child.installRuntime({
-        onChange: (childId) => this.markHistoryChildChanged(childId),
+        onChange: (childId) => {
+          this.markHistoryChildChanged(childId)
+          // A previous invalid frame intentionally stops the render loop. A CPU
+          // correction must be able to schedule the clean retry that recovers it.
+          this.renderer.start()
+        },
         validateLayer,
       })
       this.pushWebGLChild(child)

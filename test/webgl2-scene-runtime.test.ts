@@ -9,10 +9,12 @@ import {
 import { Mesh } from "../src/stay/webgl2/mesh"
 import {
   GlassMaterial,
+  ImageMaterial,
   LambertMaterial,
   StandardMaterial,
   UnlitMaterial,
 } from "../src/stay/webgl2/material"
+import { ImageTexture } from "../src/stay/webgl2/imageTexture"
 import { AmbientLight, DirectionalLight, PointLight } from "../src/stay/webgl2/light"
 import { EnvironmentMap } from "../src/stay/webgl2/environmentMap"
 import { PerspectiveCamera } from "../src/stay/webgl2/perspectiveCamera"
@@ -38,6 +40,22 @@ const triangle = (z = 0) => ({
 const litTriangle = (z = 0) => ({
   ...triangle(z),
   normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+})
+
+const texturedTriangle = (z = 0) => ({
+  ...triangle(z),
+  uvs: [0, 0, 1, 0, 0.5, 1],
+})
+
+const imageTexture = () => new ImageTexture({
+  width: 2,
+  height: 2,
+  data: new Uint8Array([
+    255, 0, 0, 255,
+    0, 255, 0, 255,
+    0, 0, 255, 255,
+    255, 255, 255, 255,
+  ]),
 })
 
 const unlit = (color: readonly [number, number, number, number]) =>
@@ -172,6 +190,48 @@ describe("internal WebGL2 scene runtime", () => {
     expect(mesh.copyGeometrySnapshot().revision).toBe(0)
   })
 
+  it("owns opaque image pixels and validates image UV state transactionally", () => {
+    const source = imageTexture().copySnapshot().data
+    const texture = new ImageTexture({ width: 2, height: 2, data: source })
+    source[0] = 0
+    expect(texture.copySnapshot().data[0]).toBe(255)
+
+    expect(() => new ImageTexture({
+      width: 2,
+      height: 2,
+      data: new Uint8Array(15),
+    })).toThrow("exactly 16 RGBA8 values")
+    expect(() => new ImageTexture({
+      width: 1,
+      height: 1,
+      data: new Uint8Array([0, 0, 0, 254]),
+    })).toThrow("alpha must be 255")
+    expect(() => new Mesh({
+      geometry: triangle(),
+      material: new ImageMaterial({ texture }),
+    })).toThrow("requires uvs")
+
+    const mesh = new Mesh({
+      geometry: texturedTriangle(),
+      material: new ImageMaterial({ texture }),
+    })
+    const before = mesh.copyGeometrySnapshot()
+    expect(() => mesh.setGeometry({
+      ...triangle(),
+      uvs: [0, 0, 1, 0],
+    })).toThrow("one uv pair per vertex")
+    expect(() => mesh.setGeometry({
+      ...triangle(),
+      uvs: [0, 0, 1, 0, Number.NaN, 1],
+    })).toThrow("Mesh uv 4 must be finite")
+    expect(mesh.copyGeometrySnapshot()).toEqual(before)
+    expect(() => mesh.setMaterial(new UnlitMaterial()))
+      .not.toThrow()
+    expect(() => mesh.setMaterial(new ImageMaterial({ texture })))
+      .not.toThrow()
+    expect(mesh.geometryRevision).toBe(0)
+  })
+
   it("reuses program and mesh buffers until CPU geometry changes", () => {
     const canvas = document.createElement("canvas")
     canvas.width = 240
@@ -187,18 +247,18 @@ describe("internal WebGL2 scene runtime", () => {
 
     expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
     expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(2)
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(3)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(4)
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(2)
 
     mesh.setGeometry(triangle(-0.25))
     runtime.render([mesh], camera())
     expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(2)
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(6)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(8)
 
     runtime.render([], camera())
-    expect(gl.spies.deleteBuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.deleteBuffer).toHaveBeenCalledTimes(4)
     expect(gl.spies.deleteVertexArray).toHaveBeenCalledOnce()
     runtime.dispose()
     expect(gl.spies.deleteProgram).toHaveBeenCalledTimes(2)
@@ -238,7 +298,7 @@ describe("internal WebGL2 scene runtime", () => {
     expect(changes).toEqual([])
     expect(glassChanges).toEqual([])
     expect(mesh.geometryRevision).toBe(0)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(3)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(4)
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(2)
     runtime.dispose()
   })
@@ -256,13 +316,13 @@ describe("internal WebGL2 scene runtime", () => {
 
     expect(() => runtime.render([mesh], camera()))
       .toThrow("Mesh geometry upload")
-    expect(gl.spies.deleteBuffer).toHaveBeenCalledTimes(3)
+    expect(gl.spies.deleteBuffer).toHaveBeenCalledTimes(4)
     expect(gl.spies.deleteVertexArray).toHaveBeenCalledOnce()
 
     runtime.render([mesh], camera())
     expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(3)
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(6)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(6)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(8)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(8)
     expect(gl.spies.drawElements).toHaveBeenCalledOnce()
     runtime.dispose()
   })
@@ -284,8 +344,8 @@ describe("internal WebGL2 scene runtime", () => {
 
     runtime.render([mesh], camera())
     expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(2)
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(9)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(12)
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(2)
     runtime.dispose()
   })
@@ -311,8 +371,90 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.clear).toHaveBeenCalledWith(
       gl.spies.COLOR_BUFFER_BIT | gl.spies.DEPTH_BUFFER_BIT
     )
-    expect(gl.spies.uniformMatrix4fv).toHaveBeenCalledTimes(2)
+    expect(gl.spies.uniformMatrix4fv).toHaveBeenCalledTimes(3)
     expect(gl.spies.drawElements).toHaveBeenCalledTimes(2)
+    runtime.dispose()
+  })
+
+  it("renders one Standard receiver from a clipped reflected camera without recursion", () => {
+    const canvas = document.createElement("canvas")
+    canvas.width = 400
+    canvas.height = 240
+    const gl = createRecordingWebGL2Context(canvas, {
+      samples: 4,
+      supportedSamples: [4, 2],
+    })
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const receiver = new Mesh({
+      geometry: litTriangle(),
+      material: new StandardMaterial({ roughness: 0.24 }),
+      planarReflection: {
+        localPlane: { point: [0, 0, 0], normal: [0, 0, 1] },
+        resolutionScale: 0.5,
+      },
+    })
+    const opaque = new Mesh({
+      geometry: triangle(-0.5),
+      material: unlit([1, 0.2, 0.1, 1]),
+    })
+    const glass = new Mesh({
+      geometry: litTriangle(-0.25),
+      material: new GlassMaterial({ color: [0.5, 0.8, 1, 0.2] }),
+    })
+
+    runtime.render([receiver, opaque, glass], camera())
+
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.createRenderbuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.renderbufferStorageMultisample).toHaveBeenCalledTimes(2)
+    expect(gl.spies.renderbufferStorage).toHaveBeenCalledTimes(2)
+    expect(gl.spies.drawElements).toHaveBeenCalledTimes(5)
+    expect(gl.spies.blitFramebuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.generateMipmap).toHaveBeenCalledTimes(3)
+    expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
+      String(source).includes("u_planar_reflection_view_projection")
+      && String(source).includes("apply_clip_plane()")
+      && String(source).includes("textureLod(\n          u_planar_reflection_map")))
+      .toBe(true)
+
+    runtime.render([receiver, opaque, glass], camera())
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.createRenderbuffer).toHaveBeenCalledTimes(4)
+
+    canvas.width = 600
+    canvas.height = 300
+    runtime.render([receiver, opaque, glass], camera())
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(8)
+    expect(gl.spies.createRenderbuffer).toHaveBeenCalledTimes(8)
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.deleteRenderbuffer).toHaveBeenCalledTimes(4)
+    receiver.setPlanarReflection(undefined)
+    runtime.render([receiver, opaque, glass], camera())
+    expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(8)
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(6)
+    expect(gl.spies.deleteRenderbuffer).toHaveBeenCalledTimes(6)
+    runtime.dispose()
+    expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(8)
+    expect(gl.spies.deleteRenderbuffer).toHaveBeenCalledTimes(8)
+  })
+
+  it("rejects multiple planar receivers before mutating GPU resources", () => {
+    const canvas = document.createElement("canvas")
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const receiver = () => new Mesh({
+      geometry: litTriangle(),
+      material: new StandardMaterial(),
+      planarReflection: {
+        localPlane: { point: [0, 0, 0], normal: [0, 0, 1] },
+      },
+    })
+
+    expect(() => runtime.render([receiver(), receiver()], camera()))
+      .toThrow("at most one planar reflection receiver")
+    expect(gl.spies.createProgram).not.toHaveBeenCalled()
+    expect(gl.spies.createBuffer).not.toHaveBeenCalled()
+    expect(gl.spies.createRenderbuffer).not.toHaveBeenCalled()
     runtime.dispose()
   })
 
@@ -385,7 +527,7 @@ describe("internal WebGL2 scene runtime", () => {
       && String(source).includes("if (color <= 0.0) return 0.0")
       && String(source).includes("if (color >= 1.0) return 1.0")
       && String(source).includes("exp(clamp(log_attenuation_exponent, -80.0, 80.0))")
-      && String(source).includes("u_color.rgb * volume_transmittance")))
+      && String(source).includes("scene_color.rgb / scene_color.a * volume_transmittance")))
       .toBe(true)
     expect(gl.spies.createTexture).toHaveBeenCalledOnce()
     expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
@@ -446,6 +588,73 @@ describe("internal WebGL2 scene runtime", () => {
     expect(gl.spies.deleteTexture).toHaveBeenCalledTimes(2)
     expect(gl.spies.deleteFramebuffer).toHaveBeenCalledTimes(4)
     expect(gl.spies.deleteRenderbuffer).toHaveBeenCalledTimes(4)
+  })
+
+  it("uploads one shared ImageTexture, draws it before Glass, prunes it, and restores it", () => {
+    const canvas = document.createElement("canvas")
+    canvas.width = 240
+    canvas.height = 160
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const texture = imageTexture()
+    const first = new Mesh({
+      geometry: texturedTriangle(-1),
+      material: new ImageMaterial({ texture }),
+    })
+    const second = new Mesh({
+      geometry: texturedTriangle(-1.1),
+      material: new ImageMaterial({ texture }),
+    })
+    const glass = new Mesh({
+      geometry: litTriangle(),
+      material: new GlassMaterial({ thickness: 0.2 }),
+    })
+
+    runtime.render([glass, first, second], camera(), [new AmbientLight()])
+    runtime.render([glass, first, second], camera(), [new AmbientLight()])
+
+    const shaderSources = gl.spies.shaderSource.mock.calls
+      .map(([, source]) => String(source))
+    expect(shaderSources.some((source) =>
+      source.includes("layout(location = 2) in vec2 a_uv")))
+      .toBe(true)
+    expect(shaderSources.some((source) =>
+      source.includes("uniform sampler2D u_image_texture")
+      && source.includes("texture(u_image_texture, image_uv)")))
+      .toBe(true)
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
+    expect(gl.spies.texImage2D).toHaveBeenCalledTimes(2)
+    expect(gl.spies.texImage2D).toHaveBeenCalledWith(
+      gl.spies.TEXTURE_2D,
+      0,
+      gl.spies.SRGB8_ALPHA8,
+      2,
+      2,
+      0,
+      gl.spies.RGBA,
+      gl.spies.UNSIGNED_BYTE,
+      expect.any(Uint8Array),
+    )
+    expect(gl.spies.uniform1i.mock.calls)
+      .toContainEqual([expect.anything(), 0])
+    const firstDrawOrder = gl.spies.drawElements.mock.invocationCallOrder[0]
+    const firstResolveOrder = gl.spies.blitFramebuffer.mock.invocationCallOrder[0]
+    const glassDrawOrder = gl.spies.drawElements.mock.invocationCallOrder[2]
+    expect(firstDrawOrder).toBeLessThan(firstResolveOrder)
+    expect(firstResolveOrder).toBeLessThan(glassDrawOrder)
+
+    runtime.render([glass], camera(), [new AmbientLight()])
+    expect(gl.spies.deleteTexture).toHaveBeenCalledOnce()
+
+    gl.setLost(true)
+    expect(() => runtime.render([glass, first], camera(), [new AmbientLight()]))
+      .toThrow("context is lost")
+    gl.setLost(false)
+    runtime.restoreContext()
+    runtime.render([glass, first], camera(), [new AmbientLight()])
+    expect(gl.spies.createTexture).toHaveBeenCalledTimes(4)
+    expect(gl.spies.texImage2D).toHaveBeenCalledTimes(4)
+    runtime.dispose()
   })
 
   it("uploads finite logarithmic attenuation for valid Float32 endpoint ratios", () => {
@@ -560,8 +769,8 @@ describe("internal WebGL2 scene runtime", () => {
     }))
     runtime.render([mesh], camera(), [new AmbientLight()], environment)
     expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(3)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(4)
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
 
     environment.setIntensity(0.5)
@@ -603,9 +812,13 @@ describe("internal WebGL2 scene runtime", () => {
       && String(source).includes("evaluate_microfacet_lobes(")
       && String(source).includes("min(premultiplied_color, vec3(alpha))")
       && String(source).includes("scene_color.rgb / scene_color.a")
-      && String(source).includes("surface_color * (alpha - fresnel)")
+      && String(source).includes("lit_tint * boundary_weight")
+      && String(source).includes("refracted_color * transmission_weight")
       && String(source).includes("reflection_color * fresnel")))
       .toBe(true)
+    expect(gl.spies.shaderSource.mock.calls.some(([, source]) =>
+      String(source).includes("scene_color.rgb / scene_color.a * u_color.rgb")))
+      .toBe(false)
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
     expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(2)
     expect(gl.spies.texImage2D).toHaveBeenCalledTimes(2)
@@ -699,8 +912,8 @@ describe("internal WebGL2 scene runtime", () => {
       [1, 0, 0, 0.2].map(Math.fround),
     ])
     expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(6)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(6)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(8)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(8)
     runtime.dispose()
   })
 
@@ -760,7 +973,7 @@ describe("internal WebGL2 scene runtime", () => {
 
     expect(gl.spies.createProgram).toHaveBeenCalledTimes(4)
     expect(gl.spies.createVertexArray).toHaveBeenCalledTimes(4)
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(6)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(8)
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(2)
     expect(gl.spies.createFramebuffer).toHaveBeenCalledTimes(4)
     expect(gl.spies.deleteProgram).not.toHaveBeenCalled()
@@ -792,8 +1005,8 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.render([mesh], camera(), [ambient, key])
 
     expect(gl.spies.createProgram).toHaveBeenCalledTimes(2)
-    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(3)
-    expect(gl.spies.bufferData).toHaveBeenCalledTimes(3)
+    expect(gl.spies.createBuffer).toHaveBeenCalledTimes(4)
+    expect(gl.spies.bufferData).toHaveBeenCalledTimes(4)
     expect(gl.spies.uniformMatrix3fv).toHaveBeenCalledTimes(2)
     expect(gl.spies.uniform3fv).toHaveBeenCalled()
     expect(gl.spies.uniform1i.mock.calls).toContainEqual([expect.anything(), 1])
@@ -1324,7 +1537,7 @@ describe("internal WebGL2 scene runtime", () => {
       kind: "lambert",
       color: [1, 1, 1, 1],
     } as never)).toThrow(
-      "must be an UnlitMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
+      "must be an UnlitMaterial, ImageMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
     )
   })
 

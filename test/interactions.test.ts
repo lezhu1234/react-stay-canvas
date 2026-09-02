@@ -90,6 +90,61 @@ describe("undo / redo / log", () => {
     })
   })
 
+  it("tracks a batched Child update as one undoable composition change", () => {
+    const { stage } = createStage()
+    const originalShapes = new Map([
+      ["body", rect(10, 20, 30, 40)],
+      ["handle", rect(35, 55, 5, 5)],
+    ])
+    const child = stage.tools.appendChild({
+      className: "annotation",
+      shape: originalShapes,
+      placement: { type: "affine", x: 5 },
+    })
+    stage.tools.log()
+
+    const replacementShapes = new Map([
+      ["body", rect(70, 80, 90, 100)],
+      ["label", rect(75, 85, 20, 10)],
+    ])
+    expect(child.update({
+      className: "annotation:selected",
+      shape: replacementShapes,
+      placement: { type: "affine", x: 25, y: 30 },
+    })).toBe(child)
+    stage.tools.log()
+
+    stage.tools.undo()
+    const restored = stage.tools.getChildById<Rectangle>(child.id)!
+    expect(restored.className).toBe("annotation")
+    expect([...restored.shapeMap.keys()]).toEqual(["body", "handle"])
+    expect(restored.shapeMap.get("body")?.getBound()).toEqual({
+      x: 10,
+      y: 20,
+      width: 30,
+      height: 40,
+    })
+    expect(restored.placement).toMatchObject({
+      type: "affine",
+      matrix: { e: 5, f: 0 },
+    })
+
+    stage.tools.redo()
+    const redone = stage.tools.getChildById<Rectangle>(child.id)!
+    expect(redone.className).toBe("annotation:selected")
+    expect([...redone.shapeMap.keys()]).toEqual(["body", "label"])
+    expect(redone.shapeMap.get("body")?.getBound()).toEqual({
+      x: 70,
+      y: 80,
+      width: 90,
+      height: 100,
+    })
+    expect(redone.placement).toMatchObject({
+      type: "affine",
+      matrix: { e: 25, f: 30 },
+    })
+  })
+
   it("can set the current scene as a non-undoable history baseline", () => {
     const { stage } = createStage()
     const background = stage.tools.appendChild({ className: "background", shape: rect(0, 0) })

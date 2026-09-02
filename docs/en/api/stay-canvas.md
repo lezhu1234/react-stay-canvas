@@ -11,6 +11,7 @@ import {
   StayCanvas,
   PerspectiveCamera,
   type CanvasLayerConfig,
+  type HistoryAdapter,
   type StayCanvasProps,
   type StayCanvasRefType,
   type WebGL2LayerConfig,
@@ -34,6 +35,7 @@ import {
 | `recreateOnResize` | `boolean` | `false` | Opt into destructive runtime recreation when width or height changes |
 | `focusOnInit` | `boolean` | `true` | Whether to focus the top Canvas after initialization |
 | `viewport` | `{ minScale?, maxScale? }` | `{ minScale: 0.1, maxScale: 10 }` | Non-destructive viewport scale limits; fixed after runtime creation |
+| `historyAdapter` | `HistoryAdapter<TSnapshot>` | — | Include application-owned state in the same undo/redo transactions as the Canvas scene |
 
 ### layers
 
@@ -97,6 +99,30 @@ These lists are read when a runtime is created. A React rerender that only repla
 3. rebuild the scene and external references from the new `mounted` callback.
 
 `reCreate()` destroys the previous input listeners, render loop, and scene objects. Treat previous `StayTools`, Child, and Shape references as stale afterward.
+
+### historyAdapter
+
+Use `historyAdapter` when one editor operation changes both Canvas objects and application-owned state:
+
+```tsx
+type EditorSnapshot = {
+  activePage: number
+  labels: Record<string, string>
+}
+
+<StayCanvas
+  historyAdapter={{
+    capture: () => structuredClone(editorStateRef.current),
+    restore: (snapshot: EditorSnapshot) => updateEditorState(snapshot),
+  }}
+/>
+```
+
+The adapter does not create a second history stack. `log()` stores the before/after application snapshots on the same history item as pending static-Child changes; `undo()` restores the before snapshot and `redo()` restores the after snapshot. `resetHistory()` clears that shared stack and captures both the current scene and current application state as the new baseline. With an adapter, `log()` is an explicit commit even when only application state changed.
+
+The library stores the value returned by `capture()` as-is: return an owned snapshot, using `structuredClone` or an application-specific immutable representation when necessary. `capture()` and `restore()` must be synchronous. `restore()` owns only application state; it must not mutate the Canvas scene or call `log()`, `undo()`, `redo()`, or `resetHistory()`. If `restore()` throws, Canvas objects and the history cursor are left at their current position.
+
+The adapter is read when the runtime is created. A normal React rerender does not replace it; call `reCreate()` only when intentionally rebuilding the complete runtime and scene.
 
 ### recreateOnResize
 

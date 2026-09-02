@@ -1,4 +1,4 @@
-import type { Cursor, StayTools, ViewportState } from "react-stay-canvas"
+import type { Cursor, HistoryAdapter, StayTools, ViewportState } from "react-stay-canvas"
 import type { Circle, Path, Polygon, Rectangle, StayText } from "react-stay-canvas"
 
 export const SCENE_WIDTH = 900
@@ -72,6 +72,23 @@ export type DiagramEngine = {
   say: (en: string, zh: string) => void
   save: () => void
   import: () => void
+}
+
+export type DiagramHistorySnapshot = Pick<DiagramEngine, "nodeSequence" | "edgeSequence">
+
+export function createDiagramHistoryAdapter(
+  engine: DiagramEngine
+): HistoryAdapter<DiagramHistorySnapshot> {
+  return {
+    capture: () => ({
+      nodeSequence: engine.nodeSequence,
+      edgeSequence: engine.edgeSequence,
+    }),
+    restore: ({ nodeSequence, edgeSequence }) => {
+      engine.nodeSequence = nodeSequence
+      engine.edgeSequence = edgeSequence
+    },
+  }
 }
 
 export type EdgeMeta = Omit<DiagramDocument["edges"][number], "label"> & { label: string }

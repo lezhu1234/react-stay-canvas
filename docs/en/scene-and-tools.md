@@ -190,12 +190,14 @@ tools.redo()
 
 For an initialized editor, call `resetHistory()` after loading non-undoable background content. It clears both history stacks and treats the current static scene as the new baseline.
 
+Application state can join the same transaction through the optional [`historyAdapter`](./api/stay-canvas.md#historyadapter). The adapter captures before/after snapshots on each explicit `log()` boundary; it does not own another stack. This also allows an application-only change to become a history item.
+
 The transaction boundaries are:
 
 - `appendChild()`, `removeChild()`, normal Shape mutations, and `child.setPlacement()` mark static Children as pending history changes;
 - `tools.webgl.appendChild()`, `tools.webgl.removeChild()`, and Mesh geometry/model/material mutations enter the same pending set and transaction;
-- `log()` groups changes since the previous snapshot into one history item;
-- `resetHistory()` clears undo/redo and makes the current static scene the baseline;
+- `log()` groups changes since the previous snapshot into one history item, including application state when a `historyAdapter` is configured;
+- `resetHistory()` clears undo/redo and makes the current static scene and adapted application state the baseline;
 - several mutations followed by one `log()` become one undo unit;
 - recording a new operation after `undo()` truncates the previous redo tail;
 - animated Children never enter history and removing one cannot be undone;

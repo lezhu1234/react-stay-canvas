@@ -108,7 +108,7 @@ function prepareRegionContext(
 }
 
 // One factory, one unified tool surface. Every stage gets all tools.
-export function stayTools(this: Stay<any>): StayTools {
+export function stayTools(this: Stay<any, any>): StayTools {
   const webglTools = createStayWebGLTools.call(this)
 
   const appendHistoryChild = (snapshot: StayHistoryChildSnapshot) => {
@@ -196,6 +196,7 @@ export function stayTools(this: Stay<any>): StayTools {
     //   return childProxy
     // },
     log: () => {
+      this.history.assertOperationAllowed()
       const steps = [...this.unLogedChildrenIds]
         // A removed child is absent from the store, so it remains eligible here;
         // its prior snapshot determines the remove step.
@@ -214,22 +215,15 @@ export function stayTools(this: Stay<any>): StayTools {
           )
         })
         .filter((step): step is StepProps<StayHistoryChildSnapshot> => Boolean(step))
-      if (steps.length === 0) {
-        this.snapshotChildren()
-        return
-      }
-      this.pushToStack({
-        state: this.state,
-        steps,
-      })
-      this.snapshotChildren()
+      this.history.commit(this.state, steps)
     },
     redo: () => {
-      if (this.stackIndex >= this.stack.length) {
+      const stepItem = this.history.peekRedo()
+      if (!stepItem) {
         console.log("no more operations")
         return
       }
-      const stepItem = this.stack[this.stackIndex]
+      const externalState = this.history.restoreExternal(stepItem, "redo")
       this.root.layers.forEach((_, i) => {
         this.forceUpdateLayer(i)
       })
@@ -245,8 +239,7 @@ export function stayTools(this: Stay<any>): StayTools {
       })
 
       this.tools.switchState(stepItem.state)
-      this.snapshotChildren()
-      this.stackIndex++
+      this.history.completeRedo(externalState)
     },
 
     resetHistory: () => {
@@ -254,15 +247,15 @@ export function stayTools(this: Stay<any>): StayTools {
     },
 
     undo: () => {
-      if (this.stackIndex <= 0) {
+      const stepItem = this.history.peekUndo()
+      if (!stepItem) {
         console.log("no more operations")
         return
       }
-      this.stackIndex--
+      const externalState = this.history.restoreExternal(stepItem, "undo")
       this.root.layers.forEach((_, i) => {
         this.forceUpdateLayer(i)
       })
-      const stepItem = this.stack[this.stackIndex]
 
       stepItem.steps.forEach((step) => {
         if (step.action === "append") {
@@ -275,7 +268,7 @@ export function stayTools(this: Stay<any>): StayTools {
         }
       })
       this.tools.switchState(stepItem.state)
-      this.snapshotChildren()
+      this.history.completeUndo(externalState)
     },
   }
 

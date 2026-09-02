@@ -2,9 +2,15 @@ import type { ProgressBound } from "../types/animation"
 import type { ExtraTransform } from "../types/geometry"
 import type { ShapeDrawProps } from "../types/shapes"
 
-export interface StackItem<TSnapshot = unknown> {
+export interface ExternalHistoryStep<TSnapshot> {
+  before: TSnapshot
+  after: TSnapshot
+}
+
+export interface StackItem<TSnapshot = unknown, TExternalSnapshot = unknown> {
   state: string
   steps: StepProps<TSnapshot>[]
+  external?: ExternalHistoryStep<TExternalSnapshot>
 }
 export interface StepProps<TSnapshot = unknown> {
   action: "append" | "update" | "remove"

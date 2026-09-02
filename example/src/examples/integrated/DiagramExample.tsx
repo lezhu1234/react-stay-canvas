@@ -14,6 +14,7 @@ import { useI18n } from "../../i18n"
 import {
   SCENE_HEIGHT,
   SCENE_WIDTH,
+  createDiagramHistoryAdapter,
   type DiagramEngine,
   type EdgeChild,
   type EdgeShape,
@@ -180,6 +181,7 @@ export default function DiagramExample() {
 
   useEffect(() => bindDiagramShortcuts(engine, () => toolsRef.current), [engine])
   const listeners = useMemo(() => createDiagramListeners(engine), [engine])
+  const historyAdapter = useMemo(() => createDiagramHistoryAdapter(engine), [engine])
 
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
@@ -252,6 +254,7 @@ export default function DiagramExample() {
                 DiagramSpaceStartMoveEvent,
               ]}
               height={SCENE_HEIGHT}
+              historyAdapter={historyAdapter}
               layers={3}
               listenerList={listeners}
               mounted={mounted}

@@ -164,12 +164,12 @@ renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 dep
 
 | 方法 | 说明 |
 | --- | --- |
-| `log()` | 把待记录的静态 Child 差异（包括 Shape 或 Mesh 变更）提交为一个历史项 |
+| `log()` | 把待记录的静态 Child 差异和适配后的应用状态提交为一个历史项 |
 | `undo()` | 撤销一个历史项；无可撤销项时只输出日志 |
 | `redo()` | 重做一个历史项；无可重做项时只输出日志 |
 | `resetHistory()` | 清空 undo/redo，并把当前静态场景作为新的历史基线 |
 
-Canvas2D 与 WebGL2 静态 Child 进入同一 History 事务和 id 命名空间；Camera、EnvironmentMap 与 Light 修改属于图层显示状态，不进入历史。动画 Child 不参与历史。调用边界与示例见[场景与工具：历史记录](../scene-and-tools.md#历史记录)。
+Canvas2D 与 WebGL2 静态 Child 进入同一 History 事务和 id 命名空间；`StayCanvas` 上可选的 `historyAdapter` 会把应用持有的快照加入这些相同历史项。Camera、EnvironmentMap 与 Light 修改属于图层显示状态，不进入历史。动画 Child 不参与历史。调用边界与示例见[场景与工具：历史记录](../scene-and-tools.md#历史记录)。
 
 ## 动画
 

@@ -25,6 +25,5 @@ The following user-visible behavior is not reliable in the current implementatio
 
 ## Events and targeting
 
-- The default target comparator does not provide a stable ordering guarantee. Supply `sortBy` when pointer targets overlap.
 - The public Event trigger type includes `"frame"`, but the current renderer does not emit frame actions through `EventRuntime`.
 - DOM and root actions still work on a WebGL2 Canvas, but a `StayWebGLChild` is not a pointer target until native raycasting is added.

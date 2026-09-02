@@ -118,7 +118,7 @@ const selectedNodes = tools.getChildrenBySelector(
 )
 ```
 
-`sortBy` controls the returned order and which item `getContainPointChildren({ returnFirst: true })` picks. Use a stable comparator so overlapping objects do not produce inconsistent selections.
+`sortBy` controls the returned query order and which item `getContainPointChildren({ returnFirst: true })` picks. Listener target routing uses a stable default when its own `sortBy` is omitted: smaller bounds first, equal bounds in scene insertion order, and root last. Tool queries do not apply this Listener default; they retain their selector result order unless the call supplies a comparator.
 
 ## Point hits and area queries
 
@@ -188,14 +188,18 @@ tools.undo()
 tools.redo()
 ```
 
+Use `tools.canUndo()` and `tools.canRedo()` to derive disabled states for history controls. They only inspect the committed history cursor and never perform an operation. Pending Canvas or application changes become visible to these queries only after `tools.log()`.
+
 For an initialized editor, call `resetHistory()` after loading non-undoable background content. It clears both history stacks and treats the current static scene as the new baseline.
+
+Application state can join the same transaction through the optional [`historyAdapter`](./api/stay-canvas.md#historyadapter). The adapter captures before/after snapshots on each explicit `log()` boundary; it does not own another stack. This also allows an application-only change to become a history item.
 
 The transaction boundaries are:
 
 - `appendChild()`, `removeChild()`, normal Shape mutations, and `child.setPlacement()` mark static Children as pending history changes;
 - `tools.webgl.appendChild()`, `tools.webgl.removeChild()`, and Mesh geometry/model/material mutations enter the same pending set and transaction;
-- `log()` groups changes since the previous snapshot into one history item;
-- `resetHistory()` clears undo/redo and makes the current static scene the baseline;
+- `log()` groups changes since the previous snapshot into one history item, including application state when a `historyAdapter` is configured;
+- `resetHistory()` clears undo/redo and makes the current static scene and adapted application state the baseline;
 - several mutations followed by one `log()` become one undo unit;
 - recording a new operation after `undo()` truncates the previous redo tail;
 - animated Children never enter history and removing one cannot be undone;

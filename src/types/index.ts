@@ -7,6 +7,7 @@ export type {
   NumberInRangeZeroOne,
   NumericString,
   Positive,
+  StayStore,
   storeType,
   ZeroToOne,
 } from "./common"
@@ -14,6 +15,7 @@ export * from "./component"
 export * from "./coordinates"
 export * from "./events"
 export * from "./geometry"
+export * from "./history"
 export * from "./manualActions"
 export * from "./shapes"
 export * from "./tools"

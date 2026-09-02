@@ -11,7 +11,7 @@ import {
   type StayWebGLSceneFragment,
 } from "./webgl2/stayWebGLChildSnapshot"
 
-export function createStayWebGLTools(this: Stay<any>): StayWebGLTools {
+export function createStayWebGLTools(this: Stay<any, any>): StayWebGLTools {
   const validateLayer = (layer: number) => this.assertWebGL2Layer(layer)
 
   const appendChild = (props: StayWebGLChildProps) => {

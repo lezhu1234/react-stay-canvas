@@ -95,6 +95,113 @@ describe("ActionRouter contracts", () => {
     expect(callbackTarget).toBe(acceptedTarget)
   })
 
+  it("prefers the smallest overlapping Child when a Listener omits sortBy", () => {
+    const { stage, top } = createStage()
+    stage.tools.appendChild({
+      className: "overlap",
+      shape: rectangle(0, 0, 100, 100),
+    })
+    const smallest = stage.tools.appendChild({
+      className: "overlap",
+      shape: rectangle(0, 0, 20, 20),
+    })
+    let target: any
+
+    stage.addEventListener({
+      name: "default-overlap-order",
+      event: "mousedown",
+      selector: ".overlap",
+      callback: ({ e }: any) => {
+        target = e.target
+      },
+    })
+
+    top.dispatchEvent(md(10, 10))
+
+    expect(target).toBe(smallest)
+  })
+
+  it("uses the combined bounds of a multi-Shape Child for default ordering", () => {
+    const { stage, top } = createStage()
+    stage.tools.appendChild({
+      className: "overlap",
+      shape: [rectangle(0, 0, 10, 10), rectangle(90, 90, 10, 10)],
+    })
+    const compact = stage.tools.appendChild({
+      className: "overlap",
+      shape: [rectangle(0, 0, 20, 20), rectangle(10, 10, 20, 20)],
+    })
+    let target: any
+
+    stage.addEventListener({
+      name: "multi-shape-default-order",
+      event: "mousedown",
+      selector: ".overlap",
+      callback: ({ e }: any) => {
+        target = e.target
+      },
+    })
+
+    top.dispatchEvent(md(5, 5))
+
+    expect(target).toBe(compact)
+  })
+
+  it("keeps insertion order for equal bounds and places root after ordinary Children", () => {
+    const { stage, top } = createStage()
+    const first = stage.tools.appendChild({
+      className: "first-overlap",
+      shape: rectangle(0, 0, 600, 600),
+    })
+    stage.tools.appendChild({
+      className: "second-overlap",
+      shape: rectangle(0, 0, 600, 600),
+    })
+    let target: any
+
+    stage.addEventListener({
+      name: "stable-default-order",
+      event: "mousedown",
+      selector: ".first-overlap|.second-overlap|.stay-canvas",
+      callback: ({ e }: any) => {
+        target = e.target
+      },
+    })
+
+    top.dispatchEvent(md(10, 10))
+
+    expect(target).toBe(first)
+  })
+
+  it("recognizes platform-standard undo and redo modifiers", () => {
+    const { stage, top } = createStage()
+    const actions: string[] = []
+    const dispatchKey = (type: "keydown" | "keyup", key: string) => {
+      top.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true }))
+    }
+    const dispatchShortcut = (modifier: "Control" | "Meta", shift: boolean) => {
+      dispatchKey("keydown", modifier)
+      if (shift) dispatchKey("keydown", "Shift")
+      dispatchKey("keydown", "z")
+      dispatchKey("keyup", "z")
+      if (shift) dispatchKey("keyup", "Shift")
+      dispatchKey("keyup", modifier)
+    }
+
+    stage.addEventListener({
+      name: "history-shortcuts",
+      event: ["undo", "redo"],
+      callback: ({ e }: any) => actions.push(e.name),
+    })
+
+    dispatchShortcut("Control", false)
+    dispatchShortcut("Control", true)
+    dispatchShortcut("Meta", false)
+    dispatchShortcut("Meta", true)
+
+    expect(actions).toEqual(["undo", "redo", "undo", "redo"])
+  })
+
   it("retains each listener's drag-start target through continuation and end", () => {
     const { stage, top } = createStage()
     const startA = stage.tools.appendChild({

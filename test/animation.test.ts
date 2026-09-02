@@ -72,4 +72,32 @@ describe("animation interpolation (intermediateState)", () => {
     expect(child.shapeMap.get("image")).toBeInstanceOf(StayImage)
     expect((child.shapeMap.get("image") as StayImage).opacity).toBeCloseTo(0.5)
   })
+
+  it("keeps Animated Child composition owned by timeline slices", () => {
+    const { stage } = createStage()
+    const child = stage.tools.createChild({ className: "animated" })
+    child.appendKeyFrame("body", new Rectangle({
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      transition: { durationMs: 100 },
+    }))
+    child.setCurrentTime({ time: 0 })
+
+    expect(() => (child.update as (props: object) => unknown)({
+      shape: new Rectangle({ x: 20, y: 20, width: 30, height: 30 }),
+    })).toThrow("Animated Child composition is timeline-owned; use replaceSlice()")
+    expect(child.shapeFramesMap.has("body")).toBe(true)
+
+    expect(child.update({
+      className: "animated:selected",
+      placement: { type: "affine", x: 15 },
+    })).toBe(child)
+    expect(child.className).toBe("animated:selected")
+    expect(child.placement).toMatchObject({
+      type: "affine",
+      matrix: { e: 15 },
+    })
+  })
 })

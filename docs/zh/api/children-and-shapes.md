@@ -27,6 +27,7 @@
 | `getShapeBound(shape)` | `Rect` | 单个 Shape 放置后的保守 Content 坐标边界 |
 | `containsPointer(point)` | `boolean` | 任一 Shape 命中即为 true |
 | `inArea(area)` | `boolean` | 任一 Shape 中心在区域内即为 true |
+| `update(props)` | `this` | 原子更新 class、完整 Shape 组合与/或 placement |
 | `setPlacement(placement)` | `this` | 完整替换 affine 或 projective placement |
 | `toLocalPoint(point)` | `PointType \| undefined` | 把 Content 点映射进有限 Child 局部域 |
 | `toContentPoint(point)` | `PointType \| undefined` | 把有限 Child 局部域映射到 Content |
@@ -36,7 +37,7 @@
 | `getLayers()` | `Set<number>` | Child 使用的 layer 集合 |
 | `getShapes(layer)` | `T[]` | 指定 layer 中的 Shape |
 
-`update(...)` 是历史恢复使用的内部替换原语。应用更新应调用 `child.shape.update(...)` 或从 `shapeMap` 取出具体 Shape 后调用它的 `update(...)`。
+更新几何或绘制属性时调用具体 Shape 的 `update(...)`；更新 Child 级属性，或业务流程需要整体替换单个/多个 Shape 组合时，调用 `child.update(...)`。批量更新会先完成校验，再一次性应用；它会重绘被移除和新增 Shape 所在的 layer，并在下一次 `tools.log()` 时进入撤销/重做历史。
 
 Shape 几何始终保留在 Child 局部坐标中；绘制、边界、命中、区域查询、历史、场景传输和区域捕获统一应用同一份 placement。affine placement 支持语义字段或 Canvas 兼容原始矩阵；projective placement 包含 3×3 矩阵和有限正面积 local domain，且 domain 不能接触或跨越齐次地平线。非有限值或不可逆矩阵会抛错，因为局部命中需要逆映射。
 
@@ -55,6 +56,7 @@ Child 是绑定 Canvas 的运行时实体，不提供复制操作。需要捕获
 | `appendKeyFrame(name, shape, prependZeroShape?)` | 向 slice 追加关键帧 |
 | `appendKeyFrames(frameMap, prependZeroShape?)` | 批量追加多个 slice |
 | `replaceSlice(name, frames, prependZeroShape?)` | 原子替换一个非空 slice；当前投影会在下一次 seek 时改变 |
+| `update({ className?, placement? })` | 更新 Child 级状态；不包含 timeline 持有的 Shape 组合 |
 | `appendDefaultFrame(shape, prependZeroShape?)` | 向 `default` slice 追加 |
 | `getSlice(name)` | 返回 slice；不存在时返回空数组 |
 | `hasSlice(name)` | 判断 slice 是否存在 |
@@ -64,6 +66,8 @@ Child 是绑定 Canvas 的运行时实体，不提供复制操作。需要捕获
 | `participatesInHistory` | 始终为 `false` |
 
 `disappear(..., "afterEach")` 会在每个 slice 自身结尾追加透明帧。默认 transition 的持续时间为 0，因此会立即消失；传入非零 transition 才会形成动画。`"afterAll"` 会补 delay，使所有 slice 等最长时间线结束后再进入各自消失帧。
+
+动画 Shape 组合由 `shapeFramesMap` 独占。替换时间线 slice 应调用 `replaceSlice(...)`；`StayAnimatedChild.update(...)` 只接受 `className` 和 `placement`，若运行时传入 `shape` 字段会直接拒绝。
 
 ## 通用 ShapeProps
 

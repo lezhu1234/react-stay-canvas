@@ -25,6 +25,5 @@
 
 ## 事件与目标
 
-- 默认目标 comparator 不提供稳定排序保证。指针目标重叠时请传入 `sortBy`。
 - 公开 Event trigger 类型包含 `"frame"`，但当前 renderer 不会通过 `EventRuntime` 发出 frame action。
 - WebGL2 Canvas 上的 DOM 与 root action 仍可用，但在原生 raycast 加入前，`StayWebGLChild` 不是指针 target。

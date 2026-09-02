@@ -1,17 +1,14 @@
-import { Point } from "./shapes/point"
 import type { EventProps } from "./types/events"
-import { FRAME_EVENT_NAME, KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
+import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "./userConstants"
 import type {
   PredefinedEventName,
   PredefinedKeyEventName,
   PredefinedMouseEventName,
   PredefinedWheelEventName,
 } from "./types/events"
-import type { Coordinate } from "./types/geometry"
-import { distance } from "./utils/geometry"
-import {
-  getClickPairing,
-} from "./stay/events/clickPairing"
+
+const hasPlatformCommandModifier = (pressedKeys: ReadonlySet<string>) =>
+  pressedKeys.has("Control") || pressedKeys.has("Meta")
 
 export const mouseDownEvent: EventProps<PredefinedMouseEventName> = {
   name: "mousedown",
@@ -24,7 +21,7 @@ export const UndoEvent: EventProps<PredefinedKeyEventName> = {
   trigger: KEYBOARRD_EVENTS.KEY_UP,
   conditionCallback: ({ e }) => {
     return (
-      e.pressedKeys.has("Control") &&
+      hasPlatformCommandModifier(e.pressedKeys) &&
       !e.pressedKeys.has("Shift") &&
       e.key?.toLowerCase() === "z"
     )
@@ -36,7 +33,7 @@ export const RedoEvent: EventProps<PredefinedKeyEventName> = {
   trigger: KEYBOARRD_EVENTS.KEY_UP,
   conditionCallback: ({ e }) => {
     return (
-      e.pressedKeys.has("Control") &&
+      hasPlatformCommandModifier(e.pressedKeys) &&
       e.pressedKeys.has("Shift") &&
       e.key?.toLowerCase() === "z"
     )
@@ -46,16 +43,7 @@ export const RedoEvent: EventProps<PredefinedKeyEventName> = {
 export const ClickEvent: EventProps<PredefinedMouseEventName> = {
   name: "click",
   trigger: MOUSE_EVENTS.MOUSE_UP,
-  conditionCallback: ({ e, store }) => {
-    const pairing = getClickPairing(store)
-    if (!pairing) return false
-    if (e.x === undefined || e.y === undefined) return false
-    const { x, y } = pairing.point
-    const now = Date.now()
-    const timeDiff = now - pairing.startedAt
-    const distance = Math.sqrt((e.x - x) ** 2 + (e.y - y) ** 2)
-    return timeDiff < 500 && distance < 10
-  },
+  conditionCallback: () => true,
 }
 
 export const MousemoveEvent: EventProps<PredefinedMouseEventName> = {
@@ -92,15 +80,8 @@ const DragEndEvent: EventProps<PredefinedMouseEventName> = {
 const DragEvent: EventProps<PredefinedMouseEventName> = {
   name: "drag",
   trigger: MOUSE_EVENTS.MOUSE_MOVE,
-  conditionCallback: ({ e, store }) => {
-    const dragStartPosition: Coordinate = store.get("dragStartPosition")
-    if (!e.point) return false
-    return (
-      e.pressedKeys.has("mouse0") &&
-      (distance(dragStartPosition, e.point) >= 10 || store.get("dragging")) &&
-      !e.pressedKeys.has("Control")
-    )
-  },
+  conditionCallback: ({ e }) =>
+    e.pressedKeys.has("mouse0") && !e.pressedKeys.has("Control"),
   successCallback: ({ store }) => {
     store.set("dragging", true)
     return DragEndEvent

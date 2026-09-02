@@ -102,20 +102,23 @@ src/stay/events/
 - Router 根据权威 action key 和 target decision 创建全新的 routed `ActionEvent`；definition seed 上附加的 `name` 或 `target` 不能越过该边界。
 - 手动 action 在 dispatch 开始时统一快照 state、pressedKeys 和 point；原生 Event 仅作为独立的 `originEvent` 传递。
 - `conditionCallback`、`successCallback` 和 listener callback 的同步异常继续向调用方抛出；已经完成的动态增删不回滚。
-- Pointer Session 的 terminal 清理位于 runtime 的 `finally` 中，事件定义或 listener 抛错不能跳过动态事件、点击配对和 gesture owner 清理。
-- Registry、click pairing 和 gesture owner 使用同一个 session id；terminal `finally` 只清理该 id。新的原生 Pointer Session 必须等当前 terminal 边界完成后才能开始。
+- Pointer Session 的 terminal 清理位于 runtime 的 `finally` 中，事件定义或 listener 抛错不能跳过动态事件、拖拽激活状态和 gesture owner 清理。
+- Registry、拖拽激活状态和 gesture owner 使用同一个 session id；terminal `finally` 只清理该 id。新的原生 Pointer Session 必须等当前 terminal 边界完成后才能开始。
 - 取消只派发当前会话动态注册的标准 `dragend`/`moveend`，不得产生 `click`、普通 `mouseup` 或清除无关动态事件。
 - 正常点击没有达到 drag/move 条件时，不派发 `dragend`/`moveend`，但仍清理本次会话注册的动态事件。
+- 每次原生指针输入只生成一份 `PointerCoordinates`：Client 是浏览器窗口坐标，View 是 CSS 显示归一化后的 Canvas 平面，Content 是逆向应用 viewport 后的 Child/Shape 坐标。
+- 点击和拖拽激活阈值使用 View 位移；公开 `point` 使用 Content，公开 `movement` 使用 View。Root 以 View 命中，普通 Child 以 Content 命中。
+- 同一轮条件判断、目标解析与 Listener 派发共享一份 `CoordinateFrame`；事件路由不得重新读取 viewport 或自行换算坐标。
 
 ## Input and lifecycle invariants
 
 - `DomInputAdapter` 只将顶层 Canvas 和必要的 window/document 终止信号标准化为 runtime input，并对所有绑定提供对称解绑。
 - `PressedInputState` 是键盘按键和鼠标按钮状态的唯一所有者；每次派发获得独立快照，销毁时统一清空。
-- Canvas 内开始的主指针会话通过 Pointer Capture 延续到 Canvas 外；`pointerup`、`pointercancel`、`lostpointercapture`、window blur 和 document hidden 统一终止且只终止一次。
+- Canvas 内开始的主指针会话通过 Pointer Capture 延续到 Canvas 外；`pointerup`、`pointercancel`、`lostpointercapture`、window blur 和 document hidden 统一终止且只终止一次。initiating button 已松开后的 `lostpointercapture` 属于正常隐式释放，按键仍按下时的异常 Capture 丢失才属于取消。
 - Pointer Session 正在同步派发 terminal input 时不接受新的原生 down；被忽略的输入不得修改 pressed state、获取 Pointer Capture 或注册动态 gesture definition。
 - Pointer Capture 不可用时，window terminal listener 是释放兜底；多个 Canvas 的会话状态彼此隔离。
 - Canvas path 内或经 Pointer Capture 重定向到 Canvas 的释放由 Canvas target listener 处理；window capture listener 只处理 composed path 不含 Canvas 的外部释放。
-- `pointercancel`、`lostpointercapture`、blur 和 visibilitychange 保留真正的原生 cause Event；terminal 坐标独立取自 session 的最后 pointer sample。
+- `pointercancel`、异常 `lostpointercapture`、blur 和 visibilitychange 保留真正的原生 cause Event；terminal 坐标独立取自 session 的最后 pointer sample。
 - `EventDispatcher` 仅协调 input adapter、pressed state 与 `EventRuntime`，不保存事件定义或 listener 状态。
 - `Stay.destroy()` 是 DOM 监听、render loop、事件定义、gesture owner 和 listener 状态的统一终止出口。
 - React unmount、显式 `reCreate()` 和 resize recreate 都必须先销毁旧 Stay，不能遗留 DOM listener 或 animation frame。

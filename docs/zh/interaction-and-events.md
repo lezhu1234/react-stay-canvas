@@ -88,7 +88,7 @@ export function SelectableCanvas() {
 | `event` | 一个动作名或动作名数组 |
 | `state` | Listener 可用的 Canvas state，默认 `default-state` |
 | `selector` | 可成为目标的 Child，默认 `.stay-canvas` 根 Child |
-| `sortBy` | 多个候选 Child 的排序函数；重叠目标应提供明确 comparator |
+| `sortBy` | 候选 Child 的排序函数；默认较小边界优先，root 最后兜底 |
 | `callback` | 接收动作并执行场景或应用逻辑 |
 
 Listener 按注册顺序处理。state 会在处理每个 Listener、每个动作前实时读取，因此前面的 Listener 同步调用 `switchState` 后，后面的 Listener 会看到新 state。
@@ -112,7 +112,7 @@ selector 匹配 Child，而不是 Shape：
 
 Child 的 `className` 不是 DOM 的空格分隔列表。`node:active` 以 `node` 为基础 class；`.node` 与 `.node:active` 分别匹配基础类和完整值。
 
-指针动作会先按 selector 找出候选 Child，再按当前 Canvas 坐标进行命中测试。当前默认 comparator 不提供稳定排序保证，因此重叠目标应始终传入 `sortBy(a, b)`。
+指针动作会先按 selector 找出候选 Child，再按当前 Canvas 坐标进行命中测试。未提供 `sortBy` 时，较小的 Child 边界优先；边界面积相同则保留场景插入顺序；root Child 始终最后兜底。若产品需要显式 z-order 等其他优先级，再传入 `sortBy(a, b)` 覆盖。
 
 `withTargetConditionCallback` 是 Event 定义上的第二层目标判断。它收到候选 `target`，只有返回 `true` 的 Child 才能进入 Listener。通过这个判断的 Child 就是回调最终收到的 `e.target`。
 
@@ -182,6 +182,45 @@ const dragListener: ListenerProps = {
 
 每次动作都会先调用外层 `callback`，然后只执行返回对象中与当前 `e.name` 同名的函数。该函数返回的对象会合并进这个 Listener 自己的 `composeStore`。
 
+### 类型化回调 store
+
+运行时始终持有原生 Map；应用可以描述其中的 key，而不需要再增加一层状态：
+
+```tsx
+import type { ContentPoint, ListenerProps } from "react-stay-canvas"
+
+interface EditorStore {
+  selectedId: string
+  selection: Set<string>
+}
+
+interface SelectStateStore {
+  dragOrigin: ContentPoint
+}
+
+type SelectListener = {
+  name: "select-item"
+  payload: { id: string }
+}
+
+const selectListener: ListenerProps<
+  SelectListener,
+  "drag",
+  { started: boolean },
+  EditorStore,
+  SelectStateStore
+> = {
+  name: "select-item",
+  event: "drag",
+  callback: ({ payload, store, stateStore }) => {
+    store.set("selectedId", payload.id)
+    stateStore.set("dragOrigin", { x: 20, y: 30 } as ContentPoint)
+  },
+}
+```
+
+如果整张 Canvas 的定义需要共享同一 schema，可把最后两个类型参数同样传给 `EventProps<EventName, StoreSchema, StateStoreSchema>` 和 `StayCanvasProps<EventName, HistorySnapshot, StoreSchema, StateStoreSchema>`。`composeStore` 仍是 `ListenerProps` 的第三个泛型，因为每个 Listener 都拥有不同的组合状态结构。这些泛型只约束访问方式；`store` 初始仍为空，`stateStore` 也仍会在每次 `switchState()` 时清空。
+
 ## `originEvent` 与 `ActionEvent`
 
 Listener 回调同时收到两个事件对象：
@@ -216,13 +255,13 @@ Listener 回调同时收到两个事件对象：
 动作名不能保证字段存在，因为手动动作也可以命名为 `drag` 或 `keydown`。读取坐标和 target 前应使用类型守卫：
 
 ```tsx
-import type { ActionEvent, Coordinate } from "react-stay-canvas"
+import type { ActionEvent, ContentPoint } from "react-stay-canvas"
 
 type PositionedAction<EventName extends string = string> =
   ActionEvent<EventName> & {
     x: number
     y: number
-    point: Coordinate
+    point: ContentPoint
   }
 
 function hasPointerPosition<EventName extends string>(
@@ -258,8 +297,8 @@ function hasPointerTarget<EventName extends string>(
 | `moveend` | 已进入 move 后正常结束，或当前 move 会话被取消 |
 | `zoomin`、`zoomout` | Wheel 的 `deltaY` 分别小于或大于 0 |
 | `keydown`、`keyup` | Canvas 获得焦点后的键盘输入 |
-| `undo` | Control 保持按下时松开 Z |
-| `redo` | Control 和 Shift 保持按下时松开 Z |
+| `undo` | Control 或 Meta 保持按下时松开 Z |
+| `redo` | Control/Meta 和 Shift 保持按下时松开 Z |
 | `dragover`、`drop` | 浏览器原生拖放输入 |
 
 `undo` 和 `redo` 只是动作名，不会自动调用 `tools.undo()` 或 `tools.redo()`；应用需要注册对应 Listener。
@@ -275,7 +314,7 @@ function hasPointerTarget<EventName extends string>(
 
 键盘动作只在顶层 Canvas 获得焦点时产生。`focusOnInit` 默认开启，也可以调用 `StayCanvasRef.focus()` 主动聚焦。按键在 Canvas 外松开时，库会对账内部按键状态，但不会伪造一条 Canvas `keyup` 动作。
 
-当前预定义 `startmove`、`undo` 和 `redo` 使用 Control，不会自动把 macOS Command 当作 Control。macOS 的 Control + 主键还可能触发系统右键菜单。需要跨平台平移时，推荐像 Transform 示例一样覆盖为“空格 + 主键”；需要 macOS 快捷键时，应显式支持 `Meta`。
+预定义 `undo` 和 `redo` 在 Windows/Linux 接受 Control，在 macOS 接受 Meta。旧的 `startmove` 条件为兼容性仍使用 Control + 主键；macOS 把这个组合保留给辅助点按/右键菜单，产品交互不得将它作为可用组合。跨平台平移必须像 Transform 示例一样覆盖为“空格 + 主键”。
 
 如果 Wheel Listener 调用 `originEvent.preventDefault()`，请给 `StayCanvas` 设置 `passive={false}`。
 
@@ -290,18 +329,22 @@ pointer move inside or outside
   → continue the same session and retain the start target
 pointer up
   → normal terminal
-pointercancel / lostpointercapture / window blur / document hidden
+initiating button 已松开后的 lostpointercapture
+  → 正常的 implicit-release terminal
+pointercancel / 异常 lostpointercapture / window blur / document hidden / 运行时 resize
   → cancelled terminal
 ```
 
 浏览器支持 Pointer Events 时，库会在开始阶段请求 Pointer Capture。Capture 不可用或没有建立时，window 上的终止监听器作为外部释放兜底。Canvas 内或被 capture 重定向回 Canvas 的松开仍由 Canvas 自己的 DOM listener 处理。
 
+浏览器可能在 initiating button 已经松开后才派发 `lostpointercapture`，此时运行时将其视为正常的隐式释放。只有 initiating button 仍处于按下状态时，Capture 丢失才属于取消。
+
 所有正常和取消路径只终止一次。取消终止具有以下行为：
 
 - `dragend` 或 `moveend` 可收到 `e.cancelled === true`；
-- `e.cancelReason` 为 `pointercancel`、`lostpointercapture`、`blur` 或 `visibilitychange`；
+- `e.cancelReason` 为 `pointercancel`、`lostpointercapture`、`blur`、`visibilitychange` 或 `resize`；其中 `lostpointercapture` 只表示 initiating button 仍按下时发生的异常 Capture 丢失；
 - 坐标使用本次会话最后收到的指针位置；
-- `originEvent` 保留真正导致取消的原生 Event；
+- DOM 取消时，`originEvent` 保留真正的原生 Event；逻辑 resize 会在坐标帧改变前使用一个 `Event("resize")` 作为终止原因；
 - 不产生 `click`，也不把取消伪装成普通 `mouseup`。
 
 当前模型只跟踪每个 Canvas 的主指针，不提供双指缩放等多指针手势。不同 Canvas 的按键状态、目标和 session 相互隔离。

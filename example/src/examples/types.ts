@@ -4,14 +4,13 @@ import { type LocalizedText } from "../i18n"
 
 export interface ExampleDefinition {
   path: string
-  sourcePath: string
+  sourcePaths: readonly [string, ...string[]]
+  presentation?: "standard" | "immersive"
   group: "Simple" | "Integrated"
   order: number
   title: LocalizedText
   shortTitle: LocalizedText
   summary: LocalizedText
   features: string[]
-  instructions: LocalizedText[]
-  checklist: LocalizedText[]
   component: ComponentType
 }

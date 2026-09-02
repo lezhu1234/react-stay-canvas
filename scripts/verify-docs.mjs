@@ -284,6 +284,11 @@ function checkApiReference() {
       declarations: ["PathAttr"],
       pages: ["zh/api/children-and-shapes.md", "en/api/children-and-shapes.md"],
     },
+    {
+      source: join(repositoryRoot, "src/shapes/polygon.ts"),
+      declarations: ["PolygonAttr"],
+      pages: ["zh/api/children-and-shapes.md", "en/api/children-and-shapes.md"],
+    },
   ]
 
   references.forEach(({ source, declarations, pages }) => {

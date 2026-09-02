@@ -1,5 +1,12 @@
 import Canvas from "../../../canvas"
 import type { EventProps, StayEventProps } from "../../../types/events"
+import {
+  CoordinateSystem,
+  type CoordinateFrame,
+  type PointerCoordinates,
+  type PointerSamples,
+  type SurfaceMetrics,
+} from "../../coordinates/coordinateSystem"
 import type {
   ActionRoutePort,
   EvaluatedActions,
@@ -7,11 +14,6 @@ import type {
   EventInput,
   NormalizedActionEvent,
 } from "../contracts"
-import {
-  beginClickPairing,
-  clearClickPairing,
-  getClickPairing,
-} from "../clickPairing"
 import {
   describeEventDefinition,
   type EventDefinitionScope,
@@ -22,14 +24,22 @@ type Store = Map<string, any>
 
 type EventRuntimeContext<EventName extends string> = {
   canvas: Canvas
+  coordinates: CoordinateSystem
   store: Store
   stateStore: Store
   getState: () => string
   actionRouter: ActionRoutePort<EventName>
 }
 
+type PointerMappingContext = {
+  frame: CoordinateFrame
+  metrics: SurfaceMetrics
+}
+
 export class EventRuntime<EventName extends string> {
   private readonly registry = new EventRegistry<EventName>()
+  private readonly activatedDragSessions = new Set<number>()
+  private readonly pointerMappingContexts = new Map<number, PointerMappingContext>()
 
   constructor(private readonly context: EventRuntimeContext<EventName>) {}
 
@@ -43,16 +53,16 @@ export class EventRuntime<EventName extends string> {
 
   clearEvents() {
     this.registry.clear()
-    clearClickPairing(this.context.store)
+    this.activatedDragSessions.clear()
     this.context.actionRouter.clearGestureOwners()
   }
 
   handleInput(input: EventInput) {
-    this.beginClickCandidate(input)
+    const mapped = this.pointerCoordinates(input)
     const terminalSessionId = this.terminalSessionId(input)
 
     try {
-      const triggerEvents = this.evaluate(input)
+      const triggerEvents = this.evaluate(input, mapped?.coordinates, mapped?.frame)
       this.context.actionRouter.dispatch(
         input.originEvent,
         triggerEvents,
@@ -62,13 +72,18 @@ export class EventRuntime<EventName extends string> {
     } finally {
       if (terminalSessionId !== undefined) {
         this.registry.clearPointerSession(terminalSessionId)
-        clearClickPairing(this.context.store, terminalSessionId)
+        this.activatedDragSessions.delete(terminalSessionId)
+        this.pointerMappingContexts.delete(terminalSessionId)
         this.context.actionRouter.endPointerSession(terminalSessionId)
       }
     }
   }
 
-  private evaluate(input: EventInput): EvaluatedActions<EventName> {
+  private evaluate(
+    input: EventInput,
+    coordinates?: PointerCoordinates,
+    coordinateFrame?: CoordinateFrame
+  ): EvaluatedActions<EventName> {
     const triggerEvents: EvaluatedActions<EventName> = {}
     const namesAtStart = this.registry.names()
 
@@ -77,18 +92,21 @@ export class EventRuntime<EventName extends string> {
         eventName,
         input.pointerSession?.id
       )
-      if (!registered || !this.shouldEvaluate(registered, input)) return
+      if (!registered || !this.shouldEvaluate(registered, input, coordinates)) return
 
       const actionEvent = this.createActionEvent(
         eventName,
         registered.definition,
-        input
+        input,
+        coordinates
       )
       if (!this.conditionPasses(registered.definition, actionEvent)) return
 
       this.runSuccess(registered, actionEvent, input)
       triggerEvents[eventName] = {
         info: actionEvent,
+        coordinates,
+        coordinateFrame,
         event: registered.definition,
         role: registered.role,
         scope: registered.scope,
@@ -101,7 +119,8 @@ export class EventRuntime<EventName extends string> {
 
   private shouldEvaluate(
     registered: RegisteredEvent<EventName>,
-    input: EventInput
+    input: EventInput,
+    coordinates?: PointerCoordinates
   ) {
     const { definition, role, scope } = registered
     const rawTrigger = input.rawAction?.trigger
@@ -118,10 +137,15 @@ export class EventRuntime<EventName extends string> {
       ) {
         return false
       }
-      const pairing = getClickPairing(this.context.store)
       return sessionId !== undefined &&
-        pairing?.sessionId === sessionId &&
-        pairing.initiatingButton === input.pointerSession?.initiatingButton
+        input.pointerSession !== undefined &&
+        coordinates !== undefined &&
+        Date.now() - input.pointerSession.startedAt < 500 &&
+        Math.hypot(
+          coordinates.viewOffsetFromStart.x,
+          coordinates.viewOffsetFromStart.y
+        ) < 10 &&
+        !this.activatedDragSessions.has(sessionId)
     }
 
     if (role.phase === "start") {
@@ -133,7 +157,16 @@ export class EventRuntime<EventName extends string> {
     }
 
     if (role.phase === "continue") {
-      return rawTrigger === definition.trigger && transition.phase === "continue"
+      if (rawTrigger !== definition.trigger || transition.phase !== "continue") return false
+      if (role.family !== "drag") return true
+      if (this.activatedDragSessions.has(sessionId)) return true
+      if (!coordinates) return false
+      const activated = Math.hypot(
+        coordinates.viewOffsetFromStart.x,
+        coordinates.viewOffsetFromStart.y
+      ) >= 10
+      if (activated) this.activatedDragSessions.add(sessionId)
+      return activated
     }
 
     if (transition.phase !== "end" && transition.phase !== "cancel") return false
@@ -147,24 +180,25 @@ export class EventRuntime<EventName extends string> {
   private createActionEvent(
     eventName: EventName,
     event: StayEventProps<EventName>,
-    input: EventInput
+    input: EventInput,
+    coordinates?: PointerCoordinates
   ): NormalizedActionEvent<EventName> {
     const actionEvent: NormalizedActionEvent<EventName> = {
       state: this.context.getState(),
       name: eventName,
       pressedKeys: new Set(input.pressedKeys),
-      isMouseEvent: Boolean(input.pointerSample) || input.originEvent instanceof MouseEvent,
+      isMouseEvent: Boolean(coordinates) || input.originEvent instanceof MouseEvent,
     }
 
     if (input.originEvent instanceof KeyboardEvent) {
       actionEvent.key = input.originEvent.key
     }
 
-    const sample = input.pointerSample ?? this.sampleFromMouseEvent(input.originEvent)
-    if (sample) {
-      actionEvent.x = sample.clientX - this.context.canvas.x
-      actionEvent.y = sample.clientY - this.context.canvas.y
-      actionEvent.point = { x: actionEvent.x, y: actionEvent.y }
+    if (coordinates) {
+      actionEvent.x = coordinates.content.x
+      actionEvent.y = coordinates.content.y
+      actionEvent.point = { ...coordinates.content }
+      actionEvent.movement = { ...coordinates.viewMovement }
     }
 
     const session = input.pointerSession
@@ -186,6 +220,58 @@ export class EventRuntime<EventName extends string> {
     }
 
     return actionEvent
+  }
+
+  private pointerCoordinates(input: EventInput): {
+    coordinates: PointerCoordinates
+    frame: CoordinateFrame
+  } | undefined {
+    const current = input.pointerSample ?? this.sampleFromMouseEvent(input.originEvent)
+    if (!current) return undefined
+    const samples: PointerSamples = input.pointerSamples ?? {
+      start: current,
+      previous: current,
+      current,
+    }
+    const mappingContext = this.pointerMappingContext(input)
+    this.rememberPointerMappingContext(input, mappingContext)
+    return {
+      coordinates: this.context.coordinates.mapPointer(
+        samples,
+        mappingContext.metrics,
+        mappingContext.frame
+      ),
+      frame: mappingContext.frame,
+    }
+  }
+
+  private pointerMappingContext(input: EventInput): PointerMappingContext {
+    const sessionId = input.pointerSession?.id
+    if (
+      sessionId !== undefined &&
+      input.sessionTransition?.phase === "cancel" &&
+      input.sessionTransition.cancelReason === "resize"
+    ) {
+      const remembered = this.pointerMappingContexts.get(sessionId)
+      if (remembered) return remembered
+    }
+
+    const metrics = this.context.canvas.getSurfaceMetrics()
+    return {
+      metrics,
+      frame: this.context.coordinates.getFrame(metrics),
+    }
+  }
+
+  private rememberPointerMappingContext(
+    input: EventInput,
+    mappingContext: PointerMappingContext
+  ) {
+    const sessionId = input.pointerSession?.id
+    const phase = input.sessionTransition?.phase
+    if (sessionId !== undefined && (phase === "start" || phase === "continue")) {
+      this.pointerMappingContexts.set(sessionId, mappingContext)
+    }
   }
 
   private sampleFromMouseEvent(originEvent: Event) {
@@ -249,23 +335,6 @@ export class EventRuntime<EventName extends string> {
     }
 
     return { kind: "persistent" }
-  }
-
-  private beginClickCandidate(input: EventInput) {
-    const transition = input.sessionTransition
-    const sample = input.pointerSample
-    const session = input.pointerSession
-    if (transition?.phase !== "start" || !sample || !session) return
-
-    beginClickPairing(this.context.store, {
-      sessionId: session.id,
-      initiatingButton: session.initiatingButton,
-      point: {
-        x: sample.clientX - this.context.canvas.x,
-        y: sample.clientY - this.context.canvas.y,
-      },
-      startedAt: Date.now(),
-    })
   }
 
   private terminalSessionId(input: EventInput) {

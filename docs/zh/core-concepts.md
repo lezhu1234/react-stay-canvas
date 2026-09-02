@@ -38,7 +38,7 @@ React application
 - 创建当前实例的 `StayTools`；
 - 按配置在尺寸变化后重建运行时，并在主动重建或卸载时统一清理旧实例。
 
-`StayCanvas` 的 `width` 和 `height` 决定场景坐标空间。`layers` 决定实际创建多少个叠放的 `<canvas>`。
+`StayCanvas` 的 `width` 和 `height` 决定场景坐标空间。`layers` 决定实际创建多少个叠放的 `<canvas>`，也可以逐层显式选择 Canvas2D 或 WebGL2。Canvas2D 是默认值；WebGL2 是必须配置 Camera 的 opt-in 原生 Mesh 场景。
 
 场景内容不是 React 子节点。应在 `mounted`、Listener 回调或应用操作中通过 `StayTools` 和 Child/Shape 方法修改场景。
 
@@ -72,6 +72,7 @@ Child 为一个或多个 Shape 提供共同的：
 - 命中测试结果
 - 整体边界框
 - 移动和缩放入口
+- 从局部空间到 Content 的非破坏性变换
 - 历史记录身份
 
 一个按钮可以由背景矩形和文字两个 Shape 组成，但它们应属于同一个 Child。这样点击文字或背景时，命中的都是同一个对象，移动时两部分也会一起移动。
@@ -90,8 +91,10 @@ tools.appendChild({
     }),
     new StayText({
       x: 102,
-      y: 49,
+      y: 58,
       text: "Save",
+      textAlign: "center",
+      textBaseline: "middle",
       fillConfig: { color: { r: 255, g: 255, b: 255, a: 1 } },
     }),
   ],
@@ -99,6 +102,8 @@ tools.appendChild({
 ```
 
 `child.shape` 返回这个 Child 的第一个 Shape，适合最常见的单 Shape Child。多 Shape Child 应使用 `child.shapeMap` 明确访问或遍历全部 Shape。
+
+Child placement 把其中全部 Shape 从同一个局部对象映射到 Content，而不改写 Shape 几何；它可以是 affine，也可以是带有限 local domain 的 projective 平面。绘制、边界、点命中、区域查询、历史、场景传输和区域截图共享同一份 placement。公开指针 `e.point` 仍是 Content 坐标；只有需要局部几何时才调用 `child.toLocalPoint(e.point)`，并处理 projective 域外的 `undefined`。
 
 ## 图层与 `zIndex`
 
@@ -110,6 +115,8 @@ tools.appendChild({
 因此，较低图层上的 Shape 无论 `zIndex` 多大，都不会盖住更高图层上的 Shape。
 
 多 Shape Child 中的每个 Shape 都可以选择不同图层。例如连线图编辑器可以让边显示在底层、节点显示在上层，同时仍把节点矩形和文字组织成一个 Child。
+
+每个原生图层只有一个 backend 所有者。Canvas2D 图层消费 Shape RenderPlan；WebGL2 图层通过一台 Camera 和持久 GPU cache 消费 `StayWebGLChild` Mesh。两类 Child 共享同一份 identity store、selector、脏层调度、History 事务、state 和场景传输所有权，但不共享几何与排序：Shape `zIndex` 只属于 Canvas2D；不透明 WebGL2 Mesh 由原生 depth 决定遮挡，透明队列则把 Glass Mesh 稳定地从远到近排序。WebGL2 context loss 只暂停对应图层，也不会触发隐式 Canvas2D fallback。
 
 ## `StayTools`：当前实例的操作入口
 

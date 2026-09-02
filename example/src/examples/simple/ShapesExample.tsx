@@ -2,6 +2,9 @@ import { useRef, useState } from "react"
 import {
   Circle,
   Line,
+  Path,
+  Point,
+  Polygon,
   Rectangle,
   StayCanvas,
   StayImage,
@@ -9,7 +12,7 @@ import {
   StayTools,
 } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, placeSceneChild, ResetButton, scenePoint, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 
 function makeSampleImage() {
@@ -42,10 +45,12 @@ export default function ShapesExample() {
       x: 84,
       y: 118,
       text: "Rectangle",
+      textAlign: "center",
+      textBaseline: "top",
       font: { size: 12, fontWeight: 700 },
       fillConfig: { color: colors.ink },
     })
-    rectangleRef.current = tools.appendChild({
+    rectangleRef.current = placeSceneChild(tools, tools.appendChild({
       id: "shape-rectangle",
       className: "shape",
       shape: [
@@ -59,8 +64,8 @@ export default function ShapesExample() {
         }),
         rectangleLabelRef.current,
       ],
-    })
-    tools.appendChild({
+    }))
+    placeSceneChild(tools, tools.appendChild({
       className: "shape",
       shape: [
         new Circle({
@@ -70,10 +75,18 @@ export default function ShapesExample() {
           fillConfig: { color: colors.greenSoft },
           strokeConfig: { color: colors.green, lineWidth: 3 },
         }),
-        new StayText({ x: 220, y: 118, text: "Circle", font: { size: 12, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
+        new StayText({
+          x: 220,
+          y: 118,
+          text: "Circle",
+          textAlign: "center",
+          textBaseline: "top",
+          font: { size: 12, fontWeight: 700 },
+          fillConfig: { color: colors.ink },
+        }),
       ],
-    })
-    tools.appendChild({
+    }))
+    placeSceneChild(tools, tools.appendChild({
       className: "shape",
       shape: [
         new Line({
@@ -83,23 +96,82 @@ export default function ShapesExample() {
           y2: 108,
           strokeConfig: { color: colors.orange, lineWidth: 4, dash: [10, 7], lineCap: "round" },
         }),
-        new StayText({ x: 347, y: 118, text: "Line", font: { size: 12, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
+        new StayText({
+          x: 347,
+          y: 118,
+          text: "Line",
+          textAlign: "center",
+          textBaseline: "top",
+          font: { size: 12, fontWeight: 700 },
+          fillConfig: { color: colors.ink },
+        }),
       ],
-    })
-    tools.appendChild({
+    }))
+    placeSceneChild(tools, tools.appendChild({
       className: "label",
       shape: new StayText({
         x: 220,
         y: 154,
         text: "StayText",
+        textAlign: "center",
+        textBaseline: "top",
         font: { size: 18, fontWeight: 650 },
         fillConfig: { color: colors.ink },
       }),
-    })
+    }))
+    placeSceneChild(tools, tools.appendChild({
+      className: "shape",
+      shape: [
+        new Path({
+          points: [
+            new Point({ x: 290, y: 160 }),
+            new Point({ x: 320, y: 176 }),
+            new Point({ x: 350, y: 154 }),
+            new Point({ x: 385, y: 172 }),
+            new Point({ x: 412, y: 156 }),
+          ],
+          strokeConfig: { color: colors.orange, lineWidth: 8 },
+        }),
+        new StayText({
+          x: 351,
+          y: 180,
+          text: "Path",
+          textAlign: "center",
+          textBaseline: "top",
+          font: { size: 10, fontWeight: 700 },
+          fillConfig: { color: colors.ink },
+        }),
+      ],
+    }))
+    placeSceneChild(tools, tools.appendChild({
+      className: "shape",
+      shape: [
+        new Polygon({
+          points: [
+            { x: 65, y: 150 },
+            { x: 104, y: 168 },
+            { x: 90, y: 190 },
+            { x: 40, y: 190 },
+            { x: 26, y: 168 },
+          ],
+          fillConfig: { color: colors.greenSoft },
+          strokeConfig: { color: colors.green, lineWidth: 3, lineJoin: "round" },
+        }),
+        new StayText({
+          x: 65,
+          y: 194,
+          text: "Polygon",
+          textAlign: "center",
+          textBaseline: "top",
+          font: { size: 10, fontWeight: 700 },
+          fillConfig: { color: colors.ink },
+        }),
+      ],
+    }))
 
     const image = new Image()
     image.onload = () => {
-      tools.appendChild({
+      const imageChild = tools.appendChild({
         className: "image",
         shape: new StayImage({
           image,
@@ -111,20 +183,25 @@ export default function ShapesExample() {
           strokeConfig: { color: colors.ink, lineWidth: 1 },
         }),
       })
+      placeSceneChild(tools, imageChild)
     }
     image.src = makeSampleImage()
   }
 
   const changeRectangle = () => {
+    const tools = toolsRef.current
     const rectangle = rectangleRef.current?.shape as Rectangle | undefined
-    if (!rectangle) return
+    if (!tools || !rectangle) return
+    const expanding = rectangle.width === 112
+    const rectanglePosition = scenePoint(tools, expanding ? 54 : 28, 32)
+    const labelPosition = scenePoint(tools, expanding ? 129 : 84, 118)
     rectangle.update({
-      x: rectangle.x === 28 ? 54 : 28,
-      width: rectangle.width === 112 ? 150 : 112,
-      fillConfig: { color: rectangle.width === 112 ? colors.orangeSoft : colors.blueSoft },
+      x: rectanglePosition.x,
+      width: expanding ? 150 : 112,
+      fillConfig: { color: expanding ? colors.orangeSoft : colors.blueSoft },
     })
-    rectangleLabelRef.current?.update({ x: rectangle.width === 150 ? 129 : 84 })
-    setVariant(rectangle.width === 150 ? text("Updated geometry", "已修改") : text("Default geometry", "默认状态"))
+    rectangleLabelRef.current?.update({ x: labelPosition.x })
+    setVariant(expanding ? text("Updated geometry", "已修改") : text("Default geometry", "默认状态"))
   }
 
   const forceRefresh = () => {
@@ -134,7 +211,7 @@ export default function ShapesExample() {
 
   return (
     <DemoLayout>
-      <CanvasCard title={text("Built-in shape palette", "内置图形与样式")} description={text("Five drawing primitives share one incremental renderer.", "同一个 Canvas 中绘制五种内容，并按需增量重绘。")} wide>
+      <CanvasCard title={text("Built-in shape palette", "内置图形与样式")} description={text("Seven drawing primitives share one incremental renderer.", "同一个 Canvas 中绘制七种内容，并按需增量重绘。")} wide>
         <StayCanvas className="demo-canvas" height={330} layers={2} mounted={mounted} width={440} />
       </CanvasCard>
       <Toolbar>
@@ -142,7 +219,7 @@ export default function ShapesExample() {
         <Button onClick={forceRefresh}>{text("Force refresh", "强制刷新")}</Button>
         <ResetButton />
       </Toolbar>
-      <StatusGrid items={[[text("Variant", "当前状态"), variant], [text("Refreshes", "刷新次数"), refreshCount], ["Canvas", "440 × 330"], [text("Layers", "图层"), "2"]]} />
+      <StatusGrid items={[[text("Variant", "当前状态"), variant], [text("Refreshes", "刷新次数"), refreshCount], ["Canvas", text("Responsive", "自适应")], [text("Layers", "图层"), "2"]]} />
     </DemoLayout>
   )
 }

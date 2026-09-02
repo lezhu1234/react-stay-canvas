@@ -22,7 +22,7 @@ const saveListener: ListenerProps = {
 | `state` | 当前 Canvas state 满足表达式时才参与路由 |
 | `selector` | 目标查询；原生指针 action 省略时默认使用 root selector `.stay-canvas` |
 | `event` | 订阅一个或多个 action 名称 |
-| `sortBy` | 多个命中 Child 的稳定排序函数 |
+| `sortBy` | 覆盖默认的较小边界优先目标顺序 |
 | `callback` | action 路由完成后同步执行 |
 
 Listener 的目标在标准 drag/move 手势开始时确定，后续 continuation 和 terminal 阶段保持同一 owner。普通手动 action 即使使用同名 `drag`，也不会进入 Pointer Session owner 流程。
@@ -33,14 +33,16 @@ Listener 的目标在标准 drag/move 手势开始时确定，后续 continuatio
 | --- | --- | --- |
 | `originEvent` | `Event` | 当前输入的原生事件对象；不得跨异步阶段依赖其传播状态 |
 | `e` | `ActionEvent` | 当前 Listener 独立的 action envelope |
-| `store` | `Map` | Event 定义共享存储 |
-| `stateStore` | `Map` | 当前 Canvas state 的存储，切 state 时清空 |
+| `store` | `Map` 或 `StayStore<Schema>` | Event 定义共享存储 |
+| `stateStore` | `Map` 或 `StayStore<Schema>` | 当前 Canvas state 的存储，切 state 时清空 |
 | `composeStore` | object | 同一 Listener 内由回调返回函数合并的状态 |
 | `canvas` | `Canvas` | 当前运行时 Canvas |
 | `tools` | `StayTools` | 当前 Canvas 的工具实例 |
 | `payload` | object | 手动 trigger 传入的业务数据 |
 
 `callback` 可以返回一个以 action 名为 key 的函数映射。函数返回的对象会同步合并到该 Listener 的 `composeStore`。
+
+`StayStore<Schema>` 是同一个原生 Map 的类型化视图；`get()` 和 `set()` 会按已知字符串 key 推导各自的 value 类型。可通过 `EventProps`、`ListenerProps` 或 `StayCanvasProps` 末尾的泛型传入 store schema；省略时仍保持原有 `Map<string, any>` 回调类型。schema 不会初始化数据，因此 key 尚未写入时 `get()` 仍返回 `undefined`。示例见[交互与事件：类型化回调 store](../interaction-and-events.md#类型化回调-store)。
 
 ## ActionEvent
 
@@ -58,21 +60,26 @@ Listener 的目标在标准 drag/move 手势开始时确定，后续 continuatio
 | 字段 | 出现条件 |
 | --- | --- |
 | `target` | selector 成功解析出 Child |
-| `x`, `y`, `point` | 指针、鼠标、wheel 或显式提供坐标的手动 action |
+| `x`, `y`, `point` | 原生指针、鼠标或 wheel 输入时是 Content 坐标；手动 action 仅保留调用方显式提供的值 |
+| `movement` | Pointer Session 中相邻采样的 View 坐标增量；普通无状态鼠标事件为 `{ x: 0, y: 0 }` |
 | `key` | 键盘 action 或显式提供 key 的手动 action |
 | `deltaX`, `deltaY`, `deltaZ` | wheel action 或显式提供 delta 的手动 action |
 | `pointerId`, `pointerType` | Pointer Events 输入 |
-| `cancelled`, `cancelReason` | Pointer Session 取消产生的 terminal action |
+| `cancelled`, `cancelReason` | Pointer Session 取消产生的 terminal action；原因包括 DOM 取消和逻辑 `resize` |
 
 action 名不决定这些字段是否存在。使用属性前应用类型守卫：
 
 ```ts
+import type { ActionEvent, ContentPoint } from "react-stay-canvas"
+
 function hasPointerPosition(
   e: ActionEvent,
-): e is ActionEvent & { x: number; y: number; point: PointType } {
+): e is ActionEvent & { x: number; y: number; point: ContentPoint } {
   return e.x !== undefined && e.y !== undefined && e.point !== undefined
 }
 ```
+
+原生指针链路依次经过三套内部坐标：Client 是浏览器窗口像素；View 是 CSS 尺寸归一化后的 `width × height` Canvas 平面；Content 是逆向应用 `tools.viewport` 后的场景坐标。公开 `e.point` 的类型是 `ContentPoint`，保证命中和 Child 操作不需要关心视口；`e.movement` 的类型是 `ViewVector`，保证拖拽阈值和平移手感不随缩放改变。需要显式转换时使用 `tools.coordinates`。
 
 ## EventProps
 
@@ -87,7 +94,7 @@ const saveEvent: EventProps<"save"> = {
 }
 ```
 
-导出的 `EventProps<EventName>` 组合了必需的 `name`/`trigger` 字段、可选的条件与成功回调，以及可选的目标谓词。请直接使用导出类型，不要在应用中重写内部 trigger union。
+导出的 `EventProps<EventName, StoreSchema?, StateStoreSchema?>` 组合了必需的 `name`/`trigger` 字段、可选的条件与成功回调，以及可选的目标谓词。请直接使用导出类型，不要在应用中重写内部 trigger union。
 
 - `conditionCallback` 在目标解析前判断 action 是否成立；
 - `successCallback` 在 action 成立后执行，可注册后续动态 Event；

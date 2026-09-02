@@ -41,6 +41,63 @@ await tools.removeChild(child.id)
 
 `getChildrenWithoutRoot()` 返回应用创建的所有 Child。内部 root Child 代表 Canvas 边界，不应删除；需要做全场景遍历时通常也应排除它。
 
+应用可以自行选择业务 Child，合并它们的 Content 边界，再显式适配到当前 View：
+
+```ts
+const children = tools.getChildrenBySelector(".node|.edge")
+const bounds = unionRects(children.map((child) => child.getBound()))
+
+if (bounds) tools.viewport.fit(bounds, { padding: 32 })
+```
+
+库负责几何和 viewport 计算；哪些 Child 属于业务场景、何时触发适配，仍由应用决定。
+
+## 不改写几何地放置单个 Child
+
+每个 Child 只拥有一份局部坐标到 Content 的 `placement`。仿射 placement 可以使用语义字段：
+
+```ts
+const plane = tools.appendChild({
+  className: "plane",
+  placement: {
+    type: "affine",
+    x: 180,
+    y: 96,
+    rotation: -6,
+    skewX: -18,
+    scaleY: 0.78,
+    origin: { x: 0, y: 0 },
+  },
+  shape: [background, ...gridLines, label],
+})
+
+plane.setPlacement({ type: "affine", x: 220, y: 120, rotation: 12 })
+const local = plane.toLocalPoint(e.point)
+const content = local && plane.toContentPoint(local)
+```
+
+`x`、`y`、`origin`、缩放、旋转和倾斜共同定义非破坏性的仿射 placement。旋转和倾斜使用角度制。矩阵按 `translate(x, y) · translate(origin) · rotate · skew · scale · translate(-origin)` 组合。`scaleX`、`scaleY` 默认是 `1`，其余值默认是 `0`。
+
+高级仿射调用方可以传 `{ type: "affine", matrix: { a, b, c, d, e, f } }`。透视平面可以把有限局部矩形映射到四个具名的 Content 顶点：
+
+```ts
+plane.setPlacement(projectivePlacementFromQuad(
+  { x: 0, y: 0, width: 320, height: 180 },
+  {
+    topLeft: { x: 24, y: 18 },
+    topRight: { x: 350, y: 42 },
+    bottomRight: { x: 332, y: 210 },
+    bottomLeft: { x: 12, y: 232 },
+  }
+))
+```
+
+`projectivePlacementFromQuad()` 返回与 `appendChild()`、`createChild()`、`setPlacement()` 相同的公开 `{ type: "projective", matrix, domain }` placement；已经持有单应矩阵的调用方仍可直接传原始 placement。四个顶点按顺时针具名，工具只负责构造并验证有限映射，不替应用决定绘制或交互行为。
+
+projective domain 必须有限、宽高为正，并始终位于齐次地平线同一侧；域外点映射为 `undefined`。`child.placement` 返回带判别字段的快照；`setPlacement()` 完整替换 placement，不合并字段。绘制、边界、命中、工具查询、事件路由、历史、场景传输和区域截图都读取同一份值。`e.point` 继续使用 Content。
+
+静态 placement 变更会进入下一次 `log()` 事务。Animated Child 可以使用一份静态 placement，但当前不包含 placement 关键帧或插值。
+
 ## selector 查询
 
 工具查询使用下面的 selector 表达式。Listener 的 `selector` 接受相同的字符串表达式，但不接受字符串数组或 selector 函数：
@@ -61,7 +118,7 @@ const selectedNodes = tools.getChildrenBySelector(
 )
 ```
 
-`sortBy` 会影响返回顺序，也会影响 `getContainPointChildren({ returnFirst: true })` 选中的第一项。把排序规则写成稳定函数，避免重叠对象在不同调用中选择不一致。
+`sortBy` 会影响查询返回顺序，也会影响 `getContainPointChildren({ returnFirst: true })` 选中的第一项。Listener 自身未提供 `sortBy` 时，目标路由采用稳定默认规则：较小边界优先、相同面积保留场景插入顺序、root 最后兜底。工具查询不会套用这套 Listener 默认规则；未传 comparator 时保留 selector 的结果顺序。
 
 ## 点命中与区域查询
 
@@ -131,16 +188,23 @@ tools.undo()
 tools.redo()
 ```
 
+可用 `tools.canUndo()` 和 `tools.canRedo()` 计算历史按钮的禁用状态。它们只读取已提交的历史游标，不会执行任何操作；Canvas 或应用的待提交修改只有在调用 `tools.log()` 后才会反映到查询结果中。
+
+编辑器完成初始化后，可在加载不可撤销的背景内容之后调用 `resetHistory()`。它会清空 undo/redo，并把当前静态场景作为新的历史基线。
+
+应用状态可以通过可选的 [`historyAdapter`](./api/stay-canvas.md#historyadapter) 进入同一事务。适配器会在每次显式 `log()` 边界保存 before/after 快照，不会持有另一套历史栈；因此只有应用状态变化时也可以形成历史项。
+
 边界规则：
 
-- `appendChild()` 和 `removeChild()` 会把静态 Child 标记为待记录；
-- `log()` 把从上一次快照到当前状态的变化组成一个历史项；
+- `appendChild()`、`removeChild()`、正常 Shape 变更和 `child.setPlacement()` 都会把静态 Child 标记为待记录；
+- `tools.webgl.appendChild()`、`tools.webgl.removeChild()` 与 Mesh geometry/model/material 变更进入同一待记录集合和事务；
+- `log()` 把从上一次快照到当前状态的变化组成一个历史项；配置 `historyAdapter` 时也包含应用状态；
+- `resetHistory()` 清空 undo/redo，并把当前静态场景和适配后的应用状态设为基线；
 - 多个变更后只调用一次 `log()`，它们会成为同一个撤销单位；
 - `undo()` 后再记录新操作，会截断旧的 redo 尾部；
 - 动画 Child 不进入历史，移除后也不会被 undo 恢复；
+- camera 变更仍属于显示状态，不进入历史；
 - `undo()` 和 `redo()` 会恢复当时的 Canvas state。
-
-纯 Shape `update()` 不会自动把 Child 加入待记录集合，因此只在拖动结束时调用 `log()` 不能可靠地记录已经存在对象的移动。需要可撤销更新时，应用必须像 Annotator 示例一样用同 id 的 remove/append replacement 建立显式历史差异。不要假定 `log()` 会扫描全部 Child。
 
 ## 在 Canvas 之间复制场景
 
@@ -160,13 +224,24 @@ targetTools.importChildren(scene, {
 })
 ```
 
-目标区域与源区域必须保持相同宽高比，否则会抛出 `area not match`。每个导出 Child 片段包含 `sourceId`、`className` 和 `shapes`。导入会创建新的运行时 Child id；`sourceId` 只用于关联导入对象与源对象。
+目标区域与源区域必须保持相同宽高比，否则会抛出 `area not match`。每个导出 Child 片段包含 `sourceId`、`className`、`shapes` 和解析后的局部到 Content `placement`。导入会创建新的运行时 Child id；`sourceId` 只用于关联导入对象与源对象。
 
 这是场景传输路径，不是序列化格式。公共 Shape 状态和库拥有的可变样式值会被独立捕获；`shapeStore` 中的任意值仍然共享，因为库无法推断它们的所有权。Animated Child 只提供当前渲染投影，不传输时间线。
 
 `importChildren()` 会先实例化新的 Shape，再对它们执行 move/zoom，因此可以把同一个 exported payload 重复导入不同 Canvas 或目标区域，输入数据不会被修改。
 
 如果 `exportChildren()` 省略 `area`，会使用源 Canvas 的 root 边界。如果 `importChildren()` 省略目标区域，会使用目标 Canvas 的 root 边界。
+
+原生 Mesh 场景使用独立且保持所有权的传输入口：
+
+```ts
+const fragment = sourceTools.webgl.exportChildren(
+  sourceTools.webgl.getChildrenBySelector(".plane"),
+)
+const imported = targetTools.webgl.importChildren(fragment)
+```
+
+每个导入的 Child 都会获得新 id，以及独立的 Mesh geometry、normals、model matrix 和 material 值，其中包含 Glass roughness 与体积吸收配置。目标 WebGL2 layer config 继续拥有自己的 camera、environment 与 lights；这些显示状态不会被传输。Mesh geometry 已经位于原生场景 world space，因此该传输没有二维 `area` 或 Child placement。
 
 ## 把区域渲染到独立 Canvas
 
@@ -180,9 +255,9 @@ const snapshotCanvas = await tools.regionToTargetCanvas({
 const png = snapshotCanvas.toDataURL("image/png")
 ```
 
-`regionToTargetCanvas()` 返回一个未挂载到 DOM 的 `HTMLCanvasElement`。它按 Shape 的 layer 和 `zIndex` 顺序强制绘制传入的 Children。传入 `progress` 时，动画 Child 会先推进到对应毫秒时间，包括 `progress: 0`；静态 Child 保持不变。
+`regionToTargetCanvas()` 返回一个未挂载到 DOM 的 `HTMLCanvasElement`。它会裁剪到 `area`，再把该区域等比缩放并居中放入 `targetSize`；宽高比不同时，剩余区域保持透明。绘制顺序仍按 Shape 的 layer 和 `zIndex` 决定，调用过程不会移动或缩放源 Child。
 
-当前实现不会自动把 `area` 平移或缩放到 `targetSize`，因此它更接近“按当前场景坐标绘制到另一个 Canvas”。需要真正裁剪或缩放时，应先导出/导入到目标坐标系，或在业务层明确处理变换。
+传入 `progress` 时，动画 Child 会临时投影到对应毫秒时间，包括 `progress: 0`；静态 Child 保持不变。输出完成后会恢复动画 Child 原有的当前投影，因此截帧不会改变现场播放位置。
 
 ## 其他工具
 

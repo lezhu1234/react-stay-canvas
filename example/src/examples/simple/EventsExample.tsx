@@ -8,7 +8,7 @@ import {
   StayTools,
 } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, EventLog, placeSceneChild, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerTarget } from "../actionEventGuards"
 
@@ -63,7 +63,7 @@ export default function EventsExample() {
   ], [text])
 
   const mounted = (tools: StayTools) => {
-    tools.appendChild({
+    placeSceneChild(tools, tools.appendChild({
       id: "drag-target",
       className: "target",
       shape: [
@@ -75,9 +75,17 @@ export default function EventsExample() {
           fillConfig: { color: colors.blueSoft },
           strokeConfig: { color: colors.blue, lineWidth: 3 },
         }),
-        new StayText({ x: 220, y: 116, text: text("drag me", "拖动我"), font: { size: 20, fontWeight: 650 }, fillConfig: { color: colors.ink } }),
+        new StayText({
+          x: 220,
+          y: 116,
+          text: text("drag me", "拖动我"),
+          textAlign: "center",
+          textBaseline: "top",
+          font: { size: 20, fontWeight: 650 },
+          fillConfig: { color: colors.ink },
+        }),
       ],
-    })
+    }))
     setCanvasInstances((value) => value + 1)
   }
 

@@ -1,7 +1,19 @@
 import { Canvas } from "../canvas"
-import { InstantShape } from "../shapes/instantShape"
 import type { DrawReturn, StayDrawProps } from "../types/tools"
-import { StayInstantChild } from "./children/stayInstantChild"
+import {
+  isStayInstantChild,
+  isStayWebGLChild,
+  type StayChild,
+  stayChildLayers,
+} from "./children/stayChild"
+import {
+  CoordinateSystem,
+  type CoordinateFrame,
+} from "./coordinates/coordinateSystem"
+import { executeCanvas2DRenderPlan } from "./rendering/canvas2DExecutor"
+import { resolveCanvas2DProjectiveQuality } from "./rendering/canvas2DProjectiveQuality"
+import { createLayerRenderPlan } from "./rendering/renderPlan"
+import { ChildLayerScheduler } from "./rendering/childLayerScheduler"
 
 interface DrawLayer {
   forceUpdate: boolean
@@ -15,10 +27,13 @@ export class Renderer {
   #layers: DrawLayer[]
   #nextTick: (() => void)[] = []
   #running = false
+  #lastRenderedCoordinateRevision = -1
+  readonly #childLayers = new ChildLayerScheduler(stayChildLayers)
 
   constructor(
     private readonly root: Canvas,
-    private readonly getRenderChildren: () => StayInstantChild[]
+    private readonly getRenderChildren: () => StayChild[],
+    private readonly coordinates: CoordinateSystem
   ) {
     this.#layers = root.layers.map(() => ({ forceUpdate: false }))
   }
@@ -40,68 +55,65 @@ export class Renderer {
   // Repaints only the layers flagged dirty (own forceUpdate, or a child's
   // updatedLayers), clearing + redrawing each such layer's own canvas.
   draw({ now = Date.now(), beforeDrawCallback, afterDrawCallback }: StayDrawProps): DrawReturn {
-    interface ChildLayer {
-      updateCurrentLayer: boolean
-    }
+    beforeDrawCallback?.()
 
-    const childrenInlayer: ChildLayer[] = this.#layers.map((layer) => {
-      const childInLayer = { updateCurrentLayer: layer.forceUpdate }
+    const frame = this.coordinates.getFrame(this.root.getSurfaceMetrics())
+    const viewportChanged = frame.revision !== this.#lastRenderedCoordinateRevision
+    const dirtyLayers = this.#layers.map((layer, layerIndex) => {
+      const dirty = layer.forceUpdate || (
+        viewportChanged && this.root.getLayerBackend(layerIndex) === "canvas2d"
+      )
       layer.forceUpdate = false
-      return childInLayer
+      return dirty
     })
 
     const children = this.getRenderChildren()
 
-    children.forEach((child) => {
-      child.getUpdatedLayers().forEach((layer) => {
-        childrenInlayer[layer].updateCurrentLayer = true
-      })
-    })
+    this.#childLayers.collectDirtyLayers(children, dirtyLayers)
 
     const updatedLayers: number[] = []
-    const updatedChilds: {
-      child: StayInstantChild
-      shapes: InstantShape[]
-    }[] = []
+    const updatedChilds: DrawReturn["updatedChilds"] = []
 
-    if (beforeDrawCallback) {
-      beforeDrawCallback()
-    }
-
-    for (let layerIndex = 0; layerIndex < childrenInlayer.length; layerIndex++) {
-      const { updateCurrentLayer } = childrenInlayer[layerIndex]
-
-      if (!updateCurrentLayer) {
-        continue
-      }
-
-      updatedLayers.push(layerIndex)
-
-      const context = this.root.contexts[layerIndex]
-      this.root.clear(context)
-
-      let layerDrawShapes: InstantShape[] = []
-
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i]
-        const shapes = child.getShapes(layerIndex)
-        layerDrawShapes.push(...shapes)
-        child.layerDraw(layerIndex)
-        if (shapes.length > 0) {
-          updatedChilds.push({ child, shapes })
+    try {
+      for (let layerIndex = 0; layerIndex < dirtyLayers.length; layerIndex++) {
+        if (!dirtyLayers[layerIndex] || !this.root.isLayerDrawable(layerIndex)) {
+          continue
         }
+
+        updatedLayers.push(layerIndex)
+        if (this.root.getLayerBackend(layerIndex) === "webgl2") {
+          const canvas2DChild = children
+            .filter(isStayInstantChild)
+            .find((child) => stayChildLayers.occupiedLayers(child).has(layerIndex))
+          if (canvas2DChild) {
+            throw new Error(`Canvas2D Child ${canvas2DChild.id} cannot target layer ${layerIndex}`)
+          }
+          const meshes = children
+            .filter(isStayWebGLChild)
+            .filter((child) => child.layer === layerIndex)
+            .flatMap((child) => [...child.meshes])
+          this.root.renderWebGL2Layer(layerIndex, meshes)
+        } else {
+          const webGLChild = children
+            .filter(isStayWebGLChild)
+            .find((child) => child.layer === layerIndex)
+          if (webGLChild) {
+            throw new Error(`WebGL Child ${webGLChild.id} cannot target layer ${layerIndex}`)
+          }
+          const plan = createLayerRenderPlan(
+            children.filter(isStayInstantChild),
+            layerIndex,
+            frame.visibleContentArea
+          )
+          updatedChilds.push(...plan.updatedChildren)
+          this.#drawCanvas2DLayer(layerIndex, frame, plan.items, now)
+        }
+        this.#childLayers.acknowledgeLayer(children, layerIndex)
       }
-
-      layerDrawShapes = layerDrawShapes.sort((s1, s2) => s1.zIndex - s2.zIndex)
-
-      layerDrawShapes.forEach((shape) => {
-        shape.draw({
-          context,
-          now,
-          width: this.root.width,
-          height: this.root.height,
-        })
-      })
+      this.#lastRenderedCoordinateRevision = frame.revision
+    } catch (error) {
+      this.forceUpdateAllLayers()
+      throw error
     }
 
     if (afterDrawCallback) {
@@ -111,6 +123,42 @@ export class Renderer {
     this.#drainNextTick()
 
     return { updatedLayers, updatedChilds }
+  }
+
+  #drawCanvas2DLayer(
+    layerIndex: number,
+    frame: CoordinateFrame,
+    items: ReturnType<typeof createLayerRenderPlan>["items"],
+    now: number
+  ) {
+    const quality = (mapping: Parameters<typeof resolveCanvas2DProjectiveQuality>[0]["mapping"]) => {
+      const layer = this.root.layers[layerIndex]
+      return resolveCanvas2DProjectiveQuality({
+        mapping,
+        outputWidth: layer.width,
+        outputHeight: layer.height,
+        contentScaleX:
+          layer.width / this.root.width * frame.contentToView.scale,
+        contentScaleY:
+          layer.height / this.root.height * frame.contentToView.scale,
+      })
+    }
+
+    this.root.withLayerFrame(layerIndex, frame.contentToView, (context) => {
+      executeCanvas2DRenderPlan({
+        context,
+        items,
+        getNow: () => now,
+        width: this.root.width,
+        height: this.root.height,
+        getProjectiveQuality: ({ projection }) => {
+          if (!projection) {
+            throw new Error("projective quality requires a projective RenderItem")
+          }
+          return quality(projection.mapping)
+        },
+      })
+    })
   }
 
   // The continuous render loop. Incremental: draw() only repaints dirty layers,
@@ -135,7 +183,15 @@ export class Renderer {
     if (!this.#running) return
 
     this.#frameId = undefined
-    this.draw({ now: Date.now() })
+    try {
+      this.draw({ now: Date.now() })
+    } catch (error) {
+      // A failed frame has no scheduled successor. Keep the lifecycle state
+      // honest so an explicit invalidation such as WebGL context restoration
+      // can start a fresh loop after the error has propagated.
+      this.#running = false
+      throw error
+    }
     if (!this.#running) return
 
     this.#frameId = window.requestAnimationFrame(() => this.#runFrame())

@@ -15,12 +15,19 @@ A Shape owns geometry, drawing, hit testing, and its own visual state. A Child g
 | `Rectangle` | `x`, `y`, `width`, `height` | Yes | Yes | `x` and `y` are the top-left corner |
 | `Circle` | `x`, `y`, `radius` | Yes | No | Uses radial hit testing with plain coordinates |
 | `Line` | `x1`, `y1`, `x2`, `y2` | No | Yes | Use `nearPoint` for a custom line hit area |
-| `StayText` | `x`, `y`, `text`, `font` | No | Yes | `(x, y)` is currently the upper center of the text bounding box |
+| `StayText` | `x`, `y`, `text`, `font` | No | Yes | `(x, y)` is always the Canvas text anchor defined by `textAlign` and `textBaseline` |
 | `StayImage` | `image`, `x`, `y`, `width`, `height`, `opacity` | Yes | Yes | Uses rectangular bounds; create it after the image loads |
 | `Point` | `x`, `y` | No | No | Geometry helper only; appending it throws during render because `getBound()` is not implemented |
-| `Path` | `points`, `radius` | Unavailable | No | Cannot currently render as an appended Shape because `getBound()` is not implemented |
+| `Path` | `points`, `strokeConfig.lineWidth` | Yes | No | Uses a native stroked `Path2D`; defaults to round caps and joins |
+| `Polygon` | `points`, `fillRule` | Yes | No | Closed fillable area; requires at least three points |
 
 “Default hit testing” means that `Child.containsPointer()` can rely on the Shape's `contains()` implementation. A Child is hit when any Shape inside it is hit. A practical pattern is to group non-hittable text or lines with a visible or low-opacity `Rectangle`, giving the whole Child a stable interaction region.
+
+`Path` builds one native `Path2D` centerline from its points and paints it with `context.stroke()`. `strokeConfig.lineWidth` is the only width source; `fillConfig` is not accepted. Its bound expands the point extrema by half the line width, and hit testing compares the pointer with the nearest segment after a bounds check. Empty, single-point, repeated-point, and multi-segment paths are valid static geometry. Zoom scales both the points and line width.
+
+`Polygon` closes the last point back to the first and accepts both `fillConfig` and `strokeConfig`. It requires at least three points and owns copies of the supplied coordinates, so later mutations of the input array do not change the Shape. `fillRule` defaults to `"nonzero"`; `"evenodd"` is also supported. Hit testing uses the same rule as Canvas filling and includes points on the boundary. Bounds, area, centroid, movement, zoom, update, and copy all derive from the closed geometry.
+
+`StayText` follows Canvas coordinate semantics: the default `start + alphabetic` uses `(x, y)` as the start-side alphabetic-baseline anchor. To center text on a visual point, pass that point as `x` and `y` together with `textAlign: "center"` and `textBaseline: "middle"`. Drawing, bounds, movement, zoom, and keyframe interpolation use the same anchor. `offsetXRatio` and `offsetYRatio` apply an additional width- and height-relative shift to it.
 
 ## Styling and paint order
 
@@ -103,7 +110,7 @@ label?.update({ text: "Renamed" })
 
 Arrays become `shapeMap` entries named `"0"`, `"1"`, and so on. Copies, scene exports, and history snapshots retain those map keys.
 
-## Update the Shape, not the Child container
+## Update Shape properties or the Child composition
 
 The public mutation path is the Shape's own `update(...)` method:
 
@@ -116,7 +123,20 @@ child?.shape.update({
 })
 ```
 
-`update()` tells the owning Child which layers need repainting. A same-layer update dirties that layer; changing `layer` dirties both the previous and next layers so the old Canvas is cleared automatically. `StayInstantChild.update(...)` is an internal replacement primitive used by undo and redo; it is not the normal application-level mutation API.
+Shape `update()` tells the owning Child which layers need repainting. A same-layer update dirties that layer; changing `layer` dirties both the previous and next layers so the old Canvas is cleared automatically.
+
+Use `StayInstantChild.update(...)` when changing Child-level state or atomically replacing the full Shape composition, such as restoring a cancelled multi-Shape edit:
+
+```ts
+child.update({
+  className: "node:selected",
+  shape: originalShapes,
+  placement: { type: "affine", x: 24, y: 12 },
+})
+tools.log()
+```
+
+The Child id is stable and cannot be changed through `update(...)`. The update validates every replacement Shape layer and the placement before changing the Child, dirties both old and new layers, and is recorded by the next `tools.log()` as one history step.
 
 `move()` applies a relative offset. At the start of a continuous gesture, call `moveInit()` once, then pass offsets relative to that gesture start:
 
@@ -152,6 +172,8 @@ image.src = "/photo.png"
 Cross-origin images follow the browser's Canvas tainting rules. If the scene will later call `toDataURL()` or `regionToTargetCanvas()`, the image response must allow the corresponding CORS use.
 
 Pass `sx`, `sy`, `swidth`, and `sheight` to crop the source image. Explicit crop dimensions are preserved during construction, update, and copy; omitted dimensions use the image's natural size. Custom crop dimensions are not currently preserved in interpolated timeline frames.
+
+Animated `StayImage` slices use `opacity` as their visibility state. An image produced by `zeroShape()` stays out of the rendered frame at opacity `0`, then becomes visible as opacity is interpolated; no dummy `fillConfig` is required.
 
 ## Explicit timeline model
 
@@ -195,6 +217,15 @@ tools.progress({ timeMs: 0 })
 ```
 
 The first `appendKeyFrame()` call prepends a transparent zero frame by default. The example therefore fades from transparent into its first visible rectangle. Keep that default: the current runtime cannot safely seek to `timeMs: 0` when the first frame has a non-zero duration and the zero frame is disabled. See [Current limitations](./known-limitations.md#animation-and-history).
+
+Timeline editors can recompile one named slice without replacing its Child:
+
+```ts
+card.replaceSlice("body", nextBodyFrames, false)
+tools.progress({ timeMs: playheadMs })
+```
+
+`replaceSlice()` validates and compiles the complete non-empty slice before swapping it in. A compilation error leaves the previous slice, `totalDurationMs`, and current projected Shapes unchanged. It follows the same `prependZeroShape` convention as the first append and does not seek automatically; call `progress()` when the new timeline should be projected.
 
 `durationMs` and `delayMs` describe the transition arriving at the current keyframe: hold the previous frame for `delayMs`, then interpolate for `durationMs`. `totalDurationMs` is the longest total duration among all slices.
 

@@ -1,15 +1,18 @@
 {
   "name": "react-stay-canvas",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "stay-canvas for react",
   "scripts": {
     "build": "rollup -c",
-    "pub": "pnpm verify && pnpm publish --access public",
+    "prepublishOnly": "pnpm verify",
+    "pub": "pnpm publish --access public",
     "test": "npm test --prefix test",
+    "typecheck:public-api": "tsc -p test/types/tsconfig.json",
     "typecheck:example": "npm run typecheck --prefix example",
     "build:example": "npm run build --prefix example",
     "verify:docs": "node scripts/verify-docs.mjs",
-    "verify": "pnpm verify:docs && pnpm build && pnpm test && pnpm build:example"
+    "verify:package": "node scripts/verify-package.mjs",
+    "verify": "pnpm verify:docs && pnpm typecheck:public-api && pnpm build && pnpm verify:package && pnpm test && pnpm build:example"
   },
   "repository": {
     "type": "git",
@@ -43,7 +46,10 @@
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "files": [
-    "dist"
+    "dist",
+    "docs/en",
+    "docs/zh",
+    "CHANGELOG.md"
   ],
   "types": "dist/index.d.ts"
 }

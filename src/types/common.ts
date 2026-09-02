@@ -1,4 +1,20 @@
+type StayStoreKey<Schema extends object> = Extract<keyof Schema, string>
+type StayStoreValue<Schema extends object> = Schema[StayStoreKey<Schema>]
+
+/** A native Map view whose known string keys determine their value types. */
+export type StayStore<Schema extends object = Record<string, any>> = Omit<
+  Map<StayStoreKey<Schema>, StayStoreValue<Schema>>,
+  "get" | "set"
+> & {
+  get<Key extends StayStoreKey<Schema>>(key: Key): Schema[Key] | undefined
+  set<Key extends StayStoreKey<Schema>>(key: Key, value: Schema[Key]): StayStore<Schema>
+}
+
 export type storeType = Map<string, any>
+
+export type StayStoreFor<Schema extends object = never> = [Schema] extends [never]
+  ? storeType
+  : StayStore<Schema>
 
 export type Dict<T = any> = Record<string, T>
 

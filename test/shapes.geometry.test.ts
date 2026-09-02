@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { Rectangle, Circle, Line, Path, Point, StayText } from "react-stay-canvas"
+import { createTextMeasureContext } from "./helpers/textMetrics"
 
 // Dimension 1 (Shapes): pure geometry — no canvas needed.
 
@@ -25,8 +26,10 @@ describe("Rectangle geometry", () => {
 
   it("computeFitInfo scales content to fit inside the rect", () => {
     // fit a 50x50 into 100x50 -> limited by height -> ratio 1
-    const { scaleRatio } = rect().computeFitInfo(50, 50)
+    const { rectangle, scaleRatio, offsetX, offsetY } = rect().computeFitInfo(50, 50)
     expect(scaleRatio).toBeCloseTo(1)
+    expect(rectangle.getBound()).toEqual({ x: 35, y: 20, width: 50, height: 50 })
+    expect({ offsetX, offsetY }).toEqual({ offsetX: 25, offsetY: 0 })
   })
 
   it("copy() is independent of the original", () => {
@@ -72,19 +75,44 @@ describe("Rectangle geometry", () => {
   })
 })
 
+describe("Shape config updates", () => {
+  it("keeps required Canvas defaults when optional config fields are undefined", () => {
+    const line = new Line({
+      x1: 0,
+      y1: 0,
+      x2: 10,
+      y2: 10,
+      strokeConfig: { dash: undefined, lineWidth: undefined },
+    })
+
+    expect(line.strokeConfig.dash).toEqual([])
+    expect(line.strokeConfig.lineWidth).toBe(1)
+
+    line.update({
+      strokeConfig: { dash: [4, 6], lineWidth: 2 },
+    })
+    line.update({
+      strokeConfig: { dash: undefined, lineWidth: undefined },
+    })
+
+    expect(line.strokeConfig.dash).toEqual([4, 6])
+    expect(line.strokeConfig.lineWidth).toBe(2)
+  })
+})
+
 describe("Shape snapshots", () => {
   it("copies Path points independently", () => {
     const path = new Path({
       points: [new Point({ x: 1, y: 2 }), new Point({ x: 3, y: 4 })],
-      radius: 5,
       layer: 1,
+      strokeConfig: { lineWidth: 10 },
     })
 
     const snapshot = path.copy()
     snapshot.points[0].update({ x: 99, y: 2 })
 
     expect(snapshot.layer).toBe(1)
-    expect(snapshot.radius).toBe(5)
+    expect(snapshot.strokeConfig.lineWidth).toBe(10)
     expect(path.points[0].x).toBe(1)
   })
 
@@ -97,15 +125,7 @@ describe("Shape snapshots", () => {
           public height: number
         ) {}
 
-        getContext() {
-          return {
-            measureText: () => ({
-              width: 24,
-              fontBoundingBoxAscent: 10,
-              fontBoundingBoxDescent: 2,
-            }),
-          }
-        }
+        getContext() { return createTextMeasureContext(24) }
       }
     )
     const text = new StayText({
@@ -124,6 +144,110 @@ describe("Shape snapshots", () => {
     expect(snapshot.autoTransitionDiffText).toBe(false)
     expect(text.font.size).toBe(12)
     expect(text.border![0].color).toBe("red")
+    vi.unstubAllGlobals()
+  })
+})
+
+describe("StayText anchors", () => {
+  const installTextMetrics = () => {
+    vi.stubGlobal(
+      "OffscreenCanvas",
+      class {
+        constructor(
+          public width: number,
+          public height: number
+        ) {}
+
+        getContext() { return createTextMeasureContext(24) }
+      }
+    )
+  }
+
+  it("uses x and y as the native anchor for the default alignment", () => {
+    installTextMetrics()
+    const text = new StayText({ x: 100, y: 50, text: "default" })
+    const context = { fillText: vi.fn() }
+
+    text.fill({ context } as any)
+
+    expect(text.getBound()).toEqual({ x: 100, y: 40, width: 24, height: 12 })
+    expect(context.fillText).toHaveBeenCalledWith("default", 100, 50)
+    vi.unstubAllGlobals()
+  })
+
+  it("uses x and y as the native anchor for explicit center and middle alignment", () => {
+    installTextMetrics()
+    const text = new StayText({
+      x: 100,
+      y: 50,
+      text: "centered",
+      textAlign: "center",
+      textBaseline: "middle",
+    })
+    const context = { fillText: vi.fn() }
+
+    text.fill({ context } as any)
+
+    expect(text.getBound()).toEqual({ x: 88, y: 44, width: 24, height: 12 })
+    expect(text.getCenterPoint()).toEqual({ x: 100, y: 50 })
+    expect(context.fillText).toHaveBeenCalledWith("centered", 100, 50)
+
+    const rightBottom = new StayText({
+      x: 100,
+      y: 50,
+      text: "right-bottom",
+      textAlign: "right",
+      textBaseline: "bottom",
+    })
+    expect(rightBottom.getBound()).toEqual({ x: 76, y: 38, width: 24, height: 12 })
+
+    text.zoomCenter = { x: 100, y: 50 }
+    text.zoom(2)
+    expect(text.getCenterPoint()).toEqual({ x: 100, y: 50 })
+    vi.unstubAllGlobals()
+  })
+
+  it.each([
+    ["top", 50],
+    ["hanging", 48],
+    ["middle", 44],
+    ["alphabetic", 40],
+    ["ideographic", 39],
+    ["bottom", 38],
+  ] as const)("derives the %s bound from metrics measured at that baseline", (textBaseline, top) => {
+    installTextMetrics()
+    const text = new StayText({ x: 100, y: 50, text: "baseline", textBaseline })
+
+    expect(text.getBound()).toEqual({ x: 100, y: top, width: 24, height: 12 })
+    vi.unstubAllGlobals()
+  })
+
+  it("keeps offsets, movement, and animation relative to the resolved anchor", () => {
+    installTextMetrics()
+    const before = new StayText({
+      x: 40,
+      y: 30,
+      text: "moving",
+      textAlign: "center",
+      textBaseline: "middle",
+      offsetXRatio: 0.25,
+      offsetYRatio: 0.5,
+    })
+    const after = new StayText({
+      x: 80,
+      y: 70,
+      text: "moving",
+      textAlign: "center",
+      textBaseline: "middle",
+      offsetXRatio: 0.25,
+      offsetYRatio: 0.5,
+    })
+
+    expect(before.getBound()).toEqual({ x: 34, y: 30, width: 24, height: 12 })
+    before.move(10, 20)
+    expect(before.getBound()).toEqual({ x: 44, y: 50, width: 24, height: 12 })
+    const middle = after.intermediateState(before, after, 0.5, "linear")
+    expect(middle.getCenterPoint()).toEqual({ x: 71, y: 66 })
     vi.unstubAllGlobals()
   })
 })

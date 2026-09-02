@@ -33,6 +33,11 @@ export class StayImage extends Rectangle {
   sx: number
   sy: number
   opacity: number
+
+  override shouldFill(): boolean {
+    return this.opacity > 0
+  }
+
   constructor(props: ImageProps) {
     super(props)
     const {

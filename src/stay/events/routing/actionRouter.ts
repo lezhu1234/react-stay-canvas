@@ -28,7 +28,7 @@ type ListenerRegistration<EventName extends string> = {
   name: string
   state: string
   selector: string
-  sortBy: ChildSortFunction
+  sortBy?: ChildSortFunction
   eventNames: EventName[]
   callback: ListenerProps<ListenerNamePayloadPair, EventName>["callback"]
 }
@@ -51,11 +51,6 @@ const EMPTY_EVENT_DEFINITIONS: EventDefinitionLookup = {
   get: () => undefined,
 }
 
-const defaultSort: ChildSortFunction = (child) => {
-  const { width, height } = child.getBound()
-  return width * height
-}
-
 export class ActionRouter<EventName extends string> {
   private readonly listeners = new Map<string, ListenerRuntime<EventName>>()
   private readonly targetResolver: ActionTargetResolver
@@ -70,7 +65,7 @@ export class ActionRouter<EventName extends string> {
     callback,
     state = DEFAULTSTATE,
     selector = `.${ROOTNAME}`,
-    sortBy = defaultSort,
+    sortBy,
   }: ListenerProps<ListenerNamePayloadPair, EventName>) {
     const listenerName = name as string
     const previous = this.listeners.get(listenerName)
@@ -184,7 +179,9 @@ export class ActionRouter<EventName extends string> {
         triggered.event,
         triggered.role,
         triggered.sessionId,
-        originEvent
+        originEvent,
+        triggered.coordinates,
+        triggered.coordinateFrame
       )
       if (target.kind === "skip") return
 

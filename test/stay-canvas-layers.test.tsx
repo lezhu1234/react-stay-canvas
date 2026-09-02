@@ -3,10 +3,11 @@ import React, { act, createRef } from "react"
 import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { StayCanvas } from "react-stay-canvas"
+import { Rectangle, StayCanvas } from "react-stay-canvas"
 import type {
   ContextLayerSetFunction,
   StayCanvasRefType,
+  StayTools,
 } from "react-stay-canvas"
 
 let root: Root | undefined
@@ -117,6 +118,207 @@ describe("StayCanvas layers", () => {
     expect(mounted).toHaveBeenCalledTimes(2)
     contextSetters.forEach((setContext) => {
       expect(setContext).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it("resizes the existing runtime by default and preserves mounted scene references", () => {
+    const container = createContainer()
+    const observedLayerSizes = [[], []] as Array<Array<{ height: number; width: number }>>
+    const contextSetters = observedLayerSizes.map((sizes) =>
+      vi.fn<ContextLayerSetFunction>((canvas) => {
+        sizes.push({ height: canvas.height, width: canvas.width })
+        return canvas.getContext("2d")
+      })
+    )
+    const mounted = vi.fn((tools: StayTools) => {
+      tools.appendChild({
+        id: "preserved",
+        className: "shape",
+        shape: new Rectangle({ x: 20, y: 30, width: 80, height: 50 }),
+      })
+      tools.viewport.restore({ x: 12, y: 18, scale: 1.5 })
+    })
+
+    act(() => {
+      root?.render(
+        <StayCanvas
+          width={300}
+          height={200}
+          layers={contextSetters}
+          mounted={mounted}
+          focusOnInit={false}
+        />
+      )
+    })
+
+    const tools = mounted.mock.calls[0][0]
+    const child = tools.getChildById<Rectangle>("preserved")!
+    const canvases = [...container.querySelectorAll("canvas")]
+
+    act(() => {
+      root?.render(
+        <StayCanvas
+          width={480}
+          height={320}
+          layers={contextSetters}
+          mounted={mounted}
+          focusOnInit={false}
+        />
+      )
+    })
+
+    expect(mounted).toHaveBeenCalledOnce()
+    expect([...container.querySelectorAll("canvas")]).toEqual(canvases)
+    expect(tools.getChildById("preserved")).toBe(child)
+    expect(child.shape.getBound()).toEqual({ x: 20, y: 30, width: 80, height: 50 })
+    expect(tools.viewport.get()).toEqual({ x: 12, y: 18, scale: 1.5 })
+    canvases.forEach((canvas) => {
+      expect(canvas.style.width).toBe("480px")
+      expect(canvas.style.height).toBe("320px")
+      expect(canvas.width).toBe(480 * window.devicePixelRatio)
+      expect(canvas.height).toBe(320 * window.devicePixelRatio)
+    })
+    contextSetters.forEach((setContext) => {
+      expect(setContext).toHaveBeenCalledTimes(2)
+    })
+    observedLayerSizes.forEach((sizes) => {
+      expect(sizes).toEqual([
+        { width: 300 * window.devicePixelRatio, height: 200 * window.devicePixelRatio },
+        { width: 480 * window.devicePixelRatio, height: 320 * window.devicePixelRatio },
+      ])
+    })
+  })
+
+  it("sizes every backing store before resolving any layer context", () => {
+    const container = createContainer()
+    const observedSizes: Array<Array<{ width: number; height: number }>> = []
+    const setters = Array.from({ length: 3 }, () =>
+      vi.fn<ContextLayerSetFunction>((canvas) => {
+        observedSizes.push([...container.querySelectorAll("canvas")].map((layer) => ({
+          width: layer.width,
+          height: layer.height,
+        })))
+        const context = canvas.getContext("2d")
+        if (context) context.imageSmoothingEnabled = false
+        return context
+      })
+    )
+
+    act(() => {
+      root?.render(
+        <StayCanvas
+          width={240}
+          height={160}
+          layers={setters}
+          focusOnInit={false}
+        />
+      )
+    })
+    act(() => {
+      root?.render(
+        <StayCanvas
+          width={360}
+          height={220}
+          layers={setters}
+          focusOnInit={false}
+        />
+      )
+    })
+
+    const dpr = window.devicePixelRatio || 1
+    const repeatedLayerSizes = (width: number, height: number) =>
+      Array.from({ length: 3 }, () =>
+        Array.from({ length: 3 }, () => ({ width, height })))
+    expect(observedSizes).toEqual([
+      ...repeatedLayerSizes(240 * dpr, 160 * dpr),
+      ...repeatedLayerSizes(360 * dpr, 220 * dpr),
+    ])
+    const canvases = [...container.querySelectorAll("canvas")]
+    canvases.forEach((canvas) => {
+      expect(canvas.getContext("2d")!.imageSmoothingEnabled).toBe(false)
+    })
+  })
+
+  it("cancels an active pointer session in its pre-resize DOM coordinate frame", () => {
+    const container = createContainer()
+    const terminal = vi.fn()
+
+    act(() => {
+      root?.render(
+        <StayCanvas
+          width={300}
+          height={200}
+          listenerList={[{
+            name: "resize-terminal",
+            event: "dragend",
+            callback: ({ e }) => terminal({
+              cancelled: e.cancelled,
+              point: e.point,
+              reason: e.cancelReason,
+            }),
+          }]}
+          focusOnInit={false}
+        />
+      )
+    })
+
+    const canvas = container.querySelectorAll("canvas")[1]
+    vi.spyOn(canvas, "getBoundingClientRect").mockImplementation(() => {
+      const resized = canvas.parentElement?.style.width === "480px"
+      return {
+        x: resized ? 220 : 100,
+        y: 50,
+        left: resized ? 220 : 100,
+        top: 50,
+        right: (resized ? 220 : 100) + 300,
+        bottom: 250,
+        width: 300,
+        height: 200,
+        toJSON: () => ({}),
+      }
+    })
+
+    act(() => {
+      canvas.dispatchEvent(new MouseEvent("mousedown", {
+        bubbles: true,
+        button: 0,
+        buttons: 1,
+        clientX: 120,
+        clientY: 70,
+      }))
+      canvas.dispatchEvent(new MouseEvent("mousemove", {
+        bubbles: true,
+        button: 0,
+        buttons: 1,
+        clientX: 170,
+        clientY: 95,
+      }))
+    })
+
+    act(() => {
+      root?.render(
+        <StayCanvas
+          width={480}
+          height={320}
+          listenerList={[{
+            name: "resize-terminal",
+            event: "dragend",
+            callback: ({ e }) => terminal({
+              cancelled: e.cancelled,
+              point: e.point,
+              reason: e.cancelReason,
+            }),
+          }]}
+          focusOnInit={false}
+        />
+      )
+    })
+
+    expect(terminal).toHaveBeenCalledOnce()
+    expect(terminal).toHaveBeenCalledWith({
+      cancelled: true,
+      point: { x: 70, y: 45 },
+      reason: "resize",
     })
   })
 

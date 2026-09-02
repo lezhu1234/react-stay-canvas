@@ -1,28 +1,26 @@
-import { InstantShape } from "../shapes/instantShape"
 import type { ProgressBound } from "../types/animation"
 import type { ExtraTransform } from "../types/geometry"
 import type { ShapeDrawProps } from "../types/shapes"
 
-export interface StackItem {
+export interface ExternalHistoryStep<TSnapshot> {
+  before: TSnapshot
+  after: TSnapshot
+}
+
+export interface StackItem<TSnapshot = unknown, TExternalSnapshot = unknown> {
   state: string
-  steps: StepProps[]
+  steps: StepProps<TSnapshot>[]
+  external?: ExternalHistoryStep<TExternalSnapshot>
 }
-export interface StepProps {
+export interface StepProps<TSnapshot = unknown> {
   action: "append" | "update" | "remove"
-  child: StepChildProps
+  child: TSnapshot
+  before?: TSnapshot
 }
 
-export interface StepChildProps {
-  id: string
-  className: string
-  beforeName?: string
-  shape: Map<string, InstantShape>
-  beforeShape?: Map<string, InstantShape>
-}
-
-export interface StepRecorderProps {
-  relatedChildren: StepChildProps[]
-  steps: StepProps[]
+export interface StepRecorderProps<TSnapshot = unknown> {
+  relatedChildren: TSnapshot[]
+  steps: StepProps<TSnapshot>[]
 }
 
 export interface DrawChildProps {

@@ -3,12 +3,42 @@ import type {
   StayInstantChildProps,
   StayInstantChildUpdateProps,
 } from "../../types/children"
-import type { Area, Coordinate, PointType, Rect } from "../../types/geometry"
+import type { ContentPoint } from "../../types/coordinates"
+import type { Area, PointType, Rect } from "../../types/geometry"
+import type {
+  ChildPlacement,
+  ChildPlacementSnapshot,
+  Matrix2D,
+} from "../../types/transform"
 import { uuid4 } from "../../utils/identifiers"
 import { parseLayer } from "../../utils/stage"
+import { mapVector } from "../transforms/affine2D"
+import {
+  childPlacementEquals,
+  copyChildPlacement,
+  placementShapeBound,
+  placementToContentPoint,
+  placementToLocalPoint,
+  resolveChildPlacement,
+  restoreChildPlacement,
+  scaleProjectivePlacement,
+  translateProjectivePlacement,
+  type ChildPlacementRuntime,
+} from "../placements/childPlacement"
 import { SetShapeChildCurrentTime } from "../types"
 
 import { Canvas } from "../../canvas"
+
+interface StayInstantChildHistorySnapshotProps<T extends InstantShape> {
+  className: string
+  shape: T | T[] | Map<string, T>
+  placement: ChildPlacementSnapshot
+}
+
+interface ShapeReplacement<T extends InstantShape> {
+  nextShapeMap: Map<string, T>
+  previousLayers: Set<number>
+}
 
 export class StayInstantChild<T extends InstantShape = InstantShape> {
   className: string
@@ -16,13 +46,25 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
 
   shapeMap: Map<string, T>
   canvas: Canvas
+  readonly #onChange?: (childId: string) => void
+  #placement: ChildPlacementRuntime
+  #moveStartPlacement?: Extract<ChildPlacementSnapshot, { type: "projective" }>
   protected updatedLayers = new Set<number>()
 
   //   history
-  constructor({ id, className, shape, canvas }: StayInstantChildProps<T>) {
+  constructor({
+    id,
+    className,
+    shape,
+    placement,
+    canvas,
+    onShapeChange,
+  }: StayInstantChildProps<T>) {
     this.id = id ?? uuid4()
     this.className = className
     this.canvas = canvas
+    this.#onChange = onShapeChange
+    this.#placement = resolveChildPlacement(placement)
     this.shapeMap = this.assignShapes(shape)
   }
 
@@ -38,13 +80,56 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     return this.shape
   }
 
+  get placement(): ChildPlacementSnapshot {
+    return copyChildPlacement(this.#placement.snapshot)
+  }
+
+  /** @internal Returns the affine matrix used by an affine RenderItem. */
+  getAffinePlacementMatrix(): Readonly<Matrix2D> {
+    if (this.#placement.type !== "affine") {
+      throw new Error("projective Child requires a projective RenderItem")
+    }
+    return this.#placement.snapshot.matrix
+  }
+
+  /** @internal Returns the projective mapping owned by this Child, if any. */
+  getProjectiveMapping() {
+    return this.#placement.type === "projective"
+      ? this.#placement.mapping
+      : undefined
+  }
+
+  setPlacement(placement: ChildPlacement) {
+    this.replacePlacement(resolveChildPlacement(placement), true)
+    return this
+  }
+
+  toContentPoint(point: PointType): ContentPoint | undefined {
+    return placementToContentPoint(this.#placement, point)
+  }
+
+  toLocalPoint(point: ContentPoint): PointType | undefined {
+    return placementToLocalPoint(this.#placement, point)
+  }
+
+  private toLocalVector(vector: PointType): PointType {
+    if (this.#placement.type !== "affine") {
+      throw new Error("projective placement does not have a uniform local vector")
+    }
+    return mapVector(this.#placement.inverse, vector)
+  }
+
+  getShapeBound(shape: T): Rect {
+    return placementShapeBound(this.#placement, shape.getBound())
+  }
+
   getBound(): Rect {
     let left = Infinity,
       top = Infinity,
       right = -Infinity,
       bottom = -Infinity
     this.shapeMap.forEach((shape) => {
-      const { x, y, width, height } = shape.getBound()
+      const { x, y, width, height } = this.getShapeBound(shape)
       left = Math.min(left, x)
       top = Math.min(top, y)
       right = Math.max(right, x + width)
@@ -59,18 +144,46 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   }
 
   move(offsetX: number, offsetY: number) {
+    if (this.#placement.type === "projective") {
+      const start = this.#moveStartPlacement ?? this.#placement.snapshot
+      this.replacePlacement(
+        restoreChildPlacement(translateProjectivePlacement(start, offsetX, offsetY)),
+        true
+      )
+      return
+    }
+    const localOffset = this.toLocalVector({ x: offsetX, y: offsetY })
     this.shapeMap.forEach((shape) => {
-      shape.move(...shape.applyMove(offsetX, offsetY))
+      shape.move(...shape.applyMove(localOffset.x, localOffset.y))
     })
   }
 
   zoom(deltaY: number, center: PointType) {
+    if (this.#placement.type === "projective") {
+      this.replacePlacement(
+        restoreChildPlacement(scaleProjectivePlacement(
+          this.#placement.snapshot,
+          1 + deltaY * -0.001,
+          center
+        )),
+        true
+      )
+      return
+    }
+    const localCenter = this.toLocalPoint(center)!
     this.shapeMap.forEach((shape) => {
-      shape.zoom(shape._zoom(deltaY, center))
+      shape.zoom(shape._zoom(deltaY, localCenter))
     })
   }
 
   moveInit() {
+    if (this.#placement.type === "projective") {
+      this.#moveStartPlacement = copyChildPlacement(
+        this.#placement.snapshot
+      ) as Extract<ChildPlacementSnapshot, { type: "projective" }>
+      return
+    }
+    this.#moveStartPlacement = undefined
     this.shapeMap.forEach((shape) => {
       shape.moveInit()
     })
@@ -95,9 +208,14 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     }
     const shapeMap = convertToShapeMap(shape)
 
+    const normalizedLayers = new Map<T, number>()
     shapeMap.forEach((shape) => {
+      normalizedLayers.set(shape, this.resolveChildShapeLayer(shape.layer, shape))
+    })
+
+    shapeMap.forEach((shape) => {
+      shape.layer = normalizedLayers.get(shape)!
       shape.parent = this
-      shape.layer = parseLayer(this.canvas.layers, shape.layer)
       // Mark the shape's layer dirty so an appended (or replaced) child paints on
       // the next draw — without this, appendChild alone never renders until the
       // shape is later mutated. See onChildShapeChange for the per-update path.
@@ -107,9 +225,20 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     return shapeMap
   }
 
-  containsPointer(point: Coordinate): boolean {
+  /** @internal Validates and normalizes a Shape layer before state is committed. */
+  resolveChildShapeLayer(layer: number | undefined, _shape?: InstantShape) {
+    const normalized = parseLayer(this.canvas.layers, layer)
+    if (this.canvas.getLayerBackend(normalized) !== "canvas2d") {
+      throw new Error(`Canvas2D Child ${this.id} cannot target layer ${normalized}`)
+    }
+    return normalized
+  }
+
+  containsPointer(point: ContentPoint): boolean {
+    const localPoint = this.toLocalPoint(point)
+    if (!localPoint) return false
     for (const shape of this.shapeMap.values()) {
-      if (shape.contains(point)) return true
+      if (shape.contains(localPoint)) return true
     }
     return false
   }
@@ -120,7 +249,8 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
 
   inArea(area: Area) {
     for (const shape of this.shapeMap.values()) {
-      const center = shape.getCenterPoint()
+      const center = this.toContentPoint(shape.getCenterPoint())
+      if (!center) continue
 
       if (
         center.x >= area.x &&
@@ -141,9 +271,10 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   }
 
   onChildShapeChange(shape: T, previousLayer: number) {
-    shape.layer = parseLayer(this.canvas.layers, shape.layer)
+    shape.layer = this.resolveChildShapeLayer(shape.layer, shape)
     this.updatedLayers.add(previousLayer)
     this.updatedLayers.add(shape.layer)
+    this.#onChange?.(this.id)
   }
 
   layerDraw(layer: number) {
@@ -163,6 +294,12 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
   // Polymorphic so callers can tick every child uniformly.
   setCurrentTime(_props: SetShapeChildCurrentTime): void {}
 
+  /** @internal Projects this Child and returns the matching restoration step. */
+  beginCurrentTimeProjection(props: SetShapeChildCurrentTime): () => void {
+    this.setCurrentTime(props)
+    return () => {}
+  }
+
   getShapes(layer: number): T[] {
     const shapes: T[] = []
     this.shapeMap.forEach((shape) => {
@@ -173,16 +310,83 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     return shapes
   }
 
-  /**
-   * @internal Replaces the child's shape(s) wholesale. This is an internal
-   * primitive used by undo/redo (which force-repaint separately) and does NOT
-   * go through the normal per-shape dirty-tracking. Consumers should mutate the
-   * shape instead — `child.shape.update({ ... })` — which repaints correctly.
-   */
-  update({ id, className, shape }: StayInstantChildUpdateProps<T>) {
-    this.id = id ?? this.id
-    this.className = className ?? this.className
-    this.shapeMap = shape ? this.assignShapes(shape) : this.shapeMap
-    // `shape` is now a getter derived from shapeMap — nothing else to assign.
+  update({ className, shape, placement }: StayInstantChildUpdateProps<T>) {
+    // Resolve every fallible input before changing the Child so a rejected
+    // placement or layer cannot leave a partially applied batch.
+    const nextPlacement = placement === undefined
+      ? undefined
+      : resolveChildPlacement(placement)
+    const shapeReplacement = shape === undefined
+      ? undefined
+      : this.prepareShapeReplacement(shape)
+
+    let changed = false
+    if (className !== undefined && className !== this.className) {
+      this.className = className
+      changed = true
+    }
+    if (shapeReplacement !== undefined) {
+      this.replaceShapeMap(shapeReplacement)
+      changed = true
+    }
+    if (nextPlacement !== undefined) {
+      changed = this.replacePlacement(nextPlacement, false) || changed
+    }
+
+    if (changed) this.#onChange?.(this.id)
+    return this
+  }
+
+  /** @internal Restores a complete history snapshot without recording another change. */
+  restoreHistorySnapshot({
+    className,
+    shape,
+    placement,
+  }: StayInstantChildHistorySnapshotProps<T>) {
+    const nextPlacement = restoreChildPlacement(placement)
+    const shapeReplacement = this.prepareShapeReplacement(shape)
+
+    this.className = className
+    this.replaceShapeMap(shapeReplacement)
+    this.replacePlacement(nextPlacement, false)
+  }
+
+  private prepareShapeReplacement(shape: T | T[] | Map<string, T>): ShapeReplacement<T> {
+    const previousLayers = this.getLayers()
+    for (const candidate of this.getShapeCandidates(shape)) {
+      if (candidate.parent && candidate.parent !== this) {
+        throw new Error(`Shape already belongs to Child ${candidate.parent.id}`)
+      }
+    }
+    return {
+      nextShapeMap: this.assignShapes(shape),
+      previousLayers,
+    }
+  }
+
+  private getShapeCandidates(shape: T | T[] | Map<string, T>): Iterable<T> {
+    if (shape instanceof Map) return shape.values()
+    return Array.isArray(shape) ? shape : [shape]
+  }
+
+  private replaceShapeMap({ nextShapeMap, previousLayers }: ShapeReplacement<T>) {
+    const retainedShapes = new Set(nextShapeMap.values())
+    this.shapeMap.forEach((shape) => {
+      if (!retainedShapes.has(shape) && shape.parent === this) {
+        shape.parent = undefined
+      }
+    })
+    this.shapeMap = nextShapeMap
+    previousLayers.forEach((layer) => this.updatedLayers.add(layer))
+  }
+
+  private replacePlacement(placement: ChildPlacementRuntime, notify: boolean): boolean {
+    const before = this.#placement.snapshot
+    const after = placement.snapshot
+    if (childPlacementEquals(before, after)) return false
+    this.#placement = placement
+    this.getLayers().forEach((layer) => this.updatedLayers.add(layer))
+    if (notify) this.#onChange?.(this.id)
+    return true
   }
 }

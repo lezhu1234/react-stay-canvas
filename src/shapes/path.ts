@@ -1,73 +1,132 @@
-import { SHAPE_DRAW_TYPES } from "../userConstants"
-import { getCornersByCenterLine } from "../utils/geometry"
-import { Line } from "./line"
 import { Point } from "./point"
-import type { DrawCanvasContext } from "../types/canvas"
 import type { Coordinate, Rect } from "../types/geometry"
 import type { ShapeDrawProps, ShapeProps } from "../types/shapes"
 import { InstantShape } from "./instantShape"
 
-export interface PathAttr extends ShapeProps {
+function squaredDistanceToSegment(point: Coordinate, start: Coordinate, end: Coordinate) {
+  const segmentX = end.x - start.x
+  const segmentY = end.y - start.y
+  const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY
+
+  if (segmentLengthSquared === 0) {
+    const pointX = point.x - start.x
+    const pointY = point.y - start.y
+    return pointX * pointX + pointY * pointY
+  }
+
+  const projection =
+    ((point.x - start.x) * segmentX + (point.y - start.y) * segmentY) /
+    segmentLengthSquared
+  const ratio = Math.max(0, Math.min(1, projection))
+  const offsetX = point.x - (start.x + ratio * segmentX)
+  const offsetY = point.y - (start.y + ratio * segmentY)
+  return offsetX * offsetX + offsetY * offsetY
+}
+
+function isInsideBound(point: Coordinate, bound: Rect) {
+  return (
+    point.x >= bound.x &&
+    point.x <= bound.x + bound.width &&
+    point.y >= bound.y &&
+    point.y <= bound.y + bound.height
+  )
+}
+
+export interface PathAttr extends Omit<ShapeProps, "fillConfig"> {
   points: Point[]
-  radius: number
 }
 
 export class Path extends InstantShape {
   commonDraw(props: ShapeDrawProps): void {}
-  fill({ context }: ShapeDrawProps): void {
-    context.fill(this.path)
-  }
+  fill(props: ShapeDrawProps): void {}
   copy(): Path {
+    const { fillConfig: _fillConfig, ...copyProps } = this.copyProps()
     return new Path({
       points: this.points.map((point) => point.copy()),
-      radius: this.radius,
-      ...this.copyProps(),
+      ...copyProps,
     })
   }
   getBound(): Rect {
-    throw new Error("Method not implemented.")
+    if (this.points.length === 0) {
+      return { x: 0, y: 0, width: 0, height: 0 }
+    }
+
+    let minX = this.points[0].x
+    let minY = this.points[0].y
+    let maxX = minX
+    let maxY = minY
+
+    for (const point of this.points) {
+      minX = Math.min(minX, point.x)
+      minY = Math.min(minY, point.y)
+      maxX = Math.max(maxX, point.x)
+      maxY = Math.max(maxY, point.y)
+    }
+
+    const halfWidth = this.strokeConfig.lineWidth / 2
+    return {
+      x: minX - halfWidth,
+      y: minY - halfWidth,
+      width: maxX - minX + this.strokeConfig.lineWidth,
+      height: maxY - minY + this.strokeConfig.lineWidth,
+    }
   }
   points: Point[]
-  radius: number
   constructor(props: PathAttr) {
-    super(props)
-    const { points, radius } = props
+    super({
+      ...props,
+      fillConfig: undefined,
+      strokeConfig: {
+        ...props.strokeConfig,
+        lineCap: props.strokeConfig?.lineCap ?? "round",
+        lineJoin: props.strokeConfig?.lineJoin ?? "round",
+      },
+    })
+    const { points } = props
     this.points = points
-    this.radius = radius
   }
 
   get path(): Path2D {
     const path = new Path2D()
-    this.points.forEach((p, i) => {
-      path.moveTo(p.x, p.y)
-      path.arc(p.x, p.y, this.radius, 0, 2 * Math.PI)
+    const firstPoint = this.points[0]
+    if (!firstPoint) return path
 
-      if (i > 0) {
-        const lastPoint = this.points[i - 1]
+    path.moveTo(firstPoint.x, firstPoint.y)
+    if (this.points.length === 1) {
+      path.lineTo(firstPoint.x, firstPoint.y)
+      return path
+    }
 
-        const pathRectCorners = getCornersByCenterLine(
-          new Line({
-            x1: p.x,
-            y1: p.y,
-            x2: lastPoint.x,
-            y2: lastPoint.y,
-          }),
-          this.radius * 2
-        )
-
-        pathRectCorners.forEach((p, i) => {
-          if (i === 0) {
-            path.moveTo(p.x, p.y)
-          } else {
-            path.lineTo(p.x, p.y)
-          }
-        })
-      }
-    })
+    for (let index = 1; index < this.points.length; index += 1) {
+      const point = this.points[index]
+      path.lineTo(point.x, point.y)
+    }
     return path
   }
 
+  contains(point: Coordinate): boolean {
+    if (this.points.length === 0 || !isInsideBound(point, this.getBound())) return false
+
+    const halfWidth = this.strokeConfig.lineWidth / 2
+    const halfWidthSquared = halfWidth * halfWidth
+    if (this.points.length === 1) {
+      return squaredDistanceToSegment(point, this.points[0], this.points[0]) <= halfWidthSquared
+    }
+
+    for (let index = 1; index < this.points.length; index += 1) {
+      if (
+        squaredDistanceToSegment(point, this.points[index - 1], this.points[index]) <=
+        halfWidthSquared
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+
   getCenterPoint(): Coordinate {
+    if (this.points.length === 0) return { x: 0, y: 0 }
+
     let x = 0,
       y = 0
     this.points.forEach((point) => {
@@ -80,6 +139,7 @@ export class Path extends InstantShape {
   //   return ctx.isPointInPath(this.path, point.x, point.y)
   // }
   stroke({ context }: ShapeDrawProps): void {
+    if (this.points.length === 0) return
     context.stroke(this.path)
   }
 
@@ -92,9 +152,8 @@ export class Path extends InstantShape {
     })
   }
   update(props: Partial<PathAttr>) {
-    const { points, radius } = props
+    const { points } = props
     this.points = points || this.points
-    this.radius = radius === undefined ? this.radius : radius
     this.applyUpdate(props || {})
     return this
   }
@@ -105,7 +164,7 @@ export class Path extends InstantShape {
         const { x, y } = this.getZoomPoint(zoomScale, point)
         return point.update({ x, y })
       }),
-      radius: this.radius * zoomScale,
+      strokeConfig: { lineWidth: this.strokeConfig.lineWidth * zoomScale },
     })
   }
 }

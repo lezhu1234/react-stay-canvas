@@ -41,6 +41,63 @@ await tools.removeChild(child.id)
 
 `getChildrenWithoutRoot()` returns the Children created by application code. The internal root Child represents Canvas bounds and cannot be removed; most whole-scene application logic should exclude it as well.
 
+Applications can choose their own business Children, merge their Content bounds, and explicitly fit them into the current View:
+
+```ts
+const children = tools.getChildrenBySelector(".node|.edge")
+const bounds = unionRects(children.map((child) => child.getBound()))
+
+if (bounds) tools.viewport.fit(bounds, { padding: 32 })
+```
+
+The library performs the geometry and viewport calculation, while the application decides which Children count as scene content and when fitting should run.
+
+## Place one Child without rewriting geometry
+
+Every Child owns one local-to-Content `placement`. An affine placement accepts semantic fields:
+
+```ts
+const plane = tools.appendChild({
+  className: "plane",
+  placement: {
+    type: "affine",
+    x: 180,
+    y: 96,
+    rotation: -6,
+    skewX: -18,
+    scaleY: 0.78,
+    origin: { x: 0, y: 0 },
+  },
+  shape: [background, ...gridLines, label],
+})
+
+plane.setPlacement({ type: "affine", x: 220, y: 120, rotation: 12 })
+const local = plane.toLocalPoint(e.point)
+const content = local && plane.toContentPoint(local)
+```
+
+`x`, `y`, `origin`, scale, rotation, and skew define one non-destructive affine placement. Rotation and skew use degrees. The matrix is composed as `translate(x, y) · translate(origin) · rotate · skew · scale · translate(-origin)`. `scaleX` and `scaleY` default to `1`; all other values default to `0`.
+
+Advanced affine callers may pass `{ type: "affine", matrix: { a, b, c, d, e, f } }`. For a perspective plane, map its finite local rectangle to four named Content corners:
+
+```ts
+plane.setPlacement(projectivePlacementFromQuad(
+  { x: 0, y: 0, width: 320, height: 180 },
+  {
+    topLeft: { x: 24, y: 18 },
+    topRight: { x: 350, y: 42 },
+    bottomRight: { x: 332, y: 210 },
+    bottomLeft: { x: 12, y: 232 },
+  }
+))
+```
+
+`projectivePlacementFromQuad()` returns the same public `{ type: "projective", matrix, domain }` placement accepted by `appendChild()`, `createChild()`, and `setPlacement()`; callers that already own a homography may pass that raw placement directly. Corners are named in clockwise order so the helper can validate the finite mapping without making rendering or interaction decisions for the application.
+
+The projective domain must be finite, positive, and remain on one side of the homogeneous horizon. Points outside it map to `undefined`. `child.placement` returns a discriminated snapshot; `setPlacement()` replaces the complete placement rather than merging fields. Rendering, bounds, hit testing, tool queries, event routing, history, scene transfer, and region capture all read that same value. `e.point` remains in Content.
+
+Static placement changes participate in the next `log()` transaction. Animated Children may use one static placement, but placement keyframes and interpolation are not part of the current contract.
+
 ## Selector queries
 
 Tool queries use the selector expression language below. Listener `selector` accepts the same string expressions, but not string arrays or selector functions:
@@ -61,7 +118,7 @@ const selectedNodes = tools.getChildrenBySelector(
 )
 ```
 
-`sortBy` controls the returned order and which item `getContainPointChildren({ returnFirst: true })` picks. Use a stable comparator so overlapping objects do not produce inconsistent selections.
+`sortBy` controls the returned query order and which item `getContainPointChildren({ returnFirst: true })` picks. Listener target routing uses a stable default when its own `sortBy` is omitted: smaller bounds first, equal bounds in scene insertion order, and root last. Tool queries do not apply this Listener default; they retain their selector result order unless the call supplies a comparator.
 
 ## Point hits and area queries
 
@@ -131,16 +188,23 @@ tools.undo()
 tools.redo()
 ```
 
+Use `tools.canUndo()` and `tools.canRedo()` to derive disabled states for history controls. They only inspect the committed history cursor and never perform an operation. Pending Canvas or application changes become visible to these queries only after `tools.log()`.
+
+For an initialized editor, call `resetHistory()` after loading non-undoable background content. It clears both history stacks and treats the current static scene as the new baseline.
+
+Application state can join the same transaction through the optional [`historyAdapter`](./api/stay-canvas.md#historyadapter). The adapter captures before/after snapshots on each explicit `log()` boundary; it does not own another stack. This also allows an application-only change to become a history item.
+
 The transaction boundaries are:
 
-- `appendChild()` and `removeChild()` mark static Children as pending history changes;
-- `log()` groups changes since the previous snapshot into one history item;
+- `appendChild()`, `removeChild()`, normal Shape mutations, and `child.setPlacement()` mark static Children as pending history changes;
+- `tools.webgl.appendChild()`, `tools.webgl.removeChild()`, and Mesh geometry/model/material mutations enter the same pending set and transaction;
+- `log()` groups changes since the previous snapshot into one history item, including application state when a `historyAdapter` is configured;
+- `resetHistory()` clears undo/redo and makes the current static scene and adapted application state the baseline;
 - several mutations followed by one `log()` become one undo unit;
 - recording a new operation after `undo()` truncates the previous redo tail;
 - animated Children never enter history and removing one cannot be undone;
+- camera changes remain display state and are not recorded;
 - `undo()` and `redo()` also restore the Canvas state captured with the item.
-
-A pure Shape `update()` does not add an existing Child to the pending-history set, so calling `log()` only at drag end does not reliably record that movement. When an update must be undoable, use an explicit remove/append replacement with the same id as demonstrated by the Annotator example. Do not assume that `log()` scans every Child.
 
 ## Copy a scene between Canvases
 
@@ -160,13 +224,24 @@ targetTools.importChildren(scene, {
 })
 ```
 
-Source and target areas must have the same aspect ratio or the method throws `area not match`. Each exported Child fragment contains `sourceId`, `className`, and `shapes`. Import creates a new runtime Child id; use `sourceId` only to correlate imported objects with their source objects.
+Source and target areas must have the same aspect ratio or the method throws `area not match`. Each exported Child fragment contains `sourceId`, `className`, `shapes`, and its resolved local-to-Content `placement`. Import creates a new runtime Child id; use `sourceId` only to correlate imported objects with their source objects.
 
 This is a scene-transfer path, not a serialization format. Common Shape state and library-owned mutable style values are captured independently. Arbitrary values inside `shapeStore` remain shared because the library cannot infer their ownership. Animated Children contribute their current rendered projection, not their timeline.
 
 `importChildren()` materializes fresh Shapes before moving and zooming them. The same exported payload can therefore be imported repeatedly into different Canvases or target areas without mutating the input data.
 
 When `exportChildren()` omits `area`, it uses the source root bounds. When `importChildren()` omits its target area, it uses the target root bounds.
+
+Native Mesh scenes use their separate ownership-preserving transfer surface:
+
+```ts
+const fragment = sourceTools.webgl.exportChildren(
+  sourceTools.webgl.getChildrenBySelector(".plane"),
+)
+const imported = targetTools.webgl.importChildren(fragment)
+```
+
+Each imported Child receives a new id and independent Mesh geometry, normals, model matrices, and material values, including Glass roughness and volume-attenuation settings. The target WebGL2 layer config continues to own its camera, environment, and lights; that display state is not transferred. Mesh transfer has no 2D `area` or Child placement because its geometry already lives in the native scene's world space.
 
 ## Render a region to a standalone Canvas
 
@@ -180,9 +255,9 @@ const snapshotCanvas = await tools.regionToTargetCanvas({
 const png = snapshotCanvas.toDataURL("image/png")
 ```
 
-`regionToTargetCanvas()` returns an `HTMLCanvasElement` that is not mounted in the DOM. It force-draws the supplied Children in layer and `zIndex` order. When `progress` is supplied, animated Children seek to that millisecond time, including `progress: 0`, while static Children remain unchanged.
+`regionToTargetCanvas()` returns an `HTMLCanvasElement` that is not mounted in the DOM. It clips to `area`, then scales that region uniformly and centers it inside `targetSize`; any space left by a different aspect ratio stays transparent. Shapes still draw in layer and `zIndex` order, and the call does not move or zoom the source Children.
 
-The current implementation does not automatically translate `area` or scale it into `targetSize`; it is closer to drawing current scene coordinates onto another Canvas. For true crop or scale behavior, first export/import into the target coordinate system or apply an explicit application-level transform.
+When `progress` is supplied, animated Children temporarily project the requested millisecond time, including `progress: 0`, while static Children remain unchanged. Their previous live projections are restored after drawing, so capturing a frame does not move the playback position.
 
 ## Other tools
 

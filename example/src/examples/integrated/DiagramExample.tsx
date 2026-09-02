@@ -1,308 +1,352 @@
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { type EventProps, StayCanvas, type StayTools } from "react-stay-canvas"
+
 import {
-  Line,
-  ListenerProps,
-  Rectangle,
-  StayCanvas,
-  StayText,
-  StayTools,
-} from "react-stay-canvas"
-
-import { Button, CanvasCard, colors, DemoLayout, EventLog, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+  Button,
+  CanvasCard,
+  DemoLayout,
+  EventLog,
+  ResetButton,
+  StatusGrid,
+  Toolbar,
+} from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
-import { hasPointerPosition, hasPointerTarget } from "../actionEventGuards"
-
-type Mode = "select" | "connect"
-type Child = ReturnType<StayTools["appendChild"]>
-type Edge = { childId: string; from: string; to: string; line: Line }
-type SavedGraph = {
-  scene: ReturnType<StayTools["exportChildren"]>
-  edges: Array<Pick<Edge, "childId" | "from" | "to">>
-}
+import {
+  SCENE_HEIGHT,
+  SCENE_WIDTH,
+  createDiagramHistoryAdapter,
+  type DiagramEngine,
+  type EdgeChild,
+  type EdgeShape,
+  type NodeChild,
+  type NodeKind,
+  type NodeShape,
+} from "./diagram/model"
+import {
+  bodyOf,
+  edgeLabelOf,
+  edges,
+  fitDiagramViewport,
+  labelOf,
+  nodeKind,
+  nodes,
+  seedDiagram,
+} from "./diagram/scene"
+import {
+  addDiagramNode,
+  bindDiagramShortcuts,
+  duplicateDiagramSelection,
+  navigateDiagramHistory,
+  removeDiagramSelection,
+  replaceDiagramFromDocument,
+  toDiagramDocument,
+  updateDiagramEdge,
+  updateDiagramNode,
+} from "./diagram/document"
+import {
+  DiagramClickEvent,
+  DiagramDoubleClickEvent,
+  DiagramDragStartEvent,
+  DiagramSpaceStartMoveEvent,
+  createDiagramListeners,
+} from "./diagram/interactions"
 
 export default function DiagramExample() {
   const { text } = useI18n()
-  const toolsRef = useRef<StayTools | null>(null)
-  const nodesRef = useRef(new Map<string, Child>())
-  const nodeOutlinesRef = useRef(new Map<string, Rectangle>())
-  const nodeLabelsRef = useRef(new Map<string, string>())
-  const nodeStackOrderRef = useRef(new Map<string, number>())
-  const edgesRef = useRef<Edge[]>([])
-  const sequenceRef = useRef(0)
-  const stackSequenceRef = useRef(0)
-  const copySequenceRef = useRef(0)
-  const selectedNodeRef = useRef<string | null>(null)
-  const savedGraphRef = useRef<SavedGraph | null>(null)
-  const [mode, setMode] = useState<Mode>("select")
-  const [nodeCount, setNodeCount] = useState(0)
-  const [edgeCount, setEdgeCount] = useState(0)
-  const [selected, setSelected] = useState(text("None", "无"))
+  const toolsRef = useRef<StayTools>()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const stageShellRef = useRef<HTMLDivElement>(null)
+  const [summary, setSummary] = useState({ nodes: 0, edges: 0, selected: 0 })
   const [entries, setEntries] = useState<string[]>([])
+  const [draftLabel, setDraftLabel] = useState("")
+  const [draftKind, setDraftKind] = useState<NodeKind>("process")
+  const [viewportScale, setViewportScale] = useState(1)
+  const [inlineEdit, setInlineEdit] = useState<{
+    id: string
+    value: string
+    left: number
+    top: number
+    width: number
+  }>()
+  const engineRef = useRef<DiagramEngine>({
+    selected: new Set(),
+    nodeSequence: 0,
+    edgeSequence: 0,
+    changed: () => {},
+    edit: () => {},
+    viewportChanged: () => {},
+    say: () => {},
+    save: () => {},
+    import: () => {},
+  })
+  const engine = engineRef.current
 
-  const push = (message: string) => setEntries((current) => [message, ...current].slice(0, 8))
-
-  const nodeRect = (child: Child) => [...child.shapeMap.values()].find((shape) => shape instanceof Rectangle) as Rectangle
-  const nodeLabel = (id: string) => nodeLabelsRef.current.get(id) ?? id
-  const frontmostNodeFirst = (a: Child, b: Child) =>
-    (nodeStackOrderRef.current.get(b.id) ?? -1) - (nodeStackOrderRef.current.get(a.id) ?? -1)
-
-  const clearNodeFeedback = (id: string | null) => {
-    if (!id) return
-    nodeOutlinesRef.current.get(id)?.update({
-      strokeConfig: { color: { ...colors.blue, a: 0 }, lineWidth: 4, dash: [] },
-    })
-  }
-
-  const setNodeFeedback = (id: string, kind: "selected" | "connection") => {
-    clearNodeFeedback(selectedNodeRef.current)
-    nodeOutlinesRef.current.get(id)?.update({
-      strokeConfig: kind === "connection"
-        ? { color: colors.orange, lineWidth: 4, dash: [8, 5] }
-        : { color: colors.blue, lineWidth: 4, dash: [] },
-    })
-    selectedNodeRef.current = id
-    setSelected(nodeLabel(id))
-  }
-
-  const clearSelection = () => {
-    clearNodeFeedback(selectedNodeRef.current)
-    selectedNodeRef.current = null
-    setSelected(text("None", "无"))
-  }
-
-  const updateEdges = () => {
-    edgesRef.current.forEach((edge) => {
-      const from = nodesRef.current.get(edge.from)
-      const to = nodesRef.current.get(edge.to)
-      if (!from || !to) return
-      const a = nodeRect(from).getCenterPoint()
-      const b = nodeRect(to).getCenterPoint()
-      edge.line.update({ x1: a.x, y1: a.y, x2: b.x, y2: b.y })
-    })
-  }
-
-  const addNode = (x?: number, y?: number) => {
+  engine.viewportChanged = ({ scale }) => setViewportScale(scale)
+  engine.say = (en, zh) => setEntries((current) => [text(en, zh), ...current].slice(0, 8))
+  engine.changed = () => {
     const tools = toolsRef.current
-    if (!tools) return null
-    const index = sequenceRef.current++
-    const id = `node-${index + 1}`
-    const nodeX = x ?? 92 + (index % 4) * 148
-    const nodeY = y ?? 94 + Math.floor(index / 4) * 120
-    const label = text(`Node ${index + 1}`, `节点 ${index + 1}`)
-    const outline = new Rectangle({
-      x: nodeX,
-      y: nodeY,
-      width: 112,
-      height: 62,
-      layer: 2,
-      zIndex: 4,
-      strokeConfig: { color: { ...colors.blue, a: 0 }, lineWidth: 4, dash: [] },
+    setSummary({
+      nodes: tools ? nodes(tools).length : 0,
+      edges: tools ? edges(tools).length : 0,
+      selected: engine.selected.size + (engine.selectedEdge ? 1 : 0),
     })
-    const child = tools.appendChild({
-      id,
-      className: "node",
-      shape: [
-        new Rectangle({
-          x: nodeX,
-          y: nodeY,
-          width: 112,
-          height: 62,
-          layer: 1,
-          zIndex: 2,
-          fillConfig: { color: index % 2 ? colors.greenSoft : colors.blueSoft },
-          strokeConfig: { color: index % 2 ? colors.green : colors.blue, lineWidth: 2 },
-        }),
-        new StayText({
-          x: nodeX + 56,
-          y: nodeY + 21,
-          text: label,
-          font: { size: 15, fontWeight: 650 },
-          layer: 2,
-          zIndex: 3,
-          fillConfig: { color: colors.ink },
-        }),
-        outline,
-      ],
-    })
-    nodesRef.current.set(id, child)
-    nodeOutlinesRef.current.set(id, outline)
-    nodeLabelsRef.current.set(id, label)
-    nodeStackOrderRef.current.set(id, stackSequenceRef.current++)
-    setNodeCount(nodesRef.current.size)
-    return child
   }
-
-  const addEdge = (from: string, to: string) => {
+  engine.import = () => inputRef.current?.click()
+  engine.save = () => {
     const tools = toolsRef.current
-    const a = nodesRef.current.get(from)
-    const b = nodesRef.current.get(to)
-    if (!tools || !a || !b || from === to) return
-    const start = nodeRect(a).getCenterPoint()
-    const end = nodeRect(b).getCenterPoint()
-    const line = new Line({ x1: start.x, y1: start.y, x2: end.x, y2: end.y, layer: 0, zIndex: 1, strokeConfig: { color: colors.gray, lineWidth: 3, lineCap: "round" } })
-    const child = tools.appendChild({ className: "edge", shape: line })
-    edgesRef.current.push({ childId: child.id, from, to, line })
-    setEdgeCount(edgesRef.current.length)
-    push(text(`connected ${nodeLabel(from)} to ${nodeLabel(to)}`, `已连接 ${nodeLabel(from)} 与 ${nodeLabel(to)}`))
+    if (!tools) return
+    const contents = JSON.stringify(toDiagramDocument(tools), null, 2)
+    const url = URL.createObjectURL(new Blob([contents], { type: "application/json" }))
+    const link = Object.assign(document.createElement("a"), { href: url, download: "workflow-diagram.json" })
+    link.click()
+    URL.revokeObjectURL(url)
+    engine.say("Diagram exported", "已导出图表")
   }
 
-  const listeners = useMemo<ListenerProps[]>(() => [
-    {
-      name: "drag-node",
-      state: "select",
-      selector: ".node",
-      sortBy: frontmostNodeFirst,
-      event: ["dragstart", "drag", "dragend"],
-      callback: ({ e, composeStore }) => {
-        if (!hasPointerTarget(e)) return
-        return {
-          dragstart: () => {
-            e.target.moveInit()
-            setNodeFeedback(e.target.id, "selected")
-            return { start: e.point, child: e.target }
-          },
-          drag: () => {
-            composeStore.child.move(e.x - composeStore.start.x, e.y - composeStore.start.y)
-            updateEdges()
-          },
-          dragend: () => push(text(`moved ${nodeLabel(composeStore.child.id)}`, `已移动 ${nodeLabel(composeStore.child.id)}`)),
-        }
-      },
-    },
-    {
-      name: "select-node",
-      state: "select",
-      selector: ".stay-canvas",
-      event: "click",
-      callback: ({ e, tools }) => {
-        if (!hasPointerPosition(e)) return
-        const target = tools.getContainPointChildren({ point: e.point, selector: ".node", sortBy: frontmostNodeFirst, withRoot: false })[0]
-        if (!target) {
-          clearSelection()
-          push(text("selection cleared", "已取消选择"))
-          return
-        }
-        setNodeFeedback(target.id, "selected")
-        push(text(`selected ${nodeLabel(target.id)}`, `已选择 ${nodeLabel(target.id)}`))
-      },
-    },
-    {
-      name: "connect-node",
-      state: "connect",
-      selector: ".stay-canvas",
-      event: "click",
-      callback: ({ e, stateStore, tools }) => {
-        if (!hasPointerPosition(e)) return
-        const target = tools.getContainPointChildren({ point: e.point, selector: ".node", sortBy: frontmostNodeFirst, withRoot: false })[0]
-        const from = stateStore.get("from") as string | undefined
-        if (!target) {
-          stateStore.delete("from")
-          clearSelection()
-          push(text("connection cancelled", "已取消连接"))
-          return
-        }
-        if (!from) {
-          stateStore.set("from", target.id)
-          setNodeFeedback(target.id, "connection")
-          push(text(`connection starts at ${nodeLabel(target.id)}`, `连接起点为 ${nodeLabel(target.id)}`))
-        } else {
-          addEdge(from, target.id)
-          stateStore.delete("from")
-          clearSelection()
-        }
-      },
-    },
-  ], [text])
+  const selectedNode = engine.selected.size === 1 && toolsRef.current
+    ? toolsRef.current.getChildById<NodeShape>([...engine.selected][0]) as NodeChild | undefined
+    : undefined
+  const selectedEdge = engine.selectedEdge && toolsRef.current
+    ? toolsRef.current.getChildById<EdgeShape>(engine.selectedEdge) as EdgeChild | undefined
+    : undefined
+  const selectedId = selectedNode?.id ?? selectedEdge?.id
+  const selectedLabel = selectedNode ? labelOf(selectedNode).text : selectedEdge ? edgeLabelOf(selectedEdge).text : ""
+  const selectedKind = selectedNode ? nodeKind(selectedNode) : "process"
+
+  const runWithTools = (action: (tools: StayTools) => void) => {
+    const tools = toolsRef.current
+    if (tools) action(tools)
+  }
+
+  const openInlineEditor = (id: string) => {
+    const tools = toolsRef.current
+    const shell = stageShellRef.current
+    if (!tools || !shell) return
+    const node = tools.getChildById<NodeShape>(id) as NodeChild | undefined
+    const edge = tools.getChildById<EdgeShape>(id) as EdgeChild | undefined
+    const shellRect = shell.getBoundingClientRect()
+    if (node?.className === "node") {
+      const body = bodyOf(node)
+      const center = tools.coordinates.contentToClient({
+        x: body.x + body.width / 2,
+        y: body.y + body.height / 2,
+      })
+      const left = tools.coordinates.contentToClient({ x: body.x, y: body.y })
+      const right = tools.coordinates.contentToClient({ x: body.x + body.width, y: body.y })
+      setInlineEdit({
+        id,
+        value: labelOf(node).text,
+        left: left.x - shellRect.left,
+        top: center.y - shellRect.top - 17,
+        width: Math.max(100, right.x - left.x),
+      })
+    } else if (edge?.className === "edge") {
+      const label = edgeLabelOf(edge)
+      const anchor = tools.coordinates.contentToClient(label)
+      setInlineEdit({
+        id,
+        value: label.text,
+        left: anchor.x - shellRect.left - 70,
+        top: anchor.y - shellRect.top - 24,
+        width: 140,
+      })
+    }
+  }
+
+  engine.edit = openInlineEditor
+
+  const commitInlineEdit = () => {
+    const edit = inlineEdit
+    setInlineEdit(undefined)
+    if (!edit) return
+    runWithTools((tools) => {
+      const node = tools.getChildById<NodeShape>(edit.id) as NodeChild | undefined
+      if (node?.className === "node") {
+        if (edit.value.trim()) updateDiagramNode(tools, engine, edit.id, edit.value, nodeKind(node))
+      } else {
+        updateDiagramEdge(tools, engine, edit.id, edit.value)
+      }
+    })
+  }
+
+  useEffect(() => {
+    if (selectedNode || selectedEdge) {
+      setDraftLabel(selectedLabel)
+      if (selectedNode) setDraftKind(selectedKind)
+    } else {
+      setDraftLabel("")
+      setDraftKind("process")
+    }
+  }, [selectedEdge, selectedId, selectedKind, selectedLabel, selectedNode])
+
+  useEffect(() => bindDiagramShortcuts(engine, () => toolsRef.current), [engine])
+  const listeners = useMemo(() => createDiagramListeners(engine), [engine])
+  const historyAdapter = useMemo(() => createDiagramHistoryAdapter(engine), [engine])
 
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
-    tools.switchState("select")
-    const first = addNode(92, 90)
-    const second = addNode(306, 90)
-    const third = addNode(520, 220)
-    if (first && second && third) {
-      addEdge(first.id, second.id)
-      addEdge(second.id, third.id)
+    seedDiagram(tools, engine, text)
+  }
+
+  const importDocument = async (file?: File) => {
+    const tools = toolsRef.current
+    if (!tools || !file) return
+    try {
+      replaceDiagramFromDocument(tools, engine, JSON.parse(await file.text()))
+    } catch (error) {
+      engine.say(error instanceof Error ? error.message : "Import failed", "导入失败，文件格式无效")
     }
-    tools.log()
   }
 
-  const switchMode = (next: Mode) => {
-    toolsRef.current?.switchState(next)
-    setMode(next)
-    clearSelection()
-    push(text(`mode: ${next}`, `模式：${next === "select" ? "选择" : "连接"}`))
-  }
-
-  const save = () => {
+  const changeScale = (direction: -1 | 1) => {
     const tools = toolsRef.current
     if (!tools) return
-    savedGraphRef.current = {
-      scene: tools.exportChildren({ children: tools.getChildrenWithoutRoot(), area: { x: 0, y: 0, width: 720, height: 420 } }),
-      edges: edgesRef.current.map(({ childId, from, to }) => ({ childId, from, to })),
-    }
-    push(text("scene saved in memory", "场景已保存到内存"))
+    engine.viewportChanged(tools.viewport.zoomBy(direction > 0 ? 1.1 : 1 / 1.1))
   }
 
-  const restoreCopy = () => {
-    const saved = savedGraphRef.current
-    const tools = toolsRef.current
-    if (!saved || !tools) return
-    const existingIds = new Set(tools.getChildrenWithoutRoot().map((child) => child.id))
-    const copyNumber = ++copySequenceRef.current
-    const importedScene = saved.scene
-    tools.importChildren(importedScene, { x: 26, y: 26, width: 720, height: 420 })
-    const imported = tools.getChildrenWithoutRoot().filter((child) => !existingIds.has(child.id))
-    const importedByOriginalId = new Map<string, Child>()
-    importedScene.children.forEach((child, index) => {
-      const copy = imported[index]
-      if (!copy) return
-      importedByOriginalId.set(child.sourceId, copy)
-      if (copy.className === "node") {
-        nodesRef.current.set(copy.id, copy)
-        nodeStackOrderRef.current.set(copy.id, stackSequenceRef.current++)
-        const rectangles = [...copy.shapeMap.values()].filter((shape) => shape instanceof Rectangle) as Rectangle[]
-        const outline = rectangles[1]
-        if (outline) {
-          outline.update({ strokeConfig: { color: { ...colors.blue, a: 0 }, lineWidth: 4, dash: [] } })
-          nodeOutlinesRef.current.set(copy.id, outline)
-        }
-        const originalLabel = nodeLabel(child.sourceId)
-        const copyLabel = `${originalLabel} · ${text(`Copy ${copyNumber}`, `副本 ${copyNumber}`)}`
-        const textShape = [...copy.shapeMap.values()].find((shape) => shape instanceof StayText) as StayText | undefined
-        textShape?.update({ text: copyLabel, font: { size: 12, fontWeight: 650 } })
-        nodeLabelsRef.current.set(copy.id, copyLabel)
-      }
-    })
-    saved.edges.forEach((edge) => {
-      const edgeChild = importedByOriginalId.get(edge.childId)
-      const from = importedByOriginalId.get(edge.from)
-      const to = importedByOriginalId.get(edge.to)
-      const line = edgeChild?.shapeMap.values().next().value
-      if (!edgeChild || !from || !to || !(line instanceof Line)) return
-      edgesRef.current.push({ childId: edgeChild.id, from: from.id, to: to.id, line })
-    })
-    setNodeCount(nodesRef.current.size)
-    setEdgeCount(edgesRef.current.length)
-    push(text("saved scene imported as a copy", "已将保存场景作为副本导入"))
-  }
+  const palette = (["start", "process", "decision", "end"] as NodeKind[]).map((kind) => ({
+    kind,
+    label: text(
+      { start: "Start", process: "Process", decision: "Decision", end: "End" }[kind],
+      { start: "开始", process: "流程", decision: "判断", end: "结束" }[kind],
+    ),
+  }))
 
   return (
     <DemoLayout>
-      <CanvasCard title={text("Connected diagram", "连线图编辑器")} description={text("Blue outlines show selection. Dashed orange outlines show the pending connection start.", "蓝色外框表示当前选中，橙色虚线外框表示等待连接的起点。")} wide>
-        <StayCanvas className="demo-canvas demo-canvas-grid" height={420} layers={3} listenerList={listeners} mounted={mounted} width={720} />
-      </CanvasCard>
-      <Toolbar>
-        <Button active={mode === "select"} onClick={() => switchMode("select")}>{text("Select", "选择")}</Button>
-        <Button active={mode === "connect"} onClick={() => switchMode("connect")}>{text("Connect", "连接")}</Button>
-        <Button onClick={() => { const node = addNode(); if (node) { toolsRef.current?.log(); push(text(`added ${nodeLabel(node.id)}`, `已添加 ${nodeLabel(node.id)}`)) } }}>{text("Add node", "添加节点")}</Button>
-        <Button onClick={() => { void toolsRef.current?.zoom(-100, { x: 360, y: 210 }); push(text("zoom in", "放大")) }}>{text("Zoom in", "放大")}</Button>
-        <Button onClick={() => { void toolsRef.current?.reset(); push(text("view reset", "视图已重置")) }}>{text("Reset view", "重置视图")}</Button>
-        <Button onClick={save}>{text("Save scene", "保存场景")}</Button>
-        <Button disabled={!savedGraphRef.current} onClick={restoreCopy}>{text("Import copy", "导入副本")}</Button>
-        <ResetButton />
-      </Toolbar>
-      <StatusGrid items={[[text("Mode", "模式"), mode === "select" ? text("select", "选择") : text("connect", "连接")], [text("Nodes", "节点"), nodeCount], [text("Edges", "边"), edgeCount], [text("Selected", "已选择"), selected]]} />
+      <div className="diagram-stage-shell diagram-workspace" ref={stageShellRef}>
+        <aside className="diagram-palette" aria-label={text("Flowchart shapes", "流程图形库")}>
+          <strong>{text("Shapes", "图形")}</strong>
+          <p>{text("Drag onto canvas", "拖入画布")}</p>
+          {palette.map(({ kind, label }) => (
+            <button
+              draggable
+              key={kind}
+              onClick={() => runWithTools((tools) => addDiagramNode(tools, engine, kind))}
+              onDragStart={(event) => {
+                event.dataTransfer.effectAllowed = "copy"
+                event.dataTransfer.setData("application/x-diagram-node-kind", kind)
+              }}
+              title={text(`Drag ${label} onto the canvas`, `拖动${label}到画布`)}
+              type="button"
+            >
+              <span className={`diagram-palette-shape ${kind}`} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </aside>
+        <div className="diagram-canvas-area">
+          <CanvasCard
+            title={text("Workflow diagram editor", "流程图编辑器")}
+            description={text(
+              "Drag shapes in, double-click labels, connect blue ports, and hold Space to pan.",
+              "拖入图形，双击编辑文字，拖动蓝色连接点连线，按住空格拖动画布。",
+            )}
+            resizeToViewport
+            wide
+          >
+            <StayCanvas
+              className="demo-canvas diagram-canvas"
+              eventList={[
+                DiagramClickEvent as EventProps<string>,
+                DiagramDoubleClickEvent as EventProps<string>,
+                DiagramDragStartEvent as EventProps<string>,
+                DiagramSpaceStartMoveEvent,
+              ]}
+              height={SCENE_HEIGHT}
+              historyAdapter={historyAdapter}
+              layers={3}
+              listenerList={listeners}
+              mounted={mounted}
+              passive={false}
+              viewport={{ minScale: 0.6, maxScale: 1.8 }}
+              width={SCENE_WIDTH}
+            />
+          </CanvasCard>
+          <div className="diagram-floating-toolbar" aria-label={text("Diagram toolbar", "图表工具栏")}>
+            <button onClick={() => runWithTools((tools) => navigateDiagramHistory(tools, engine, "undo"))} title={text("Undo", "撤销")}>↶</button>
+            <button onClick={() => runWithTools((tools) => navigateDiagramHistory(tools, engine, "redo"))} title={text("Redo", "重做")}>↷</button>
+            <span />
+            <button disabled={engine.selected.size === 0} onClick={() => runWithTools((tools) => duplicateDiagramSelection(tools, engine))} title={text("Duplicate", "复制")}>⧉</button>
+            <button disabled={summary.selected === 0} onClick={() => runWithTools((tools) => removeDiagramSelection(tools, engine))} title={text("Delete", "删除")}>⌫</button>
+            <span />
+            <button onClick={() => changeScale(-1)} title={text("Zoom out", "缩小")}>−</button>
+            <output>{Math.round(viewportScale * 100)}%</output>
+            <button onClick={() => changeScale(1)} title={text("Zoom in", "放大")}>＋</button>
+            <button onClick={() => runWithTools((tools) => engine.viewportChanged(fitDiagramViewport(tools)))} title={text("Fit diagram", "适应图表")}>⌂</button>
+          </div>
+        </div>
+        {inlineEdit && (
+          <input
+            autoFocus
+            className="diagram-inline-editor"
+            maxLength={32}
+            onBlur={commitInlineEdit}
+            onChange={(event) => setInlineEdit({ ...inlineEdit, value: event.target.value })}
+            onKeyDown={(event) => {
+              event.stopPropagation()
+              if (event.key === "Enter") commitInlineEdit()
+              if (event.key === "Escape") setInlineEdit(undefined)
+            }}
+            style={{ left: inlineEdit.left, top: inlineEdit.top, width: inlineEdit.width }}
+            value={inlineEdit.value}
+          />
+        )}
+      </div>
+
+      <section className="diagram-inspector" aria-label={text("Selection inspector", "选择检查器")}>
+        <div className="diagram-inspector-heading">
+          <strong>{text("Inspector", "检查器")}</strong>
+          <span>{selectedId ?? text("Nothing selected", "未选择内容")}</span>
+        </div>
+        <label>
+          <span>{selectedEdge ? text("Connection label", "连线文字") : text("Label", "名称")}</span>
+          <input disabled={!selectedNode && !selectedEdge} maxLength={32} onChange={(event) => setDraftLabel(event.target.value)} value={draftLabel} />
+        </label>
+        {selectedNode && <label>
+          <span>{text("Type", "类型")}</span>
+          <select onChange={(event) => setDraftKind(event.target.value as NodeKind)} value={draftKind}>
+            <option value="start">{text("Start", "开始")}</option>
+            <option value="process">{text("Process", "流程")}</option>
+            <option value="decision">{text("Decision", "判断")}</option>
+            <option value="end">{text("End", "结束")}</option>
+          </select>
+        </label>}
+        <Button disabled={!selectedNode && !selectedEdge} onClick={() => runWithTools((tools) => {
+          if (selectedNode && draftLabel.trim()) updateDiagramNode(tools, engine, selectedNode.id, draftLabel, draftKind)
+          if (selectedEdge) updateDiagramEdge(tools, engine, selectedEdge.id, draftLabel)
+        })}>{text("Apply", "应用")}</Button>
+        <p>{text(
+          "Double-click a node or connection to edit in place. Select a connection and drag either endpoint to reconnect it.",
+          "双击节点或连线可原位编辑；选中连线后拖动任一端点即可重新连接。",
+        )}</p>
+      </section>
+
+      <section className="diagram-document-controls">
+        <strong>{text("Document", "文档")}</strong>
+        <Toolbar>
+          <Button onClick={engine.save}>{text("Export JSON", "导出 JSON")}</Button>
+          <Button onClick={engine.import}>{text("Import JSON", "导入 JSON")}</Button>
+          <ResetButton />
+        </Toolbar>
+        <input
+          accept="application/json,.json"
+          hidden
+          onChange={(event) => {
+            void importDocument(event.target.files?.[0])
+            event.target.value = ""
+          }}
+          ref={inputRef}
+          type="file"
+        />
+      </section>
+
+      <StatusGrid items={[
+        [text("Nodes", "节点"), summary.nodes],
+        [text("Edges", "连线"), summary.edges],
+        [text("Selected", "已选择"), summary.selected],
+        [text("Zoom", "缩放"), `${Math.round(viewportScale * 100)}%`],
+      ]} />
       <EventLog entries={entries} />
     </DemoLayout>
   )

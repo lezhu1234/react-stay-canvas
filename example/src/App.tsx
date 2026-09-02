@@ -5,7 +5,10 @@ import { ExamplePage } from "./components/ExamplePage"
 import { catalog, getExampleByPath } from "./examples/catalog"
 import { type Locale, useI18n } from "./i18n"
 
-const sourceModules = import.meta.glob("./examples/**/*.tsx", {
+const sourceModules = import.meta.glob([
+  "./examples/simple/*.tsx",
+  "./examples/integrated/**/*.{ts,tsx}",
+], {
   query: "?raw",
   import: "default",
   eager: true,
@@ -77,8 +80,8 @@ function CatalogHome() {
         <h1>{text("Learn one behavior. Regress the whole system.", "从基础绘制到完整流程，都有示例可以直接验证。")}</h1>
         <p>
           {text(
-            "Thirteen isolated examples cover the public surface of react-stay-canvas, from individual shapes to complete editing workflows.",
-            "13 个可独立运行的示例，覆盖 react-stay-canvas 从基础绘制到完整编辑流程的主要能力。",
+            "Fourteen isolated examples cover the public surface of react-stay-canvas, from individual shapes to complete editing workflows.",
+            "14 个可独立运行的示例，覆盖 react-stay-canvas 从基础绘制到完整编辑流程的主要能力。",
           )}
         </p>
         <div className="catalog-metrics" aria-label={text("Example counts", "示例数量")}>
@@ -97,6 +100,9 @@ export default function App() {
   const { locale, localized, switchLocale, text } = useI18n()
   const path = useHashPath()
   const active = getExampleByPath(path)
+  const shellClassName = active?.presentation === "immersive"
+    ? "app-shell example-active example-immersive"
+    : active ? "app-shell example-active" : "app-shell"
 
   useEffect(() => {
     document.title = active ? `${localized(active.title)} | react-stay-canvas` : text("react-stay-canvas examples", "react-stay-canvas 示例")
@@ -114,7 +120,7 @@ export default function App() {
   )
 
   return (
-    <div className="app-shell">
+    <div className={shellClassName}>
       <header className="topbar">
         <RouteLink className="brand" path="/">
           <span className="brand-mark" aria-hidden="true" />
@@ -158,7 +164,10 @@ export default function App() {
           <ErrorBoundary key={active.path}>
             <ExamplePage
               definition={active}
-              source={sourceModules[active.sourcePath] ?? text("Source unavailable.", "源码暂不可用。")}
+              sources={active.sourcePaths.map((path) => ({
+                path,
+                source: sourceModules[path] ?? text("Source unavailable.", "源码暂不可用。"),
+              }))}
             />
           </ErrorBoundary>
         ) : path === "/" ? (

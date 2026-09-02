@@ -2,6 +2,10 @@ import type { ChildSortFunction, SelectorFunc } from "../../../types/children"
 import type { EventProps } from "../../../types/events"
 import { StayInstantChild } from "../../children/stayInstantChild"
 import type {
+  CoordinateFrame,
+  PointerCoordinates,
+} from "../../coordinates/coordinateSystem"
+import type {
   EvaluatedActions,
   EventDefinitionLookup,
   NormalizedActionEvent,
@@ -13,6 +17,7 @@ import {
   type GestureFamily,
 } from "../gesturePhases"
 import { createActionEventEnvelope } from "./actionEventEnvelope"
+import type { PointerTargetPicker } from "./pointerTargetPicker"
 
 type Store = Map<string, any>
 
@@ -29,7 +34,7 @@ export type TargetRegistration = {
   id: symbol
   eventNames: readonly string[]
   selector: string
-  sortBy: ChildSortFunction
+  sortBy?: ChildSortFunction
 }
 
 export type TargetDecision =
@@ -39,17 +44,14 @@ export type TargetDecision =
 
 export type TargetResolverContext = {
   rootChild: StayInstantChild
+  sceneChildren: () => readonly StayInstantChild[]
   store: Store
   stateStore: Store
+  pointerTargets: PointerTargetPicker<StayInstantChild>
   select: (
     selector: string | SelectorFunc,
     sortBy?: ChildSortFunction
   ) => StayInstantChild[]
-  hitTest: (props: {
-    point: { x: number; y: number }
-    selector: string | SelectorFunc
-    sortBy?: ChildSortFunction
-  }) => StayInstantChild[]
 }
 
 export class ActionTargetResolver {
@@ -132,7 +134,9 @@ export class ActionTargetResolver {
     eventDefinition: EventProps<T>,
     role: EventDefinitionRole,
     sessionId: number | undefined,
-    originEvent: Event
+    originEvent: Event,
+    coordinates: PointerCoordinates | undefined,
+    coordinateFrame: CoordinateFrame | undefined
   ): TargetDecision {
     if (role.kind === "gesture" && sessionId !== undefined) {
       return this.resolveGestureTarget(
@@ -163,15 +167,17 @@ export class ActionTargetResolver {
         eventName,
         sourceEvent,
         eventDefinition,
-        originEvent
+        originEvent,
+        coordinates,
+        coordinateFrame
       )
       return target ? { kind: "target", target } : { kind: "skip" }
     }
 
     if (!eventDefinition.withTargetConditionCallback) return { kind: "targetless" }
 
-    const target = this.context
-      .select(registration.selector, registration.sortBy)
+    const target = this
+      .orderedCandidates(registration)
       .find((child) =>
         this.acceptsTarget(child, eventName, sourceEvent, eventDefinition, originEvent)
       )
@@ -235,16 +241,48 @@ export class ActionTargetResolver {
     eventName: T,
     sourceEvent: NormalizedActionEvent<T>,
     eventDefinition: EventProps<T>,
-    originEvent: Event
+    originEvent: Event,
+    coordinates: PointerCoordinates | undefined,
+    coordinateFrame: CoordinateFrame | undefined
   ): StayInstantChild | undefined {
-    const point = sourceEvent.point
-    if (!point) return undefined
+    if (!coordinates || !coordinateFrame) return undefined
 
     return this.context
-      .hitTest({ point, selector: registration.selector, sortBy: registration.sortBy })
+      .pointerTargets.hits(
+        this.orderedCandidates(registration),
+        coordinates,
+        coordinateFrame
+      )
       .find((child) =>
         this.acceptsTarget(child, eventName, sourceEvent, eventDefinition, originEvent)
       )
+  }
+
+  private orderedCandidates(
+    registration: TargetRegistration
+  ): StayInstantChild[] {
+    const candidates = this.context.select(
+      registration.selector,
+      registration.sortBy
+    )
+    if (registration.sortBy) return candidates
+
+    const sceneOrder = new Map(
+      this.context.sceneChildren().map((child, index) => [child, index])
+    )
+    const rootChild = this.context.rootChild
+    return candidates.sort((a, b) => {
+      if (a === b) return 0
+      if (a === rootChild) return 1
+      if (b === rootChild) return -1
+
+      const aBound = a.getBound()
+      const bBound = b.getBound()
+      const areaDifference =
+        aBound.width * aBound.height - bBound.width * bBound.height
+      if (areaDifference !== 0) return areaDifference
+      return (sceneOrder.get(a) ?? 0) - (sceneOrder.get(b) ?? 0)
+    })
   }
 
   private targetIfAccepted<T extends string>(
@@ -331,7 +369,9 @@ export class ActionTargetResolver {
       gesture.start as T,
       start.info,
       start.event,
-      originEvent
+      originEvent,
+      start.coordinates,
+      start.coordinateFrame
     )
     this.setGestureOwner(
       sessionId,

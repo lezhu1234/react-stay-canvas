@@ -27,6 +27,11 @@ export interface Size {
   height: number
 }
 
+export interface TextSize extends Size {
+  ascent: number
+  descent: number
+}
+
 export interface ExtraTransform {
   zoom: number
   zoomCenter: { x: number; y: number }

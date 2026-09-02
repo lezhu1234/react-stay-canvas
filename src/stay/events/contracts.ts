@@ -7,6 +7,11 @@ import type {
   EventDefinitionRole,
   EventDefinitionScope,
 } from "./gesturePhases"
+import type {
+  CoordinateFrame,
+  PointerCoordinates,
+  PointerSamples,
+} from "../coordinates/coordinateSystem"
 
 export type PointerSample = {
   clientX: number
@@ -15,6 +20,7 @@ export type PointerSample = {
 
 export type PointerSessionRef = {
   id: number
+  startedAt: number
   pointerId?: number
   pointerType: string
   initiatingButton: number
@@ -30,6 +36,7 @@ export type EventInput = {
   originEvent: Event
   pressedKeys: ReadonlySet<string>
   pointerSample?: PointerSample
+  pointerSamples?: PointerSamples
   rawAction?: { trigger: string }
   pointerSession?: PointerSessionRef
   sessionTransition?: PointerSessionTransition
@@ -59,6 +66,8 @@ export type NormalizedActionEvent<EventName extends string> = Omit<
 export type EvaluatedActions<EventName extends string> = Partial<
   Record<EventName, {
     info: NormalizedActionEvent<EventName>
+    coordinates?: PointerCoordinates
+    coordinateFrame?: CoordinateFrame
     event: EventProps<EventName>
     role: EventDefinitionRole
     scope: EventDefinitionScope

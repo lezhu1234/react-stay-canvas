@@ -1,9 +1,269 @@
-import { ReactNode, useEffect, useRef, useState } from "react"
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react"
+
+import { type StayCanvasProps, type StayTools } from "react-stay-canvas"
 
 import { useI18n } from "../i18n"
 
 export function DemoLayout({ children }: { children: ReactNode }) {
-  return <div className="demo-layout">{children}</div>
+  const [primary, ...controls] = Children.toArray(children)
+  const { text } = useI18n()
+
+  return (
+    <div className="demo-layout">
+      <div className="demo-primary">{primary}</div>
+      {controls.length > 0 && (
+        <aside className="demo-controls" aria-label={text("Example controls", "示例控制区")}>
+          {controls.map((control, index) => (
+            <div className="demo-control-panel" key={index}>{control}</div>
+          ))}
+        </aside>
+      )}
+    </div>
+  )
+}
+
+type CanvasScenePlacement = {
+  canvasHeight: number
+  canvasWidth: number
+  offsetX: number
+  offsetY: number
+}
+
+type CanvasChild = ReturnType<StayTools["appendChild"]>
+
+type CanvasDisplayTransform = {
+  offsetX?: number
+  offsetY?: number
+  scaleX?: number
+  scaleY?: number
+}
+
+function positiveFiniteOr(value: number | undefined, fallback: number) {
+  return value !== undefined && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function finiteOr(value: number | undefined, fallback: number) {
+  return value !== undefined && Number.isFinite(value) ? value : fallback
+}
+
+const scenePlacementByTools = new WeakMap<StayTools, CanvasScenePlacement>()
+const placedSceneChildren = new WeakSet<CanvasChild>()
+
+function useViewportSize(viewportRef: RefObject<HTMLDivElement>, observeResize: boolean) {
+  const [size, setSize] = useState<{ height: number; width: number }>()
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+
+    const measure = () => {
+      const nextSize = {
+        height: Math.max(1, Math.floor(viewport.clientHeight)),
+        width: Math.max(1, Math.floor(viewport.clientWidth)),
+      }
+      setSize((current) => current?.height === nextSize.height && current.width === nextSize.width
+        ? current
+        : nextSize)
+    }
+
+    measure()
+    if (!observeResize) return
+
+    if (typeof ResizeObserver === "function") {
+      const observer = new ResizeObserver(measure)
+      observer.observe(viewport)
+      return () => observer.disconnect()
+    }
+
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [observeResize, viewportRef])
+
+  return size
+}
+
+function getScenePlacement(tools: StayTools) {
+  return scenePlacementByTools.get(tools)
+}
+
+export function scenePoint(tools: StayTools, x: number, y: number) {
+  const { offsetX = 0, offsetY = 0 } = getScenePlacement(tools) ?? {}
+  return { x: x + offsetX, y: y + offsetY }
+}
+
+export function sceneArea(tools: StayTools, width: number, height: number) {
+  const { offsetX = 0, offsetY = 0 } = getScenePlacement(tools) ?? {}
+  return { x: offsetX, y: offsetY, width, height }
+}
+
+export function sceneCanvasArea(tools: StayTools, sceneWidth: number, sceneHeight: number) {
+  const placement = getScenePlacement(tools)
+  return {
+    x: 0,
+    y: 0,
+    width: placement?.canvasWidth ?? sceneWidth,
+    height: placement?.canvasHeight ?? sceneHeight,
+  }
+}
+
+export function sceneLine(
+  tools: StayTools,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+) {
+  const start = scenePoint(tools, x1, y1)
+  const end = scenePoint(tools, x2, y2)
+  return { x1: start.x, y1: start.y, x2: end.x, y2: end.y }
+}
+
+export function placeSceneChild<T extends CanvasChild>(tools: StayTools, child: T): T {
+  if (placedSceneChildren.has(child)) return child
+  placedSceneChildren.add(child)
+  const { offsetX = 0, offsetY = 0 } = getScenePlacement(tools) ?? {}
+  if (offsetX === 0 && offsetY === 0) return child
+  child.moveInit()
+  child.move(offsetX, offsetY)
+  return child
+}
+
+export function resetScene(tools: StayTools) {
+  // reset() consumes the current move baseline; capture it after the latest pan.
+  tools.moveStart()
+  return tools.reset()
+}
+
+function mountPlacedScene(
+  tools: StayTools,
+  placement: CanvasScenePlacement,
+  mounted?: StayCanvasProps["mounted"],
+) {
+  scenePlacementByTools.set(tools, placement)
+  mounted?.(tools)
+}
+
+export function CanvasSurface({
+  children,
+  className,
+  viewportLabel,
+  canvasDisplayTransform,
+  fitInitialDisplayTransformToViewport = false,
+  resizeToViewport = false,
+  shrinkToViewport = false,
+}: {
+  children: ReactNode
+  className?: string
+  viewportLabel?: string
+  canvasDisplayTransform?: CanvasDisplayTransform
+  fitInitialDisplayTransformToViewport?: boolean
+  resizeToViewport?: boolean
+  shrinkToViewport?: boolean
+}) {
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const observesResize = resizeToViewport || shrinkToViewport
+    || (isValidElement<StayCanvasProps>(children) && children.props.recreateOnResize === true)
+  const viewportSize = useViewportSize(viewportRef, observesResize)
+  const displayScaleX = positiveFiniteOr(canvasDisplayTransform?.scaleX, 1)
+  const displayScaleY = positiveFiniteOr(canvasDisplayTransform?.scaleY, 1)
+  const displayOffsetX = finiteOr(canvasDisplayTransform?.offsetX, 0)
+  const displayOffsetY = finiteOr(canvasDisplayTransform?.offsetY, 0)
+  const usesDisplayTransform = canvasDisplayTransform !== undefined
+  // Keep the responsive fit as a stable baseline. Later transform controls
+  // must change the DOM footprint without silently resizing logical Canvas.
+  const initialDisplayTransform = useRef({
+    offsetX: displayOffsetX,
+    offsetY: displayOffsetY,
+    scaleX: displayScaleX,
+    scaleY: displayScaleY,
+  })
+  const canvasFrame: { element: ReactNode; height?: number; width?: number } | null =
+    isValidElement<StayCanvasProps>(children) && viewportSize
+    ? (() => {
+        const sceneWidth = children.props.width ?? 500
+        const sceneHeight = children.props.height ?? 500
+        const hasMeasuredViewport = viewportSize.width > 1 && viewportSize.height > 1
+        const initialTransform = initialDisplayTransform.current
+        const fittedViewportWidth = fitInitialDisplayTransformToViewport
+          ? Math.max(1, viewportSize.width - initialTransform.offsetX) / initialTransform.scaleX
+          : viewportSize.width
+        const fittedViewportHeight = fitInitialDisplayTransformToViewport
+          ? Math.max(1, viewportSize.height - initialTransform.offsetY) / initialTransform.scaleY
+          : viewportSize.height
+        const width = (resizeToViewport || shrinkToViewport) && hasMeasuredViewport
+          ? fittedViewportWidth
+          : Math.max(sceneWidth, viewportSize.width)
+        const height = (resizeToViewport || shrinkToViewport) && hasMeasuredViewport
+          ? fittedViewportHeight
+          : Math.max(sceneHeight, viewportSize.height)
+        const placement = {
+          canvasHeight: height,
+          canvasWidth: width,
+          offsetX: Math.max(0, (width - sceneWidth) / 2),
+          offsetY: Math.max(0, (height - sceneHeight) / 2),
+        }
+
+        return {
+          element: cloneElement(children, {
+            height,
+            mounted: (tools) => mountPlacedScene(tools, placement, children.props.mounted),
+            recreateOnResize: shrinkToViewport || children.props.recreateOnResize,
+            width,
+          }),
+          height,
+          width,
+        }
+      })()
+    : isValidElement<StayCanvasProps>(children)
+      ? null
+      : { element: children }
+  const canvas = canvasFrame && usesDisplayTransform && canvasFrame.width && canvasFrame.height
+    ? (
+        <div
+          className="canvas-display-transform"
+          data-display-offset-x={displayOffsetX}
+          data-display-offset-y={displayOffsetY}
+          data-display-scale-x={displayScaleX}
+          data-display-scale-y={displayScaleY}
+          style={{
+            height: canvasFrame.height,
+            transform: `translate(${displayOffsetX}px, ${displayOffsetY}px) scale(${displayScaleX}, ${displayScaleY})`,
+            width: canvasFrame.width,
+          }}
+        >
+          {canvasFrame.element}
+        </div>
+      )
+    : canvasFrame?.element
+
+  return (
+    <div className={["canvas-viewport", className ?? ""].filter(Boolean).join(" ")} ref={viewportRef}>
+      {viewportLabel && (
+        <span
+          className="canvas-viewport-label"
+          style={!usesDisplayTransform || !canvasFrame?.width ? undefined : {
+            left: displayOffsetX + canvasFrame.width * displayScaleX - 10,
+            right: "auto",
+            top: displayOffsetY + 10,
+            transform: "translateX(-100%)",
+          }}
+        >
+          {viewportLabel}
+        </span>
+      )}
+      {canvas}
+    </div>
+  )
 }
 
 export function CanvasCard({
@@ -11,19 +271,33 @@ export function CanvasCard({
   description,
   children,
   wide = false,
+  className,
+  viewportLabel,
+  canvasDisplayTransform,
+  resizeToViewport = false,
 }: {
   title: string
   description?: string
   children: ReactNode
   wide?: boolean
+  className?: string
+  viewportLabel?: string
+  canvasDisplayTransform?: CanvasDisplayTransform
+  resizeToViewport?: boolean
 }) {
   return (
-    <section className={wide ? "canvas-card wide" : "canvas-card"}>
+    <section className={["canvas-card", wide ? "wide" : "", className ?? ""].filter(Boolean).join(" ")}>
       <div className="canvas-card-heading">
         <h2>{title}</h2>
         {description && <p>{description}</p>}
       </div>
-      <div className="canvas-viewport">{children}</div>
+      <CanvasSurface
+        canvasDisplayTransform={canvasDisplayTransform}
+        resizeToViewport={resizeToViewport}
+        viewportLabel={viewportLabel}
+      >
+        {children}
+      </CanvasSurface>
     </section>
   )
 }

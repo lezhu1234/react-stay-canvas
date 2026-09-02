@@ -3,8 +3,8 @@ import type { InstantShape } from "../shapes/instantShape"
 import type { StayInstantChild } from "../stay/children/stayInstantChild"
 import type { FRAME_EVENT_NAME, KEYBOARRD_EVENTS, MOUSE_EVENTS } from "../userConstants"
 import type { ChildSortFunction } from "./children"
-import type { Dict, storeType, valueof } from "./common"
-import type { Coordinate } from "./geometry"
+import type { Dict, StayStoreFor, valueof } from "./common"
+import type { ContentPoint, ViewVector } from "./coordinates"
 import type { ManualTriggerEvents } from "./manualActions"
 import type { StayTools } from "./tools"
 
@@ -37,6 +37,7 @@ export type PointerSessionCancelReason =
   | "lostpointercapture"
   | "blur"
   | "visibilitychange"
+  | "resize"
 
 export interface ActionEvent<EventName extends string = string> {
   state: string
@@ -48,7 +49,8 @@ export interface ActionEvent<EventName extends string = string> {
   target?: StayInstantChild
   x?: number
   y?: number
-  point?: Coordinate
+  point?: ContentPoint
+  movement?: ViewVector
   key?: string
   deltaX?: number
   deltaY?: number
@@ -63,7 +65,8 @@ export interface MouseActionEvent<EventName extends PredefinedMouseEventName>
   extends ActionEvent<EventName> {
   x: number
   y: number
-  point: Coordinate
+  point: ContentPoint
+  movement?: ViewVector
   isMouseEvent: true
 }
 
@@ -85,12 +88,14 @@ export interface AnyActionEvent extends ActionEvent<string> {}
 export interface ActionCallbackProps<
   T = Dict,
   EventName extends string = string,
-  CS = Record<string, any>
+  CS = Record<string, any>,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
 > {
   originEvent: Event
   e: ActionEvent<EventName>
-  store: storeType
-  stateStore: storeType
+  store: StayStoreFor<StoreSchema>
+  stateStore: StayStoreFor<StateStoreSchema>
   composeStore: CS
   canvas: Canvas
   tools: StayTools
@@ -98,18 +103,39 @@ export interface ActionCallbackProps<
 }
 
 export type CallbackFuncMap<
-  T extends ActionCallbackProps<U, EventName>,
+  T extends ActionCallbackProps<
+    U,
+    EventName,
+    CS,
+    StoreSchema,
+    StateStoreSchema
+  >,
   U,
   EventName extends string,
-  CS = Record<string, any>
+  CS = Record<string, any>,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
 > = {
   [key in T["e"]["name"]]?: () => Partial<CS> | void | undefined
 }
 
-export type UserCallback<T, EventName extends string, CS = Record<string, any>> = (
-  p: ActionCallbackProps<T, EventName, CS>
+export type UserCallback<
+  T,
+  EventName extends string,
+  CS = Record<string, any>,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
+> = (
+  p: ActionCallbackProps<T, EventName, CS, StoreSchema, StateStoreSchema>
 ) =>
-  | CallbackFuncMap<ActionCallbackProps<T, EventName>, T, EventName, CS>
+  | CallbackFuncMap<
+      ActionCallbackProps<T, EventName, CS, StoreSchema, StateStoreSchema>,
+      T,
+      EventName,
+      CS,
+      StoreSchema,
+      StateStoreSchema
+    >
   | void
 
 export type ListenerNamePayloadPairOrName = ListenerNamePayloadPair | string
@@ -138,26 +164,36 @@ export type ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<
 export interface ListenerProps<
   T extends ListenerNamePayloadPair = ListenerNamePayloadPair,
   EventName extends string = string,
-  CS = Record<string, any>
+  CS = Record<string, any>,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
 > {
   name: T["name"]
   state?: string
   selector?: string
   event: EventName | EventName[]
   sortBy?: ChildSortFunction
-  callback: UserCallback<T["payload"], EventName, CS>
+  callback: UserCallback<
+    T["payload"],
+    EventName,
+    CS,
+    StoreSchema,
+    StateStoreSchema
+  >
 }
 
 export interface PredefinedEventListenerProps<
   EventName extends PredefinedEventName = PredefinedEventName,
-  CS = Record<string, any>
+  CS = Record<string, any>,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
 > {
   name: string
   state?: string
   selector?: string
   event: EventName | EventName[]
   sortBy?: ChildSortFunction
-  callback: UserCallback<Dict, EventName, CS>
+  callback: UserCallback<Dict, EventName, CS, StoreSchema, StateStoreSchema>
 }
 
 export interface FireEvent {
@@ -168,25 +204,41 @@ export interface UserCallbackTools {
   deleteEvent: (name: string) => void
 }
 
-export interface UserSuccessCallbackProps<EventName extends string> {
+export interface UserSuccessCallbackProps<
+  EventName extends string,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
+> {
   e: ActionEvent<EventName>
-  store: storeType
-  stateStore: storeType
+  store: StayStoreFor<StoreSchema>
+  stateStore: StayStoreFor<StateStoreSchema>
   deleteEvent: (name: EventName) => void
 }
 
-export interface UserConditionCallbackProps<EventName extends string> {
+export interface UserConditionCallbackProps<
+  EventName extends string,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
+> {
   e: ActionEvent<EventName>
-  store: storeType
-  stateStore: storeType
+  store: StayStoreFor<StoreSchema>
+  stateStore: StayStoreFor<StateStoreSchema>
 }
 
-export interface UserConditionCallbackFunction<EventName extends string> {
-  (props: UserConditionCallbackProps<EventName>): boolean
+export interface UserConditionCallbackFunction<
+  EventName extends string,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
+> {
+  (props: UserConditionCallbackProps<EventName, StoreSchema, StateStoreSchema>): boolean
 }
 
-export type StayEventMap<EventName extends string> = {
-  [key in EventName]: StayEventProps<EventName>
+export type StayEventMap<
+  EventName extends string,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
+> = {
+  [key in EventName]: StayEventProps<EventName, StoreSchema, StateStoreSchema>
 }
 
 export interface StayEventRequiredProps<EventName extends string> {
@@ -197,31 +249,50 @@ export interface StayEventRequiredProps<EventName extends string> {
     | typeof FRAME_EVENT_NAME
 }
 
-export interface StayEventChooseProps<EventName extends string> {
-  conditionCallback: UserConditionCallbackFunction<EventName>
+export interface StayEventChooseProps<
+  EventName extends string,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
+> {
+  conditionCallback: UserConditionCallbackFunction<
+    EventName,
+    StoreSchema,
+    StateStoreSchema
+  >
   successCallback: (
-    props: UserSuccessCallbackProps<EventName>
-  ) => void | EventProps<EventName> | EventProps<EventName>[]
+    props: UserSuccessCallbackProps<EventName, StoreSchema, StateStoreSchema>
+  ) =>
+    | void
+    | EventProps<EventName, StoreSchema, StateStoreSchema>
+    | EventProps<EventName, StoreSchema, StateStoreSchema>[]
 }
 
-export type StayEventProps<EventName extends string> = StayEventRequiredProps<EventName> &
-  StayEventChooseProps<EventName> & {
+export type StayEventProps<
+  EventName extends string,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
+> = StayEventRequiredProps<EventName> &
+  StayEventChooseProps<EventName, StoreSchema, StateStoreSchema> & {
     withTargetConditionCallback?: (props: {
       originEvent: Event
       e: ActionEvent<EventName>
-      store: storeType
-      stateStore: storeType
+      store: StayStoreFor<StoreSchema>
+      stateStore: StayStoreFor<StateStoreSchema>
       target: StayInstantChild<InstantShape>
     }) => boolean
   }
 
-export type EventProps<EventName extends string> = StayEventRequiredProps<EventName> &
-  Partial<StayEventChooseProps<EventName>> & {
+export type EventProps<
+  EventName extends string,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
+> = StayEventRequiredProps<EventName> &
+  Partial<StayEventChooseProps<EventName, StoreSchema, StateStoreSchema>> & {
     withTargetConditionCallback?: (props: {
       originEvent: Event
       e: ActionEvent<EventName>
-      store: storeType
-      stateStore: storeType
+      store: StayStoreFor<StoreSchema>
+      stateStore: StayStoreFor<StateStoreSchema>
       target: StayInstantChild<InstantShape>
     }) => boolean
   }
@@ -256,17 +327,29 @@ export type DisOrderArr<T> = PermutationsOfTuple<Union2Tuple<T>>
 
 export type UnionListenerProps<
   T extends ListenerNamePayloadPair[],
-  EventName extends string = string
+  EventName extends string = string,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
 > = {
-  [key in keyof T]: ListenerProps<T[key], EventName>
+  [key in keyof T]: ListenerProps<
+    T[key],
+    EventName,
+    Record<string, any>,
+    StoreSchema,
+    StateStoreSchema
+  >
 }
 
 export type ListenerArrayProps<
   T extends ListenerNamePayloadPairOrName[],
-  EventName extends string = string
+  EventName extends string = string,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
 > = UnionListenerProps<
   ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>,
-  EventName
+  EventName,
+  StoreSchema,
+  StateStoreSchema
 >
 
 export type Tuple2Union<T extends unknown[]> = T extends [infer F, ...infer L]

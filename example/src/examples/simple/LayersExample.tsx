@@ -1,7 +1,7 @@
 import { useRef, useState } from "react"
 import { Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, placeSceneChild, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 
 export default function LayersExample() {
@@ -13,20 +13,22 @@ export default function LayersExample() {
   const [front, setFront] = useState("orange")
 
   const mounted = (tools: StayTools) => {
-    tools.appendChild({
+    placeSceneChild(tools, tools.appendChild({
       className: "background",
       shape: new Rectangle({ x: 20, y: 20, width: 400, height: 250, layer: 0, fillConfig: { color: colors.graySoft } }),
-    })
+    }))
     blueLabelRef.current = new StayText({
       x: 176,
       y: 70,
       text: text("blue · L1 · z1", "蓝色 · L1 · z1"),
+      textAlign: "center",
+      textBaseline: "top",
       font: { size: 12, fontWeight: 700 },
       layer: 2,
       zIndex: 2,
       fillConfig: { color: colors.ink },
     })
-    middleRef.current = tools.appendChild({
+    middleRef.current = placeSceneChild(tools, tools.appendChild({
       className: "stack",
       shape: [
         new Rectangle({
@@ -40,17 +42,19 @@ export default function LayersExample() {
         }),
         blueLabelRef.current,
       ],
-    })
+    }))
     orangeLabelRef.current = new StayText({
       x: 270,
       y: 196,
       text: text("orange · L1 · z2", "橙色 · L1 · z2"),
+      textAlign: "center",
+      textBaseline: "top",
       font: { size: 12, fontWeight: 700 },
       layer: 2,
       zIndex: 2,
       fillConfig: { color: colors.ink },
     })
-    frontRef.current = tools.appendChild({
+    frontRef.current = placeSceneChild(tools, tools.appendChild({
       className: "stack",
       shape: [
         new Rectangle({
@@ -64,19 +68,21 @@ export default function LayersExample() {
         }),
         orangeLabelRef.current,
       ],
-    })
-    tools.appendChild({
+    }))
+    placeSceneChild(tools, tools.appendChild({
       className: "overlay",
       shape: new StayText({
         x: 220,
         y: 28,
         text: text("layer 2 overlay", "图层 2 覆盖层"),
+        textAlign: "center",
+        textBaseline: "top",
         font: { size: 15, fontWeight: 650 },
         layer: 2,
         zIndex: 1,
         fillConfig: { color: colors.ink },
       }),
-    })
+    }))
   }
 
   const swap = () => {

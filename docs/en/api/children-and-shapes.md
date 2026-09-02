@@ -15,6 +15,7 @@ Create a static Child with `tools.appendChild(...)`.
 | `shape` | `T` | First Shape in `shapeMap` |
 | `shapeMap` | `Map<string, T>` | All Shapes in the Child |
 | `canvas` | `Canvas` | Owning Canvas runtime |
+| `placement` | `ChildPlacementSnapshot` | Resolved affine or projective local-to-Content placement snapshot |
 | `participatesInHistory` | `boolean` | `true` for static Children |
 
 ### Common methods
@@ -23,15 +24,24 @@ Create a static Child with `tools.appendChild(...)`.
 | --- | --- | --- |
 | `getShape()` | `T` | Same value as `shape` |
 | `getBound()` | `Rect` | Union of all Shape bounds |
+| `getShapeBound(shape)` | `Rect` | Conservative Content-space bound of one placed Shape |
 | `containsPointer(point)` | `boolean` | True when any Shape is hit |
 | `inArea(area)` | `boolean` | True when any Shape center is inside the area |
+| `update(props)` | `this` | Atomically update the class, complete Shape composition, and/or placement |
+| `setPlacement(placement)` | `this` | Replace the complete affine or projective placement |
+| `toLocalPoint(point)` | `PointType \| undefined` | Map Content into the finite Child-local domain |
+| `toContentPoint(point)` | `PointType \| undefined` | Map the finite Child-local domain into Content |
 | `moveInit()` | `void` | Snapshot the start of continuous movement |
-| `move(offsetX, offsetY)` | `void` | Move every Shape as a unit |
-| `zoom(deltaY, center)` | `void` | Zoom every Shape as a unit |
+| `move(offsetX, offsetY)` | `void` | Destructively move every Shape by a Content-space vector |
+| `zoom(deltaY, center)` | `void` | Destructively zoom every Shape around a Content-space center |
 | `getLayers()` | `Set<number>` | Layers used by the Child |
 | `getShapes(layer)` | `T[]` | Shapes on one layer |
 
-`update(...)` is an internal replacement primitive for history restoration. Application code should call `child.shape.update(...)` or retrieve a specific Shape from `shapeMap` and update that Shape.
+Use a Shape's own `update(...)` for geometry and drawing properties. Use `child.update(...)` for Child-level changes or when a workflow must replace a complete single- or multi-Shape composition. The batch is validated before it is applied, repaints both removed and added layers, and participates in undo/redo after the next `tools.log()`.
+
+Shape geometry remains in Child-local coordinates. Rendering, bounds, hit testing, area queries, history, scene transfer, and region capture apply the same placement. Affine placement supports semantic fields or a raw Canvas-compatible matrix. Projective placement owns a 3×3 matrix plus a finite positive local domain that cannot touch or cross its horizon. Non-finite or non-invertible matrices throw because local hit testing requires an inverse.
+
+The `placement` getter returns a discriminated snapshot, so mutating the returned object does not change the Child. Animated Children may use the same static placement, but placement keyframes and interpolation are not yet supported.
 
 Children are Canvas-bound runtime entities and do not expose a copy operation. Use `exportChildren()` and `importChildren()` to capture and materialize a reusable scene fragment.
 
@@ -45,6 +55,8 @@ Children are Canvas-bound runtime entities and do not expose a copy operation. U
 | `totalDurationMs` | Duration of the longest slice |
 | `appendKeyFrame(name, shape, prependZeroShape?)` | Append one keyframe to a slice |
 | `appendKeyFrames(frameMap, prependZeroShape?)` | Append frames to several slices |
+| `replaceSlice(name, frames, prependZeroShape?)` | Atomically replace one non-empty slice; the current projection changes on the next seek |
+| `update({ className?, placement? })` | Update Child-level state; timeline-owned Shape composition is excluded |
 | `appendDefaultFrame(shape, prependZeroShape?)` | Append to the `default` slice |
 | `getSlice(name)` | Return a slice or an empty array |
 | `hasSlice(name)` | Test whether a slice exists |
@@ -54,6 +66,8 @@ Children are Canvas-bound runtime entities and do not expose a copy operation. U
 | `participatesInHistory` | Always `false` |
 
 `disappear(..., "afterEach")` appends a transparent frame at each slice's own end. With the default zero-duration transition, disappearance is immediate; pass a non-zero transition to animate it. `"afterAll"` adds delay so every slice begins its disappearance after the longest timeline has completed.
+
+Animated Shape composition belongs exclusively to `shapeFramesMap`. Replace a timeline slice with `replaceSlice(...)`; `StayAnimatedChild.update(...)` only accepts `className` and `placement`, and rejects a runtime `shape` field.
 
 ## Common ShapeProps
 
@@ -104,11 +118,18 @@ interface CanvasGlobalProps {
 | `StayText` | `x`, `y`, `text` | `font`, `decoration`, `border`, `offsetXRatio`, `offsetYRatio`, `textBaseline`, `textAlign`, `autoTransitionDiffText` |
 | `StayImage` | `image`, `x`, `y`, `width`, `height`, `opacity` | `sx`, `sy`, `swidth`, `sheight`, `imageLoaded` |
 | `Point` | `x`, `y` | — |
-| `Path` | `points`, `radius` | — |
+| `Path` | `points` | — |
+| `Polygon` | `points` | `fillRule`, `filter` |
 
-Every constructor also accepts common `ShapeProps`. `Rectangle`, `StayText`, and `StayImage` additionally accept `transition`. `Line` is implemented as an animated Shape, but its current exported `LineProps` does not accept `transition`.
+Every constructor also accepts common `ShapeProps`. The animated built-ins `Rectangle`, `Line`, `StayText`, and `StayImage` additionally accept `transition`.
+
+`Path` is a native stroked centerline rather than a fillable area. Its width comes only from `strokeConfig.lineWidth`; `fillConfig` is not part of `PathAttr`. It defaults to round caps and joins while preserving explicitly supplied Canvas stroke settings.
+
+`Polygon` is a closed fillable area. `PolygonAttr.points` must contain at least three coordinates. `fillRule` accepts `"nonzero"` (the default) or `"evenodd"` and governs both Canvas filling and hit testing. The Shape copies its input points and exposes derived bounds, area, and centroid through the standard Shape geometry methods.
 
 `StayImage` uses the image's natural size when `swidth` or `sheight` is omitted. Explicit source-crop dimensions are preserved during construction, update, and copy. Timeline interpolation does not currently preserve custom crop dimensions; see [Current limitations](../known-limitations.md#rendering-and-geometry).
+
+`StayText` always treats `x` and `y` as the Canvas text anchor defined by `textAlign` and `textBaseline`. The default `start + alphabetic` uses the start-side alphabetic-baseline anchor; the common `center + middle` pair uses `(x, y)` as the visual center.
 
 `CircleAttr` also retains `stroke` and `fill` fields, but the current constructor does not use them; use `strokeConfig` and `fillConfig` consistently. `StayText` likewise does not carry `decoration` into its current drawing state, so do not rely on it as a stable visual effect.
 
@@ -170,7 +191,6 @@ See [Custom Shapes](../advanced/custom-shapes.md) for implementation guidance.
 
 - `Line.contains()` and `StayText.contains()` currently always return false;
 - `Point.getBound()` is not implemented, so an appended Point throws during normal rendering;
-- `Path.getBound()` is not implemented, so an appended Path throws during rendering;
 - `Circle` does not extend `AnimatedShape` and cannot be used directly as a timeline keyframe;
 - `Root` is exported from the package entry point but is an internal runtime boundary Shape and should not normally be constructed by application code.
 

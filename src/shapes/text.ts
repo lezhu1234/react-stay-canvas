@@ -24,6 +24,12 @@ import { AnimatedShape } from "./animatedShape"
 import { BlackColor, InstantShape, ZeroColor } from "./instantShape"
 import { Rectangle } from "./rectangle"
 
+function alignedLeft(anchorX: number, width: number, textAlign: CanvasTextAlign) {
+  if (textAlign === "center") return anchorX - width / 2
+  if (textAlign === "right" || textAlign === "end") return anchorX - width
+  return anchorX
+}
+
 export class StayText extends AnimatedShape {
   font: Required<Font>
   height: number
@@ -43,6 +49,8 @@ export class StayText extends AnimatedShape {
   offsetYRatio: number
   textObj: TextMetrics | undefined
   autoTransitionDiffText: boolean
+  private ascent: number
+  private drawPoint: Coordinate
 
   constructor(props: TextAttr) {
     super(props)
@@ -73,9 +81,12 @@ export class StayText extends AnimatedShape {
     this.leftTop = { x: 0, y: 0 }
     this.rightBottom = { x: 0, y: 0 }
     this.rightTop = { x: 0, y: 0 }
-    const size = getSize(text, this.font)
+    this.ascent = 0
+    this.drawPoint = { x: 0, y: 0 }
+    const size = getSize(text, this.font, this.textBaseline)
     this.width = size.width
     this.height = size.height
+    this.ascent = size.ascent
     this.autoTransitionDiffText = autoTransitionDiffText ?? true
 
     this.init()
@@ -166,11 +177,11 @@ export class StayText extends AnimatedShape {
   }
 
   fill({ context }: ShapeDrawProps): void {
-    context.fillText(this.text, this.leftBottom.x, this.leftBottom.y)
+    context.fillText(this.text, this.drawPoint.x, this.drawPoint.y)
   }
 
   stroke({ context, width, height }: ShapeDrawProps): void {
-    context.strokeText(this.text, this.leftBottom.x, this.leftBottom.y)
+    context.strokeText(this.text, this.drawPoint.x, this.drawPoint.y)
 
     if (this.font.strikethrough) {
       context.lineWidth = this.height / 10
@@ -218,18 +229,22 @@ export class StayText extends AnimatedShape {
   }
 
   init(ctx?: DrawCanvasContext | undefined) {
-    const offsetX = -this.width / 2 + this.width * this.offsetXRatio
+    const offsetX = this.width * this.offsetXRatio
     const offsetY = this.height * this.offsetYRatio
+    this.drawPoint.x = this.x + offsetX
+    this.drawPoint.y = this.y + offsetY
 
-    this.leftTop.x = this.x + offsetX
-    this.leftTop.y = this.y + offsetY
-    this.leftBottom.x = this.x + offsetX
-    this.leftBottom.y = this.y + this.height + offsetY
-    this.rightTop.x = this.x + this.width + offsetX
-    this.rightTop.y = this.y + offsetY
+    const left = alignedLeft(this.drawPoint.x, this.width, this.textAlign)
+    const top = this.drawPoint.y - this.ascent
 
-    this.rightBottom.x = this.x + this.width + offsetX
-    this.rightBottom.y = this.y + this.height + offsetY
+    this.leftTop.x = left
+    this.leftTop.y = top
+    this.leftBottom.x = left
+    this.leftBottom.y = top + this.height
+    this.rightTop.x = left + this.width
+    this.rightTop.y = top
+    this.rightBottom.x = left + this.width
+    this.rightBottom.y = top + this.height
 
     // this.rect.update({
     //   x: this.leftTop.x,
@@ -254,9 +269,10 @@ export class StayText extends AnimatedShape {
     this.textAlign = textAlign ?? this.textAlign
     this.offsetXRatio = offsetXRatio ?? this.offsetXRatio
     this.offsetYRatio = offsetYRatio ?? this.offsetYRatio
-    const size = getSize(this.text, this.font)
+    const size = getSize(this.text, this.font, this.textBaseline)
     this.width = size.width
     this.height = size.height
+    this.ascent = size.ascent
     this.applyUpdate(props)
     this.init()
     return this

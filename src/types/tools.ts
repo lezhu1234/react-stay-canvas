@@ -14,8 +14,17 @@ import type {
   SelectorFunc,
 } from "./children"
 import type { Dict } from "./common"
+import type {
+  ClientPoint,
+  ContentRect,
+  ContentPoint,
+  ContentVector,
+  ViewPoint,
+  ViewVector,
+} from "./coordinates"
 import type { Area, PointType } from "./geometry"
 import type { ManualTriggerEvents } from "./manualActions"
+import type { StayWebGLTools } from "./webgl"
 
 export interface StayDrawProps {
   now?: number
@@ -23,9 +32,53 @@ export interface StayDrawProps {
   afterDrawCallback?: (canvas: Canvas) => void
 }
 
-export type StayTools = BasicTools & InstantTools & AnimatedTools
+export type StayTools = BasicTools & InstantTools & AnimatedTools & {
+  readonly webgl: StayWebGLTools
+}
+
+export interface ViewportState {
+  x: number
+  y: number
+  scale: number
+}
+
+export interface ViewportOptions {
+  minScale?: number
+  maxScale?: number
+}
+
+export interface ViewportFitOptions {
+  /** Padding inside the Canvas View, measured in View pixels. */
+  padding?: number
+}
+
+export interface StayViewport {
+  get: () => Readonly<ViewportState>
+  panBy: (viewMovement: ViewVector) => Readonly<ViewportState>
+  zoomBy: (factor: number, contentAnchor?: ContentPoint) => Readonly<ViewportState>
+  fit: (
+    contentBounds: ContentRect,
+    options?: ViewportFitOptions
+  ) => Readonly<ViewportState>
+  reset: () => Readonly<ViewportState>
+  restore: (state: ViewportState) => Readonly<ViewportState>
+  toClientPoint: (contentPoint: ContentPoint) => ClientPoint
+}
+
+export interface StayCoordinates {
+  clientToView: (point: ClientPoint) => ViewPoint
+  viewToClient: (point: ViewPoint) => ClientPoint
+  viewToContent: (point: ViewPoint) => ContentPoint
+  contentToView: (point: ContentPoint) => ViewPoint
+  clientToContent: (point: ClientPoint) => ContentPoint
+  contentToClient: (point: ContentPoint) => ClientPoint
+  viewVectorToContent: (vector: ViewVector) => ContentVector
+  contentVectorToView: (vector: ContentVector) => ViewVector
+}
 
 export interface BasicTools {
+  readonly coordinates: StayCoordinates
+  readonly viewport: StayViewport
   appendChild: <T extends InstantShape>(props: AppendChildProps<T>) => StayInstantChild<T>
   removeChild: (childId: string) => Promise<void> | void
   getContainPointChildren: <T extends InstantShape = InstantShape>(
@@ -83,8 +136,11 @@ export interface AnimatedTools {
 }
 
 export interface InstantTools {
+  canRedo: () => boolean
+  canUndo: () => boolean
   log: () => void
   redo: () => void
+  resetHistory: () => void
   undo: () => void
 }
 

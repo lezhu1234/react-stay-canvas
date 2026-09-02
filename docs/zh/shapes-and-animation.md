@@ -15,12 +15,19 @@ Shape 负责几何、绘制、命中和自身状态；Child 负责把一个或�
 | `Rectangle` | `x`、`y`、`width`、`height` | 是 | 是 | `x`、`y` 表示左上角 |
 | `Circle` | `x`、`y`、`radius` | 是 | 否 | 使用普通坐标进行圆形半径命中 |
 | `Line` | `x1`、`y1`、`x2`、`y2` | 否 | 是 | 可用 `nearPoint` 做自定义线段命中 |
-| `StayText` | `x`、`y`、`text`、`font` | 否 | 是 | `(x, y)` 当前表示文字包围盒的上方中心 |
+| `StayText` | `x`、`y`、`text`、`font` | 否 | 是 | `(x, y)` 始终是由 `textAlign` 和 `textBaseline` 定义的 Canvas 文字锚点 |
 | `StayImage` | `image`、`x`、`y`、`width`、`height`、`opacity` | 是 | 是 | 继承矩形边界；应在图片加载后创建 |
 | `Point` | `x`、`y` | 否 | 否 | 仅可作为几何工具；追加后会因 `getBound()` 未实现而在渲染时抛错 |
-| `Path` | `points`、`radius` | 不可用 | 否 | `getBound()` 未实现，当前不能作为追加到场景的 Shape 渲染 |
+| `Path` | `points`、`strokeConfig.lineWidth` | 是 | 否 | 使用原生 `Path2D` 描边，端帽和连接默认采用圆形 |
+| `Polygon` | `points`、`fillRule` | 是 | 否 | 闭合可填充区域；至少需要三个点 |
 
 这里的“默认命中”指 `Child.containsPointer()` 是否能直接依赖该 Shape 的 `contains()`。一个 Child 只要有任意一个 Shape 命中，就会命中整个 Child。因此常见做法是把不可命中的文字或线条，与一个透明度很低或可见的 `Rectangle` 放在同一个 Child 中，由矩形提供稳定命中区域。
+
+`Path` 根据路径点建立一条原生 `Path2D` 中心线，并通过 `context.stroke()` 绘制。`strokeConfig.lineWidth` 是唯一宽度来源；不接受 `fillConfig`。边界会在所有点的坐标极值上向四周扩张半线宽；命中会先检查边界，再比较指针到最近线段的距离。空路径、单点、重复点和多段折线都具有明确的静态几何语义；缩放会同时缩放路径点与线宽。
+
+`Polygon` 会把最后一个点闭合到第一个点，同时接受 `fillConfig` 与 `strokeConfig`。它至少需要三个点，并会持有传入坐标的副本，因此之后修改输入数组不会改变 Shape。`fillRule` 默认为 `"nonzero"`，也支持 `"evenodd"`。命中检测采用与 Canvas 填充相同的规则，并把边界上的点视为命中。边界、面积、质心、移动、缩放、更新和复制都基于这份闭合几何。
+
+`StayText` 的坐标语义与 Canvas 一致：默认 `start + alphabetic` 把 `(x, y)` 作为左侧字母基线锚点；需要把文字放在某个视觉中心时，传入相同中心坐标并设置 `textAlign: "center"`、`textBaseline: "middle"`。文字绘制、包围盒、移动、缩放和关键帧插值使用同一个锚点。`offsetXRatio` 和 `offsetYRatio` 会在该锚点基础上按文字宽高继续偏移。
 
 ## 样式与绘制顺序
 
@@ -103,7 +110,7 @@ label?.update({ text: "Renamed" })
 
 数组会自动用 `"0"`、`"1"` 等索引作为 `shapeMap` 的键。复制、导出和历史快照都会保留这些键。
 
-## 修改 Shape，而不是替换 Child
+## 修改 Shape 属性或 Child 组合
 
 公开更新路径是 Shape 自己的 `update(...)`：
 
@@ -116,7 +123,20 @@ child?.shape.update({
 })
 ```
 
-`update()` 会通知所属 Child 重绘相关 layer：同层更新只标记当前层，修改 `layer` 时会同时标记旧层和新层，旧 Canvas 会自动清除。`StayInstantChild.update(...)` 是撤销/重做使用的内部替换原语，不应作为应用代码的常规更新入口。
+Shape 的 `update()` 会通知所属 Child 重绘相关 layer：同层更新只标记当前层，修改 `layer` 时会同时标记旧层和新层，旧 Canvas 会自动清除。
+
+修改 Child 级状态或原子替换完整 Shape 组合时，使用 `StayInstantChild.update(...)`。例如，多 Shape 编辑取消时可以整体恢复原组合：
+
+```ts
+child.update({
+  className: "node:selected",
+  shape: originalShapes,
+  placement: { type: "affine", x: 24, y: 12 },
+})
+tools.log()
+```
+
+Child id 是稳定标识，不能通过 `update(...)` 修改。该方法会先校验全部替换 Shape 的 layer 与 placement，再修改 Child；同时标记旧、新 layer，并由下一次 `tools.log()` 作为一个历史步骤记录。
 
 `move()` 表示相对位移；连续手势开始前先调用 `moveInit()`，之后可以反复以“相对手势起点”的偏移调用 `move()`：
 
@@ -152,6 +172,8 @@ image.src = "/photo.png"
 跨域图片要遵守浏览器 Canvas 污染规则。如果后续需要调用 `toDataURL()` 或 `regionToTargetCanvas()`，图片响应必须允许对应的 CORS 使用方式。
 
 传入 `sx`、`sy`、`swidth` 和 `sheight` 可以裁剪源图片。显式裁剪尺寸会在构造、更新和复制时保留；省略时使用图片 natural size。自定义裁剪尺寸目前不会保留到时间线插值帧中。
+
+动画 `StayImage` slice 使用 `opacity` 表示可见状态。`zeroShape()` 生成的图片会在透明度为 `0` 时退出当前渲染帧，随后随透明度插值重新显示，不需要额外设置无意义的 `fillConfig`。
 
 ## 显式时间线模型
 
@@ -195,6 +217,15 @@ tools.progress({ timeMs: 0 })
 ```
 
 第一次 `appendKeyFrame()` 默认会在 slice 开头插入一个透明的零帧，因此上例会先从透明状态进入第一个可见矩形。请保留这个默认行为：第一帧持续时间非零且关闭零帧时，当前运行时不能安全定位到 `timeMs: 0`。详见[当前限制](./known-limitations.md#动画与历史)。
+
+时间线编辑器可以在不替换 Child 的情况下重新编译一个具名 slice：
+
+```ts
+card.replaceSlice("body", nextBodyFrames, false)
+tools.progress({ timeMs: playheadMs })
+```
+
+`replaceSlice()` 会先校验并编译完整的非空 slice，再一次性替换。编译失败时，旧 slice、`totalDurationMs` 和当前投影 Shape 都保持不变。它沿用第一次 append 的 `prependZeroShape` 约定，并且不会自动 seek；需要显示新时间线时再调用 `progress()`。
 
 `durationMs` 和 `delayMs` 属于“到达当前关键帧”的 transition：先保持前一帧 `delayMs`，再用 `durationMs` 插值到当前帧。`totalDurationMs` 是所有 slice 中最长的总时长。
 

@@ -1,7 +1,7 @@
-import type { Size } from "../types/geometry"
+import type { TextSize } from "../types/geometry"
 
 class CanvasResourceCache {
-  private readonly fontSizes = new Map<string, Size>()
+  private readonly fontSizes = new Map<string, TextSize>()
   private readonly offscreenCanvases = new Map<
     string,
     { canvas: OffscreenCanvas; context: OffscreenCanvasRenderingContext2D }
@@ -22,7 +22,7 @@ class CanvasResourceCache {
     return cached.context
   }
 
-  setFontSize(key: string, size: Size) {
+  setFontSize(key: string, size: TextSize) {
     this.fontSizes.set(key, size)
   }
 }

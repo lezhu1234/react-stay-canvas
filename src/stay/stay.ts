@@ -3,10 +3,11 @@ import { Root } from "../shapes/root"
 import { InstantShape } from "../shapes/instantShape"
 // import { Point } from "../shapes/point"
 // import { Root } from "../shapes/root"
-import type { ContextLayerSetFunction } from "../types/canvas"
+import type { CanvasLayerConfig } from "../types/canvas"
 import type { SelectorFunc } from "../types/children"
 import type { EventProps, ListenerNamePayloadPair, ListenerProps } from "../types/events"
-import type { DrawReturn, StayDrawProps, StayTools } from "../types/tools"
+import type { HistoryAdapter } from "../types/history"
+import type { DrawReturn, StayDrawProps, StayTools, ViewportOptions } from "../types/tools"
 import {
   DEFAULTSTATE,
   FRAME_EVENT_NAME,
@@ -15,25 +16,45 @@ import {
   SUPPORT_OPRATOR,
 } from "../userConstants"
 import { uuid4 } from "../utils/identifiers"
+import { parseLayer } from "../utils/stage"
 
 import { ChildrenStore } from "./children/childrenStore"
+import {
+  isStayInstantChild,
+  isStayWebGLChild,
+  type StayChild,
+  stayChildLayers,
+} from "./children/stayChild"
 import { StayInstantChild } from "./children/stayInstantChild"
+import { CoordinateSystem } from "./coordinates/coordinateSystem"
 import { EventDispatcher } from "./events/input/eventDispatcher"
 import { ActionRouter } from "./events/routing/actionRouter"
+import { createCanvas2DPointerTargetPicker } from "./events/routing/pointerTargetPicker"
 import { EventRuntime } from "./events/runtime/eventRuntime"
 import { History } from "./history"
-import { captureHistoryChildren, HistoryChildSnapshot } from "./historySnapshot"
+import {
+  captureHistoryChildren,
+  type StayHistoryChildSnapshot,
+} from "./historySnapshot"
 import { Renderer } from "./renderer"
 import { stayTools } from "./stayTools"
-import { SetShapeChildCurrentTime, StackItem } from "./types"
+import type { SetShapeChildCurrentTime } from "./types"
+import type { StayWebGLChild } from "./webgl2/stayWebGLChild"
 
-class Stay<EventName extends string> {
-  readonly children = new ChildrenStore()
+class StayRootChild extends StayInstantChild<Root> {
+  override resolveChildShapeLayer(layer: number | undefined) {
+    return parseLayer(this.canvas.layers, layer)
+  }
+}
+
+class Stay<EventName extends string, HistorySnapshot = unknown> {
+  readonly children = new ChildrenStore<StayChild>()
+  readonly coordinates: CoordinateSystem
   actionRouter: ActionRouter<EventName>
   eventRuntime: EventRuntime<EventName>
   renderer: Renderer
   eventDispatcher: EventDispatcher
-  history: History
+  history: History<HistorySnapshot>
   height: number
   root: Canvas
   state: string
@@ -49,15 +70,21 @@ class Stay<EventName extends string> {
   rootId: string
   tools: StayTools
 
-  constructor(root: Canvas, passive: boolean) {
+  constructor(
+    root: Canvas,
+    passive: boolean,
+    viewportOptions?: ViewportOptions,
+    historyAdapter?: HistoryAdapter<HistorySnapshot>
+  ) {
     this.root = root
+    this.coordinates = new CoordinateSystem(viewportOptions)
     this.passive = passive
     this.x = 0
     this.y = 0
     this.width = this.root.width
     this.height = this.root.height
     this.rootId = `${ROOTNAME}-${uuid4()}`
-    this.rootChild = new StayInstantChild({
+    this.rootChild = new StayRootChild({
       id: this.rootId,
       shape: new Root({
         x: this.x,
@@ -67,6 +94,7 @@ class Stay<EventName extends string> {
       }),
       canvas: this.root,
       className: ROOTNAME,
+      onShapeChange: (childId) => this.markHistoryChildChanged(childId),
     })
     this.children.add(this.rootChild)
     this.store = new Map<string, any>()
@@ -74,7 +102,10 @@ class Stay<EventName extends string> {
     this.state = DEFAULTSTATE
     this.stateSet = new Set([DEFAULTSTATE])
 
-    this.history = new History(() => this.captureHistoryChildren())
+    this.history = new History(
+      () => this.captureHistoryChildren(),
+      historyAdapter
+    )
 
     this.actionRouter = new ActionRouter<EventName>({
       canvas: this.root,
@@ -85,18 +116,26 @@ class Stay<EventName extends string> {
         this.tools.getAvailiableStates(selector).includes(this.state),
       targetResolver: {
         rootChild: this.rootChild,
+        sceneChildren: () => this.getShapeChildren(),
         store: this.store,
         stateStore: this.stateStore,
+        pointerTargets: createCanvas2DPointerTargetPicker(this.rootChild),
         select: (selector, sortBy) => this.tools.getChildrenBySelector(selector, sortBy),
-        hitTest: (props) => this.tools.getContainPointChildren(props),
       },
     })
     this.tools = stayTools.call(this)
-    this.renderer = new Renderer(this.root, () =>
-      this.children.values().filter((child) => child.id !== this.rootId)
+    this.renderer = new Renderer(
+      this.root,
+      () => this.children.values().filter((child) => child.id !== this.rootId),
+      this.coordinates
     )
+    this.root.setLayerInvalidationListener((layerIndex) => {
+      this.renderer.forceUpdateLayer(layerIndex)
+      this.renderer.start()
+    })
     this.eventRuntime = new EventRuntime({
       canvas: this.root,
+      coordinates: this.coordinates,
       store: this.store,
       stateStore: this.stateStore,
       getState: () => this.state,
@@ -156,6 +195,10 @@ class Stay<EventName extends string> {
     return this.history.unLogedChildrenIds
   }
 
+  markHistoryChildChanged(childId: string) {
+    this.unLogedChildrenIds.add(childId)
+  }
+
   clearEventListeners() {
     this.actionRouter.clearListeners()
   }
@@ -167,36 +210,43 @@ class Stay<EventName extends string> {
   destroy() {
     this.eventDispatcher.destroy()
     this.renderer.stop()
+    this.children.values().filter(isStayWebGLChild).forEach((child) => child.destroy())
+    this.root.destroy()
     this.eventRuntime.clearEvents()
     this.actionRouter.clearListeners()
   }
 
-  captureHistoryChildren(): Map<string, HistoryChildSnapshot> {
+  captureHistoryChildren(): Map<string, StayHistoryChildSnapshot> {
     return captureHistoryChildren(this.children.values())
   }
 
   updateChildrenTime(props: SetShapeChildCurrentTime) {
     // Polymorphic: static children no-op setCurrentTime, timeline children advance.
-    this.getChildren().forEach((child) => child.setCurrentTime(props))
+    this.getShapeChildren().forEach((child) => child.setCurrentTime(props))
   }
   draw(props: StayDrawProps): DrawReturn {
     return this.renderer.draw(props)
   }
 
   filterChildren(filterCallback: (child: StayInstantChild) => boolean) {
-    return this.children.filter(filterCallback)
+    return this.getShapeChildren().filter(filterCallback)
   }
 
   findByClassName(className: string): StayInstantChild[] {
-    return this.children.findByClassName(className)
+    return this.children
+      .findByClassName(className, this.getShapeChildren())
+      .filter(isStayInstantChild)
   }
 
   findBySimpleSelector(selector: string): StayInstantChild[] {
-    return this.children.findBySimpleSelector(selector)
+    return this.children
+      .findBySimpleSelector(selector, this.getShapeChildren())
+      .filter(isStayInstantChild)
   }
 
   findChildById(id: string): StayInstantChild | undefined {
-    return this.children.get(id)
+    const child = this.children.get(id)
+    return child && isStayInstantChild(child) ? child : undefined
   }
 
   getTools() {
@@ -210,26 +260,50 @@ class Stay<EventName extends string> {
     this.renderer.forceUpdateAllLayers()
   }
   getChildById(id: string) {
-    return this.children.get(id)
+    return this.findChildById(id)
   }
 
   getChildren() {
-    return this.children.map
+    return new Map(this.getShapeChildren().map((child) => [child.id, child]))
+  }
+
+  getShapeChildren() {
+    return this.children.values().filter(isStayInstantChild)
+  }
+
+  getWebGLChildren() {
+    return this.children.values().filter(isStayWebGLChild)
   }
   nextTick(fn: () => void) {
     this.renderer.nextTick(fn)
   }
 
   getChildrenBySelector(selector?: string | SelectorFunc) {
-    return this.children.bySelector(selector)
+    const candidates = this.getShapeChildren()
+    if (typeof selector === "function") return candidates.filter(selector)
+    return this.children.bySelector(selector, candidates) as StayInstantChild[]
   }
 
   pushToChildren<T extends InstantShape>(child: StayInstantChild<T>) {
+    this.#assertUniqueChildId(child.id)
+    stayChildLayers.occupiedLayers(child).forEach((layer) => {
+      if (this.root.getLayerBackend(layer) !== "canvas2d") {
+        throw new Error(`Canvas2D Child ${child.id} cannot target layer ${layer}`)
+      }
+    })
     this.children.add(child)
   }
 
-  pushToStack(steps: StackItem) {
-    this.history.pushToStack(steps)
+  pushWebGLChild(child: StayWebGLChild) {
+    this.#assertUniqueChildId(child.id)
+    this.assertWebGL2Layer(child.layer)
+    this.children.add(child)
+  }
+
+  assertWebGL2Layer(layer: number) {
+    if (layer >= this.root.layers.length || this.root.getLayerBackend(layer) !== "webgl2") {
+      throw new Error(`WebGL Child cannot target layer ${layer}`)
+    }
   }
 
   registerEvent(props: EventProps<EventName>) {
@@ -239,31 +313,53 @@ class Stay<EventName extends string> {
   removeChildById(id: string) {
     const child = this.children.delete(id)
     if (child) {
-      child.getLayers().forEach((layer) => {
+      stayChildLayers.occupiedLayers(child).forEach((layer) => {
         this.forceUpdateLayer(layer)
       })
+      if (isStayWebGLChild(child)) child.destroy()
     }
+    return child
   }
 
-  snapshotChildren() {
-    this.history.snapshot()
+  resize(width: number, height: number) {
+    try {
+      // A pointer session cannot span two View coordinate frames. Dispatch its
+      // terminal event while the old surface metrics are still authoritative.
+      this.eventDispatcher.cancelPointerSession("resize")
+    } finally {
+      this.root.resize(width, height)
+      this.width = width
+      this.height = height
+      this.forceUpdateAllLayers()
+    }
   }
 
   startRender() {
     this.renderer.start()
   }
+
+  #assertUniqueChildId(id: string) {
+    if (this.children.has(id)) throw new Error(`Child id ${id} already exists`)
+  }
 }
 
 // Single construction point for "a Stay wrapping a Canvas built from layers +
 // dimensions" — used by both StayCanvas and the test harness so they can't drift.
-export function createStay(
+export function createStay<HistorySnapshot = unknown>(
   canvasLayers: HTMLCanvasElement[],
-  contextLayerSetFunctionList: ContextLayerSetFunction[],
+  layerConfigs: CanvasLayerConfig[],
   width: number,
   height: number,
-  passive: boolean
-): Stay<string> {
-  return new Stay(new Canvas(canvasLayers, contextLayerSetFunctionList, width, height), passive)
+  passive: boolean,
+  viewportOptions?: ViewportOptions,
+  historyAdapter?: HistoryAdapter<HistorySnapshot>
+): Stay<string, HistorySnapshot> {
+  return new Stay(
+    new Canvas(canvasLayers, layerConfigs, width, height),
+    passive,
+    viewportOptions,
+    historyAdapter
+  )
 }
 
 export default Stay

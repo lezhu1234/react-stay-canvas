@@ -88,7 +88,7 @@ The main `ListenerProps` fields are:
 | `event` | One action name or an array of action names |
 | `state` | Canvas states in which the Listener is available; defaults to `default-state` |
 | `selector` | Children that may become targets; defaults to the `.stay-canvas` root Child |
-| `sortBy` | Candidate ordering; provide an explicit comparator for overlapping targets |
+| `sortBy` | Candidate ordering; defaults to smaller Child bounds first, with root last |
 | `callback` | Scene or application logic for accepted actions |
 
 Listeners run in registration order. State is read before each Listener and each action, so a synchronous `switchState` in an earlier Listener is visible to later Listeners.
@@ -112,7 +112,7 @@ The selector language supports `&`, `|`, `!`, and parentheses. Do not put whites
 
 A Child `className` is not a DOM-style whitespace-separated list. `node:active` has base class `node`; `.node` matches the base and `.node:active` matches the full value.
 
-For pointer actions, the router first selects candidate Children and then hit-tests them at the current Canvas coordinate. The current default comparator does not provide a stable ordering guarantee, so overlapping targets should always supply `sortBy(a, b)`.
+For pointer actions, the router first selects candidate Children and then hit-tests them at the current Canvas coordinate. Without `sortBy`, smaller Child bounds come first, equal bounds keep scene insertion order, and the root Child remains the final fallback. Supply `sortBy(a, b)` when the product needs a different priority such as explicit z-order.
 
 `withTargetConditionCallback` on an Event definition is a second target filter. It receives each candidate `target`; the Child it accepts is the same Child later exposed as `e.target`.
 
@@ -182,6 +182,45 @@ const dragListener: ListenerProps = {
 
 The outer `callback` runs for every accepted action. Only the returned function whose key matches the current `e.name` then runs, and its returned object is merged into that Listener's `composeStore`.
 
+### Typed callback stores
+
+The runtime always owns native Maps, but applications can describe their keys without adding another state layer:
+
+```tsx
+import type { ContentPoint, ListenerProps } from "react-stay-canvas"
+
+interface EditorStore {
+  selectedId: string
+  selection: Set<string>
+}
+
+interface SelectStateStore {
+  dragOrigin: ContentPoint
+}
+
+type SelectListener = {
+  name: "select-item"
+  payload: { id: string }
+}
+
+const selectListener: ListenerProps<
+  SelectListener,
+  "drag",
+  { started: boolean },
+  EditorStore,
+  SelectStateStore
+> = {
+  name: "select-item",
+  event: "drag",
+  callback: ({ payload, store, stateStore }) => {
+    store.set("selectedId", payload.id)
+    stateStore.set("dragOrigin", { x: 20, y: 30 } as ContentPoint)
+  },
+}
+```
+
+Use the same final two schemas in `EventProps<EventName, StoreSchema, StateStoreSchema>` and `StayCanvasProps<EventName, HistorySnapshot, StoreSchema, StateStoreSchema>` when a complete Canvas definition should share them. `composeStore` remains the third `ListenerProps` generic because every Listener owns a different composition shape. These generics only constrain access; `store` starts empty, and `stateStore` still clears on every `switchState()`.
+
 ## `originEvent` and `ActionEvent`
 
 A Listener callback receives two event objects:
@@ -216,13 +255,13 @@ Other fields depend on the input source and routing result:
 An action name cannot guarantee a field because a manual action may also be named `drag` or `keydown`. Use a type guard before reading coordinates or a target:
 
 ```tsx
-import type { ActionEvent, Coordinate } from "react-stay-canvas"
+import type { ActionEvent, ContentPoint } from "react-stay-canvas"
 
 type PositionedAction<EventName extends string = string> =
   ActionEvent<EventName> & {
     x: number
     y: number
-    point: Coordinate
+    point: ContentPoint
   }
 
 function hasPointerPosition<EventName extends string>(
@@ -258,8 +297,8 @@ The default Event definitions provide these commonly used actions:
 | `moveend` | An active move ends normally, or its session is cancelled |
 | `zoomin`, `zoomout` | Wheel `deltaY` is respectively below or above zero |
 | `keydown`, `keyup` | Keyboard input while the Canvas has focus |
-| `undo` | Z is released while Control remains pressed |
-| `redo` | Z is released while Control and Shift remain pressed |
+| `undo` | Z is released while Control or Meta remains pressed |
+| `redo` | Z is released while Control/Meta and Shift remain pressed |
 | `dragover`, `drop` | Native browser drag-and-drop input |
 
 `undo` and `redo` are action names; they do not call `tools.undo()` or `tools.redo()` automatically. Register Listeners to perform those commands.
@@ -275,7 +314,7 @@ The default Event definitions provide these commonly used actions:
 
 Keyboard actions are emitted only while the top Canvas has focus. `focusOnInit` is enabled by default, and `StayCanvasRef.focus()` can restore focus. Releasing a key outside the Canvas reconciles internal pressed state but does not synthesize a Canvas `keyup` action.
 
-The predefined `startmove`, `undo`, and `redo` actions currently use Control and do not map macOS Command to Control. On macOS, Control-click may also open a context menu. For cross-platform panning, prefer a Space-plus-primary override like the Transform example. Add explicit `Meta` support for standard macOS shortcuts.
+The predefined `undo` and `redo` actions accept Control on Windows/Linux and Meta on macOS. The legacy `startmove` condition remains Control plus the primary button for backward compatibility, but must not be exposed as a macOS product interaction because macOS reserves Control-click for secondary click. Cross-platform panning must override it with Space plus the primary button, as in the Transform example.
 
 Set `passive={false}` on `StayCanvas` when a Wheel Listener needs to call `originEvent.preventDefault()`.
 
@@ -290,18 +329,22 @@ pointer move inside or outside
   → continue the same session and retain the start target
 pointer up
   → normal terminal
-pointercancel / lostpointercapture / window blur / document hidden
+lostpointercapture after the initiating button is released
+  → normal implicit-release terminal
+pointercancel / unexpected lostpointercapture / window blur / document hidden / runtime resize
   → cancelled terminal
 ```
 
 When Pointer Events are available, the runtime requests Pointer Capture at the start. If capture is unavailable or never becomes active, window terminal listeners provide an outside-release fallback. Releases delivered to the Canvas, including capture-retargeted releases, still run through the Canvas's own DOM listener.
 
+Browsers may emit `lostpointercapture` after the initiating button has already been released. The runtime treats that signal as a normal implicit release. Capture loss is a cancellation only while the initiating button is still pressed.
+
 Every normal or cancelled path terminates once. Cancellation has these semantics:
 
 - `dragend` or `moveend` may receive `e.cancelled === true`;
-- `e.cancelReason` is `pointercancel`, `lostpointercapture`, `blur`, or `visibilitychange`;
+- `e.cancelReason` is `pointercancel`, `lostpointercapture`, `blur`, `visibilitychange`, or `resize`; `lostpointercapture` appears only for unexpected capture loss while the initiating button remains pressed;
 - coordinates come from the last pointer sample in the session;
-- `originEvent` remains the real native event that caused cancellation;
+- `originEvent` remains the real native event that caused a DOM cancellation; a logical resize uses an `Event("resize")` terminal cause before changing the coordinate frame;
 - cancellation emits no `click` and is not disguised as an ordinary `mouseup`.
 
 The current model tracks only the primary pointer for each Canvas; it does not implement multi-pointer gestures such as pinch zoom. Input state, targets, and sessions are isolated between Canvas instances.

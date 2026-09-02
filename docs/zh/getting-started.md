@@ -63,7 +63,9 @@ export function Demo() {
 }
 ```
 
-页面外层可以控制留白、滚动和响应式布局，但不要只用 CSS 拉伸内部 Canvas 来代替 `width`、`height`。CSS 拉伸会改变显示比例，却不会同步场景坐标和位图分辨率。
+页面外层可以控制留白、滚动和响应式布局。修改 `width` 或 `height` 会调整现有 View 与位图，同时保留 Child、Content 几何、历史、listener 和 viewport 状态。只有响应式场景必须从 `mounted` 重新建立时，才应开启 `recreateOnResize`。
+
+也可以用沿坐标轴的 CSS 缩放只改变显示尺寸。原生指针坐标会在 Event 条件、target 命中和 Listener 运行前换算回逻辑 View；显示缩放不会改变场景几何或位图分辨率。旋转、倾斜和镜像不属于支持的坐标变换。
 
 `layers` 表示叠放的 Canvas 图层数。例如 `layers={3}` 会创建三个尺寸一致的原生 `<canvas>`，它们共同组成一个场景，而不是三个并排的场景。
 

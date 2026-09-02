@@ -4,9 +4,17 @@
 
 ```ts
 import {
+  AmbientLight,
+  DirectionalLight,
+  EnvironmentMap,
+  PointLight,
   StayCanvas,
+  PerspectiveCamera,
+  type CanvasLayerConfig,
+  type HistoryAdapter,
   type StayCanvasProps,
   type StayCanvasRefType,
+  type WebGL2LayerConfig,
 } from "react-stay-canvas"
 ```
 
@@ -16,16 +24,18 @@ import {
 
 | 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `width` | `number` | `500` | CSS 尺寸和场景宽度，必须大于 0 |
-| `height` | `number` | `500` | CSS 尺寸和场景高度，必须大于 0 |
-| `layers` | `number \| ContextLayerSetFunction[]` | `2` | Canvas 层数，或每层对应一个自定义 2D context setter |
+| `width` | `number` | `500` | CSS 尺寸和 View 逻辑宽度，必须大于 0 |
+| `height` | `number` | `500` | CSS 尺寸和 View 逻辑高度，必须大于 0 |
+| `layers` | `number \| CanvasLayerConfig[]` | `2` | Canvas 层数，或逐层指定 Canvas2D/WebGL2 配置 |
 | `className` | `string` | `""` | 外层 `<div>` 的 className |
 | `eventList` | `EventProps[]` | `[]` | 初始化时注册的 Event 定义 |
 | `listenerList` | `ListenerProps[]` | `[]` | 初始化时注册的 Listener |
 | `mounted` | `(tools: StayTools) => void` | — | 每次运行时创建完成后调用 |
 | `passive` | `boolean` | `true` | wheel DOM listener 的 passive 选项 |
-| `recreateOnResize` | `boolean` | `false` | width/height 改变时是否重建运行时 |
+| `recreateOnResize` | `boolean` | `false` | width/height 改变时是否显式采用破坏性重建 |
 | `focusOnInit` | `boolean` | `true` | 初始化后是否聚焦顶层 Canvas |
+| `viewport` | `{ minScale?, maxScale? }` | `{ minScale: 0.1, maxScale: 10 }` | 非破坏性视口缩放范围；创建运行时后固定 |
+| `historyAdapter` | `HistoryAdapter<TSnapshot>` | — | 让应用持有的状态与 Canvas 场景进入同一组 undo/redo 事务 |
 
 ### layers
 
@@ -35,9 +45,50 @@ import {
 <StayCanvas width={720} height={420} layers={3} />
 ```
 
-函数数组形式会为每个数组项创建一个 Canvas，并把该 Canvas 传给对应函数。数组至少需要一个函数，并且每个函数都必须返回可用的 2D 绘制 context。
+原有的函数数组形式会为每个数组项创建一个 Canvas，并把该 Canvas 传给对应函数；函数必须返回可用的 2D 绘制 context。判别式 descriptor 可以显式选择 backend，也可以和原有函数混用。原生 WebGL2 图层必须拥有一台 CPU Camera，也可以显式拥有一张经纬环境图：
 
-Shape 的 `layer` 从 0 开始。负索引会从末层换算，例如 `-1` 表示最后一层；正索引大于等于 layer 数量，或换算后仍为负数，都会抛出 `layer is out of range`。
+```tsx
+<StayCanvas
+  layers={[
+    { backend: "canvas2d" },
+    {
+      backend: "webgl2",
+      camera: new PerspectiveCamera({ position: [0, 0, 3], target: [0, 0, 0] }),
+      environment: new EnvironmentMap({
+        width: 1024,
+        height: 512,
+        data: environmentRgba8,
+        intensity: 0.8,
+      }),
+      lights: [
+        new AmbientLight({ intensity: 0.25 }),
+        new DirectionalLight({
+          directionToLight: [0.2, 0.4, 1],
+          intensity: 0.8,
+          shadow: { target: [0, 0, 0], width: 6, height: 4, near: 0.1, far: 20 },
+        }),
+        new PointLight({
+          position: [-2, 3, 1],
+          intensity: 12,
+          range: 8,
+        }),
+      ],
+      context: (canvas) => canvas.getContext("webgl2", { alpha: true, depth: true }),
+      onContextRestored: () => console.info("WebGL2 layer restored"),
+    },
+  ]}
+/>
+```
+
+Canvas2D 仍是默认 backend。WebGL2 是显式 opt-in 的原生 Mesh 场景，不再是 Shape 栅格后端。Mesh Child 通过 `tools.webgl.appendChild()` 添加；Canvas2D Shape 只能进入 Canvas2D 图层，`StayWebGLChild` 则只占用一个 WebGL2 图层。不透明 Mesh 的可见性由 depth 决定；Glass Mesh 保持 depth test，并在 opaque pass 后稳定地从远到近排序。Shape `zIndex` 不跨 backend 比较。
+
+`lights` 与 `environment` 都是可选的图层显示状态。`EnvironmentMap`、`AmbientLight`、`DirectionalLight`、`PointLight` 的修改与 Camera 修改一样，只会标脏拥有它们的 WebGL2 图层；它们不进入 Child History 或场景传输。`EnvironmentMap` 会深拷贝一张 2:1、逐行排列的经纬 sRGB RGBA8 图；第一行表示 +Y 极点，水平方向环绕 world Y，`intensity` 是非负的线性强度倍率。只改 intensity 时仅更新 uniform；修改像素时复用现有 GPU texture 上传并重建 roughness mip chain。一个图层当前最多接受四个方向光、四个点光和一张方向光 shadow map。`directionToLight` 表示从表面指向光源的 world-space 向量，Light 会把它归一化。`PointLight.position` 使用 world space，radiance 按平方反比衰减；省略 `range` 表示作用距离无限，提供正数 range 时使用平滑的四次截止，并在 range 外不再贡献。点光阴影暂不支持。方向光阴影使用显式正交相机（`target`、`up`、`distance`、`width`、`height`、`near`、`far`）以及 `mapSize`、`bias`；核心不会自动 fit scene。只修改灯光或阴影相机时会复用 Mesh geometry upload；shadow 与 environment GPU 资源只在各自 source、context 或 layer 生命周期要求时重建。
+
+backend 失败不会被隐藏。WebGL2 或其线性 scene target 创建失败、绘制期间 context loss、无效 Mesh 状态和 GPU 上传失败都不会自动回退到 Canvas2D。WebGL2 context 丢失后，该层暂停绘制。Layer runtime 默认阻止原生 loss event，以便浏览器恢复它拥有的 context；`onContextLost` 只负责观察，不承担恢复所有权。恢复后运行时会丢弃失效 GPU handle，从 CPU Mesh 状态懒重建，标脏该层，再调用 `onContextRestored`。
+
+数组至少需要一项。普通 React rerender 中替换 descriptor 不会迁移已存在的运行时；backend 或生命周期回调变化时应调用 `reCreate()`。
+
+Shape 的 `layer` 从 0 开始，并且只能指向 Canvas2D 图层。负 Shape layer 会从末层换算，例如 `-1` 表示最后一层。`StayWebGLChild.layer` 必须是非负的 WebGL2 图层索引；backend 不匹配或越界会同步失败。
 
 ### eventList 与 listenerList 的生命周期
 
@@ -49,9 +100,37 @@ Shape 的 `layer` 从 0 开始。负索引会从末层换算，例如 `-1` 表�
 
 `reCreate()` 会销毁旧输入监听、渲染循环和场景对象。旧 `StayTools`、Child 与 Shape 引用随后都应视为失效。
 
+### historyAdapter
+
+当一次编辑操作同时改变 Canvas 对象和应用持有的状态时，可以传入 `historyAdapter`：
+
+```tsx
+type EditorSnapshot = {
+  activePage: number
+  labels: Record<string, string>
+}
+
+<StayCanvas
+  historyAdapter={{
+    capture: () => structuredClone(editorStateRef.current),
+    restore: (snapshot: EditorSnapshot) => updateEditorState(snapshot),
+  }}
+/>
+```
+
+适配器不会创建第二套历史栈。`log()` 会把应用状态的 before/after 快照与待提交的静态 Child 变更写入同一个历史项；`undo()` 恢复 before，`redo()` 恢复 after。`resetHistory()` 清空这套共享历史，并同时把当前场景和当前应用状态设为新基线。只要配置了适配器，即使本次只修改应用状态，`log()` 也会作为一次显式提交。
+
+库会原样保存 `capture()` 返回的值，不会替应用做拷贝；必要时应使用 `structuredClone` 或应用自己的不可变数据结构返回独立快照。`capture()` 和 `restore()` 都必须同步执行。`restore()` 只负责应用状态，不能修改 Canvas 场景，也不能调用 `log()`、`undo()`、`redo()` 或 `resetHistory()`。如果 `restore()` 抛错，Canvas 对象和历史游标会保持在当前位置。
+
+适配器在运行时创建时读取。普通 React rerender 不会替换它；只有在明确要重建完整运行时和场景时才调用 `reCreate()`。
+
 ### recreateOnResize
 
-默认 `false` 时，初始化后的 width/height prop 变化不会重建运行时。设为 `true` 后，每次有效尺寸变化都会销毁旧实例、创建新实例并再次调用 `mounted`。这不是保留场景内容的 resize；场景需要由应用重新建立。
+默认 `false` 时，有效的 width/height 变化会直接调整现有运行时。Canvas DOM、`StayTools`、Child、Shape、placement、历史、状态、listener 和 viewport 状态都保留原来的身份与值。Content 几何不会自动缩放、移动或重新布局：缩小时只会裁掉更多 Content，扩大后会显示更多 Content。Root 的命中边界跟随新的 View 尺寸，而 Root Shape 表示的 Content 边界保持不变。
+
+resize 会重设每个原生 Canvas 的位图，然后重新调用各层最初的 context resolver。Canvas2D 图层会使用新的 `ShapeDrawProps.width/height` 重绘；WebGL2 图层保留仍有效的 program/buffer cache，并在下一次脏帧使用新的 drawing-buffer aspect。若 resize 时存在活动 Pointer Session，运行时会先用旧坐标帧中的最后一个点取消该会话，并给出 `cancelReason: "resize"`。
+
+设为 `recreateOnResize={true}` 后，每次有效尺寸变化会改为销毁旧实例、创建新实例并再次调用 `mounted`。只应在应用明确需要重新创建或布局整个场景时使用；此前的运行时和 Child 引用随后失效。
 
 ### passive
 
@@ -88,7 +167,15 @@ width: <width>px;
 height: <height>px;
 ```
 
-每个 Canvas 绝对定位到 `(0, 0)`。`width` 和 `height` 控制真实绘制尺寸；父容器如果更宽，不会自动拉伸 Canvas。响应式布局应在应用中计算明确的数值尺寸，并根据需要开启 `recreateOnResize`。
+每个 Canvas 绝对定位到 `(0, 0)`。`width` 和 `height` 控制 View 逻辑尺寸与位图分辨率；父容器如果更宽，不会自动拉伸 Canvas。响应式布局有三种语义不同的方式：
+
+- 传入新的数值尺寸来改变逻辑绘制尺寸；默认保留现有场景和 viewport。
+- 只有尺寸变化必须重新创建和布局场景时，才开启 `recreateOnResize` 并在 `mounted` 中重建。
+- 保持逻辑场景不变，对渲染后的 Canvas 或其外层应用正数、沿坐标轴的 CSS 缩放。原生指针输入会在事件路由前，从渲染边界换算为 Canvas 局部逻辑坐标。
+
+第三种方式只改变显示，并不会提高位图分辨率。一次 Pointer Session 期间应保持 CSS 显示缩放稳定；单次交互过程中改变 CSS 布局不属于该合同。旋转、倾斜和镜像也不在该坐标行为的支持范围内。
+
+`viewport` 不是 React 受控状态。运行时的平移、缩放和恢复由 [`tools.viewport`](./stay-tools.md#非破坏性视口) 完成；它只改变 Content 到 View 的投影，不修改 Child 或 Shape。
 
 ## 相关参考
 

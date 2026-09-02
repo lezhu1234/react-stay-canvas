@@ -5,9 +5,11 @@ import type {
   ShapeBound,
   StayShapeTransitionConfig,
 } from "../../types/animation"
-import type { StayAnimatedChildProps } from "../../types/children"
+import type {
+  StayAnimatedChildProps,
+  StayAnimatedChildUpdateProps,
+} from "../../types/children"
 import { uuid4 } from "../../utils/identifiers"
-import { parseLayer } from "../../utils/stage"
 import { StayInstantChild } from "./stayInstantChild"
 import { Canvas } from "../../canvas"
 import { SetShapeChildCurrentTime } from "../types"
@@ -21,12 +23,9 @@ export class StayAnimatedChild<
   shapeFramesMap: Map<string, T[]>
   totalDurationMs: number
 
-  private intermidateShapeCache = new Map<
-    string,
-    {
-      shape: T
-      hit: number
-    }
+  private intermidateShapeCache = new WeakMap<
+    T[],
+    Map<string, { shape: T; hit: number }>
   >()
   private intermidateShapeCacheSize = 10
 
@@ -69,22 +68,24 @@ export class StayAnimatedChild<
     const transitionType = transition?.type ?? "linear"
 
     const key = `${bound.beforeIndex}-${bound.afterIndex}-${ratio}-${transitionType}`
+    const sliceCache = this.intermidateShapeCache.get(slice) ?? new Map()
+    this.intermidateShapeCache.set(slice, sliceCache)
 
-    const cachedShape = this.intermidateShapeCache.get(key)
+    const cachedShape = sliceCache.get(key)
     if (cachedShape) {
       cachedShape.hit++
       return cachedShape.shape
     }
-    if (this.intermidateShapeCache.size > this.intermidateShapeCacheSize) {
+    if (sliceCache.size > this.intermidateShapeCacheSize) {
       let minCacheHit = Infinity,
         minCacheHitKey = ""
-      this.intermidateShapeCache.forEach((value, key) => {
+      sliceCache.forEach((value, key) => {
         if (value.hit < minCacheHit) {
           minCacheHit = value.hit
           minCacheHitKey = key
         }
       })
-      this.intermidateShapeCache.delete(minCacheHitKey)
+      sliceCache.delete(minCacheHitKey)
     }
 
     const intermediateShape = afterShape.intermediateState(
@@ -93,7 +94,7 @@ export class StayAnimatedChild<
       ratio,
       transitionType
     ) as T
-    this.intermidateShapeCache.set(key, { shape: intermediateShape, hit: 1 })
+    sliceCache.set(key, { shape: intermediateShape, hit: 1 })
     return intermediateShape
   }
 
@@ -132,6 +133,14 @@ export class StayAnimatedChild<
       }
 
       if (stepEndTime === timeMs) {
+        const nextTransition = slice[index + 1]?.transition
+        const nextStepDuration = nextTransition
+          ? (nextTransition.durationMs ?? 0) + (nextTransition.delayMs ?? 0)
+          : undefined
+        if (nextStepDuration === 0) {
+          stepStartTime = stepEndTime
+          continue
+        }
         return {
           beforeIndex: index,
           afterIndex: index,
@@ -159,8 +168,15 @@ export class StayAnimatedChild<
     return false
   }
 
+  override update(props: StayAnimatedChildUpdateProps): this {
+    if ("shape" in props) {
+      throw new Error("Animated Child composition is timeline-owned; use replaceSlice()")
+    }
+    return super.update(props)
+  }
+
   onChildShapeChange(shape: T, _previousLayer: number) {
-    shape.layer = parseLayer(this.canvas.layers, shape.layer)
+    shape.layer = this.resolveChildShapeLayer(shape.layer, shape)
     console.warn("change property of AnimatedShape may cause unexpected behavior")
   }
 
@@ -195,9 +211,7 @@ export class StayAnimatedChild<
       const ratioChanged = () =>
         !lastInfo.beforeShape.sameAs(lastInfo.afterShape) && lastInfo.ratio !== currentInfo.ratio
 
-      const inView = () => !lastInfo.shape.isOutOfViewport() || !currentInfo.shape.isOutOfViewport()
-      // Update is needed if any of these conditions are true
-      return inView() && (beforeStateChanged() || afterStateChanged() || ratioChanged())
+      return beforeStateChanged() || afterStateChanged() || ratioChanged()
     }
     const updateCurrentShape = (name: string, shape: T, frameBoundInfo: FrameBoundInfo<T>) => {
       frameBoundInfo.shape = shape
@@ -287,23 +301,100 @@ export class StayAnimatedChild<
     this.shapeMap = currentShapeMap
   }
 
+  /** @internal Projects a timeline and returns the matching restoration step. */
+  override beginCurrentTimeProjection(props: SetShapeChildCurrentTime): () => void {
+    const previousShapeMap = this.shapeMap
+    const previousFrameMapInfo = this.frameMapInfo
+    const previousUpdatedLayers = this.updatedLayers
+    const restore = () => {
+      this.shapeMap = previousShapeMap
+      this.frameMapInfo = previousFrameMapInfo
+      this.updatedLayers = previousUpdatedLayers
+    }
+
+    this.frameMapInfo = new Map(previousFrameMapInfo)
+    this.updatedLayers = new Set(previousUpdatedLayers)
+    try {
+      this.setCurrentTime(props)
+    } catch (error) {
+      restore()
+      throw error
+    }
+    return restore
+  }
+
   checkShape(shape: T) {
     if (isNaN(shape.transition.delayMs) || isNaN(shape.transition.durationMs)) {
       throw new Error("transition delayMs or durationMs is NaN")
     }
     return shape
   }
-  appendKeyFrame(name: string, shape: T, prependZeroShape: boolean = true) {
-    shape.parent = this
-    const shapeFrames: T[] = this.shapeFramesMap.get(name) ?? []
-    if (shapeFrames.length === 0 && prependZeroShape) {
-      const zs = shape._zeroShape(this.shapeFramesMap) as T
-      zs.parent = this
-      shapeFrames.push(this.checkShape(zs))
+
+  private compileSlice(name: string, frames: T[], prependZeroShape: boolean): T[] {
+    if (frames.length === 0) {
+      throw new Error("slice must contain at least one keyframe")
     }
-    shapeFrames.push(this.checkShape(shape))
-    this.shapeFramesMap.set(name, shapeFrames)
+
+    const previousLayers = frames.map(({ layer }) => layer)
+    const resolvedLayers = frames.map((frame) => {
+      this.checkShape(frame)
+      return this.resolveChildShapeLayer(frame.layer, frame)
+    })
+    const previousParents = frames.map(({ parent }) => parent)
+    frames.forEach((frame, index) => {
+      frame.layer = resolvedLayers[index]
+      frame.parent = this
+    })
+    try {
+      const compiledFrames = [...frames]
+      if (prependZeroShape) {
+        const otherSlices = new Map(this.shapeFramesMap)
+        otherSlices.delete(name)
+        const zeroShape = this.checkShape(frames[0]._zeroShape(otherSlices) as T)
+        zeroShape.layer = this.resolveChildShapeLayer(zeroShape.layer, zeroShape)
+        zeroShape.parent = this
+        compiledFrames.unshift(zeroShape)
+      }
+      return compiledFrames
+    } catch (error) {
+      frames.forEach((frame, index) => {
+        frame.layer = previousLayers[index]
+        frame.parent = previousParents[index]
+      })
+      throw error
+    }
+  }
+
+  private refreshTotalDurationMs() {
+    this.totalDurationMs = 0
+    this.shapeFramesMap.forEach((_, name) => {
+      this.totalDurationMs = Math.max(this.totalDurationMs, this.getSliceTotalDurationMs(name))
+    })
+  }
+
+  appendKeyFrame(name: string, shape: T, prependZeroShape: boolean = true) {
+    const shapeFrames = this.shapeFramesMap.get(name)
+    if (!shapeFrames) {
+      this.shapeFramesMap.set(name, this.compileSlice(name, [shape], prependZeroShape))
+    } else {
+      this.checkShape(shape)
+      shape.layer = this.resolveChildShapeLayer(shape.layer, shape)
+      shape.parent = this
+      shapeFrames.push(shape)
+    }
     this.totalDurationMs = Math.max(this.totalDurationMs, this.getSliceTotalDurationMs(name))
+  }
+
+  replaceSlice(name: string, frames: T[], prependZeroShape: boolean = true) {
+    const compiledFrames = this.compileSlice(name, frames, prependZeroShape)
+    const currentShape = this.shapeMap.get(name)
+
+    if (currentShape) {
+      this.updatedLayers.add(currentShape.layer)
+    }
+    this.shapeFramesMap.set(name, compiledFrames)
+    this.frameMapInfo.delete(name)
+    this.refreshTotalDurationMs()
   }
 
   getSliceTotalDurationMs(name: string) {

@@ -14,26 +14,140 @@ import type {
   SelectorFunc,
 } from "../types/children"
 import type { Dict } from "../types/common"
+import type {
+  ClientPoint,
+  ContentRect,
+  ContentPoint,
+  ContentVector,
+  ViewPoint,
+  ViewVector,
+} from "../types/coordinates"
 import type { ManualTriggerEvents } from "../types/manualActions"
 import type { Area, PointType } from "../types/geometry"
-import type { Cursor, StayTools } from "../types/tools"
+import type { Cursor, StayCoordinates, StayTools } from "../types/tools"
 import { assert } from "../utils/assertions"
-import { numberAlmostEqual } from "../utils/geometry"
+import { fitRect, numberAlmostEqual } from "../utils/geometry"
 import { infixExpressionParser } from "../utils/selectors"
 import { StayAnimatedChild } from "./children/stayAnimatedChild"
+import { isStayInstantChild, isStayWebGLChild } from "./children/stayChild"
 import { StayInstantChild } from "./children/stayInstantChild"
+import { stayInstantChildPointHits } from "./children/stayInstantChildRuntime"
 import {
-  captureHistoryChild,
   diffHistoryChild,
   materializeHistoryShapes,
+  stayInstantChildHistory,
+  captureHistoryChildren,
+  type StayHistoryChildSnapshot,
 } from "./historySnapshot"
 import { captureScene, materializeSceneChild } from "./sceneTransfer"
 import { normalizeManualActions } from "./events/input/manualActionAdapter"
+import { executeCanvas2DRenderPlan } from "./rendering/canvas2DExecutor"
+import { resolveCanvas2DProjectiveQuality } from "./rendering/canvas2DProjectiveQuality"
+import { createLayerRenderPlan } from "./rendering/renderPlan"
+import {
+  areaPlacementMatrix,
+  invertMatrix2D,
+} from "./transforms/affine2D"
+import {
+  copyChildPlacementInput,
+  placeChildPlacement,
+} from "./placements/childPlacement"
 import Stay from "./stay"
-import { StepProps } from "./types"
+import type { StepProps } from "./types"
+import { createStayWebGLTools } from "./stayWebGLTools"
+import { materializeWebGLSnapshotMeshes } from "./webgl2/stayWebGLChildSnapshot"
+
+function placeImportedGeometry(
+  child: StayInstantChild,
+  offset: PointType,
+  scale: number,
+  center: PointType
+) {
+  child.shapeMap.forEach((shape) => {
+    shape.moveInit()
+    shape.move(...shape.applyMove(offset.x, offset.y))
+    shape.zoom(shape._zoom((scale - 1) * -1000, center))
+  })
+}
+
+function withChildrenAtTime<R>(
+  children: StayInstantChild[],
+  progress: number | undefined,
+  callback: () => R
+): R {
+  if (progress === undefined) return callback()
+
+  const restoreProjections: Array<() => void> = []
+  try {
+    children.forEach((child) => {
+      restoreProjections.push(child.beginCurrentTimeProjection({ time: progress }))
+    })
+    return callback()
+  } finally {
+    restoreProjections.reverse().forEach((restore) => restore())
+  }
+}
+
+function prepareRegionContext(
+  context: CanvasRenderingContext2D,
+  area: Area,
+  targetSize: { width: number; height: number }
+) {
+  const { rect, scale } = fitRect(area, {
+    x: 0,
+    y: 0,
+    ...targetSize,
+  })
+
+  context.beginPath()
+  context.rect(rect.x, rect.y, rect.width, rect.height)
+  context.clip()
+  context.translate(rect.x, rect.y)
+  context.scale(scale, scale)
+  context.translate(-area.x, -area.y)
+}
 
 // One factory, one unified tool surface. Every stage gets all tools.
-export function stayTools(this: Stay<any>): StayTools {
+export function stayTools(this: Stay<any, any>): StayTools {
+  const webglTools = createStayWebGLTools.call(this)
+
+  const appendHistoryChild = (snapshot: StayHistoryChildSnapshot) => {
+    if (snapshot.kind === "canvas2d") {
+      return this.tools.appendChild({
+        id: snapshot.id,
+        shape: materializeHistoryShapes(snapshot.shape),
+        className: snapshot.className,
+        placement: snapshot.placement,
+      })
+    }
+    return webglTools.appendChild({
+      id: snapshot.id,
+      className: snapshot.className,
+      layer: snapshot.layer,
+      meshes: materializeWebGLSnapshotMeshes(snapshot.meshes),
+    })
+  }
+
+  const applyHistoryChild = (snapshot: StayHistoryChildSnapshot) => {
+    const child = this.children.get(snapshot.id)
+    if (!child) throw new Error(`History Child ${snapshot.id} is missing`)
+    if (snapshot.kind === "canvas2d" && isStayInstantChild(child)) {
+      child.restoreHistorySnapshot({
+        className: snapshot.className,
+        shape: materializeHistoryShapes(snapshot.shape),
+        placement: snapshot.placement,
+      })
+      return
+    }
+    if (snapshot.kind === "webgl2" && isStayWebGLChild(child)) {
+      child.setClassName(snapshot.className)
+      child.setLayer(snapshot.layer)
+      child.setMeshes(materializeWebGLSnapshotMeshes(snapshot.meshes))
+      return
+    }
+    throw new Error(`History Child ${snapshot.id} changed backend`)
+  }
+
   const animatedTools = {
     progress: ({ timeMs: time, bound, beforeDrawCallback, afterDrawCallback }: ProgressProps) => {
       this.updateChildrenTime({ time, bound })
@@ -44,10 +158,11 @@ export function stayTools(this: Stay<any>): StayTools {
         afterDrawCallback,
       })
     },
-    createChild: ({ id, className }: CreateChildProps) => {
+    createChild: ({ id, className, placement }: CreateChildProps) => {
       const child = new StayAnimatedChild({
         id,
         className,
+        placement,
         canvas: this.root,
       })
       this.pushToChildren(child)
@@ -80,112 +195,161 @@ export function stayTools(this: Stay<any>): StayTools {
 
     //   return childProxy
     // },
+    canRedo: () => this.history.canRedo(),
+    canUndo: () => this.history.canUndo(),
     log: () => {
+      this.history.assertOperationAllowed()
       const steps = [...this.unLogedChildrenIds]
         // A removed child is absent from the store, so it remains eligible here;
         // its prior snapshot determines the remove step.
-        .filter((id) => this.getChildById(id)?.participatesInHistory ?? true)
+        .filter((id) => {
+          const child = this.children.get(id)
+          if (!child) return true
+          return isStayInstantChild(child)
+            ? stayInstantChildHistory.participates(child)
+            : true
+        })
         .map((id) => {
-          const child = this.getChildById(id)
+          const child = this.children.get(id)
           return diffHistoryChild(
             this.historyChildren.get(id),
-            child?.participatesInHistory ? captureHistoryChild(child) : undefined
+            child ? captureHistoryChildren([child]).get(id) : undefined
           )
         })
-        .filter((o) => o) as StepProps[]
-      this.pushToStack({
-        state: this.state,
-        steps,
-      })
-      this.snapshotChildren()
+        .filter((step): step is StepProps<StayHistoryChildSnapshot> => Boolean(step))
+      this.history.commit(this.state, steps)
     },
     redo: () => {
-      if (this.stackIndex >= this.stack.length) {
+      const stepItem = this.history.peekRedo()
+      if (!stepItem) {
         console.log("no more operations")
         return
       }
-      const stepItem = this.stack[this.stackIndex]
+      const externalState = this.history.restoreExternal(stepItem, "redo")
       this.root.layers.forEach((_, i) => {
         this.forceUpdateLayer(i)
       })
 
       stepItem.steps.forEach((step) => {
-        const stepChild = step.child
         if (step.action === "append") {
-          this.tools.appendChild({
-            id: stepChild.id,
-            shape: materializeHistoryShapes(stepChild.shape),
-            className: stepChild.className,
-          })
+          appendHistoryChild(step.child)
         } else if (step.action === "remove") {
-          this.tools.removeChild(stepChild.id)
+          this.removeChildById(step.child.id)
         } else if (step.action === "update") {
-          assert(stepChild.beforeShape)
-          const child = this.findChildById(stepChild.id)!
-
-          child.update({ shape: materializeHistoryShapes(stepChild.shape) })
+          applyHistoryChild(step.child)
         }
       })
 
       this.tools.switchState(stepItem.state)
-      this.snapshotChildren()
-      this.stackIndex++
+      this.history.completeRedo(externalState)
+    },
+
+    resetHistory: () => {
+      this.history.reset()
     },
 
     undo: () => {
-      if (this.stackIndex <= 0) {
+      const stepItem = this.history.peekUndo()
+      if (!stepItem) {
         console.log("no more operations")
         return
       }
-      this.stackIndex--
+      const externalState = this.history.restoreExternal(stepItem, "undo")
       this.root.layers.forEach((_, i) => {
         this.forceUpdateLayer(i)
       })
-      const stepItem = this.stack[this.stackIndex]
 
       stepItem.steps.forEach((step) => {
-        const stepChild = step.child
-
         if (step.action === "append") {
-          this.tools.removeChild(stepChild.id)
+          this.removeChildById(step.child.id)
         } else if (step.action === "remove") {
-          this.tools.appendChild({
-            id: stepChild.id,
-            shape: materializeHistoryShapes(stepChild.shape),
-            className: stepChild.className,
-          })
+          appendHistoryChild(step.child)
         } else if (step.action === "update") {
-          if (!stepChild.beforeShape) {
-            throw new Error("update history step requires beforeShape")
-          }
-
-          this.getChildById(stepChild.id)!.update({
-            className: stepChild.beforeName || stepChild.className,
-            shape: materializeHistoryShapes(stepChild.beforeShape),
-          })
-          // this.tools.updateChild({
-          //   child: this.getChildById(stepChild.id)!,
-          //   className: stepChild.beforeName || stepChild.className,
-          //   shape: stepChild.beforeShape!,
-          // })
+          if (!step.before) throw new Error("update history step requires before state")
+          applyHistoryChild(step.before)
         }
       })
       this.tools.switchState(stepItem.state)
-      this.snapshotChildren()
+      this.history.completeUndo(externalState)
+    },
+  }
+
+  const currentCoordinateFrame = () => {
+    const metrics = this.root.getSurfaceMetrics()
+    return { metrics, frame: this.coordinates.getFrame(metrics) }
+  }
+
+  const coordinateTools: StayCoordinates = {
+    clientToView: (point: ClientPoint) =>
+      this.coordinates.clientToView(point, this.root.getSurfaceMetrics()),
+    viewToClient: (point: ViewPoint) =>
+      this.coordinates.viewToClient(point, this.root.getSurfaceMetrics()),
+    viewToContent: (point: ViewPoint) => {
+      const { frame } = currentCoordinateFrame()
+      return this.coordinates.viewToContent(point, frame)
+    },
+    contentToView: (point: ContentPoint) => {
+      const { frame } = currentCoordinateFrame()
+      return this.coordinates.contentToView(point, frame)
+    },
+    clientToContent: (point: ClientPoint) => {
+      const { metrics, frame } = currentCoordinateFrame()
+      return this.coordinates.clientToContent(point, metrics, frame)
+    },
+    contentToClient: (point: ContentPoint) => {
+      const { metrics, frame } = currentCoordinateFrame()
+      return this.coordinates.contentToClient(point, metrics, frame)
+    },
+    viewVectorToContent: (vector: ViewVector) => {
+      const { frame } = currentCoordinateFrame()
+      return this.coordinates.viewVectorToContent(vector, frame)
+    },
+    contentVectorToView: (vector: ContentVector) => {
+      const { frame } = currentCoordinateFrame()
+      return this.coordinates.contentVectorToView(vector, frame)
     },
   }
 
   const stayTools = {
+    coordinates: coordinateTools,
+    viewport: {
+      get: () => this.coordinates.getViewport(),
+      panBy: (viewMovement: ViewVector) => this.coordinates.panBy(viewMovement),
+      zoomBy: (factor: number, contentAnchor?: ContentPoint) => {
+        const metrics = this.root.getSurfaceMetrics()
+        const frame = this.coordinates.getFrame(metrics)
+        const resolvedAnchor = contentAnchor ??
+          this.coordinates.viewCenterToContent(metrics, frame)
+        return this.coordinates.zoomBy(factor, resolvedAnchor)
+      },
+      fit: (contentBounds: ContentRect, { padding = 0 } = {}) =>
+        this.coordinates.fit(contentBounds, this.root.getSurfaceMetrics(), padding),
+      reset: () => this.coordinates.reset(),
+      restore: (state: { x: number; y: number; scale: number }) =>
+        this.coordinates.restore(state),
+      toClientPoint: (contentPoint: ContentPoint) =>
+        coordinateTools.contentToClient(contentPoint),
+    },
     refresh: () => {
       this.forceUpdateAllLayers()
       this.draw({ now: Date.now() })
     },
-    appendChild: <T extends InstantShape>({ id, className, shape }: AppendChildProps<T>) => {
+    appendChild: <T extends InstantShape>({
+      id,
+      className,
+      shape,
+      placement,
+    }: AppendChildProps<T>) => {
+      if (id && this.children.has(id)) {
+        throw new Error(`Child id ${id} already exists`)
+      }
       const child = new StayInstantChild<T>({
         id,
         className,
         shape,
+        placement,
         canvas: this.root,
+        onShapeChange: (childId) => this.markHistoryChildChanged(childId),
       })
       this.pushToChildren(child)
       this.unLogedChildrenIds.add(child.id)
@@ -206,7 +370,7 @@ export function stayTools(this: Stay<any>): StayTools {
       // Only history-participating children are tracked for undo/redo. `child` is
       // still the live instance here, so the check is reliable even though after
       // removal getChildById()/the degraded snapshot clone no longer could be.
-      if (child.participatesInHistory) {
+      if (stayInstantChildHistory.participates(child)) {
         this.unLogedChildrenIds.add(child.id)
       }
       return new Promise<void>((resolve) => {
@@ -291,7 +455,7 @@ export function stayTools(this: Stay<any>): StayTools {
       )
 
       let hitChildren: StayInstantChild[] = selectorChildren.filter((c: StayInstantChild) =>
-        c.containsPointer(point)
+        stayInstantChildPointHits.contains(c, point)
       )
 
       if (!withRoot) {
@@ -391,20 +555,32 @@ export function stayTools(this: Stay<any>): StayTools {
 
       const [offsetX, offsetY] = [targetArea.x - area.x, targetArea.y - area.y]
       const scale = targetArea.width / area.width
+      const placement = areaPlacementMatrix(area, targetArea)
+      const inversePlacement = invertMatrix2D(placement)
 
       children.forEach((fragment) => {
         const importedChild = materializeSceneChild(fragment, this.root)
-        importedChild.moveInit()
-        importedChild.move(offsetX, offsetY)
-        importedChild.zoom((scale - 1) * -1000, { x: targetArea.x, y: targetArea.y })
+        placeImportedGeometry(
+          importedChild,
+          { x: offsetX, y: offsetY },
+          scale,
+          { x: targetArea.x, y: targetArea.y }
+        )
+        const importedPlacement = placeChildPlacement(
+          fragment.placement,
+          placement,
+          inversePlacement
+        )
+        importedChild.setPlacement(copyChildPlacementInput(importedPlacement))
         this.tools.appendChild({
           id: importedChild.id,
           shape: importedChild.shapeMap,
           className: importedChild.className,
+          placement: copyChildPlacementInput(importedChild.placement),
         })
       })
     },
-    regionToTargetCanvas: ({
+    regionToTargetCanvas: async ({
       area,
       targetSize,
       children,
@@ -423,37 +599,41 @@ export function stayTools(this: Stay<any>): StayTools {
         throw new Error("Unable to get 2D context")
       }
 
-      let shapes: InstantShape[] = []
       const layerNumber = this.root.layers.length
+      return withChildrenAtTime(children, progress, () => {
+        const items = Array.from(
+          { length: layerNumber },
+          (_, layerIndex) => createLayerRenderPlan(children, layerIndex).items
+        ).flat()
 
-      const childrenReady = Promise.all(
-        children.map(async (c) => {
-          if (progress !== undefined) {
-            // no-op on static children (polymorphic), advances timeline children
-            c.setCurrentTime({ time: progress })
-          }
-          for (let layerIndex = 0; layerIndex < layerNumber; layerIndex++) {
-            shapes.push(...c.getShapes(layerIndex))
-          }
-        })
-      )
-
-      return new Promise((resolve) => {
-        childrenReady.then(() => {
-          shapes.sort((s1, s2) => s1.zIndex - s2.zIndex)
-          shapes.sort((s1, s2) => s1.layer - s2.layer)
-          shapes.forEach((shape) => {
-            shape.draw({
-              context: tempCtx,
-              now: Date.now(),
-              width: tempCanvas.width,
-              height: tempCanvas.height,
-              forchDraw: true,
-            })
+        tempCtx.save()
+        try {
+          prepareRegionContext(tempCtx, area, targetSize)
+          executeCanvas2DRenderPlan({
+            context: tempCtx,
+            items,
+            getNow: Date.now,
+            width: this.width,
+            height: this.height,
+            forceDraw: true,
+            getProjectiveQuality: ({ projection }) => {
+              if (!projection) {
+                throw new Error("projective quality requires a projective RenderItem")
+              }
+              return resolveCanvas2DProjectiveQuality({
+                mapping: projection.mapping,
+                outputWidth: tempCanvas.width,
+                outputHeight: tempCanvas.height,
+                contentScaleX: targetSize.width / area.width,
+                contentScaleY: targetSize.height / area.height,
+              })
+            },
           })
+        } finally {
+          tempCtx.restore()
+        }
 
-          resolve(tempCanvas)
-        })
+        return tempCanvas
       })
     },
     triggerAction: <T extends string>(
@@ -475,5 +655,6 @@ export function stayTools(this: Stay<any>): StayTools {
     ...stayTools,
     ...instantTools,
     ...animatedTools,
+    webgl: webglTools,
   }
 }

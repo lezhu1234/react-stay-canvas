@@ -12,30 +12,35 @@ import React, {
 
 import * as PredefinedEventList from "./predefinedEvents"
 import Stay, { createStay } from "./stay/stay"
-import type { ContextLayerSetFunction } from "./types/canvas"
+import type { CanvasLayerConfig, ContextLayerSetFunction } from "./types/canvas"
 import type { StayCanvasProps, StayCanvasRefType } from "./types/component"
 import type { PredefinedEventName } from "./types/events"
 
 const defaultContextLayerSetFunction: ContextLayerSetFunction = (canvas) =>
   canvas.getContext("2d")
 
-function resolveContextLayerSetFunctions(
-  layers: number | ContextLayerSetFunction[]
-): ContextLayerSetFunction[] {
-  const contextSetters =
+function resolveLayerConfigs(
+  layers: number | CanvasLayerConfig[]
+): CanvasLayerConfig[] {
+  const configs =
     typeof layers === "number"
       ? Array(layers).fill(defaultContextLayerSetFunction)
       : layers
 
-  if (contextSetters.length < 1) {
+  if (configs.length < 1) {
     throw new Error("layers must be greater than 0")
   }
 
-  return contextSetters
+  return configs
 }
 
 const StayCanvas = forwardRef(
-  <EventName extends string>(
+  <
+    EventName extends string,
+    HistorySnapshot,
+    StoreSchema extends object,
+    StateStoreSchema extends object,
+  >(
     {
       width = 500,
       height = 500,
@@ -47,12 +52,19 @@ const StayCanvas = forwardRef(
       passive = true,
       recreateOnResize = false,
       focusOnInit = true,
-    }: StayCanvasProps<EventName>,
+      viewport,
+      historyAdapter,
+    }: StayCanvasProps<
+      EventName,
+      HistorySnapshot,
+      StoreSchema,
+      StateStoreSchema
+    >,
     ref: Ref<StayCanvasRefType>
   ) => {
     const initialized = useRef(false)
-    const contextLayerSetFunctionList = resolveContextLayerSetFunctions(layers)
-    const layerCount = contextLayerSetFunctionList.length
+    const layerConfigs = resolveLayerConfigs(layers)
+    const layerCount = layerConfigs.length
     const activeLayerCount = useRef(layerCount)
     activeLayerCount.current = layerCount
 
@@ -73,7 +85,7 @@ const StayCanvas = forwardRef(
       : never
 
     const canvasLayers = useRef<HTMLCanvasElement[]>([])
-    const stay = useRef<Stay<string>>()
+    const stay = useRef<Stay<string, HistorySnapshot>>()
 
     // eventList = useMemo(() => eventList || [], [eventList])
     // listenerList = useMemo(() => listenerList || [], [listenerList])
@@ -103,10 +115,12 @@ const StayCanvas = forwardRef(
       const activeCanvasLayers = getActiveCanvasLayers()
       const nextStay = createStay(
         activeCanvasLayers,
-        contextLayerSetFunctionList,
+        layerConfigs,
         width,
         height,
-        passive
+        passive,
+        viewport,
+        historyAdapter
       )
       stay.current = nextStay
 
@@ -159,10 +173,15 @@ const StayCanvas = forwardRef(
     )
 
     useEffect(() => {
-      if (width > 0 && height > 0 && (!initialized.current || recreateOnResize)) {
+      if (width <= 0 || height <= 0) return
+
+      if (!initialized.current || recreateOnResize) {
         init()
         initialized.current = true
+        return
       }
+
+      stay.current?.resize(width, height)
     }, [width, height])
 
     useEffect(
@@ -208,6 +227,18 @@ const StayCanvas = forwardRef(
       </>
     )
   }
-)
+) as <
+  EventName extends string = string,
+  HistorySnapshot = unknown,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
+>(
+  props: StayCanvasProps<
+    EventName,
+    HistorySnapshot,
+    StoreSchema,
+    StateStoreSchema
+  > & React.RefAttributes<StayCanvasRefType>
+) => React.ReactElement | null
 
 export default StayCanvas

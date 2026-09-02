@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from "vitest"
-import { Line, Rectangle } from "react-stay-canvas"
+import { Line, Rectangle, StayImage } from "react-stay-canvas"
+import { createStage } from "./helpers/stage"
 
 // Dimension 7 (Animation): the interpolation core — intermediateState(before,
 // after, ratio, easing) is what progress() drives each frame.
@@ -13,6 +15,22 @@ describe("animation interpolation (intermediateState)", () => {
     expect(at(0.5).x2).toBeCloseTo(5)
     expect(at(0.5).y2).toBeCloseTo(10)
     expect(at(1).x2).toBeCloseTo(10)
+  })
+
+  it("Line accepts and preserves its animated transition contract", () => {
+    const line = new Line({
+      x1: 0,
+      y1: 0,
+      x2: 10,
+      y2: 20,
+      transition: { durationMs: 480, delayMs: 120, type: "easeOutCubic" },
+    })
+
+    expect(line.transition).toEqual({
+      durationMs: 480,
+      delayMs: 120,
+      type: "easeOutCubic",
+    })
   })
 
   it("Rectangle box interpolates x/y/width/height", () => {
@@ -32,5 +50,54 @@ describe("animation interpolation (intermediateState)", () => {
     const ease = b.intermediateState(a, b, 0.5, "easeInQuad") as any
     expect(lin.width).toBeCloseTo(5)
     expect(ease.width).toBeLessThan(lin.width) // ease-in starts slow
+  })
+
+  it("projects animated StayImage frames by opacity without requiring a dummy fill", () => {
+    const { stage } = createStage({})
+    const child = stage.tools.createChild({ className: "animated-image" })
+    const image = { naturalWidth: 40, naturalHeight: 30 } as HTMLImageElement
+    child.appendKeyFrame("image", new StayImage({
+      image,
+      x: 0,
+      y: 0,
+      width: 40,
+      height: 30,
+      opacity: 1,
+      transition: { durationMs: 100 },
+    }))
+
+    child.setCurrentTime({ time: 0 })
+    expect(child.shapeMap.has("image")).toBe(false)
+    child.setCurrentTime({ time: 50 })
+    expect(child.shapeMap.get("image")).toBeInstanceOf(StayImage)
+    expect((child.shapeMap.get("image") as StayImage).opacity).toBeCloseTo(0.5)
+  })
+
+  it("keeps Animated Child composition owned by timeline slices", () => {
+    const { stage } = createStage()
+    const child = stage.tools.createChild({ className: "animated" })
+    child.appendKeyFrame("body", new Rectangle({
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      transition: { durationMs: 100 },
+    }))
+    child.setCurrentTime({ time: 0 })
+
+    expect(() => (child.update as (props: object) => unknown)({
+      shape: new Rectangle({ x: 20, y: 20, width: 30, height: 30 }),
+    })).toThrow("Animated Child composition is timeline-owned; use replaceSlice()")
+    expect(child.shapeFramesMap.has("body")).toBe(true)
+
+    expect(child.update({
+      className: "animated:selected",
+      placement: { type: "affine", x: 15 },
+    })).toBe(child)
+    expect(child.className).toBe("animated:selected")
+    expect(child.placement).toMatchObject({
+      type: "affine",
+      matrix: { e: 15 },
+    })
   })
 })

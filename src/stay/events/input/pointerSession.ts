@@ -15,6 +15,7 @@ type PointerSourceEvent = MouseEvent | PointerEvent
 
 type ActivePointerSession = {
   ref: PointerSessionRef
+  startSample: PointerSample
   lastSample: PointerSample
 }
 
@@ -71,7 +72,6 @@ export class PointerSession {
     }
     if (!this.belongsTo(session, event)) return
 
-    session.lastSample = sampleOf(event)
     this.syncMouseButtons(event)
     if (this.initiatingButtonWasReleased(session, event)) {
       this.expectCompatibilityMouseUp(session)
@@ -98,7 +98,6 @@ export class PointerSession {
     }
     if (!this.belongsTo(session, event)) return
 
-    session.lastSample = sampleOf(event)
     this.syncMouseButtons(event)
     this.finish(event, {
       phase: "end",
@@ -123,8 +122,22 @@ export class PointerSession {
   pointerCancel(event: PointerEvent, reason: PointerSessionCancelReason) {
     const session = this.active
     if (!session || !this.belongsTo(session, event)) return
-    session.lastSample = sampleOf(event)
     this.cancel(event, reason)
+  }
+
+  lostPointerCapture(event: PointerEvent) {
+    const session = this.active
+    if (!session || !this.belongsTo(session, event)) return
+    this.syncMouseButtons(event)
+    if (!isMouseButtonPressed(event.buttons, session.ref.initiatingButton)) {
+      this.finish(event, {
+        phase: "end",
+        outcome: "implicit-release",
+        rawTrigger: MOUSE_EVENTS.MOUSE_UP,
+      })
+      return
+    }
+    this.cancel(event, "lostpointercapture")
   }
 
   cancel(cause: Event, reason: PointerSessionCancelReason) {
@@ -157,7 +170,6 @@ export class PointerSession {
 
     this.pressedState.release(`mouse${event.button}`)
     if (event.button === session.ref.initiatingButton) {
-      session.lastSample = sampleOf(event)
       this.finish(event, {
         phase: "end",
         outcome: "released",
@@ -192,7 +204,6 @@ export class PointerSession {
       return
     }
 
-    session.lastSample = sampleOf(event)
     this.emitRaw(event, MOUSE_EVENTS.MOUSE_MOVE, session, {
       phase: "continue",
     })
@@ -211,7 +222,6 @@ export class PointerSession {
       return
     }
 
-    session.lastSample = sampleOf(event)
     this.finish(event, {
       phase: "end",
       outcome: "released",
@@ -238,12 +248,14 @@ export class PointerSession {
     this.pendingCompatibilityMouseUp = undefined
     const ref: PointerSessionRef = {
       id: this.nextSessionId++,
+      startedAt: Date.now(),
       pointerId: pointerIdOf(event),
       pointerType: pointerTypeOf(event),
       initiatingButton: event.button,
     }
     const session: ActivePointerSession = {
       ref,
+      startSample: sampleOf(event),
       lastSample: sampleOf(event),
     }
     this.active = session
@@ -276,10 +288,18 @@ export class PointerSession {
 
     this.terminalDispatchInProgress = true
     try {
+      const current = originEvent instanceof MouseEvent && originEvent.type !== "lostpointercapture"
+        ? sampleOf(originEvent)
+        : session.lastSample
       this.inputSink({
         originEvent,
         pressedKeys: this.pressedState.snapshot(),
-        pointerSample: session.lastSample,
+        pointerSample: current,
+        pointerSamples: {
+          start: session.startSample,
+          previous: session.lastSample,
+          current,
+        },
         pointerSession: session.ref,
         rawAction: terminal.rawTrigger
           ? { trigger: terminal.rawTrigger }
@@ -298,10 +318,20 @@ export class PointerSession {
     session?: ActivePointerSession,
     transition?: { phase: "start" | "continue" }
   ) {
+    const current = originEvent instanceof MouseEvent ? sampleOf(originEvent) : undefined
+    const previous = session?.lastSample ?? current
+    if (session && current && transition) session.lastSample = current
     this.inputSink({
       originEvent,
       pressedKeys: this.pressedState.snapshot(),
-      pointerSample: originEvent instanceof MouseEvent ? sampleOf(originEvent) : undefined,
+      pointerSample: current,
+      pointerSamples: current && previous
+        ? {
+            start: session?.startSample ?? current,
+            previous,
+            current,
+          }
+        : undefined,
       pointerSession: session?.ref,
       rawAction: { trigger },
       sessionTransition: transition && session

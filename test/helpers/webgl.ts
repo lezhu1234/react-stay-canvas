@@ -1,0 +1,198 @@
+import { vi } from "vitest"
+
+export function createRecordingWebGLContext(
+  canvas: HTMLCanvasElement,
+  options: {
+    lost?: boolean
+    maxTextureSize?: number
+    samples?: number
+    supportedSamples?: readonly number[]
+    contextAttributes?: Partial<WebGLContextAttributes>
+  } = {}
+) {
+  let lost = options.lost ?? false
+  let nextHandle = 0
+  const handle = () => ({ id: ++nextHandle })
+  const spies = {
+    canvas,
+    get drawingBufferWidth() { return canvas.width },
+    get drawingBufferHeight() { return canvas.height },
+    ARRAY_BUFFER: 0x8892,
+    ELEMENT_ARRAY_BUFFER: 0x8893,
+    STATIC_DRAW: 0x88e4,
+    STREAM_DRAW: 0x88e0,
+    FLOAT: 0x1406,
+    TRIANGLES: 0x0004,
+    UNSIGNED_SHORT: 0x1403,
+    VERTEX_SHADER: 0x8b31,
+    FRAGMENT_SHADER: 0x8b30,
+    COMPILE_STATUS: 0x8b81,
+    LINK_STATUS: 0x8b82,
+    FRAMEBUFFER: 0x8d40,
+    READ_FRAMEBUFFER: 0x8ca8,
+    DRAW_FRAMEBUFFER: 0x8ca9,
+    FRAMEBUFFER_COMPLETE: 0x8cd5,
+    RENDERBUFFER: 0x8d41,
+    COLOR_ATTACHMENT0: 0x8ce0,
+    DEPTH_ATTACHMENT: 0x8d00,
+    CULL_FACE: 0x0b44,
+    DEPTH_TEST: 0x0b71,
+    SCISSOR_TEST: 0x0c11,
+    STENCIL_TEST: 0x0d90,
+    BLEND: 0x0be2,
+    SAMPLE_COVERAGE: 0x80a0,
+    SAMPLE_ALPHA_TO_COVERAGE: 0x809e,
+    ONE: 1,
+    ONE_MINUS_SRC_ALPHA: 0x0303,
+    FUNC_ADD: 0x8006,
+    COLOR_BUFFER_BIT: 0x4000,
+    TEXTURE0: 0x84c0,
+    TEXTURE1: 0x84c1,
+    TEXTURE2: 0x84c2,
+    TEXTURE3: 0x84c3,
+    TEXTURE4: 0x84c4,
+    TEXTURE_2D: 0x0de1,
+    TEXTURE_WRAP_S: 0x2802,
+    TEXTURE_WRAP_T: 0x2803,
+    TEXTURE_MIN_FILTER: 0x2801,
+    TEXTURE_MAG_FILTER: 0x2800,
+    TEXTURE_COMPARE_MODE: 0x884c,
+    TEXTURE_COMPARE_FUNC: 0x884d,
+    COMPARE_REF_TO_TEXTURE: 0x884e,
+    CLAMP_TO_EDGE: 0x812f,
+    LINEAR: 0x2601,
+    LINEAR_MIPMAP_LINEAR: 0x2703,
+    NEAREST: 0x2600,
+    REPEAT: 0x2901,
+    NONE: 0,
+    UNPACK_FLIP_Y_WEBGL: 0x9240,
+    UNPACK_PREMULTIPLY_ALPHA_WEBGL: 0x9241,
+    RGBA: 0x1908,
+    RGBA8: 0x8058,
+    SRGB8_ALPHA8: 0x8c43,
+    UNSIGNED_BYTE: 0x1401,
+    UNSIGNED_INT: 0x1405,
+    DEPTH_COMPONENT: 0x1902,
+    DEPTH_COMPONENT24: 0x81a6,
+    MAX_TEXTURE_SIZE: 0x0d33,
+    SAMPLES: 0x80a9,
+    NO_ERROR: 0,
+    CONTEXT_LOST_WEBGL: 0x9242,
+    isContextLost: vi.fn(() => lost),
+    getError: vi.fn(() => 0),
+    getParameter: vi.fn((name: number) =>
+      name === 0x80a9 ? (options.samples ?? 4) : (options.maxTextureSize ?? 4096)),
+    getContextAttributes: vi.fn(() => ({
+      alpha: true,
+      antialias: true,
+      depth: true,
+      desynchronized: false,
+      failIfMajorPerformanceCaveat: false,
+      powerPreference: "default",
+      premultipliedAlpha: true,
+      preserveDrawingBuffer: false,
+      stencil: false,
+      xrCompatible: false,
+      ...options.contextAttributes,
+    })),
+    getInternalformatParameter: vi.fn(() =>
+      new Int32Array(options.supportedSamples ?? [4, 2, 1])),
+    createShader: vi.fn(handle),
+    shaderSource: vi.fn(),
+    compileShader: vi.fn(),
+    getShaderParameter: vi.fn(() => true),
+    getShaderInfoLog: vi.fn(() => ""),
+    deleteShader: vi.fn(),
+    createProgram: vi.fn(handle),
+    attachShader: vi.fn(),
+    linkProgram: vi.fn(),
+    getProgramParameter: vi.fn(() => true),
+    getProgramInfoLog: vi.fn(() => ""),
+    deleteProgram: vi.fn(),
+    createBuffer: vi.fn(handle),
+    deleteBuffer: vi.fn(),
+    createTexture: vi.fn(handle),
+    deleteTexture: vi.fn(),
+    createFramebuffer: vi.fn(handle),
+    deleteFramebuffer: vi.fn(),
+    createRenderbuffer: vi.fn(handle),
+    deleteRenderbuffer: vi.fn(),
+    getAttribLocation: vi.fn((_: unknown, name: string) =>
+      name === "a_clip_position" ? 0 : 1),
+    getUniformLocation: vi.fn(() => handle()),
+    bindFramebuffer: vi.fn(),
+    framebufferTexture2D: vi.fn(),
+    bindRenderbuffer: vi.fn(),
+    renderbufferStorage: vi.fn(),
+    renderbufferStorageMultisample: vi.fn(),
+    framebufferRenderbuffer: vi.fn(),
+    drawBuffers: vi.fn(),
+    readBuffer: vi.fn(),
+    checkFramebufferStatus: vi.fn(() => 0x8cd5),
+    viewport: vi.fn(),
+    disable: vi.fn(),
+    depthMask: vi.fn(),
+    colorMask: vi.fn(),
+    enable: vi.fn(),
+    blendFunc: vi.fn(),
+    blendEquation: vi.fn(),
+    clearColor: vi.fn(),
+    clear: vi.fn(),
+    useProgram: vi.fn(),
+    bindBuffer: vi.fn(),
+    bufferData: vi.fn(),
+    enableVertexAttribArray: vi.fn(),
+    disableVertexAttribArray: vi.fn(),
+    vertexAttribPointer: vi.fn(),
+    activeTexture: vi.fn(),
+    bindTexture: vi.fn(),
+    texParameteri: vi.fn(),
+    pixelStorei: vi.fn(),
+    uniform1i: vi.fn(),
+    uniform1fv: vi.fn(),
+    uniform2f: vi.fn(),
+    uniform3fv: vi.fn(),
+    uniform1f: vi.fn(),
+    texImage2D: vi.fn(),
+    generateMipmap: vi.fn(),
+    blitFramebuffer: vi.fn(),
+    drawElements: vi.fn(),
+    drawArrays: vi.fn(),
+  }
+  return {
+    context: spies as unknown as WebGLRenderingContext,
+    setLost(value: boolean) { lost = value },
+    spies,
+  }
+}
+
+export function createRecordingWebGL2Context(
+  canvas: HTMLCanvasElement,
+  options: {
+    lost?: boolean
+    maxTextureSize?: number
+    samples?: number
+    supportedSamples?: readonly number[]
+    contextAttributes?: Partial<WebGLContextAttributes>
+  } = {}
+) {
+  const recording = createRecordingWebGLContext(canvas, options)
+  let nextVertexArray = 10_000
+  const webgl2 = Object.assign(recording.spies, {
+    DEPTH_BUFFER_BIT: 0x0100,
+    LEQUAL: 0x0203,
+    createVertexArray: vi.fn(() => ({ id: ++nextVertexArray })),
+    deleteVertexArray: vi.fn(),
+    bindVertexArray: vi.fn(),
+    uniformMatrix4fv: vi.fn(),
+    uniformMatrix3fv: vi.fn(),
+    uniform4fv: vi.fn(),
+    depthFunc: vi.fn(),
+    clearDepth: vi.fn(),
+  })
+  return {
+    context: webgl2 as unknown as WebGL2RenderingContext,
+    setLost: recording.setLost,
+    spies: webgl2,
+  }
+}

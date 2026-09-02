@@ -2,15 +2,15 @@
 
 ## `StayText` 的坐标锚点语义不直观
 
-状态：待处理
+状态：已修复
 
-`StayText({ x, y })` 的 `(x, y)` 当前表示文字包围盒的上方中心，而 Circle 等 Shape 通常把坐标理解为视觉中心。这会迫使调用方写出与字号相关的纵向补偿。
+`StayText({ x, y })` 的 `(x, y)` 现在始终表示由 `textAlign` 和 `textBaseline` 定义的原生 Canvas 文字锚点。例如默认 `start + alphabetic` 使用左侧字母基线锚点，`center + middle` 会让文字包围盒中心精确落在 `(x, y)`。
 
-后续修改必须先明确默认锚点以及 `textAlign`、`textBaseline`、`offsetXRatio`、`offsetYRatio` 的组合语义，并覆盖文字边界、命中区域、移动、缩放及示例回归。默认坐标语义属于兼容性决定，不能在无迁移方案时顺手修改。
+绘制锚点已与包围盒四角分离，`getBound()`、移动、缩放和动画插值使用同一套对齐结果；`offsetXRatio`、`offsetYRatio` 在解析锚点后按文字宽高继续施加偏移。自动化测试覆盖默认锚点、显式居中、右下对齐、偏移、移动、缩放、动画，以及 Motion 和 Diagram 的居中标签。
 
 ## 指针在 Canvas 外释放后，输入状态可能无法结束
 
-状态：已在 Pointer Session 中修复；自动化测试已覆盖，仍需按示例验收手册做浏览器手工回归
+状态：已在 Pointer Session 中修复；自动化测试已覆盖
 
 ### 原问题
 
@@ -19,16 +19,16 @@
 ### 修复约束
 
 - Canvas 内开始的主指针会话无论在哪里释放，都只结束一次；
-- `pointerup`、`pointercancel`、`lostpointercapture`、窗口失焦、页面隐藏和销毁进入统一清理路径；
+- `pointerup`、`pointercancel`、`lostpointercapture`、窗口失焦、页面隐藏和销毁进入统一清理路径；松键后的 `lostpointercapture` 正常结束，按键仍按下时的异常 Capture 丢失才取消；
 - 正常结束与取消都会清理本会话的按钮状态、动态事件、点击配对和 gesture owner；
 - 手势开始时确定的逻辑目标持续拥有后续 move/end；
 - 多个 Canvas 实例互不共享会话状态；
 - 卸载和重新创建后不残留全局 listener 或 Pointer Capture；
 - 现有 `dragstart/drag/dragend`、`startmove/move/moveend` 名称保持兼容。
 
-### 验收
+### 示例效果
 
-Transform 示例提供 Canvas 外释放区域和可见会话状态。必须验证外部释放后只增加一次 End count，主键状态变为 Released，指针移回但不再次按下时场景不再移动；同时覆盖取消、失焦、多 Canvas 和销毁的自动化测试。
+Transform 示例展示 Canvas 外释放区域和可见会话状态：外部释放后只增加一次 End count，主键状态变为 Released，指针移回但不再次按下时场景不再移动。取消、失焦、多 Canvas 和销毁由自动化测试覆盖。
 
 ## `layers` 函数数组与实际 Canvas 数量不一致
 
@@ -44,22 +44,15 @@ React 渲染现在使用规范化后的 context setter 数量创建 Canvas，并
 
 - `Line.contains()` 和 `StayText.contains()` 固定返回 false，不能单独提供默认命中区域；
 - `Point.getBound()` 尚未实现；
-- `Path.getBound()` 尚未实现；
 - `Circle` 是 `InstantShape`，不支持关键帧插值。
 
 `Circle.contains()` 接受普通坐标的默认命中缺口已经修复，公开工具和 Listener 的命中路径不再需要构造 `Point` 实例。
 
-这些类型都从包入口导出。尤其是正常绘制会先通过 `getBound()` 判断 viewport，因此追加 `Point` 或 `Path` 会在真正 paint 前直接抛错；影响不只限于可选的查询、命中、历史快照或 `exportChildren()`。当前用户文档已按真实能力逐项标注。后续实现必须分别定义边界、命中容差、复制独立性和动画兼容性，不能只为消除异常返回一个没有几何依据的占位结果。
+`Path` 的场景协议已经补全：它直接使用原生 `Path2D` 中心线和 Canvas stroke 配置，边界是全部路径点的轴对齐范围向四周扩张 `strokeConfig.lineWidth / 2`；命中先通过该边界快速排除，再比较目标点到每条线段的最短距离平方。空路径、单点、重复点、折线、移动、缩放、复制、viewport culling 和公开场景命中均有自动化覆盖。
+
+其余类型都从包入口导出。尤其是正常绘制会先通过 `getBound()` 判断 viewport，因此追加 `Point` 会在真正 paint 前直接抛错；影响不只限于可选的查询、命中、历史快照或 `exportChildren()`。当前用户文档已按真实能力逐项标注。后续实现必须分别定义边界、命中容差、复制独立性和动画兼容性，不能只为消除异常返回一个没有几何依据的占位结果。
 
 Shape 通过 `update({ layer })` 换层时的脏层缺口已经修复：`applyUpdate()` 会把变更前的 layer 交给 Child，Child 规范化新 layer 后同时标记新旧两层。自动化测试覆盖旧层清除、新层绘制和负 layer 规范化。
-
-## 纯 Shape 更新不会自动进入历史
-
-状态：待处理
-
-`appendChild()` 与 `removeChild()` 会把静态 Child id 加入待记录集合，但 Shape 的 `update()` 当前只标记绘制 layer，不会标记历史。已有 Child 移动或改样式后单独调用 `log()`，不会可靠地产生 update step。
-
-当前需要撤销的集成场景通过保留 id 的 remove/append replacement 显式制造历史差异。正式修复应建立清晰的公开更新入口，让一次业务操作可以标记 Child、保留变更前快照并在手势结束时提交；不能在每个 `mousemove` 自动写历史，也不能重新公开 `StayInstantChild.update()` 这个不负责正常脏层语义的内部原语。
 
 ## 关闭动画零帧后无法安全定位到时间 0
 
@@ -116,14 +109,6 @@ Child 是绑定 Canvas 的运行时实体，不再提供 `copy()` 或 `copyShape
 `CircleAttr.stroke`、`CircleAttr.fill` 会被构造函数读取但不进入基类样式；`StayText` 的 `decoration` 也没有保存到实例或绘制阶段。实际样式应分别使用 `strokeConfig`、`fillConfig`，文字装饰当前不应作为稳定能力。
 
 后续处理应在“实现这些字段”和“以兼容方式废弃字段”之间做显式 API 决策，并增加类型、绘制和复制测试。不能继续让类型暗示一个运行时没有的效果。
-
-## 默认目标排序 comparator 不稳定
-
-状态：待处理
-
-Listener 未提供 `sortBy` 时，当前默认 comparator 返回第一个 Child 的正面积，而不是 `area(a) - area(b)` 这类满足排序约束的比较结果。多个命中区域重叠时，选择顺序不能作为稳定保证。
-
-当前文档要求重叠目标显式传入 `sortBy`。后续修复应明确默认优先级，并覆盖插入顺序、相同面积、root 与普通 Child、嵌套边界及手势 owner 捕获。
 
 ## `frame` Event trigger 当前没有运行时输入源
 

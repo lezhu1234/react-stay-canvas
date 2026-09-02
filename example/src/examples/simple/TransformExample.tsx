@@ -10,7 +10,7 @@ import {
   StayTools,
 } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, placeSceneChild, ResetButton, resetScene, scenePoint, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition } from "../actionEventGuards"
 
@@ -63,7 +63,8 @@ export default function TransformExample() {
   const [endCount, setEndCount] = useState(0)
   const [terminalReason, setTerminalReason] = useState(text("None", "无"))
 
-  const isInsideCanvas = (x: number, y: number) => x >= 0 && x <= 440 && y >= 0 && y <= 290
+  const isInsideCanvas = (x: number, y: number, width: number, height: number) =>
+    x >= 0 && x <= width && y >= 0 && y <= height
 
   const markZoomOrigin = (x: number, y: number) => {
     originMarkerRef.current?.update({ x, y })
@@ -95,7 +96,7 @@ export default function TransformExample() {
     {
       name: "space-pan",
       event: ["startmove", "move", "moveend"],
-      callback: ({ e, composeStore, tools }) => {
+      callback: ({ e, composeStore, tools, canvas }) => {
         if (!hasPointerPosition(e)) return
         return {
           startmove: () => {
@@ -108,12 +109,12 @@ export default function TransformExample() {
             setSessionState(text("Active", "进行中"))
             setPrimaryButton(text("Pressed", "按下中"))
             setTerminalReason(text("None", "无"))
-            setPointerPosition(isInsideCanvas(e.x, e.y)
+            setPointerPosition(isInsideCanvas(e.x, e.y, canvas.width, canvas.height)
               ? text("Inside", "Canvas 内")
               : text("Outside", "Canvas 外"))
           },
           moveend: () => {
-            const outside = !isInsideCanvas(e.x, e.y)
+            const outside = !isInsideCanvas(e.x, e.y, canvas.width, canvas.height)
             const cancelled = e.cancelled ?? false
             setAction(cancelled
               ? text("Space-drag cancelled", "空格拖动已取消")
@@ -144,7 +145,7 @@ export default function TransformExample() {
     toolsRef.current = tools
     for (let row = 0; row < 3; row++) {
       for (let column = 0; column < 4; column++) {
-        tools.appendChild({
+        placeSceneChild(tools, tools.appendChild({
           className: "tile",
           shape: new Rectangle({
             x: 42 + column * 92,
@@ -154,10 +155,10 @@ export default function TransformExample() {
             fillConfig: { color: (row + column) % 2 ? colors.blueSoft : colors.greenSoft },
             strokeConfig: { color: (row + column) % 2 ? colors.blue : colors.green, lineWidth: 1 },
           }),
-        })
+        }))
       }
     }
-    tools.appendChild({ className: "label", shape: new StayText({ x: 220, y: 250, text: text("wheel to zoom  |  hold Space and drag to pan", "滚轮缩放  |  按住空格键拖动平移"), font: { size: 14 }, fillConfig: { color: colors.ink } }) })
+    placeSceneChild(tools, tools.appendChild({ className: "label", shape: new StayText({ x: 220, y: 250, text: text("wheel to zoom  |  hold Space and drag to pan", "滚轮缩放  |  按住空格键拖动平移"), textAlign: "center", textBaseline: "top", font: { size: 14 }, fillConfig: { color: colors.ink } }) }))
     originMarkerRef.current = new Circle({
       x: 220,
       y: 145,
@@ -170,11 +171,15 @@ export default function TransformExample() {
       x: 262,
       y: 138,
       text: text("zoom origin", "缩放原点"),
+      textAlign: "center",
+      textBaseline: "top",
       font: { size: 11, fontWeight: 700 },
       zIndex: 3,
       fillConfig: { color: colors.orange },
     })
-    tools.appendChild({ className: "zoom-origin", shape: [originMarkerRef.current, originLabelRef.current] })
+    placeSceneChild(tools, tools.appendChild({ className: "zoom-origin", shape: [originMarkerRef.current, originLabelRef.current] }))
+    const origin = scenePoint(tools, 220, 145)
+    markZoomOrigin(origin.x, origin.y)
   }
 
   const pan = (x: number, y: number) => {
@@ -186,15 +191,18 @@ export default function TransformExample() {
   }
 
   const zoom = (delta: number) => {
-    markZoomOrigin(220, 145)
-    void toolsRef.current?.zoom(delta, { x: 220, y: 145 })
+    const tools = toolsRef.current
+    if (!tools) return
+    const origin = scenePoint(tools, 220, 145)
+    markZoomOrigin(origin.x, origin.y)
+    void tools.zoom(delta, origin)
     setAction(delta < 0 ? text("Zoomed in", "已放大") : text("Zoomed out", "已缩小"))
   }
 
   return (
     <DemoLayout>
       <div className="pointer-session-demo">
-        <CanvasCard title={text("Viewport transforms", "平移与缩放")} description={text("Hold Space and drag from the Canvas into the striped release zone, then release outside.", "按住空格键从 Canvas 内拖到右侧条纹区域，并在 Canvas 外松开鼠标。") }>
+        <CanvasCard title={text("Geometry transforms", "几何变换")} description={text("These tools rewrite Child geometry. Hold Space and drag into the striped release zone, then release outside.", "这些工具会改写 Child 几何。按住空格键拖到右侧条纹区，再在 Canvas 外松开鼠标。") }>
           <StayCanvas className="demo-canvas demo-canvas-grid" eventList={[spaceStartMoveEvent]} height={290} listenerList={listeners} mounted={mounted} passive={false} width={440} />
         </CanvasCard>
         <aside className="outside-release-zone">
@@ -208,7 +216,14 @@ export default function TransformExample() {
         <Button onClick={() => pan(24, 0)}>{text("Pan right", "向右平移")}</Button>
         <Button onClick={() => zoom(-120)}>{text("Zoom in", "放大")}</Button>
         <Button onClick={() => zoom(120)}>{text("Zoom out", "缩小")}</Button>
-        <Button onClick={() => { void toolsRef.current?.reset(); markZoomOrigin(220, 145); setAction(text("Reset transform", "已恢复初始视图")) }}>{text("Tool reset", "恢复初始视图")}</Button>
+        <Button onClick={() => {
+          const tools = toolsRef.current
+          if (!tools) return
+          const origin = scenePoint(tools, 220, 145)
+          void resetScene(tools)
+          markZoomOrigin(origin.x, origin.y)
+          setAction(text("Reset transform", "已恢复初始视图"))
+        }}>{text("Tool reset", "恢复初始视图")}</Button>
         <ResetButton />
       </Toolbar>
       <StatusGrid items={[[text("Last transform", "最近变换"), action], [text("Session", "会话状态"), sessionState], [text("Pointer", "指针位置"), pointerPosition], [text("Primary button", "鼠标主键"), primaryButton], [text("End count", "结束次数"), endCount], [text("Terminal reason", "结束原因"), terminalReason], [text("Zoom origin", "缩放原点"), zoomOrigin]]} />

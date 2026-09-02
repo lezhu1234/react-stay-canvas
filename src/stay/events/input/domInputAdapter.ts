@@ -1,4 +1,5 @@
 import { KEYBOARRD_EVENTS, MOUSE_EVENTS } from "../../../userConstants"
+import type { PointerSessionCancelReason } from "../../../types/events"
 import type { EventInputSink } from "../contracts"
 import { PointerSession } from "./pointerSession"
 import { PressedInputState } from "./pressedInputState"
@@ -75,6 +76,10 @@ export class DomInputAdapter {
     this.bound = false
   }
 
+  cancelPointerSession(reason: PointerSessionCancelReason) {
+    this.pointerSession.cancel(new Event(reason), reason)
+  }
+
   private bindKeyboard() {
     const keydown = (event: KeyboardEvent) => {
       this.pressedState.press(event.key)
@@ -124,7 +129,7 @@ export class DomInputAdapter {
       this.pointerSession.pointerCancel(event, "pointercancel")
     })
     this.addBinding(this.target, "lostpointercapture", (event: PointerEvent) => {
-      this.pointerSession.pointerCancel(event, "lostpointercapture")
+      this.pointerSession.lostPointerCapture(event)
     })
     this.addBinding(
       window,

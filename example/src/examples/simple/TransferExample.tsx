@@ -1,7 +1,7 @@
 import { type MutableRefObject, useRef, useState } from "react"
 import { Circle, Rectangle, StayCanvas, StayText, StayTools } from "react-stay-canvas"
 
-import { Button, CanvasCard, colors, DemoLayout, ResetButton, StatusGrid, Toolbar } from "../../components/DemoKit"
+import { Button, CanvasCard, colors, DemoLayout, placeSceneChild, ResetButton, sceneArea, sceneCanvasArea, StatusGrid, Toolbar } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 
 type Child = ReturnType<StayTools["appendChild"]>
@@ -21,23 +21,23 @@ export default function TransferExample() {
 
   const mountSource = (tools: StayTools) => {
     sourceRef.current = tools
-    tools.appendChild({
+    placeSceneChild(tools, tools.appendChild({
       id: "asset-a",
       className: "asset",
       shape: [
         new Rectangle({ x: 46, y: 46, width: 110, height: 88, fillConfig: { color: colors.blueSoft }, strokeConfig: { color: colors.blue, lineWidth: 2 } }),
-        new StayText({ x: 101, y: 81, text: text("A · movable", "A · 可移动"), font: { size: 12, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
+        new StayText({ x: 101, y: 81, text: text("A · movable", "A · 可移动"), textAlign: "center", textBaseline: "top", font: { size: 12, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
       ],
-    })
-    tools.appendChild({
+    }))
+    placeSceneChild(tools, tools.appendChild({
       id: "asset-b",
       className: "asset",
       shape: [
         new Circle({ x: 246, y: 92, radius: 44, fillConfig: { color: colors.orangeSoft }, strokeConfig: { color: colors.orange, lineWidth: 2 } }),
-        new StayText({ x: 246, y: 84, text: "B", font: { size: 14, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
+        new StayText({ x: 246, y: 84, text: "B", textAlign: "center", textBaseline: "top", font: { size: 14, fontWeight: 700 }, fillConfig: { color: colors.ink } }),
       ],
-    })
-    tools.appendChild({ id: "asset-caption", className: "asset", shape: new StayText({ x: 180, y: 172, text: text("portable scene", "可移植场景"), font: { size: 17, fontWeight: 650 }, fillConfig: { color: colors.ink } }) })
+    }))
+    placeSceneChild(tools, tools.appendChild({ id: "asset-caption", className: "asset", shape: new StayText({ x: 180, y: 172, text: text("portable scene", "可移植场景"), textAlign: "center", textBaseline: "top", font: { size: 17, fontWeight: 650 }, fillConfig: { color: colors.ink } }) }))
   }
 
   const transfer = () => {
@@ -46,16 +46,16 @@ export default function TransferExample() {
     if (!source || !target) return
     const exported = source.exportChildren({
       children: source.getChildrenBySelector(".asset"),
-      area: { x: 0, y: 0, width: 360, height: 220 },
+      area: sceneArea(source, 360, 220),
     })
     const importIndex = importSequenceRef.current++
     const copyNumber = importIndex + 1
     const existingIds = new Set(target.getChildrenWithoutRoot().map((child) => child.id))
+    const targetScene = sceneArea(target, 360, 220)
     target.importChildren(exported, {
-      x: importIndex * 12,
-      y: importIndex * 10,
-      width: 360,
-      height: 220,
+      ...targetScene,
+      x: targetScene.x + importIndex * 12,
+      y: targetScene.y + importIndex * 10,
     })
     const imported = target.getChildrenWithoutRoot().filter((child) => !existingIds.has(child.id))
     const copyLabels = [
@@ -77,9 +77,10 @@ export default function TransferExample() {
   const capture = async () => {
     const tools = sourceRef.current
     if (!tools) return
+    const canvasArea = sceneCanvasArea(tools, 360, 220)
     const canvas = await tools.regionToTargetCanvas({
-      area: { x: 0, y: 0, width: 360, height: 220 },
-      targetSize: { width: 360, height: 220 },
+      area: canvasArea,
+      targetSize: { width: canvasArea.width, height: canvasArea.height },
       children: tools.getChildrenWithoutRoot(),
     })
     setSnapshot(canvas.toDataURL("image/png"))

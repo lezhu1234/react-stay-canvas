@@ -2,13 +2,13 @@
 
 [English](../../en/api/stay-tools.md) · [场景与工具指南](../scene-and-tools.md)
 
-`StayTools` 是 `BasicTools & InstantTools & AnimatedTools` 的统一接口。每个 Canvas 都同时拥有静态、动画和历史工具；不存在需要选择的运行模式。
+`StayTools` 组合了 `BasicTools`、`InstantTools`、`AnimatedTools` 与原生 `webgl` namespace。每个 Canvas 都同时拥有静态、动画、历史和原生场景工具；不存在需要选择的运行模式。
 
 ## Child 与查询
 
 | 方法 | 签名摘要 | 说明 |
 | --- | --- | --- |
-| `appendChild` | `({ id?, className, shape }) => StayInstantChild` | 添加静态 Child；shape 可为单个、数组或 Map |
+| `appendChild` | `({ id?, className, shape, placement? }) => StayInstantChild` | 添加静态 Child；shape 可为单个、数组或 Map |
 | `removeChild` | `(childId) => Promise<void> \| void` | 删除 Child；root 不可删除 |
 | `hasChild` | `(id) => boolean` | 按 id 判断存在 |
 | `getChildrenWithoutRoot` | `() => StayInstantChild[]` | 返回应用 Child |
@@ -23,10 +23,75 @@
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `selector` | 必填 | string、string[] 或函数 selector |
-| `point` | 必填 | Canvas 局部坐标 |
+| `point` | 必填 | `ContentPoint` 场景坐标 |
 | `returnFirst` | `false` | 是否最多返回排序后的第一项 |
 | `sortBy` | — | 命中结果排序 |
 | `withRoot` | `true` | 是否允许返回 root Child |
+
+## 原生 WebGL2 场景
+
+`tools.webgl` 在同一实例、同一 identity store 中管理原生 Mesh Child。一个 `StayWebGLChild` 在一个 WebGL2 图层上拥有有序 Mesh 列表；Mesh 几何、模型矩阵与材质以 CPU 状态为准，修改后会标脏对应图层。
+
+`Mesh` 默认使用不透明的 `UnlitMaterial`。`LambertMaterial`、`StandardMaterial` 与 `GlassMaterial` 要求显式非零的逐顶点 normals；法线会被复制、在 shader 中归一化，并通过 model matrix 的逆转置进行变换。Material 是不可变值，更新时使用 `mesh.setMaterial()` 替换，不共享可变材质状态：
+
+```ts
+const mesh = new Mesh({
+  geometry: {
+    positions: [-1, -1, 0, 1, -1, 0, 0, 1, 0],
+    normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+    indices: [0, 1, 2],
+  },
+  material: new LambertMaterial({ color: [0.2, 0.55, 0.9, 1] }),
+  castShadow: true,
+  receiveShadow: true,
+})
+
+const polished = new StandardMaterial({
+  color: [0.72, 0.76, 0.8, 1],
+  metallic: 0.08,
+  roughness: 0.28,
+})
+
+const glass = new GlassMaterial({
+  color: [0.6, 0.85, 1, 0.2],
+  ior: 1.46,
+  roughness: 0.24,
+  thickness: 0.18,
+  attenuationColor: [0.72, 0.9, 1],
+  attenuationDistance: 0.8,
+})
+mesh.setMaterial(glass)
+```
+
+`UnlitMaterial`、`LambertMaterial` 与 `StandardMaterial` 都不透明，color alpha 必须为 `1`。`StandardMaterial` 使用 metallic-roughness 光照；`metallic` 默认 `0`，`roughness` 默认 `1`，两者都必须位于 `0` 到 `1`。Lambert、Standard 与 Glass 都会消费方向光和点光；Standard 还会消费方向光阴影、相机视线和可选 `EnvironmentMap`，但仍在 opaque pass 中写入 depth。点光 radiance 使用 `intensity / distance²`；配置 `range` 时再乘以 `clamp(1 - (distance / range)^4, 0, 1)`。替换 Standard material 只更新 CPU 材质值和 shader uniform，不会推进 geometry revision。
+
+Material 与 Light 的 RGB 值按 sRGB 显示颜色传入。renderer 会在着色前把所有材质和灯光颜色转换到线性空间，把 opaque 与预乘 alpha 的 Glass 结果写入同一个线性 scene target，只在最终输出 pass 把完整画面编码为 sRGB。alpha 仍是线性覆盖率；`GlassMaterial.attenuationColor` 表示物理透射比例，因此也保持在线性空间。
+
+`GlassMaterial` 的 alpha 必须严格位于 `0` 与 `1` 之间，`ior` 必须大于 `1`（默认 `1.5`），`roughness` 位于 `0` 到 `1`（默认 `0`），`thickness` 是非负的 world-space 距离（默认 `0.1`）。renderer 会用这些值计算 Fresnel 响应、方向光与点光镜面高光，以及对本图层 opaque WebGL2 scene color 的屏幕空间折射。折射位移取折射路径与未折射路径的投影差；若该路径越出 scene-color target，则退回未偏移采样。roughness 会选择逐级过滤后的 scene-color 和 environment mip：零表示清晰，一表示使用可用的最宽模糊。厚度为零时仍保留透射和 Fresnel，只是不偏移屏幕采样位置。
+
+体积吸收遵循 Beer-Lambert 透射模型。`attenuationColor` 表示光线在介质内经过 `attenuationDistance` 个 world unit 后剩余的 RGB 颜色，因此每个通道的透射率为 `attenuationColor ** (thickness / attenuationDistance)`。attenuation color 默认白色；不传 `attenuationDistance` 表示无限距离，即不发生吸收。显式距离必须为正的有限数，颜色通道必须是 `0` 到 `1` 的有限数。`color` 仍描述玻璃边界的 tint，attenuation 则描述体积内部的损耗。当前材质直接把 `thickness` 当作完整传播距离，不会根据 Mesh 几何或厚度纹理推导路径长度。
+
+Scene-color 折射刻意限制在当前图层内：它可以扭曲同一 WebGL2 图层中更早绘制的 opaque Mesh。非空场景会画入持久的线性 RGBA8 color target 与共享 depth buffer；当 RGBA8 和 depth 都支持时，该 target 会保留 context 可用的 MSAA sample count。renderer 会在 Glass 之前 resolve 并生成 opaque color mip，使 Glass 无需产生 framebuffer feedback 就能采样；完整线性画面随后再次 resolve 并输出到浏览器。没有 Glass 的帧只需要最终一次 resolve。输出 pass 会适配 context 的 alpha 与 premultiplied-alpha 属性。
+
+WebGL2 layer config 提供 `EnvironmentMap` 时，其 RGBA8 byte 按 sRGB 解释。Standard 与 Glass 会按 world-space 经纬反射方向采样由硬件完成解码的 texture，并使用各自 roughness 选择 mip LOD。environment 属于图层显示状态，不进入 Material History 或场景传输。折射仍不能采样 Canvas 后面的 DOM/CSS 内容或其他透明 Mesh。当前线性 target 仍是 LDR RGBA8：它不会保留大于 `1` 的辐射值，也不提供 exposure、tone mapping、HDR 预过滤辐射或物理多表面透射。
+
+renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 depth write，再按局部包围盒中心变换到相机 view space 后的深度稳定地从远到近绘制。这是行业常用的对象级透明方案：彼此分离、不相交的表面能稳定合成；相交透明 Mesh 和自身重叠几何仍可能需要拆分 geometry，或等待后续 order-independent transparency。
+
+阴影行为是显式的 CPU Mesh 状态。`castShadow` 与 `receiveShadow` 都默认 `false`，运行时分别通过 `setCastShadow()`、`setReceiveShadow()` 修改。带光照的 receiver 会采样图层方向光的 shadow map；Glass 既可以接收，也可以投射方向光阴影。PointLight 暂不投射阴影，因此这些标志不会遮挡其贡献。`DirectionalLight.shadow.filterRadius` 用 shadow-map texel 表示固定 3×3 PCF tap 半径：默认值为 `1`；设为 `0` 时所有 tap 会收拢到最小的双线性硬件比较 footprint。增大它可以在不分配额外渲染目标的情况下柔化边缘；`mapSize` 与 shadow frustum 仍共同决定每个 texel 覆盖多少 world space。不透明 caster 会截断直射光；Glass caster 则把已有的边界透射率（`1 - color alpha`）与自身 `attenuationColor`、`attenuationDistance`、`thickness` 算出的 Beer-Lambert RGB 相乘。`color` 的 RGB 仍只描述边界 tint，不会成为第二套阴影颜色来源。当前有界 shadow-map 模型在每个光空间 texel 只保存最近的一层 Glass caster，多个重叠透射体还不会累积；不透明遮挡使用独立 depth map，因此即使 opaque caster 位于 Glass 后方，也仍会正确截断光线。History 与场景传输会保留阴影标志，且修改标志不会推进 geometry revision。
+
+未配置任何 Light 时 Lambert 会变暗。Standard 仍可显示已配置 EnvironmentMap 的反射；Glass 仍保留 scene-color 透射和 Fresnel 边缘，但两者直接受光的部分都会变暗。需要表面直射或漫射光时请显式添加环境光、方向光或点光，不依赖隐藏的默认灯组。
+
+| 方法 | 说明 |
+| --- | --- |
+| `webgl.appendChild({ id?, className, layer, meshes? })` | 向已配置的 WebGL2 图层添加原生 Mesh Child |
+| `webgl.removeChild(id)` | 删除原生 Child，并释放订阅和对应 GPU cache 项 |
+| `webgl.hasChild(id)` / `getChildById(id)` | 查询原生 identity，不混入 Shape 专用工具 |
+| `webgl.getChildBySelector(selector)` | 返回第一个原生 selector 匹配 |
+| `webgl.getChildrenBySelector(selector, sortBy?)` | 使用共享 selector 语言查询原生 Child |
+| `webgl.exportChildren(children)` | 捕获带 source id、深度隔离的 CPU Mesh 片段 |
+| `webgl.importChildren(fragment)` | 生成新的 Child id 与独立 Mesh 状态 |
+
+包入口导出 `Mesh`、`UnlitMaterial`、`LambertMaterial`、`StandardMaterial`、`GlassMaterial`、`EnvironmentMap`、`AmbientLight`、`DirectionalLight`、`PointLight`、`PerspectiveCamera`、`StayWebGLChild` 和最小 Matrix4 工具。GPU program、VAO、buffer、scene-color/environment/shadow target、shader 与 layer runtime 仍是内部实现。WebGL2 Child picking/raycast、点光阴影、通用材质纹理、多层透射阴影、order-independent transparency 和 Canvas 截图暂不属于这个接口。
 
 ## 状态与显示
 
@@ -39,6 +104,53 @@
 
 ## 场景变换
 
+### 坐标转换
+
+`tools.coordinates` 是 Client、View 与 Content 三个全局空间之间的统一转换入口。它不保存第二份 viewport 状态；每次调用都使用当前 Canvas 显示尺寸和当前 viewport。
+
+| 方法 | 说明 |
+| --- | --- |
+| `clientToView(point)` | 浏览器 Client 点 → Canvas View 点 |
+| `viewToClient(point)` | Canvas View 点 → 浏览器 Client 点 |
+| `viewToContent(point)` | View 点 → 当前场景 Content 点 |
+| `contentToView(point)` | Content 点 → 当前 Canvas View 点 |
+| `clientToContent(point)` | 浏览器 Client 点 → 当前场景 Content 点 |
+| `contentToClient(point)` | Content 点 → 浏览器 Client 点，适合定位 DOM 浮层 |
+| `viewVectorToContent(vector)` | View 位移 → Content 位移；只应用缩放，不应用平移 |
+| `contentVectorToView(vector)` | Content 位移 → View 位移；只应用缩放，不应用平移 |
+
+包入口同时导出 `ClientPoint`、`ViewPoint`、`ContentPoint`、`ViewVector`、`ContentVector`、`ViewRect` 和 `ContentRect`。它们是零运行时成本的弱品牌类型：普通坐标和矩形值仍兼容现有 API，而由库返回、已经带空间语义的值不能误传给另一空间。点和向量也保持不同类型，因为点转换包含平移，向量转换不包含平移。
+
+`tools.coordinates` 使用调用时的最新 viewport。事件中的 `e.point` 则是该次输入采样时固定下来的 Content 点；即使较早的 Listener 在同轮事件中改变 viewport，后续 Listener 看到的 `e.point` 也不会改变。
+
+### 非破坏性 Child placement
+
+`appendChild()` 和 `createChild()` 接收一份可选的判别式 placement。`{ type: "affine", x, y, rotation, scaleX, scaleY, skewX, skewY, origin }` 是语义形式；`{ type: "affine", matrix: { a, b, c, d, e, f } }` 是原始矩阵形式；`{ type: "projective", matrix: { m00, ..., m22 }, domain }` 定义有限透视平面。
+
+`child.setPlacement(placement)` 替换完整 placement。`child.placement` 返回快照；`child.toLocalPoint(contentPoint)` 与 `child.toContentPoint(localPoint)` 显式跨越局部边界，projective 域外返回 `undefined`。矩阵必须有限且可逆。静态 placement 会进入历史和场景传输；当前尚不支持动画 placement 插值。
+
+`projectivePlacementFromQuad(domain, quad)` 根据有限局部矩形以及具名的 `topLeft`、`topRight`、`bottomRight`、`bottomLeft` Content 顶点构造这份 projective placement。非有限、退化或跨越地平线的映射会被拒绝；已经持有单应矩阵的调用方仍可使用原始矩阵形式。
+
+### 非破坏性视口
+
+`tools.viewport` 改变 Content 在 View 中的显示位置，不修改 Child/Shape 几何，也不产生历史记录：
+
+| 方法 | 说明 |
+| --- | --- |
+| `get()` | 返回 `{ x, y, scale }` 快照 |
+| `panBy(viewMovement)` | 按 `ViewVector` 累加显示偏移 |
+| `zoomBy(factor, contentAnchor?)` | 按正倍率缩放；anchor 是保持显示位置不变的 `ContentPoint`，默认使用 View 中心 |
+| `fit(contentBounds, { padding? })` | 把一个 `ContentRect` 等比缩放并居中放入当前 View；padding 使用 View 像素 |
+| `reset()` | 恢复 `{ x: 0, y: 0, scale: 1 }`（受 min/max 限制） |
+| `restore(state)` | 恢复先前快照，并把 scale 限制在配置范围内 |
+| `toClientPoint(contentPoint)` | `coordinates.contentToClient()` 的兼容入口 |
+
+投影关系是 `View = Content × scale + (x, y)`。`fit()` 是显式的一次性操作：它不选择 Child，也不会在 append、import 或 resize 后自动重跑。配置的缩放范围优先于完整适配，但目标边界仍保持居中。边界可以只有宽或高为零，不能两者同时为零。各方法同步返回新的只读快照；Renderer 会在下一帧用同一份坐标快照重绘全部脏图层。
+
+包入口还导出两个无状态矩形工具。`unionRects(rects)` 返回轴对齐并集，空输入返回 `undefined`，并保留输入矩形类型；`fitRect(source, target)` 返回等比缩放值和居中矩形，并保留 target 的矩形类型。因此组合工具时，已知的 View/Content 品牌不会丢失。viewport 适配与区域截图共用这套计算；哪些 Child 边界代表业务场景，仍由应用决定。
+
+### 破坏性场景变换
+
 | 方法 | 说明 |
 | --- | --- |
 | `moveStart()` | 保存全场景移动起点 |
@@ -46,23 +158,28 @@
 | `zoom(deltaY, center, filter?)` | 以 Canvas 局部点为中心缩放 |
 | `reset()` | 执行当前基于 root 的逆变换；场景移动后并不可靠 |
 
-`move()`、`zoom()`、`reset()` 返回下一次 runtime tick 完成的 Promise，不代表浏览器已经完成一帧合成。场景移动后，`reset()` 不能可靠地恢复初始状态；详见[当前限制](../known-limitations.md#场景操作)。
+这些旧方法直接修改 Child/Shape 坐标，适合确实需要烘焙几何的批处理，不是视口控制。`move()`、`zoom()`、`reset()` 返回下一次 runtime tick 完成的 Promise，不代表浏览器已经完成一帧合成。场景移动后，`reset()` 不能可靠地恢复初始状态；详见[当前限制](../known-limitations.md#场景操作)。
 
 ## 历史
 
 | 方法 | 说明 |
 | --- | --- |
-| `log()` | 把由 append/remove 标记为待记录的静态 Child 差异提交为一个历史项 |
+| `canUndo()` | 返回当前是否存在已提交、可撤销的历史项 |
+| `canRedo()` | 返回当前是否存在已提交、可重做的历史项 |
+| `log()` | 把待记录的静态 Child 差异和适配后的应用状态提交为一个历史项 |
 | `undo()` | 撤销一个历史项；无可撤销项时只输出日志 |
 | `redo()` | 重做一个历史项；无可重做项时只输出日志 |
+| `resetHistory()` | 清空 undo/redo，并把当前静态场景作为新的历史基线 |
 
-动画 Child 不参与历史。调用边界与示例见[场景与工具：历史记录](../scene-and-tools.md#历史记录)。
+Canvas2D 与 WebGL2 静态 Child 进入同一 History 事务和 id 命名空间；`StayCanvas` 上可选的 `historyAdapter` 会把应用持有的快照加入这些相同历史项。Camera、EnvironmentMap 与 Light 修改属于图层显示状态，不进入历史。动画 Child 不参与历史。调用边界与示例见[场景与工具：历史记录](../scene-and-tools.md#历史记录)。
+
+`canUndo()` 与 `canRedo()` 是只读的历史游标查询，适合决定工具栏按钮是否禁用。尚未 `log()` 的修改不会改变查询结果。调用 `undo()` 后，redo 会保持可用，直到执行 `redo()`、`resetHistory()`，或用一次分叉的 `log()` 丢弃原 redo 尾部。
 
 ## 动画
 
 | 方法 | 签名摘要 | 说明 |
 | --- | --- | --- |
-| `createChild` | `({ id?, className }) => StayAnimatedChild` | 创建并加入动画 Child |
+| `createChild` | `({ id?, className, placement? }) => StayAnimatedChild` | 创建带可选静态 placement 的动画 Child |
 | `progress` | `({ timeMs, bound?, beforeDrawCallback?, afterDrawCallback? }) => DrawReturn` | 推进所有动画 Child 并立即绘制 |
 
 `DrawReturn`：
@@ -83,11 +200,13 @@ interface DrawReturn {
 | --- | --- |
 | `exportChildren({ children, area? })` | 把当前 Shape 捕获为可复用的 `SceneFragment` |
 | `importChildren(scene, targetArea?)` | 等比例实例化片段，并生成新的运行时 id |
-| `regionToTargetCanvas({ area, targetSize?, children, progress? })` | 把 Shape 绘制到新的 HTMLCanvasElement |
+| `regionToTargetCanvas({ area, targetSize?, children, progress? })` | 把区域等比居中绘制到新的 HTMLCanvasElement；可无副作用截取动画帧 |
 
-`CaptureSceneProps` 是导出参数；`SceneFragment` 包含 `area`，以及带 `sourceId`、`className`、`shapes` 的 Child 片段。`sourceId` 只作为关联元数据，不会复用为导入 Child 的 id。
+`CaptureSceneProps` 是导出参数；`SceneFragment` 包含 `area`，以及带 `sourceId`、`className`、`shapes`、`placement` 的 Child 片段。`sourceId` 只作为关联元数据，不会复用为导入 Child 的 id。
 
 场景传输会捕获公共 Shape 状态并隔离库拥有的样式容器。Animated Child 只捕获当前投影，不作为时间线序列化格式。
+
+原生 Mesh 没有 2D area/placement 变换，因此使用独立的 `tools.webgl.exportChildren()` 与 `tools.webgl.importChildren()`；Camera、EnvironmentMap 与 Light 由目标图层配置拥有，不进入片段。
 
 ## 动作与 Listener
 

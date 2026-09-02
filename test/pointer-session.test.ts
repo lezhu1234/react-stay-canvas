@@ -493,7 +493,7 @@ describe("pointer session lifecycle", () => {
     expect([...pressedState.snapshot()]).toEqual([])
   })
 
-  it("uses lostpointercapture and document hiding as idempotent cancellation paths", () => {
+  it("uses unexpected lostpointercapture and document hiding as cancellation paths", () => {
     const { stage, top } = createStage()
     const reasons: Array<string | undefined> = []
 
@@ -504,7 +504,7 @@ describe("pointer session lifecycle", () => {
     })
 
     top.dispatchEvent(pointer("pointerdown", 10, 10, { button: 0, buttons: 1 }))
-    top.dispatchEvent(pointer("lostpointercapture", 10, 10, { buttons: 0 }))
+    top.dispatchEvent(pointer("lostpointercapture", 10, 10, { buttons: 1 }))
 
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
@@ -514,6 +514,51 @@ describe("pointer session lifecycle", () => {
     document.dispatchEvent(new Event("visibilitychange"))
 
     expect(reasons).toEqual(["lostpointercapture", "visibilitychange"])
+  })
+
+  it("keeps the last movement sample when lostpointercapture has no useful position", () => {
+    const { stage, top } = createStage()
+    const points: Array<{ x: number; y: number } | undefined> = []
+    stage.addEventListener({
+      name: "lost-capture-position",
+      event: "dragend",
+      callback: ({ e }) => points.push(e.point),
+    })
+
+    top.dispatchEvent(pointer("pointerdown", 10, 10, { button: 0, buttons: 1 }))
+    top.dispatchEvent(pointer("pointermove", 70, 45, { buttons: 1 }))
+    top.dispatchEvent(pointer("lostpointercapture", 0, 0, { buttons: 1 }))
+
+    expect(points).toEqual([{ x: 70, y: 45 }])
+  })
+
+  it("treats capture loss after button release as a non-cancelled terminal", () => {
+    const { stage, top } = createStage()
+    const terminal: Array<{
+      cancelled?: boolean
+      origin: string
+      reason?: string
+    }> = []
+
+    stage.addEventListener({
+      name: "capture-release",
+      event: "dragend",
+      callback: ({ e, originEvent }) => terminal.push({
+        cancelled: e.cancelled,
+        origin: originEvent.type,
+        reason: e.cancelReason,
+      }),
+    })
+
+    top.dispatchEvent(pointer("pointerdown", 10, 10, { button: 0, buttons: 1 }))
+    top.dispatchEvent(pointer("pointermove", 40, 30, { buttons: 1 }))
+    top.dispatchEvent(pointer("lostpointercapture", 40, 30, { buttons: 0 }))
+
+    expect(terminal).toEqual([{
+      cancelled: false,
+      origin: "lostpointercapture",
+      reason: undefined,
+    }])
   })
 
   it("falls back to window mouseup when Pointer Events are unavailable", () => {
@@ -655,6 +700,30 @@ describe("pointer session lifecycle", () => {
       pointerId: 2,
     }))
     expect([...pressedState.snapshot()]).toEqual(["mouse0"])
+  })
+
+  it("keeps the current move as the terminal sample when move dispatch throws", () => {
+    const target = document.createElement("canvas")
+    const pressedState = new PressedInputState()
+    let terminalSample: { clientX: number; clientY: number } | undefined
+    const session = new PointerSession(target, pressedState, (input) => {
+      if (input.sessionTransition?.phase === "continue") throw new Error("move failed")
+      if (input.sessionTransition?.phase === "cancel") terminalSample = input.pointerSample
+    })
+
+    session.mouseDown(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    }))
+    expect(() => session.mouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 42,
+      clientY: 27,
+    }))).toThrow("move failed")
+    session.cancel(new Event("blur"), "blur")
+
+    expect(terminalSample).toEqual({ clientX: 42, clientY: 27 })
   })
 
   it("uses the real cancellation event and the last pointer sample", () => {

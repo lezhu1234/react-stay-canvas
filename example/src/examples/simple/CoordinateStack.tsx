@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AmbientLight,
   Circle,
@@ -24,12 +24,14 @@ import { CanvasSurface, colors, rgba, sceneCanvasArea } from "../../components/D
 import { useI18n } from "../../i18n"
 import {
   clippedRectEdges,
+  COORDINATE_PLANE_DOMAIN,
   containsRect,
+  coordinatePlaneRange,
   correspondingRectCorners,
-  contentReferenceRange,
   formatPoint,
+  projectCoordinatePlanePoint,
+  projectCoordinatePlaneRect,
   projectContentRect,
-  projectRectToRange,
   type CoordinateProbe,
   type LineSegment,
   visibleContentRange,
@@ -40,9 +42,9 @@ import {
   createPlaneBasis,
   createPlaneDefinitions,
   emptyMeshGeometry,
-  expandRangeToAspect,
   lineMeshGeometry,
   meshColor,
+  planePresentationMetrics,
   planeVolumeGeometry,
   planeWorldPoint,
   PLANE_GRID_COLUMNS,
@@ -55,10 +57,11 @@ import {
   type PlaneBasis,
   type PlaneDefinition,
   type PlaneName,
-  type PlaneRange,
+  type PlanePresentationMetrics,
 } from "./coordinateSceneModel"
 
-export { createPlaneDefinitions, expandRangeToAspect } from "./coordinateSceneModel"
+export { createPlaneDefinitions } from "./coordinateSceneModel"
+export { expandRangeToAspect } from "./coordinateLabModel"
 
 const STACK_WIDTH = 240
 const STACK_HEIGHT = 120
@@ -155,8 +158,10 @@ type PlaneOverlay = {
 
 type PlaneRuntime = PlaneDefinition & {
   basis: PlaneBasis
+  detailsVisible: boolean
   meshes: PlaneMeshes
   overlay: PlaneOverlay
+  presentation: PlanePresentationMetrics
 }
 
 type StackRuntime = {
@@ -169,27 +174,18 @@ type StackRuntime = {
 
 function planeRange(
   name: PlaneName,
-  plane: PlaneDefinition,
   probe: CoordinateProbe,
   clientRange: Readonly<Rect>,
-): PlaneRange {
-  const range = name === "client"
-    ? clientRange
-    : name === "view"
-      ? { x: 0, y: 0, width: probe.viewSize.width, height: probe.viewSize.height }
-      : contentReferenceRange(probe)
-  return expandRangeToAspect(range, plane.width / plane.height)
+): Rect {
+  return coordinatePlaneRange(name, COORDINATE_PLANE_DOMAIN, probe, clientRange)
 }
 
-function pointOnPlane(plane: PlaneDefinition, value: Coordinate, range: PlaneRange) {
-  return {
-    x: (value.x - range.x) / range.width * plane.width,
-    y: (value.y - range.y) / range.height * plane.height,
-  }
+function pointOnPlane(value: Coordinate, range: Rect) {
+  return projectCoordinatePlanePoint(value, range, COORDINATE_PLANE_DOMAIN)
 }
 
-function rectOnPlane(plane: PlaneDefinition, value: Rect, range: PlaneRange): Rect {
-  return projectRectToRange(value, range, plane)
+function rectOnPlane(value: Rect, range: Rect): Rect {
+  return projectCoordinatePlaneRect(value, range, COORDINATE_PLANE_DOMAIN)
 }
 
 function planeIsActive(name: PlaneName, mappingFocus: CoordinateMappingFocus) {
@@ -207,8 +203,11 @@ function clippedRect(rect: Rect, clip: Rect): Rect | undefined {
   return { x, y, width: right - x, height: bottom - y }
 }
 
-function pointIsInsidePlane(plane: PlaneDefinition, point: Readonly<Coordinate>) {
-  return point.x >= 0 && point.y >= 0 && point.x <= plane.width && point.y <= plane.height
+function pointIsInsidePlane(point: Readonly<Coordinate>) {
+  return point.x >= 0
+    && point.y >= 0
+    && point.x <= COORDINATE_PLANE_DOMAIN.width
+    && point.y <= COORDINATE_PLANE_DOMAIN.height
 }
 
 function cornerSegments(rect: Readonly<Rect>): LineSegment[] {
@@ -267,11 +266,10 @@ function updateMeshLines(
 function createPlaneRuntime(
   name: PlaneName,
   plane: PlaneDefinition,
+  detailsVisible: boolean,
 ): { meshes: Mesh[]; overlays: Array<Circle | Line | StayText>; runtime: PlaneRuntime } {
   const basis = createPlaneBasis(plane)
-  const titleSize = Math.max(13, Math.min(16, plane.width * 0.065))
-  const detailSize = Math.max(10, Math.min(12, plane.width * 0.045))
-  const rangeSize = Math.max(9, Math.min(10, plane.width * 0.04))
+  const presentation = planePresentationMetrics(plane)
   const axisColor = rgba(49, 65, 61, 0.48)
   const panelRoughness = PLANE_GLASS_ROUGHNESS[name]
   const panelAttenuation = PLANE_GLASS_ATTENUATION[name]
@@ -352,7 +350,7 @@ function createPlaneRuntime(
     zIndex: 20,
     textAlign: "center",
     textBaseline: "bottom",
-    font: { size: titleSize, fontWeight: 700 },
+    font: { size: presentation.titleSize, fontWeight: 700 },
     fillConfig: { color: plane.stroke },
   })
   const rangePoint = projectPlanePoint(plane, { x: 28, y: 38 })
@@ -362,8 +360,8 @@ function createPlaneRuntime(
     layer: OVERLAY_LAYER,
     zIndex: 5,
     textBaseline: "top",
-    font: { size: rangeSize, fontWeight: 600 },
-    fillConfig: { color: rgba(49, 65, 61, 0.6) },
+    font: { size: presentation.rangeSize, fontWeight: 600 },
+    fillConfig: { color: rgba(49, 65, 61, detailsVisible ? 0.6 : 0) },
   })
   const pointGuide = new Line({
     x1: 0,
@@ -377,7 +375,7 @@ function createPlaneRuntime(
   const dot = new Circle({
     x: 0,
     y: 0,
-    radius: Math.max(5, Math.min(7, plane.width * 0.028)),
+    radius: presentation.dotRadius,
     layer: OVERLAY_LAYER,
     zIndex: 10,
     fillConfig: { color: colors.orange },
@@ -390,8 +388,8 @@ function createPlaneRuntime(
     layer: OVERLAY_LAYER,
     zIndex: 11,
     textBaseline: "bottom",
-    font: { size: detailSize, fontWeight: 700 },
-    fillConfig: { color: colors.orange },
+    font: { size: presentation.detailSize, fontWeight: 700 },
+    fillConfig: { color: { ...colors.orange, a: detailsVisible ? 1 : 0 } },
   })
   const meshes: PlaneMeshes = {
     frameFill,
@@ -413,7 +411,7 @@ function createPlaneRuntime(
   return {
     meshes: Object.values(meshes).filter((mesh): mesh is Mesh => Boolean(mesh)),
     overlays: Object.values(overlay).filter((shape): shape is Circle | Line | StayText => Boolean(shape)),
-    runtime: { ...plane, basis, meshes, overlay },
+    runtime: { ...plane, basis, detailsVisible, meshes, overlay, presentation },
   }
 }
 
@@ -480,6 +478,7 @@ export function CoordinateStack({
 }) {
   const { text } = useI18n()
   const runtimeRef = useRef<StackRuntime>()
+  const [runtimeGeneration, setRuntimeGeneration] = useState(0)
   const viewToClientRef = useRef<(point: Coordinate) => Coordinate>()
   const camera = useMemo(() => createCoordinateCamera(), [])
   const environment = useMemo(() => createCoordinateEnvironment(), [])
@@ -530,19 +529,19 @@ export function CoordinateStack({
     const shapeProjection = projectContentRect(sample, currentViewport)
     const points: Partial<Record<PlaneName, Coordinate>> = {}
     const worldPoints: Partial<Record<PlaneName, Vector3>> = {}
-    const ranges = {} as Record<PlaneName, PlaneRange>
+    const ranges = {} as Record<PlaneName, Rect>
     const materialFocusChanged = runtime.materialFocus !== mappingFocus
 
     for (const name of Object.keys(runtime.planes) as PlaneName[]) {
       const plane = runtime.planes[name]
-      const range = planeRange(name, plane, sample, clientRange)
+      const range = planeRange(name, sample, clientRange)
       ranges[name] = range
       const value = sample[name]
-      const localPoint = pointOnPlane(plane, value, range)
-      const contentPoint = pointIsInsidePlane(plane, localPoint)
+      const localPoint = pointOnPlane(value, range)
+      const contentPoint = pointIsInsidePlane(localPoint)
         ? projectPlanePoint(plane, localPoint)
         : undefined
-      const localShape = rectOnPlane(plane, shapeProjection[name], range)
+      const localShape = rectOnPlane(shapeProjection[name], range)
       const isActive = planeIsActive(name, mappingFocus)
 
       plane.overlay.rangeValue.update({
@@ -585,18 +584,24 @@ export function CoordinateStack({
         strokeConfig: { color: { ...colors.paper, a: contentPoint ? 1 : 0 }, lineWidth: 1.5 },
       })
       const valueOnRight = localPoint.x < plane.width * 0.72
+      const { valueOffset } = plane.presentation
       plane.overlay.value.update({
-        x: contentPoint ? contentPoint.x + (valueOnRight ? 10 : -10) : 0,
-        y: contentPoint ? Math.max(12, contentPoint.y - 8) : 0,
+        x: contentPoint ? contentPoint.x + (valueOnRight ? valueOffset : -valueOffset) : 0,
+        y: contentPoint ? Math.max(9, contentPoint.y - valueOffset) : 0,
         text: `(${formatPoint(value)})`,
         textAlign: valueOnRight ? "left" : "right",
-        fillConfig: { color: { ...colors.orange, a: contentPoint ? 1 : 0 } },
+        fillConfig: {
+          color: {
+            ...colors.orange,
+            a: contentPoint && plane.detailsVisible ? 1 : 0,
+          },
+        },
       })
 
       if (name === "content") {
         updateViewportProjection(
           plane,
-          rectOnPlane(plane, visibleContentRange(sample, currentViewport), range),
+          rectOnPlane(visibleContentRange(sample, currentViewport), range),
         )
       }
       updateShapeProjection(plane, localShape)
@@ -607,7 +612,7 @@ export function CoordinateStack({
     }
 
     const clientViewActive = mappingFocus === "view-client"
-    const clientCanvasDom = rectOnPlane(runtime.planes.client, {
+    const clientCanvasDom = rectOnPlane({
       x: sample.surface.left,
       y: sample.surface.top,
       width: sample.surface.width,
@@ -616,11 +621,11 @@ export function CoordinateStack({
     const viewPlaneRect = {
       x: 0,
       y: 0,
-      width: runtime.planes.view.width,
-      height: runtime.planes.view.height,
+      width: COORDINATE_PLANE_DOMAIN.width,
+      height: COORDINATE_PLANE_DOMAIN.height,
     }
     const visibleContent = visibleContentRange(sample, currentViewport)
-    const contentViewport = rectOnPlane(runtime.planes.content, visibleContent, ranges.content)
+    const contentViewport = rectOnPlane(visibleContent, ranges.content)
     updateCornerLinks(
       runtime.clientViewLinks,
       runtime.planes.client,
@@ -654,19 +659,27 @@ export function CoordinateStack({
     runtime.materialFocus = mappingFocus
   }
 
-  useEffect(() => update(probe, viewport), [clientRange, mappingFocus, probe, viewport])
+  useEffect(
+    () => update(probe, viewport),
+    [clientRange, mappingFocus, probe, runtimeGeneration, viewport],
+  )
 
   const mounted = (tools: StayTools) => {
     viewToClientRef.current = (point) => tools.coordinates.viewToClient(point)
     const canvasArea = sceneCanvasArea(tools, STACK_WIDTH, STACK_HEIGHT)
-    const definitions = createPlaneDefinitions(canvasArea.width, canvasArea.height)
+    const definitions = createPlaneDefinitions(
+      canvasArea.width,
+      canvasArea.height,
+      COORDINATE_PLANE_DOMAIN,
+    )
     const planeNames: PlaneName[] = ["client", "view", "content"]
+    const detailsVisible = canvasArea.width >= 600
     const planes = {} as Record<PlaneName, PlaneRuntime>
     const meshes: Mesh[] = []
     const overlays: Array<Circle | Line | StayText> = []
 
     planeNames.forEach((name) => {
-      const created = createPlaneRuntime(name, definitions[name])
+      const created = createPlaneRuntime(name, definitions[name], detailsVisible)
       planes[name] = created.runtime
       meshes.push(...created.meshes)
       overlays.push(...created.overlays)
@@ -693,11 +706,11 @@ export function CoordinateStack({
     tools.webgl.appendChild({ className: "coordinate-native-scene", layer: WEBGL_LAYER, meshes })
     tools.appendChild({ className: "coordinate-scene-overlay", shape: overlays })
     runtimeRef.current = { planes, clientViewLinks, viewContentLinks, signalMeshes }
-    update(probe, viewport)
+    setRuntimeGeneration((current) => current + 1)
   }
 
   return (
-    <section aria-label={text("Three coordinate planes", "三层坐标空间")} className={`coordinate-stack-exhibit coordinate-focus-${mappingFocus}`}>
+    <section aria-label={text("Three coordinate planes", "三层坐标空间")} className={`coordinate-source-slot coordinate-stack-exhibit coordinate-focus-${mappingFocus}`}>
       <CanvasSurface className="coordinate-stack-surface" shrinkToViewport>
         <StayCanvas
           className="demo-canvas coordinate-stack-canvas"

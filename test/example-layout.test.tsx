@@ -35,6 +35,8 @@ import {
   createPlaneBevelFaceProfile,
   createPlaneBasis,
   planeVolumeGeometry,
+  planePresentationMetrics,
+  projectPlanePoint,
   rectMeshGeometry,
   roundedRectMeshGeometry,
   worldLineMeshGeometry,
@@ -47,12 +49,17 @@ import CoordinatesExample from "../example/src/examples/simple/CoordinatesExampl
 import {
   clippedRectEdges,
   clientReferenceRange,
+  COORDINATE_PLANE_DOMAIN,
   containsRect,
+  coordinatePlaneRange,
   correspondingRectCorners,
   LAB_CONTENT_BOUNDS,
   LAB_SHAPE,
+  projectCoordinatePlanePoint,
+  projectCoordinatePlaneRect,
   projectContentRect,
   projectClientPlane,
+  type CoordinateProbe,
 } from "../example/src/examples/simple/coordinateLabModel"
 import { type ExampleDefinition } from "../example/src/examples/types"
 import { I18nProvider } from "../example/src/i18n"
@@ -162,8 +169,56 @@ afterEach(() => {
 })
 
 describe("Example Canvas workspace", () => {
+  it("keeps the logical coordinate domain independent from visual stage geometry", () => {
+    const probe: CoordinateProbe = {
+      client: { x: 1262, y: 398 },
+      view: { x: 300, y: 150 },
+      content: { x: 240, y: 120 },
+      viewSize: { width: 480, height: 458 },
+      surface: { left: 954, top: 140, width: 480, height: 458, scaleX: 1, scaleY: 1 },
+    }
+    const viewport = { x: 0, y: 0, scale: 1.25 }
+    const clientRange = clientReferenceRange(probe)
+    const shapeProjection = projectContentRect(probe, viewport)
+    const composeProjection = (
+      definitions: ReturnType<typeof createPlaneDefinitions>,
+    ) => Object.fromEntries(
+      (["client", "view", "content"] as const).map((name) => {
+        const range = coordinatePlaneRange(
+          name,
+          COORDINATE_PLANE_DOMAIN,
+          probe,
+          clientRange,
+        )
+        const point = projectCoordinatePlanePoint(probe[name], range, COORDINATE_PLANE_DOMAIN)
+        const shape = projectCoordinatePlaneRect(
+            shapeProjection[name],
+            range,
+            COORDINATE_PLANE_DOMAIN,
+          )
+        return [name, {
+          physicalPoint: projectPlanePoint(definitions[name], point),
+          semantic: { point, range, shape },
+        }]
+      }),
+    )
+    const compact = createPlaneDefinitions(460, 330, COORDINATE_PLANE_DOMAIN)
+    const expanded = createPlaneDefinitions(1214, 478, COORDINATE_PLANE_DOMAIN)
+    const compactComposition = composeProjection(compact)
+    const expandedComposition = composeProjection(expanded)
+    const semantics = (composition: typeof compactComposition) => Object.fromEntries(
+      Object.entries(composition).map(([name, value]) => [name, value.semantic]),
+    )
+    const physicalPoints = (composition: typeof compactComposition) => Object.fromEntries(
+      Object.entries(composition).map(([name, value]) => [name, value.physicalPoint]),
+    )
+
+    expect(semantics(expandedComposition)).toEqual(semantics(compactComposition))
+    expect(physicalPoints(expandedComposition)).not.toEqual(physicalPoints(compactComposition))
+  })
+
   it("projects coordinate planes toward a vertical perspective vanishing direction", () => {
-    const plane = createPlaneDefinitions(728, 180).client
+    const plane = createPlaneDefinitions(728, 400, COORDINATE_PLANE_DOMAIN).client
     expect(plane.placement.type).toBe("projective")
     if (plane.placement.type !== "projective") return
     const mapping = createFiniteProjectiveMapping(
@@ -184,9 +239,22 @@ describe("Example Canvas workspace", () => {
     expect(plane.placement.matrix.m20).not.toBe(0)
   })
 
+  it("scales plane presentation from projected stage width instead of the logical domain", () => {
+    const compact = createPlaneDefinitions(460, 330, COORDINATE_PLANE_DOMAIN)
+    const expanded = createPlaneDefinitions(1214, 478, COORDINATE_PLANE_DOMAIN)
+    const compactMetrics = planePresentationMetrics(compact.client)
+    const expandedMetrics = planePresentationMetrics(expanded.client)
+
+    expect(compact.client.width).toBe(expanded.client.width)
+    expect(expandedMetrics.projectedWidth).toBeGreaterThan(compactMetrics.projectedWidth)
+    expect(expandedMetrics.titleSize).toBeGreaterThan(compactMetrics.titleSize)
+    expect(expandedMetrics.detailSize).toBeGreaterThan(compactMetrics.detailSize)
+    expect(expandedMetrics.dotRadius).toBeGreaterThan(compactMetrics.dotRadius)
+  })
+
   it("fits the projected plane bounds inside a height-constrained stack", () => {
     const canvasHeight = 80
-    const plane = createPlaneDefinitions(728, canvasHeight).client
+    const plane = createPlaneDefinitions(728, canvasHeight, COORDINATE_PLANE_DOMAIN).client
     expect(plane.placement.type).toBe("projective")
     if (plane.placement.type !== "projective") return
     const mapping = createFiniteProjectiveMapping(
@@ -199,8 +267,8 @@ describe("Example Canvas workspace", () => {
       .toBeLessThanOrEqual(canvasHeight + Number.EPSILON)
   })
 
-  it("stages equivalent coordinate planes as a separated perspective sequence", () => {
-    const definitions = createPlaneDefinitions(1012, 524)
+  it("stages equivalent coordinate planes as a readable perspective sequence", () => {
+    const definitions = createPlaneDefinitions(1012, 524, COORDINATE_PLANE_DOMAIN)
     const bounds = (["client", "view", "content"] as const).map((name) => {
       const placement = definitions[name].placement
       expect(placement.type).toBe("projective")
@@ -212,12 +280,21 @@ describe("Example Canvas workspace", () => {
     expect(bounds[1].y).toBeLessThan(bounds[2].y)
     expect(bounds[0].width).toBeGreaterThan(bounds[1].width)
     expect(bounds[1].width).toBeGreaterThan(bounds[2].width)
-    expect(bounds[0].x + bounds[0].width).toBeLessThan(bounds[1].x)
-    expect(bounds[1].x + bounds[1].width).toBeLessThan(bounds[2].x)
+    expect(bounds[2].width).toBeLessThan(bounds[0].width * 0.7)
+    const overlaps = bounds.slice(0, -1).map((bound, index) =>
+      bound.x + bound.width - bounds[index + 1].x)
+    overlaps.forEach((overlap, index) => {
+      expect(overlap).toBeGreaterThan(-Math.min(bounds[index].width, bounds[index + 1].width) * 0.08)
+      expect(overlap).toBeLessThan(Math.min(bounds[index].width, bounds[index + 1].width) * 0.25)
+    })
     expect(bounds[0].x).toBeLessThan(bounds[1].x)
     expect(bounds[1].x).toBeLessThan(bounds[2].x)
-    expect(bounds[0].y + bounds[0].height).toBeGreaterThan(bounds[1].y + bounds[1].height)
-    expect(bounds[1].y + bounds[1].height).toBeGreaterThan(bounds[2].y + bounds[2].height)
+    const panelTops = bounds.map((bound) => bound.y)
+    const panelGrounds = bounds.map((bound) => bound.y + bound.height)
+    const topSpread = Math.max(...panelTops) - Math.min(...panelTops)
+    const groundSpread = Math.max(...panelGrounds) - Math.min(...panelGrounds)
+    expect(topSpread).toBeGreaterThan(50)
+    expect(groundSpread).toBeGreaterThan(50)
     const dimensions = Object.values(definitions).map((definition) => ({
       width: Math.hypot(
         definition.worldQuad[1][0] - definition.worldQuad[0][0],
@@ -232,22 +309,25 @@ describe("Example Canvas workspace", () => {
   })
 
   it("scales the expanded coordinate world to the full-height surface without clipping", () => {
-    const compact = createPlaneDefinitions(1220, 385)
+    const compact = createPlaneDefinitions(1220, 385, COORDINATE_PLANE_DOMAIN)
     const expandedHeight = 578
-    const expanded = createPlaneDefinitions(1390, expandedHeight)
-    const wideButShort = createPlaneDefinitions(1390, 385)
-    const narrowButTall = createPlaneDefinitions(1220, expandedHeight)
+    const expanded = createPlaneDefinitions(1390, expandedHeight, COORDINATE_PLANE_DOMAIN)
+    const wideButShort = createPlaneDefinitions(1390, 385, COORDINATE_PLANE_DOMAIN)
+    const narrowButTall = createPlaneDefinitions(1220, expandedHeight, COORDINATE_PLANE_DOMAIN)
+    const compactGrounds = Object.values(compact).map((definition) => definition.worldQuad[3][1])
+    const expandedGrounds = Object.values(expanded).map((definition) => definition.worldQuad[3][1])
+
+    expect(Math.max(...compactGrounds) - Math.min(...compactGrounds)).toBeGreaterThan(0)
+    expect(Math.max(...expandedGrounds) - Math.min(...expandedGrounds)).toBeCloseTo(0)
 
     for (const name of ["client", "view", "content"] as const) {
       const compactGround = compact[name].worldQuad[3][1]
-      const expandedGround = expanded[name].worldQuad[3][1]
       const worldWidth = (definition: typeof compact[typeof name]) => Math.hypot(
         definition.worldQuad[1][0] - definition.worldQuad[0][0],
         definition.worldQuad[1][2] - definition.worldQuad[0][2],
       )
 
-      expect(expandedGround).toBeGreaterThan(compactGround)
-      expect(worldWidth(expanded[name])).toBeLessThan(worldWidth(compact[name]))
+      expect(worldWidth(expanded[name])).toBeLessThan(worldWidth(narrowButTall[name]))
       expect(wideButShort[name].worldQuad[3][1]).toBe(compactGround)
       expect(narrowButTall[name].worldQuad[3][1]).toBe(compactGround)
 
@@ -262,8 +342,40 @@ describe("Example Canvas workspace", () => {
     }
   })
 
+  it("fits every source plane inside the measured source slot", () => {
+    for (const [width, height] of [
+      [1214, 478],
+      [1085, 478],
+      [1052, 478],
+      [974, 432],
+      [610, 400],
+      [460, 330],
+      [300, 300],
+    ]) {
+      const definitions = createPlaneDefinitions(width, height, COORDINATE_PLANE_DOMAIN)
+      const bounds = (["client", "view", "content"] as const).map((name) => {
+        const placement = definitions[name].placement
+        expect(placement.type).toBe("projective")
+        if (placement.type !== "projective") throw new Error("expected projective plane")
+        return createFiniteProjectiveMapping(placement.matrix, placement.domain).contentBounds
+      })
+
+      bounds.forEach((bound) => {
+        expect(bound.x).toBeGreaterThanOrEqual(-Number.EPSILON)
+        expect(bound.y).toBeGreaterThanOrEqual(-Number.EPSILON)
+        expect(bound.x + bound.width).toBeLessThanOrEqual(width + Number.EPSILON)
+        expect(bound.y + bound.height).toBeLessThanOrEqual(height + Number.EPSILON)
+      })
+      bounds.slice(0, -1).forEach((bound, index) => {
+        const overlap = bound.x + bound.width - bounds[index + 1].x
+        expect(overlap).toBeGreaterThan(-Math.min(bound.width, bounds[index + 1].width) * 0.08)
+        expect(overlap).toBeLessThan(Math.min(bound.width, bounds[index + 1].width) * 0.25)
+      })
+    }
+  })
+
   it("keeps plane triangle winding aligned with the stored front-face normal", () => {
-    const plane = createPlaneDefinitions(1012, 524).client
+    const plane = createPlaneDefinitions(1012, 524, COORDINATE_PLANE_DOMAIN).client
     const basis = createPlaneBasis(plane)
     const geometry = rectMeshGeometry(
       plane,
@@ -301,7 +413,7 @@ describe("Example Canvas workspace", () => {
   })
 
   it("builds rounded glass faces and bevels without degenerate triangles", () => {
-    const plane = createPlaneDefinitions(1012, 524).client
+    const plane = createPlaneDefinitions(1012, 524, COORDINATE_PLANE_DOMAIN).client
     const basis = createPlaneBasis(plane)
     const bevelRadius = 0.09
     const segments = 6
@@ -598,6 +710,8 @@ describe("Example Canvas workspace", () => {
     const stackLayers = workspace?.querySelectorAll<HTMLCanvasElement>(".coordinate-stack-canvas canvas")
     const liveLayers = workspace?.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")
     expect(workspace?.querySelectorAll(":scope > section")).toHaveLength(2)
+    expect(workspace?.querySelector(":scope > .coordinate-source-slot")).toBe(stackCard)
+    expect(workspace?.querySelector(":scope > .coordinate-live-exhibit")).not.toBeNull()
     expect(stackCard?.classList.contains("coordinate-focus-view-client")).toBe(true)
     expect(stackLayers).toHaveLength(2)
     expect(liveLayers).toHaveLength(2)
@@ -683,11 +797,9 @@ describe("Example Canvas workspace", () => {
     const scaleYInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS scale Y"]')
     const offsetXInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS translate X"]')
     const offsetYInput = container.querySelector<HTMLInputElement>('input[aria-label="CSS translate Y"]')
-    const bridgeBeforeCss = container
-      .querySelector<SVGPolylineElement>(".coordinate-space-bridge-line")
-      ?.getAttribute("points")
-    expect(container.querySelector(".coordinate-space-bridge-line")?.getAttribute("marker-mid"))
-      .toBe("url(#coordinate-output-arrow)")
+    const bridgeEndpointBeforeCss = container
+      .querySelector<SVGLineElement>(".coordinate-space-bridge-line")
+      ?.getAttribute("x2")
     const setInputValue = (input: HTMLInputElement | null, value: string) => {
       const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
       setValue?.call(input, value)
@@ -703,8 +815,8 @@ describe("Example Canvas workspace", () => {
     expect(displayTransform?.style.transform).toBe("translate(32px, 24px) scale(0.65, 0.9)")
     expect(workspace?.querySelector(".coordinate-live-exhibit .canvas-viewport-label")?.textContent)
       .toBe("CLIENT DOM · 65% × 90%")
-    expect(container.querySelector(".coordinate-space-bridge-line")?.getAttribute("points"))
-      .not.toBe(bridgeBeforeCss)
+    expect(container.querySelector(".coordinate-space-bridge-line")?.getAttribute("x2"))
+      .not.toBe(bridgeEndpointBeforeCss)
     expect(proofRows
       .find((item) => item.querySelector("dt")?.textContent === "CSS View to Client")
       ?.querySelector("code")?.textContent)

@@ -10,7 +10,11 @@ import {
 } from "react-stay-canvas"
 
 import { rgba } from "../../components/DemoKit"
-import type { LineSegment } from "./coordinateLabModel"
+import type {
+  CoordinatePlaneDomain,
+  CoordinatePlaneName,
+  LineSegment,
+} from "./coordinateLabModel"
 
 export const PLANE_GRID_COLUMNS = 6
 export const PLANE_GRID_ROWS = 5
@@ -19,17 +23,19 @@ const CAMERA_FIELD_OF_VIEW = Math.PI / 3.4
 const CAMERA_POSITION_X = 4.2
 const COMPACT_GROUND_HEIGHT = -2.4
 const EXPANDED_GROUND_HEIGHT = -2.1
-const EXPANDED_LAYOUT_SCALE = 0.818
+const EXPANDED_LAYOUT_SCALE = 0.76
 const COMPACT_PANEL_HEIGHT_TRIM = 0.75
+const SOURCE_FIT_MIN_SCALE = 0.28
+const SOURCE_FIT_REFERENCE_HEIGHT = 550
+const SOURCE_FIT_REFERENCE_WIDTH = 1080
 const BEVEL_FACE_CORNER_RATIO = 0.28
 const PANEL_LAYOUT = [
-  { centerX: -3.39, depth: 7.6, worldWidth: 4.34, worldHeight: 6.4, yaw: 0.04, logicalScale: 1, verticalOffset: 0 },
-  { centerX: 1.09, depth: 8.8, worldWidth: 4.34, worldHeight: 6.4, yaw: 0.08, logicalScale: 1, verticalOffset: 0.38 },
-  { centerX: 6.13, depth: 10.2, worldWidth: 4.34, worldHeight: 6.4, yaw: 0.12, logicalScale: 1, verticalOffset: 0.37 },
+  { centerX: 0.1, depth: 7.4, worldWidth: 4.9, worldHeight: 6.6, yaw: 0.05, verticalOffset: 0.25 },
+  { centerX: 5.3, depth: 9.2, worldWidth: 4.9, worldHeight: 6.6, yaw: 0.08, verticalOffset: 0.72 },
+  { centerX: 11.4, depth: 11.2, worldWidth: 4.9, worldHeight: 6.6, yaw: 0.11, verticalOffset: 0.88 },
 ] as const
 
-export type PlaneName = "client" | "view" | "content"
-export type PlaneRange = { x: number; y: number; width: number; height: number }
+export type PlaneName = CoordinatePlaneName
 export type QuadPoints = [Coordinate, Coordinate, Coordinate, Coordinate]
 
 export type PlaneDefinition = {
@@ -54,6 +60,15 @@ export type PlaneBevelFaceProfile = {
   rect: Rect
   radiusX: number
   radiusY: number
+}
+
+export type PlanePresentationMetrics = {
+  detailSize: number
+  dotRadius: number
+  projectedWidth: number
+  rangeSize: number
+  titleSize: number
+  valueOffset: number
 }
 
 function progressBetween(value: number, start: number, end: number) {
@@ -97,10 +112,18 @@ export function pointsForRect(rect: Readonly<Rect>): QuadPoints {
 export function createPlaneDefinitions(
   width: number,
   height: number,
+  domain: CoordinatePlaneDomain,
 ): Record<PlaneName, PlaneDefinition> {
-  const logicalBaseWidth = Math.max(120, Math.min(280, height * 0.58))
   const aspect = width / Math.max(1, height)
   const halfFieldHeight = Math.tan(CAMERA_FIELD_OF_VIEW / 2)
+  const sourceFitScale = Math.max(
+    SOURCE_FIT_MIN_SCALE,
+    Math.min(
+      1,
+      width / SOURCE_FIT_REFERENCE_WIDTH,
+      height / SOURCE_FIT_REFERENCE_HEIGHT,
+    ),
+  )
   const panelStageScale = Math.min(1.08, 1 + Math.max(0, height - 80) / 800)
   const stageExpansion = Math.min(
     progressBetween(width, 1250, 1390),
@@ -127,11 +150,15 @@ export function createPlaneDefinitions(
     verticalOffset,
   }: typeof PANEL_LAYOUT[number]): [Vector3, Vector3, Vector3, Vector3] => {
     const horizontal: Vector3 = [Math.cos(yaw), 0, -Math.sin(yaw)]
-    const scaledCenterX = CAMERA_POSITION_X + (centerX - CAMERA_POSITION_X) * layoutScale
-    const halfWidth = worldWidth * panelStageScale * layoutScale / 2
-    const scaledHeight = worldHeight * panelStageScale * layoutScale
+    const expandedCenterX = CAMERA_POSITION_X + (centerX - CAMERA_POSITION_X) * layoutScale
+    const scaledCenterX = CAMERA_POSITION_X
+      + (expandedCenterX - CAMERA_POSITION_X) * sourceFitScale
+    const halfWidth = worldWidth * panelStageScale * layoutScale * sourceFitScale / 2
+    const scaledHeight = (
+      worldHeight * panelStageScale * layoutScale
       - COMPACT_PANEL_HEIGHT_TRIM * (1 - stageExpansion)
-    const bottomHeight = groundHeight + verticalOffset
+    ) * sourceFitScale
+    const bottomHeight = groundHeight + verticalOffset * (1 - stageExpansion)
     const leftBottom: Vector3 = [
       scaledCenterX - horizontal[0] * halfWidth,
       bottomHeight,
@@ -152,27 +179,15 @@ export function createPlaneDefinitions(
 
   const definition = (name: PlaneName, index: number): PlaneDefinition => {
     const layout = PANEL_LAYOUT[index]
-    const planeWidth = logicalBaseWidth * layout.logicalScale
     const worldQuad = panelWorldQuad(layout)
-    const worldWidth = Math.hypot(
-      worldQuad[1][0] - worldQuad[0][0],
-      worldQuad[1][1] - worldQuad[0][1],
-      worldQuad[1][2] - worldQuad[0][2],
-    )
-    const worldHeight = Math.hypot(
-      worldQuad[3][0] - worldQuad[0][0],
-      worldQuad[3][1] - worldQuad[0][1],
-      worldQuad[3][2] - worldQuad[0][2],
-    )
-    const planeHeight = planeWidth * worldHeight / worldWidth
     const [topLeft, topRight, bottomRight, bottomLeft] = worldQuad.map(projectWorldPoint) as QuadPoints
     return {
-      width: planeWidth,
-      height: planeHeight,
+      width: domain.width,
+      height: domain.height,
       labelX: (topLeft.x + topRight.x) / 2,
       labelY: Math.min(topLeft.y, topRight.y) + Math.max(18, height * 0.04),
       placement: projectivePlacementFromQuad(
-        { x: 0, y: 0, width: planeWidth, height: planeHeight },
+        { x: 0, y: 0, width: domain.width, height: domain.height },
         { topLeft, topRight, bottomRight, bottomLeft },
       ),
       worldQuad,
@@ -185,19 +200,6 @@ export function createPlaneDefinitions(
     view: definition("view", 1),
     content: definition("content", 2),
   }
-}
-
-export function expandRangeToAspect(range: Readonly<PlaneRange>, aspect: number): PlaneRange {
-  const width = Math.max(1, range.width)
-  const height = Math.max(1, range.height)
-  const currentAspect = width / height
-  if (Math.abs(currentAspect - aspect) < 0.0001) return { ...range, width, height }
-  if (currentAspect < aspect) {
-    const expandedWidth = height * aspect
-    return { x: range.x - (expandedWidth - width) / 2, y: range.y, width: expandedWidth, height }
-  }
-  const expandedHeight = width / aspect
-  return { x: range.x, y: range.y - (expandedHeight - height) / 2, width, height: expandedHeight }
 }
 
 export function projectPlanePoint(
@@ -215,6 +217,32 @@ export function projectPlanePoint(
   return {
     x: (matrix.m00 * point.x + matrix.m01 * point.y + matrix.m02) / denominator,
     y: (matrix.m10 * point.x + matrix.m11 * point.y + matrix.m12) / denominator,
+  }
+}
+
+export function planePresentationMetrics(
+  plane: PlaneDefinition,
+): PlanePresentationMetrics {
+  const topLeft = projectPlanePoint(plane, { x: 0, y: 0 })
+  const topRight = projectPlanePoint(plane, { x: plane.width, y: 0 })
+  const bottomLeft = projectPlanePoint(plane, { x: 0, y: plane.height })
+  const bottomRight = projectPlanePoint(plane, { x: plane.width, y: plane.height })
+  const edgeWidth = (left: Coordinate, right: Coordinate) => Math.hypot(
+    right.x - left.x,
+    right.y - left.y,
+  )
+  const projectedWidth = Math.max(
+    edgeWidth(topLeft, topRight),
+    edgeWidth(bottomLeft, bottomRight),
+  )
+
+  return {
+    detailSize: Math.max(6, Math.min(12, projectedWidth * 0.038)),
+    dotRadius: Math.max(3.5, Math.min(7, projectedWidth * 0.018)),
+    projectedWidth,
+    rangeSize: Math.max(6, Math.min(10, projectedWidth * 0.03)),
+    titleSize: Math.max(8, Math.min(16, projectedWidth * 0.05)),
+    valueOffset: Math.max(6, Math.min(10, projectedWidth * 0.025)),
   }
 }
 

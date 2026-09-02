@@ -33,14 +33,16 @@ Listener 的目标在标准 drag/move 手势开始时确定，后续 continuatio
 | --- | --- | --- |
 | `originEvent` | `Event` | 当前输入的原生事件对象；不得跨异步阶段依赖其传播状态 |
 | `e` | `ActionEvent` | 当前 Listener 独立的 action envelope |
-| `store` | `Map` | Event 定义共享存储 |
-| `stateStore` | `Map` | 当前 Canvas state 的存储，切 state 时清空 |
+| `store` | `Map` 或 `StayStore<Schema>` | Event 定义共享存储 |
+| `stateStore` | `Map` 或 `StayStore<Schema>` | 当前 Canvas state 的存储，切 state 时清空 |
 | `composeStore` | object | 同一 Listener 内由回调返回函数合并的状态 |
 | `canvas` | `Canvas` | 当前运行时 Canvas |
 | `tools` | `StayTools` | 当前 Canvas 的工具实例 |
 | `payload` | object | 手动 trigger 传入的业务数据 |
 
 `callback` 可以返回一个以 action 名为 key 的函数映射。函数返回的对象会同步合并到该 Listener 的 `composeStore`。
+
+`StayStore<Schema>` 是同一个原生 Map 的类型化视图；`get()` 和 `set()` 会按已知字符串 key 推导各自的 value 类型。可通过 `EventProps`、`ListenerProps` 或 `StayCanvasProps` 末尾的泛型传入 store schema；省略时仍保持原有 `Map<string, any>` 回调类型。schema 不会初始化数据，因此 key 尚未写入时 `get()` 仍返回 `undefined`。示例见[交互与事件：类型化回调 store](../interaction-and-events.md#类型化回调-store)。
 
 ## ActionEvent
 
@@ -92,7 +94,7 @@ const saveEvent: EventProps<"save"> = {
 }
 ```
 
-导出的 `EventProps<EventName>` 组合了必需的 `name`/`trigger` 字段、可选的条件与成功回调，以及可选的目标谓词。请直接使用导出类型，不要在应用中重写内部 trigger union。
+导出的 `EventProps<EventName, StoreSchema?, StateStoreSchema?>` 组合了必需的 `name`/`trigger` 字段、可选的条件与成功回调，以及可选的目标谓词。请直接使用导出类型，不要在应用中重写内部 trigger union。
 
 - `conditionCallback` 在目标解析前判断 action 是否成立；
 - `successCallback` 在 action 成立后执行，可注册后续动态 Event；

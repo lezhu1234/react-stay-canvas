@@ -182,6 +182,45 @@ const dragListener: ListenerProps = {
 
 每次动作都会先调用外层 `callback`，然后只执行返回对象中与当前 `e.name` 同名的函数。该函数返回的对象会合并进这个 Listener 自己的 `composeStore`。
 
+### 类型化回调 store
+
+运行时始终持有原生 Map；应用可以描述其中的 key，而不需要再增加一层状态：
+
+```tsx
+import type { ContentPoint, ListenerProps } from "react-stay-canvas"
+
+interface EditorStore {
+  selectedId: string
+  selection: Set<string>
+}
+
+interface SelectStateStore {
+  dragOrigin: ContentPoint
+}
+
+type SelectListener = {
+  name: "select-item"
+  payload: { id: string }
+}
+
+const selectListener: ListenerProps<
+  SelectListener,
+  "drag",
+  { started: boolean },
+  EditorStore,
+  SelectStateStore
+> = {
+  name: "select-item",
+  event: "drag",
+  callback: ({ payload, store, stateStore }) => {
+    store.set("selectedId", payload.id)
+    stateStore.set("dragOrigin", { x: 20, y: 30 } as ContentPoint)
+  },
+}
+```
+
+如果整张 Canvas 的定义需要共享同一 schema，可把最后两个类型参数同样传给 `EventProps<EventName, StoreSchema, StateStoreSchema>` 和 `StayCanvasProps<EventName, HistorySnapshot, StoreSchema, StateStoreSchema>`。`composeStore` 仍是 `ListenerProps` 的第三个泛型，因为每个 Listener 都拥有不同的组合状态结构。这些泛型只约束访问方式；`store` 初始仍为空，`stateStore` 也仍会在每次 `switchState()` 时清空。
+
 ## `originEvent` 与 `ActionEvent`
 
 Listener 回调同时收到两个事件对象：

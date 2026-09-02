@@ -237,10 +237,6 @@ describe("internal Stay WebGL Child runtime", () => {
           metallic: 0.15,
           roughness: 0.28,
         }),
-        planarReflection: {
-          localPlane: { point: [0, -0.2, 0], normal: [0, 2, 0] },
-          resolutionScale: 0.75,
-        },
       })],
     })
 
@@ -250,10 +246,6 @@ describe("internal Stay WebGL Child runtime", () => {
       color: [0.6, 0.65, 0.7, 1],
       metallic: Math.fround(0.15),
       roughness: Math.fround(0.28),
-    })
-    expect(snapshot.meshes[0].planarReflection).toEqual({
-      localPlane: { point: [0, -0.2, 0], normal: [0, 1, 0] },
-      resolutionScale: 0.75,
     })
     const restored = restoreStayWebGLChildSnapshot(snapshot)
     expect(captureStayWebGLSceneChild(restored).meshes[0].material)
@@ -324,38 +316,6 @@ describe("internal Stay WebGL Child runtime", () => {
     expect((restoredMaterial as TransparentImageMaterial).texture).toBe(texture)
     original.destroy()
     restored.destroy()
-  })
-
-  it("owns validated planar-reflection state atomically", () => {
-    const changes = vi.fn()
-    const receiver = new Mesh({
-      geometry: { ...triangle(), normals },
-      material: new StandardMaterial(),
-      planarReflection: {
-        localPlane: { point: [0, 0, 0], normal: [0, 4, 0] },
-      },
-    })
-    receiver.subscribeChanges(changes)
-
-    expect(receiver.getPlanarReflection()).toEqual({
-      localPlane: { point: [0, 0, 0], normal: [0, 1, 0] },
-      resolutionScale: 0.5,
-    })
-    expect(() => receiver.setPlanarReflection({
-      localPlane: { point: [0, 0, 0], normal: [0, 0, 0] },
-    })).toThrow("finite non-zero length")
-    expect(() => receiver.setPlanarReflection({
-      localPlane: { point: [0, 0, 0], normal: [0, 1, 0] },
-      resolutionScale: 1.1,
-    })).toThrow("at most 1")
-    expect(() => receiver.setMaterial(new LambertMaterial()))
-      .toThrow("requires a StandardMaterial")
-    expect(receiver.getMaterial()).toEqual(new StandardMaterial())
-    expect(changes).not.toHaveBeenCalled()
-
-    receiver.setPlanarReflection(undefined)
-    receiver.setMaterial(new LambertMaterial())
-    expect(changes).toHaveBeenCalledTimes(2)
   })
 
   it("rejects invalid ownership inputs before subscribing to Mesh state", () => {

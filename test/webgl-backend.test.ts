@@ -428,53 +428,6 @@ describe("public native WebGL2 layer backend", () => {
     expect(frames.length).toBeGreaterThan(0)
   })
 
-  it("restarts a failed frame after duplicate planar receivers are corrected", () => {
-    const frames: FrameRequestCallback[] = []
-    let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
-    const { stage } = createStage({
-      layers: [{
-        backend: "webgl2",
-        camera: camera(),
-        context: (canvas) => {
-          gl ??= createRecordingWebGL2Context(canvas)
-          return gl.context
-        },
-      }],
-      raf: (callback) => {
-        frames.push(callback)
-        return frames.length
-      },
-    })
-    const reflection = {
-      localPlane: { point: [0, 0, 0], normal: [0, 0, 1] } as const,
-    }
-    const first = new Mesh({
-      geometry: litTriangle(),
-      material: new StandardMaterial(),
-      planarReflection: reflection,
-    })
-    const second = new Mesh({
-      geometry: litTriangle(),
-      material: new StandardMaterial(),
-      planarReflection: reflection,
-    })
-    stage.tools.webgl.appendChild({
-      className: "duplicate-reflectors",
-      layer: 0,
-      meshes: [first, second],
-    })
-
-    const failedFrame = frames.shift()!
-    expect(() => failedFrame(16)).toThrow("at most one planar reflection receiver")
-    expect(gl!.spies.createProgram).not.toHaveBeenCalled()
-
-    second.setPlanarReflection(undefined)
-
-    expect(gl!.spies.drawElements).toHaveBeenCalledTimes(3)
-    expect(frames.length).toBeGreaterThan(0)
-    stage.destroy()
-  })
-
   it("keeps a layer paused when context restoration fails", () => {
     let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
     let contextRequests = 0

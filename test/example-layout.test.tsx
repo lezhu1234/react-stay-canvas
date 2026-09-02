@@ -1650,7 +1650,9 @@ describe("Example Canvas workspace", () => {
 
     click("scale-x")
     expect(cssState()).toBe("translate(0, 0) scale(0.75, 0.75)")
-    click("translate-x", 0.75)
+    // 0.55 lies between the initial-scale and current-scale rail positions, so
+    // this also proves the long-lived listener reads the latest viewport state.
+    click("translate-x", 0.55)
     expect(cssState()).toBe("translate(0, 0) scale(0.75, 0.75)")
     expect(viewportState()).toMatch(/scale\(0\.98\)$/)
     click("css-reset")

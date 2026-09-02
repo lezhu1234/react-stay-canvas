@@ -17,7 +17,6 @@ import {
   type GlassAttenuationColor,
   type ImageTextureAlphaMode,
   type WebGL2LayerConfig,
-  type PlanarReflection,
   translationMatrix4,
 } from "react-stay-canvas"
 
@@ -98,12 +97,6 @@ mesh.setMaterial(glass)
 mesh.setCastShadow(false)
 mesh.setReceiveShadow(true)
 mesh.setMaterial(standard)
-mesh.setPlanarReflection({
-  localPlane: { point: [0, 0, 0], normal: [0, 1, 0] },
-  resolutionScale: 0.5,
-})
-const planarReflection: PlanarReflection | undefined = mesh.getPlanarReflection()
-mesh.setPlanarReflection(undefined)
 
 const ambient = new AmbientLight({ color: [0.9, 0.95, 1], intensity: 0.3 })
 const key = new DirectionalLight({
@@ -182,6 +175,5 @@ void standardMetallic
 void standardRoughness
 void pointPosition
 void pointRange
-void planarReflection
 void WebGL2SceneRuntime
 void WebGL2LayerRuntime

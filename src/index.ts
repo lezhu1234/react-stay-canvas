@@ -10,9 +10,6 @@ export { Mesh } from "./stay/webgl2/mesh"
 export type {
   MeshGeometryInput,
   MeshGeometrySnapshot,
-  PlanarReflection,
-  PlanarReflectionPlane,
-  PlanarReflectionProps,
 } from "./stay/webgl2/mesh"
 export {
   GlassMaterial,

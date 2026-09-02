@@ -24,13 +24,6 @@ import {
   type ImageTextureResources,
 } from "./imageTextureResources"
 import { PerspectiveCamera } from "./perspectiveCamera"
-import {
-  findPlanarReflectionReceiver,
-  reflectionCameraFrame,
-  worldReflectionPlane,
-  type ReflectionCameraFrame,
-  type WorldReflectionPlane,
-} from "./planarReflection"
 import { EnvironmentMap } from "./environmentMap"
 import {
   createEnvironmentTextureResources,
@@ -68,14 +61,7 @@ import {
   linearizeSrgbColorWithAlpha,
 } from "./colorSpace"
 
-interface ClipPipelineResources {
-  readonly clipPlanePointLocation: WebGLUniformLocation
-  readonly clipPlaneNormalLocation: WebGLUniformLocation
-  readonly clipPlaneSideLocation: WebGLUniformLocation
-  readonly clipPlaneEnabledLocation: WebGLUniformLocation
-}
-
-interface UnlitPipelineResources extends ClipPipelineResources {
+interface UnlitPipelineResources {
   readonly kind: "unlit"
   readonly program: WebGLProgram
   readonly viewProjectionLocation: WebGLUniformLocation
@@ -83,7 +69,7 @@ interface UnlitPipelineResources extends ClipPipelineResources {
   readonly colorLocation: WebGLUniformLocation
 }
 
-interface ImagePipelineBaseResources extends ClipPipelineResources {
+interface ImagePipelineBaseResources {
   readonly program: WebGLProgram
   readonly viewProjectionLocation: WebGLUniformLocation
   readonly modelLocation: WebGLUniformLocation
@@ -102,7 +88,7 @@ type ImagePipelineResources =
   | OpaqueImagePipelineResources
   | TransparentImagePipelineResources
 
-interface LitPipelineBaseResources extends ClipPipelineResources {
+interface LitPipelineBaseResources {
   readonly program: WebGLProgram
   readonly viewProjectionLocation: WebGLUniformLocation
   readonly modelLocation: WebGLUniformLocation
@@ -145,10 +131,6 @@ interface StandardPipelineResources
   readonly kind: "standard"
   readonly metallicLocation: WebGLUniformLocation
   readonly roughnessLocation: WebGLUniformLocation
-  readonly planarReflectionMapLocation: WebGLUniformLocation
-  readonly planarReflectionViewProjectionLocation: WebGLUniformLocation
-  readonly planarReflectionMaxLodLocation: WebGLUniformLocation
-  readonly hasPlanarReflectionLocation: WebGLUniformLocation
 }
 
 interface GlassPipelineResources
@@ -215,13 +197,6 @@ interface CameraFrame {
   readonly viewProjection: Matrix4
 }
 
-interface PlanarReflectionFrame {
-  readonly receiver: Mesh
-  readonly plane: WorldReflectionPlane
-  readonly camera: ReflectionCameraFrame
-  readonly target: SceneTargetResources
-}
-
 interface TransparentDrawItem extends DrawItem {
   readonly inputOrder: number
   readonly viewDepth: number
@@ -231,12 +206,9 @@ const UNLIT_VERTEX_SHADER = `#version 300 es
 layout(location = 0) in vec3 a_position;
 uniform mat4 u_view_projection;
 uniform mat4 u_model;
-out vec3 world_position;
 
 void main() {
-  vec4 world = u_model * vec4(a_position, 1.0);
-  gl_Position = u_view_projection * world;
-  world_position = world.xyz;
+  gl_Position = u_view_projection * u_model * vec4(a_position, 1.0);
 }
 `
 
@@ -246,28 +218,10 @@ layout(location = 2) in vec2 a_uv;
 uniform mat4 u_view_projection;
 uniform mat4 u_model;
 out vec2 image_uv;
-out vec3 world_position;
 
 void main() {
-  vec4 world = u_model * vec4(a_position, 1.0);
-  gl_Position = u_view_projection * world;
+  gl_Position = u_view_projection * u_model * vec4(a_position, 1.0);
   image_uv = a_uv;
-  world_position = world.xyz;
-}
-`
-
-const CLIP_PLANE_FRAGMENT_INPUTS = `
-uniform vec3 u_clip_plane_point;
-uniform vec3 u_clip_plane_normal;
-uniform float u_clip_plane_side;
-uniform bool u_clip_plane_enabled;
-
-void apply_clip_plane() {
-  if (u_clip_plane_enabled
-      && dot(world_position - u_clip_plane_point, u_clip_plane_normal)
-        * u_clip_plane_side < -0.0001) {
-    discard;
-  }
 }
 `
 
@@ -308,12 +262,9 @@ void main() {
 const UNLIT_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 uniform vec4 u_color;
-in vec3 world_position;
 out vec4 output_color;
-${CLIP_PLANE_FRAGMENT_INPUTS}
 
 void main() {
-  apply_clip_plane();
   output_color = u_color;
 }
 `
@@ -322,12 +273,9 @@ const IMAGE_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 uniform sampler2D u_image_texture;
 in vec2 image_uv;
-in vec3 world_position;
 out vec4 output_color;
-${CLIP_PLANE_FRAGMENT_INPUTS}
 
 void main() {
-  apply_clip_plane();
   output_color = vec4(texture(u_image_texture, image_uv).rgb, 1.0);
 }
 `
@@ -336,12 +284,9 @@ const TRANSPARENT_IMAGE_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 uniform sampler2D u_image_texture;
 in vec2 image_uv;
-in vec3 world_position;
 out vec4 output_color;
-${CLIP_PLANE_FRAGMENT_INPUTS}
 
 void main() {
-  apply_clip_plane();
   output_color = texture(u_image_texture, image_uv);
 }
 `
@@ -470,10 +415,8 @@ in vec3 world_normal;
 out vec4 output_color;
 ${SHADOW_FRAGMENT_INPUTS}
 ${DIRECT_LIGHT_FRAGMENT_INPUTS}
-${CLIP_PLANE_FRAGMENT_INPUTS}
 
 void main() {
-  apply_clip_plane();
   vec3 normal = normalize(world_normal);
   if (!gl_FrontFacing) normal = -normal;
   vec3 illumination = u_ambient_light;
@@ -564,44 +507,14 @@ uniform vec4 u_color;
 uniform float u_metallic;
 uniform float u_roughness;
 uniform vec3 u_ambient_light;
-uniform sampler2D u_planar_reflection_map;
-uniform mat4 u_planar_reflection_view_projection;
-uniform float u_planar_reflection_max_lod;
-uniform bool u_has_planar_reflection;
 in vec3 world_normal;
 out vec4 output_color;
 ${SHADOW_FRAGMENT_INPUTS}
 ${DIRECT_LIGHT_FRAGMENT_INPUTS}
 ${ENVIRONMENT_FRAGMENT_INPUTS}
 ${MICROFACET_FRAGMENT_INPUTS}
-${CLIP_PLANE_FRAGMENT_INPUTS}
-
-vec3 reflected_radiance(vec3 reflected_direction, out bool has_reflection) {
-  vec3 environment = u_has_environment
-    ? environment_radiance(reflected_direction, u_roughness)
-    : vec3(0.0);
-  if (u_has_planar_reflection) {
-    vec4 clip = u_planar_reflection_view_projection * vec4(world_position, 1.0);
-    if (clip.w > 0.00001) {
-      vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
-      if (all(greaterThanEqual(uv, vec2(0.0)))
-          && all(lessThanEqual(uv, vec2(1.0)))) {
-        vec4 planar = textureLod(
-          u_planar_reflection_map,
-          uv,
-          u_roughness * u_planar_reflection_max_lod
-        );
-        has_reflection = planar.a > 0.00001 || u_has_environment;
-        return planar.rgb + environment * (1.0 - planar.a);
-      }
-    }
-  }
-  has_reflection = u_has_environment;
-  return environment;
-}
 
 void main() {
-  apply_clip_plane();
   vec3 normal = normalize(world_normal);
   if (!gl_FrontFacing) normal = -normal;
   vec3 view_direction = normalize(u_camera_position - world_position);
@@ -631,12 +544,13 @@ void main() {
       * normal_light
       * direct_light_transmittance(light);
   }
-  vec3 reflected_direction = normalize(reflect(-view_direction, normal));
-  bool has_reflection = false;
-  vec3 reflected = reflected_radiance(reflected_direction, has_reflection);
-  if (has_reflection) {
+  if (u_has_environment) {
+    vec3 reflected_direction = normalize(reflect(-view_direction, normal));
     vec3 fresnel = fresnel_schlick(normal_view, reflectance);
-    result += reflected * fresnel;
+    result += environment_radiance(
+      reflected_direction,
+      u_roughness
+    ) * fresnel;
   }
   output_color = vec4(result, 1.0);
 }
@@ -663,7 +577,6 @@ ${DIRECT_LIGHT_FRAGMENT_INPUTS}
 ${ENVIRONMENT_FRAGMENT_INPUTS}
 ${VOLUME_ATTENUATION_GLSL}
 ${MICROFACET_FRAGMENT_INPUTS}
-${CLIP_PLANE_FRAGMENT_INPUTS}
 
 vec2 projected_uv(vec4 clip_position) {
   return clip_position.xy / clip_position.w * 0.5 + 0.5;
@@ -698,7 +611,6 @@ vec2 refracted_scene_uv(
 }
 
 void main() {
-  apply_clip_plane();
   vec3 normal = normalize(world_normal);
   if (!gl_FrontFacing) normal = -normal;
   vec3 view_direction = normalize(u_camera_position - world_position);
@@ -860,18 +772,6 @@ function environmentPipelineLocations(
   }
 }
 
-function clipPipelineLocations(
-  context: WebGL2RenderingContext,
-  program: WebGLProgram,
-): ClipPipelineResources {
-  return {
-    clipPlanePointLocation: requireUniform(context, program, "u_clip_plane_point"),
-    clipPlaneNormalLocation: requireUniform(context, program, "u_clip_plane_normal"),
-    clipPlaneSideLocation: requireUniform(context, program, "u_clip_plane_side"),
-    clipPlaneEnabledLocation: requireUniform(context, program, "u_clip_plane_enabled"),
-  }
-}
-
 function createPipeline(
   context: WebGL2RenderingContext,
   kind: MeshMaterial["kind"]
@@ -891,12 +791,10 @@ function createPipeline(
       const info = context.getProgramInfoLog(program) || "unknown program error"
       throw new Error(`Unable to link WebGL2 program: ${info}`)
     }
-    const clipPipeline = clipPipelineLocations(context, program)
     if (kind === "image" || kind === "transparent-image") {
       return {
         kind,
         program,
-        ...clipPipeline,
         viewProjectionLocation: requireUniform(context, program, "u_view_projection"),
         modelLocation: requireUniform(context, program, "u_model"),
         imageTextureLocation: requireUniform(context, program, "u_image_texture"),
@@ -908,7 +806,6 @@ function createPipeline(
         kind,
         program,
         colorLocation,
-        ...clipPipeline,
         viewProjectionLocation: requireUniform(context, program, "u_view_projection"),
         modelLocation: requireUniform(context, program, "u_model"),
       }
@@ -989,7 +886,6 @@ function createPipeline(
       ),
       shadowBiasLocation: requireUniform(context, program, "u_shadow_bias"),
       receiveShadowLocation: requireUniform(context, program, "u_receive_shadow"),
-      ...clipPipeline,
     }
     if (kind === "lambert") return { kind, ...litPipeline }
     const environmentPipeline = environmentPipelineLocations(context, program)
@@ -1000,26 +896,6 @@ function createPipeline(
         ...environmentPipeline,
         metallicLocation: requireUniform(context, program, "u_metallic"),
         roughnessLocation: requireUniform(context, program, "u_roughness"),
-        planarReflectionMapLocation: requireUniform(
-          context,
-          program,
-          "u_planar_reflection_map",
-        ),
-        planarReflectionViewProjectionLocation: requireUniform(
-          context,
-          program,
-          "u_planar_reflection_view_projection",
-        ),
-        planarReflectionMaxLodLocation: requireUniform(
-          context,
-          program,
-          "u_planar_reflection_max_lod",
-        ),
-        hasPlanarReflectionLocation: requireUniform(
-          context,
-          program,
-          "u_has_planar_reflection",
-        ),
       }
     }
     return {
@@ -1286,7 +1162,6 @@ export class WebGL2SceneRuntime {
   #transmissiveShadowPipeline?: TransmissiveShadowPipelineResources
   #transmissiveShadowMap?: TransmissiveShadowMapResources
   #sceneTarget?: SceneTargetResources
-  #reflectionTarget?: SceneTargetResources
   #outputPipeline?: OutputPipelineResources
   #environmentTexture?: EnvironmentTextureResources
   #disposed = false
@@ -1313,11 +1188,6 @@ export class WebGL2SceneRuntime {
       throw new RangeError("WebGL2 drawing buffer must have positive dimensions")
     }
 
-    const receiver = findPlanarReflectionReceiver(meshes)
-    if (!receiver && this.#reflectionTarget) {
-      deleteSceneTargetResources(context, this.#reflectionTarget)
-      this.#reflectionTarget = undefined
-    }
     this.#pruneMeshResources(new Set(meshes))
     const imageTextures = imageTexturesUsedBy(meshes)
     this.#pruneImageTextureResources(imageTextures)
@@ -1343,30 +1213,7 @@ export class WebGL2SceneRuntime {
       ? this.#environmentTextureResources(environment)
       : undefined
     const shadow = this.#renderShadowPass(meshes, shadowLight)
-    let reflection: PlanarReflectionFrame | undefined
     try {
-      const descriptor = receiver?.getPlanarReflection()
-      if (receiver && descriptor) {
-        const plane = worldReflectionPlane(receiver, descriptor, mainCamera.position)
-        const reflectedCamera = reflectionCameraFrame(camera, plane, aspect)
-        const reflectionWidth = Math.max(1, Math.round(width * descriptor.resolutionScale))
-        const reflectionHeight = Math.max(1, Math.round(height * descriptor.resolutionScale))
-        const target = this.#reflectionTargetResources(reflectionWidth, reflectionHeight)
-        reflection = { receiver, plane, camera: reflectedCamera, target }
-        this.#drawSceneToTarget(
-          meshes.filter((mesh) => mesh !== receiver),
-          reflectedCamera,
-          lights,
-          environment,
-          environmentTexture,
-          shadow,
-          target,
-          plane,
-          undefined,
-          true,
-        )
-      }
-
       const sceneTarget = this.#sceneTargetResources(width, height)
       this.#drawSceneToTarget(
         meshes,
@@ -1376,8 +1223,6 @@ export class WebGL2SceneRuntime {
         environmentTexture,
         shadow,
         sceneTarget,
-        undefined,
-        reflection,
         false,
       )
       presentScene(
@@ -1393,8 +1238,6 @@ export class WebGL2SceneRuntime {
       context.depthMask(true)
       context.disable(context.BLEND)
       context.bindFramebuffer(context.FRAMEBUFFER, null)
-      context.activeTexture(context.TEXTURE5)
-      context.bindTexture(context.TEXTURE_2D, null)
       context.activeTexture(context.TEXTURE2)
       context.bindTexture(context.TEXTURE_2D, null)
       context.activeTexture(context.TEXTURE4)
@@ -1418,8 +1261,6 @@ export class WebGL2SceneRuntime {
     environmentTexture: EnvironmentTextureResources | undefined,
     shadow: ShadowFrame | undefined,
     target: SceneTargetResources,
-    clipPlane: WorldReflectionPlane | undefined,
-    reflection: PlanarReflectionFrame | undefined,
     generateFinalMipmaps: boolean,
   ) {
     const context = this.#context
@@ -1432,7 +1273,6 @@ export class WebGL2SceneRuntime {
       if (pipeline !== activePipeline) {
         context.useProgram(pipeline.program)
         activePipeline = pipeline
-        this.#applyClipPlaneUniforms(pipeline, clipPlane)
         if (pipeline.kind === "unlit" || pipeline.kind === "image"
             || pipeline.kind === "transparent-image") {
           context.uniformMatrix4fv(
@@ -1509,26 +1349,6 @@ export class WebGL2SceneRuntime {
       if (pipeline.kind === "standard" && material.kind === "standard") {
         context.uniform1f(pipeline.metallicLocation, material.metallic)
         context.uniform1f(pipeline.roughnessLocation, material.roughness)
-        const receivesReflection = reflection?.receiver === mesh
-        context.uniform1i(
-          pipeline.hasPlanarReflectionLocation,
-          receivesReflection ? 1 : 0,
-        )
-        context.uniform1i(pipeline.planarReflectionMapLocation, 5)
-        if (receivesReflection && reflection) {
-          context.uniformMatrix4fv(
-            pipeline.planarReflectionViewProjectionLocation,
-            false,
-            reflection.camera.viewProjection,
-          )
-          context.uniform1f(
-            pipeline.planarReflectionMaxLodLocation,
-            reflection.target.maxMipLevel,
-          )
-          context.activeTexture(context.TEXTURE5)
-          context.bindTexture(context.TEXTURE_2D, reflection.target.resolveTexture)
-          context.activeTexture(context.TEXTURE0)
-        }
       }
       if (pipeline.kind === "glass" && material.kind === "glass") {
         context.uniform3fv(
@@ -1563,23 +1383,6 @@ export class WebGL2SceneRuntime {
       queues.transparent.forEach(draw)
     }
     resolveSceneTarget(context, target, generateFinalMipmaps)
-  }
-
-  #applyClipPlaneUniforms(
-    pipeline: PipelineResources,
-    plane: WorldReflectionPlane | undefined,
-  ) {
-    const context = this.#context
-    context.uniform1i(pipeline.clipPlaneEnabledLocation, plane ? 1 : 0)
-    context.uniform3fv(
-      pipeline.clipPlanePointLocation,
-      new Float32Array(plane?.point ?? [0, 0, 0]),
-    )
-    context.uniform3fv(
-      pipeline.clipPlaneNormalLocation,
-      new Float32Array(plane?.normal ?? [0, 1, 0]),
-    )
-    context.uniform1f(pipeline.clipPlaneSideLocation, plane?.cameraSide ?? 1)
   }
 
   restoreContext(context: WebGL2RenderingContext = this.#context) {
@@ -1923,25 +1726,6 @@ export class WebGL2SceneRuntime {
     return created
   }
 
-  #reflectionTargetResources(width: number, height: number) {
-    if (this.#reflectionTarget?.width === width
-        && this.#reflectionTarget.height === height) {
-      return this.#reflectionTarget
-    }
-    if (this.#reflectionTarget) {
-      deleteSceneTargetResources(this.#context, this.#reflectionTarget)
-    }
-    this.#reflectionTarget = undefined
-    const created = createSceneTargetResources(
-      this.#context,
-      width,
-      height,
-      { multisample: false },
-    )
-    this.#reflectionTarget = created
-    return created
-  }
-
   #outputPipelineResources() {
     this.#outputPipeline ??= createOutputPipeline(this.#context)
     return this.#outputPipeline
@@ -2044,9 +1828,6 @@ export class WebGL2SceneRuntime {
     if (this.#sceneTarget) {
       deleteSceneTargetResources(this.#context, this.#sceneTarget)
     }
-    if (this.#reflectionTarget) {
-      deleteSceneTargetResources(this.#context, this.#reflectionTarget)
-    }
     if (this.#outputPipeline) {
       deleteOutputPipeline(this.#context, this.#outputPipeline)
     }
@@ -2058,7 +1839,6 @@ export class WebGL2SceneRuntime {
     this.#transmissiveShadowPipeline = undefined
     this.#transmissiveShadowMap = undefined
     this.#sceneTarget = undefined
-    this.#reflectionTarget = undefined
     this.#outputPipeline = undefined
     this.#environmentTexture = undefined
   }
@@ -2072,7 +1852,6 @@ export class WebGL2SceneRuntime {
     this.#transmissiveShadowPipeline = undefined
     this.#transmissiveShadowMap = undefined
     this.#sceneTarget = undefined
-    this.#reflectionTarget = undefined
     this.#outputPipeline = undefined
     this.#environmentTexture = undefined
   }

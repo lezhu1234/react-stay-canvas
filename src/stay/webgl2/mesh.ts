@@ -16,21 +16,6 @@ import {
   type MeshMaterial,
 } from "./material"
 
-export interface PlanarReflectionPlane {
-  readonly point: readonly [number, number, number]
-  readonly normal: readonly [number, number, number]
-}
-
-export interface PlanarReflectionProps {
-  readonly localPlane: PlanarReflectionPlane
-  readonly resolutionScale?: number
-}
-
-export interface PlanarReflection {
-  readonly localPlane: PlanarReflectionPlane
-  readonly resolutionScale: number
-}
-
 export interface MeshGeometryInput {
   readonly positions: ArrayLike<number>
   readonly normals?: ArrayLike<number>
@@ -50,51 +35,6 @@ export interface MeshGeometrySnapshot {
 function finite(value: number, name: string) {
   if (!Number.isFinite(value)) throw new TypeError(`${name} must be finite`)
   return value
-}
-
-function copyVector3(
-  value: readonly [number, number, number],
-  name: string,
-): readonly [number, number, number] {
-  return [
-    finite(value[0], `${name}[0]`),
-    finite(value[1], `${name}[1]`),
-    finite(value[2], `${name}[2]`),
-  ]
-}
-
-function copyPlanarReflection(
-  value: PlanarReflectionProps | PlanarReflection,
-): PlanarReflection {
-  const point = copyVector3(value.localPlane.point, "Planar reflection point")
-  const inputNormal = copyVector3(value.localPlane.normal, "Planar reflection normal")
-  const length = Math.hypot(...inputNormal)
-  if (!Number.isFinite(length) || length === 0) {
-    throw new RangeError("Planar reflection normal must have a finite non-zero length")
-  }
-  const normal: readonly [number, number, number] = [
-    inputNormal[0] / length,
-    inputNormal[1] / length,
-    inputNormal[2] / length,
-  ]
-  const resolutionScale = finite(
-    value.resolutionScale ?? 0.5,
-    "Planar reflection resolutionScale",
-  )
-  if (resolutionScale <= 0 || resolutionScale > 1) {
-    throw new RangeError("Planar reflection resolutionScale must be greater than 0 and at most 1")
-  }
-  return { localPlane: { point, normal }, resolutionScale }
-}
-
-function planarReflectionsEqual(
-  first: PlanarReflection | undefined,
-  second: PlanarReflection | undefined,
-) {
-  return first === second || Boolean(first && second
-    && arrayValuesEqual(first.localPlane.point, second.localPlane.point)
-    && arrayValuesEqual(first.localPlane.normal, second.localPlane.normal)
-    && first.resolutionScale === second.resolutionScale)
 }
 
 function copyGeometry(input: MeshGeometryInput) {
@@ -208,7 +148,6 @@ export class Mesh {
   #material: MeshMaterial
   #castShadow: boolean
   #receiveShadow: boolean
-  #planarReflection?: PlanarReflection
   readonly #changeListeners = new Set<() => void>()
 
   constructor({
@@ -217,27 +156,21 @@ export class Mesh {
     material,
     castShadow = false,
     receiveShadow = false,
-    planarReflection,
   }: {
     geometry: MeshGeometryInput
     modelMatrix?: ArrayLike<number>
     material?: MeshMaterial
     castShadow?: boolean
     receiveShadow?: boolean
-    planarReflection?: PlanarReflectionProps
   }) {
     const copied = copyGeometry(geometry)
     const copiedMaterial = copyMeshMaterial(material ?? new UnlitMaterial())
     const copiedModelMatrix = copyMatrix4(modelMatrix, "Mesh model matrix")
-    const copiedPlanarReflection = planarReflection
-      ? copyPlanarReflection(planarReflection)
-      : undefined
     const copiedCastShadow = copyBoolean(castShadow, "Mesh castShadow")
     assertMeshState(
       copied,
       copiedModelMatrix,
       copiedMaterial,
-      copiedPlanarReflection,
       copiedCastShadow,
     )
     this.#positions = copied.positions
@@ -249,7 +182,6 @@ export class Mesh {
     this.#material = copiedMaterial
     this.#castShadow = copiedCastShadow
     this.#receiveShadow = copyBoolean(receiveShadow, "Mesh receiveShadow")
-    this.#planarReflection = copiedPlanarReflection
   }
 
   setGeometry(geometry: MeshGeometryInput) {
@@ -264,7 +196,6 @@ export class Mesh {
       copied,
       this.#modelMatrix,
       this.#material,
-      this.#planarReflection,
       this.#castShadow,
     )
     if (
@@ -289,7 +220,6 @@ export class Mesh {
       this.#geometryState(),
       copied,
       this.#material,
-      this.#planarReflection,
       this.#castShadow,
     )
     if (arrayValuesEqual(this.#modelMatrix, copied)) return
@@ -314,7 +244,6 @@ export class Mesh {
       this.#geometryState(),
       this.#modelMatrix,
       copied,
-      this.#planarReflection,
       this.#castShadow,
     )
     if (materialsEqual(this.#material, copied)) return
@@ -337,25 +266,12 @@ export class Mesh {
     this.#notifyChange()
   }
 
-  setPlanarReflection(planarReflection?: PlanarReflectionProps) {
-    const copied = planarReflection ? copyPlanarReflection(planarReflection) : undefined
-    assertPlanarReflectionMaterial(this.#material, copied)
-    if (planarReflectionsEqual(this.#planarReflection, copied)) return
-    this.#planarReflection = copied
-    this.#notifyChange()
-  }
-
   get castShadow() {
     return this.#castShadow
   }
 
   get receiveShadow() {
     return this.#receiveShadow
-  }
-
-  getPlanarReflection(): PlanarReflection | undefined {
-    const value = this.#planarReflection
-    return value ? copyPlanarReflection(value) : undefined
   }
 
   get geometryRevision() {
@@ -468,20 +384,10 @@ function materialsEqual(first: MeshMaterial, second: MeshMaterial) {
   return true
 }
 
-function assertPlanarReflectionMaterial(
-  material: MeshMaterial,
-  planarReflection: PlanarReflection | undefined,
-) {
-  if (planarReflection && !(material instanceof StandardMaterial)) {
-    throw new RangeError("Planar reflection requires a StandardMaterial receiver")
-  }
-}
-
 function assertMeshState(
   geometry: { readonly normals?: ArrayLike<number>; readonly uvs?: ArrayLike<number> },
   modelMatrix: Matrix4,
   material: MeshMaterial,
-  planarReflection: PlanarReflection | undefined,
   castShadow: boolean,
 ) {
   if ((material instanceof ImageMaterial || material instanceof TransparentImageMaterial)
@@ -492,7 +398,6 @@ function assertMeshState(
     if (!geometry.normals) throw new RangeError("Lit Mesh geometry requires normals")
     normalMatrix3FromMatrix4(modelMatrix)
   }
-  assertPlanarReflectionMaterial(material, planarReflection)
   assertTransparentImageDoesNotCastShadow(material, castShadow)
 }
 

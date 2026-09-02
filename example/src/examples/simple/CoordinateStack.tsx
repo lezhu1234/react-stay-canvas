@@ -3017,6 +3017,958 @@ function updateConsolePanelOverlay(
   })
 }
 
+type CoordinateDisplayState = Readonly<{
+  offsetX: number
+  offsetY: number
+  scaleX: number
+  scaleY: number
+}>
+
+type CoordinateStackProps = {
+  clientRange: Readonly<Rect>
+  coordinateEvidence?: Readonly<CoordinateEvidence>
+  cssDisplay: CoordinateDisplayState
+  evidenceOpen: boolean
+  eventEvidence?: Readonly<CoordinateEventEvidence>
+  mappingFocus: CoordinateMappingFocus
+  onCssDisplayChange: (patch: Partial<CoordinateDisplayState>) => void
+  onEvidenceToggle: () => void
+  onSceneLayoutChange?: (layout: Readonly<CoordinateSceneLayout>) => void
+  onViewportAction: (action: CoordinateViewportAction) => void
+  probe: CoordinateProbe
+  viewport: Readonly<ViewportState>
+}
+
+type CoordinateControlContext = Pick<CoordinateStackProps,
+  "cssDisplay" | "onCssDisplayChange" | "onEvidenceToggle" | "onViewportAction" | "viewport"
+>
+
+const COORDINATE_CONTROL_SELECTOR = COORDINATE_CONSOLE_CONTROL_NAMES
+  .map((name) => `.coordinate-control-${name}`)
+  .join("|")
+
+function resolveCoordinateControl(
+  tools: StayTools,
+  point: Readonly<Coordinate>,
+): CoordinateConsoleControlName | undefined {
+  const [target] = tools.getContainPointChildren({
+    point,
+    selector: COORDINATE_CONTROL_SELECTOR,
+    returnFirst: true,
+    withRoot: false,
+  })
+  return target?.className.replace(
+    "coordinate-control-",
+    "",
+  ) as CoordinateConsoleControlName | undefined
+}
+
+function controlRailRatio(pointX: number, rect: Readonly<Rect>) {
+  const railStart = rect.x + 8
+  const railEnd = rect.x + rect.width - 8
+  return Math.max(0, Math.min(1, (pointX - railStart) / (railEnd - railStart)))
+}
+
+function updateDisplayScale(
+  name: "scale-x" | "scale-y",
+  point: Readonly<Coordinate>,
+  rect: Readonly<Rect>,
+  onCssDisplayChange: CoordinateStackProps["onCssDisplayChange"],
+) {
+  const scale = Math.round((0.5 + controlRailRatio(point.x, rect) * 0.5) * 100) / 100
+  onCssDisplayChange(name === "scale-x" ? { scaleX: scale, scaleY: scale } : { scaleY: scale })
+}
+
+function dispatchCoordinateControl(
+  name: CoordinateConsoleControlName,
+  point: Readonly<Coordinate>,
+  runtime: StackRuntime,
+  context: CoordinateControlContext,
+) {
+  const {
+    cssDisplay,
+    onCssDisplayChange,
+    onEvidenceToggle,
+    onViewportAction,
+    viewport,
+  } = context
+  if (name === "css-reset") {
+    onCssDisplayChange({ offsetX: 0, offsetY: 0, scaleX: 0.85, scaleY: 0.85 })
+    return
+  }
+
+  const frame = createCoordinateSceneLayout(runtime.viewSize.width, runtime.viewSize.height).console
+  const rect = coordinateConsoleControlRects(frame)[name]
+  if (name === "scale-x" || name === "scale-y") {
+    updateDisplayScale(name, point, rect, onCssDisplayChange)
+    return
+  }
+  if (name === "translate-x") {
+    const current = Math.log(viewport.scale / 0.2) / Math.log(3 / 0.2)
+    onViewportAction(controlRailRatio(point.x, rect) >= current ? "zoom-in" : "zoom-out")
+    return
+  }
+  if (name === "translate-y") {
+    const direction = point.x < rect.x + rect.width / 2 ? -1 : 1
+    onCssDisplayChange({
+      offsetY: Math.max(0, Math.min(96, cssDisplay.offsetY + direction * 8)),
+    })
+    return
+  }
+  if (name === "evidence") {
+    onEvidenceToggle()
+    return
+  }
+  onViewportAction(name === "viewport-reset" ? "reset" : name)
+}
+
+type CoordinateOverlayShape = Circle | Line | Path | Polygon | Rectangle | StayText
+
+function createCoordinatePhysicalPanels() {
+  const outputPanel: OutputPanelRuntime = {
+    face: new Mesh({
+      geometry: emptyMeshGeometry(),
+      material: coordinateOutputGlassMaterial(),
+      castShadow: false,
+      receiveShadow: false,
+    }),
+    depth: new Mesh({
+      geometry: emptyMeshGeometry(),
+      material: unlitMaterial(rgba(236, 240, 240, 1)),
+      castShadow: true,
+      receiveShadow: false,
+    }),
+    edgeTint: new Mesh({
+      geometry: emptyTexturedMeshGeometry(),
+      material: new TransparentImageMaterial({
+        texture: createCoordinateOutputEdgeTexture(),
+      }),
+      castShadow: false,
+      receiveShadow: false,
+    }),
+  }
+  const consolePanel: PhysicalPanelRuntime = {
+    face: new Mesh({
+      geometry: emptyMeshGeometry(),
+      material: coordinateConsoleFaceMaterial(),
+      // The console is a screen-space control plinth. It receives room light
+      // without projecting a wall-sized shadow across the shared floor.
+      castShadow: false,
+      receiveShadow: true,
+    }),
+    depth: new Mesh({
+      geometry: emptyMeshGeometry(),
+      material: coordinateConsoleEdgeMaterial(),
+      castShadow: false,
+      receiveShadow: true,
+    }),
+  }
+  return { outputPanel, consolePanel }
+}
+
+function createCoordinateOutputSignal(): OutputSignalOverlay {
+  return {
+    groundGlow: new Rectangle({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      layer: GROUND_LAYER,
+      zIndex: -20,
+      filter: "blur(28px)",
+      fillConfig: { color: rgba(95, 145, 255, 0) },
+      strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
+    }),
+    contactShadow: new Rectangle({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      layer: GROUND_LAYER,
+      zIndex: -19,
+      filter: "blur(10px)",
+      fillConfig: { color: rgba(42, 47, 48, 0) },
+      strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
+    }),
+    outputReflections: ([28, 24, 18] as const).map((blur) => new Rectangle({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      layer: GROUND_LAYER,
+      zIndex: -21,
+      filter: `blur(${blur}px)`,
+      fillConfig: { color: rgba(95, 145, 255, 0) },
+      strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
+    })) as [Rectangle, Rectangle, Rectangle],
+    outputReflectionEdges: Array.from({ length: 3 }, () => new Line({
+      x1: 0,
+      y1: 0,
+      x2: 0,
+      y2: 0,
+      layer: GROUND_LAYER,
+      zIndex: -20,
+      strokeConfig: { color: rgba(95, 145, 255, 0), lineWidth: 1, lineCap: "round" },
+    })) as [Line, Line, Line],
+    consoleContactShadow: new Rectangle({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      layer: GROUND_LAYER,
+      zIndex: -19,
+      filter: "blur(2px)",
+      fillConfig: { color: rgba(48, 45, 40, 0) },
+      strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
+    }),
+    consoleReflections: ([12, 8, 4] as const).map((blur) => new Rectangle({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      layer: GROUND_LAYER,
+      zIndex: -21,
+      filter: `blur(${blur}px)`,
+      fillConfig: { color: rgba(142, 132, 116, 0) },
+      strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
+    })) as [Rectangle, Rectangle, Rectangle],
+    consoleReflectionEdges: Array.from({ length: 3 }, () => new Line({
+      x1: 0,
+      y1: 0,
+      x2: 0,
+      y2: 0,
+      layer: GROUND_LAYER,
+      zIndex: -20,
+      strokeConfig: { color: rgba(142, 132, 116, 0), lineWidth: 1, lineCap: "round" },
+    })) as [Line, Line, Line],
+  }
+}
+
+function coordinateOverlayShapes(
+  outputOverlay: OutputPanelOverlay,
+  consoleOverlay: ConsolePanelOverlay,
+  heroOverlay: HeroOverlay,
+  evidenceOverlay: EvidenceOverlay,
+  outputSignal: OutputSignalOverlay,
+) {
+  const consoleShapes = Object.values(consoleOverlay).flatMap<CoordinateOverlayShape>(
+    (shape) => Array.isArray(shape) ? shape : [shape],
+  )
+  return [
+    ...Object.values(outputOverlay),
+    ...consoleShapes,
+    ...Object.values(heroOverlay),
+    outputSignal.groundGlow,
+    outputSignal.contactShadow,
+    ...outputSignal.outputReflections,
+    ...outputSignal.outputReflectionEdges,
+    outputSignal.consoleContactShadow,
+    ...outputSignal.consoleReflections,
+    ...outputSignal.consoleReflectionEdges,
+    evidenceOverlay.panel,
+    evidenceOverlay.heading,
+    evidenceOverlay.intro,
+    ...evidenceOverlay.labels,
+    ...evidenceOverlay.values,
+  ]
+}
+
+function createCoordinateMappingLinks() {
+  return Array.from({ length: 4 }, () => new Line({
+    x1: 0,
+    y1: 0,
+    x2: 0,
+    y2: 0,
+    layer: OVERLAY_LAYER,
+    zIndex: -20,
+    strokeConfig: { color: rgba(78, 89, 104, 0.12), lineWidth: 0.9, dash: [4, 6] },
+  })) as [Line, Line, Line, Line]
+}
+
+function createCoordinateSignalMeshes(): [Mesh, Mesh, Mesh] {
+  return [
+    new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(255, 238, 232, 0.52)) }),
+    new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(255, 238, 232, 0.52)) }),
+    new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(255, 238, 232, 0.08)) }),
+  ]
+}
+
+function loadCoordinateBackdrop(
+  tools: StayTools,
+  backdropChild: ReturnType<StayTools["webgl"]["appendChild"]>,
+  canvasArea: Readonly<{ width: number; height: number }>,
+  isCurrentMount: () => boolean,
+) {
+  void loadCoordinateRoomTexture().then((texture) => {
+    if (!isCurrentMount() || !tools.webgl.hasChild(backdropChild.id)) return
+    const backdrop = new Mesh({
+      geometry: coordinateRoomBackdropGeometry(
+        texture.width,
+        texture.height,
+        canvasArea.width,
+        canvasArea.height,
+      ),
+      material: new ImageMaterial({ texture }),
+    })
+    const lighting = new Mesh({
+      geometry: coordinateRoomLightingGeometry(canvasArea.width, canvasArea.height),
+      material: new TransparentImageMaterial({
+        texture: createCoordinateRoomLightingTexture(),
+      }),
+      castShadow: false,
+      receiveShadow: false,
+    })
+    backdropChild.setMeshes([backdrop, lighting])
+  }).catch((error) => {
+    console.error("Coordinate room WebGL texture failed", error)
+  })
+}
+
+function mountCoordinateScene(
+  tools: StayTools,
+  isCurrentMount: () => boolean,
+): StackRuntime {
+  const canvasArea = sceneCanvasArea(tools, STACK_WIDTH, STACK_HEIGHT)
+  const definitions = createPlaneDefinitions(
+    canvasArea.width,
+    canvasArea.height,
+    COORDINATE_PLANE_DOMAIN,
+  )
+  const planes = {} as Record<PlaneName, PlaneRuntime>
+  const { outputPanel, consolePanel } = createCoordinatePhysicalPanels()
+  const outputOverlay = createOutputPanelOverlay()
+  const consoleOverlay = createConsolePanelOverlay()
+  const consoleControlTargets = createConsoleControlTargets()
+  const heroOverlay = createHeroOverlay()
+  const evidenceOverlay = createEvidenceOverlay()
+  const outputSignal = createCoordinateOutputSignal()
+  const meshes = [
+    outputPanel.face,
+    outputPanel.depth,
+    outputPanel.edgeTint,
+    consolePanel.face,
+    consolePanel.depth,
+  ]
+  const overlays = coordinateOverlayShapes(
+    outputOverlay,
+    consoleOverlay,
+    heroOverlay,
+    evidenceOverlay,
+    outputSignal,
+  )
+  const planeTitles: StayText[] = []
+
+  for (const name of ["client", "view", "content"] as const) {
+    const created = createPlaneRuntime(name, definitions[name], canvasArea.width >= 600, canvasArea)
+    planes[name] = created.runtime
+    meshes.push(...created.meshes)
+    overlays.push(...created.overlays.filter((shape) => shape !== created.runtime.overlay.title))
+    planeTitles.push(created.runtime.overlay.title)
+  }
+
+  const clientViewLinks = createCoordinateMappingLinks()
+  const viewContentLinks = createCoordinateMappingLinks()
+  const signalMeshes = createCoordinateSignalMeshes()
+  const signalGlowPath = createCoordinateSignalPath(COORDINATE_SIGNAL_STYLE.glow)
+  const signalHighlightPath = createCoordinateSignalPath(COORDINATE_SIGNAL_STYLE.highlight)
+  meshes.push(...signalMeshes)
+  overlays.push(
+    ...clientViewLinks,
+    ...viewContentLinks,
+    signalGlowPath,
+    signalHighlightPath,
+  )
+
+  const backdropChild = tools.webgl.appendChild({
+    className: "coordinate-room-backdrop",
+    layer: BACKDROP_WEBGL_LAYER,
+    meshes: [],
+  })
+  tools.webgl.appendChild({
+    className: "coordinate-native-scene",
+    layer: WEBGL_LAYER,
+    meshes,
+  })
+  loadCoordinateBackdrop(tools, backdropChild, canvasArea, isCurrentMount)
+  tools.appendChild({ className: "coordinate-scene-overlay", shape: overlays })
+  tools.appendChild({
+    className: "coordinate-plane-titles",
+    placement: { type: "affine", scaleX: PLANE_TITLE_SCALE_X },
+    shape: planeTitles,
+  })
+  for (const name of Object.keys(consoleControlTargets) as CoordinateConsoleControlName[]) {
+    tools.appendChild({
+      className: `coordinate-control-${name}`,
+      shape: [consoleControlTargets[name]],
+    })
+  }
+
+  return {
+    planes,
+    definitions,
+    outputPanel,
+    outputOverlay,
+    consolePanel,
+    consoleOverlay,
+    consoleControlTargets,
+    heroOverlay,
+    evidenceOverlay,
+    outputSignal,
+    viewSize: { width: canvasArea.width, height: canvasArea.height },
+    clientViewLinks,
+    viewContentLinks,
+    signalMeshes,
+    signalGlowPath,
+    signalHighlightPath,
+  }
+}
+
+function updateCoordinatePlaneTicks(
+  plane: PlaneRuntime,
+  range: Readonly<Rect>,
+  plotInsets: Readonly<{ left: number; right: number; bottom: number }>,
+  plotBottom: number,
+) {
+  plane.overlay.rangeValue.update({ text: "" })
+  const tickColor = rgba(38, 48, 45, plane.detailsVisible ? 0.94 : 0)
+  plane.overlay.xAxis.update({
+    ...projectPlanePoint(plane, {
+      x: plane.width - plotInsets.right + 7,
+      y: plotBottom,
+    }),
+    fillConfig: { color: tickColor },
+  })
+  plane.overlay.yAxis.update({
+    ...projectPlanePoint(plane, {
+      x: plotInsets.left - 12,
+      y: PLANE_PLOT_TOP - 8,
+    }),
+    fillConfig: { color: tickColor },
+  })
+  plane.overlay.xTicks.forEach((tick, index, ticks) => {
+    const localX = plotInsets.left + 8
+      + (plane.width - plotInsets.left - plotInsets.right - 16) * index / (ticks.length - 1)
+    const localY = plotBottom + 8
+    const position = projectPlanePoint(plane, { x: localX, y: localY })
+    tick.update({
+      ...position,
+      text: String(Math.round((range.x + range.width * localX / plane.width) / 10) * 10),
+      fillConfig: { color: tickColor },
+    })
+  })
+  plane.overlay.yTicks.forEach((tick, index, ticks) => {
+    const localX = plotInsets.left - 8
+    const localY = plotBottom
+      - (plotBottom - PLANE_PLOT_TOP) * index / (ticks.length - 1)
+    const position = projectPlanePoint(plane, { x: localX, y: localY })
+    tick.update({
+      x: position.x - 3,
+      y: position.y,
+      text: String(Math.round((range.y + range.height * localY / plane.height) / 10) * 10),
+      fillConfig: { color: tickColor },
+    })
+  })
+}
+
+function updateCoordinatePlaneFocus(
+  name: PlaneName,
+  plane: PlaneRuntime,
+  active: boolean,
+  materialFocusChanged: boolean,
+) {
+  if (materialFocusChanged) {
+    plane.meshes.frameFill.setMaterial(coordinatePlaneGlassMaterial(
+      name,
+      plane.fill,
+      (active ? 1 : 0.82) * PANEL_FACE_ALPHA_SCALE,
+    ))
+  }
+  plane.overlay.title.update({
+    fillConfig: { color: { ...plane.stroke, a: active ? 0.9 : 0.72 } },
+  })
+}
+
+function updateCoordinatePlaneProbe({
+  name,
+  plane,
+  range,
+  value,
+  shape,
+  visibleContent,
+  mappingFocus,
+}: {
+  name: PlaneName
+  plane: PlaneRuntime
+  range: Readonly<Rect>
+  value: Readonly<Coordinate>
+  shape: Readonly<Rect>
+  visibleContent: Readonly<Rect>
+  mappingFocus: CoordinateMappingFocus
+}) {
+  const plotInsets = PLANE_PLOT_INSETS[name]
+  const plotBottom = plane.height - plotInsets.bottom
+  const localPoint = pointOnPlane(value, range)
+  const contentPoint = pointIsInsidePlane(localPoint)
+    ? projectPlanePoint(plane, localPoint)
+    : undefined
+  updateCoordinatePlaneTicks(plane, range, plotInsets, plotBottom)
+
+  const guideStart = contentPoint
+    ? projectPlanePoint(plane, { x: localPoint.x, y: PLANE_PLOT_TOP })
+    : undefined
+  const guideEnd = contentPoint
+    ? projectPlanePoint(plane, { x: localPoint.x, y: plotBottom })
+    : undefined
+  plane.overlay.pointGuide.update({
+    x1: guideStart?.x ?? 0,
+    y1: guideStart?.y ?? 0,
+    x2: guideEnd?.x ?? 0,
+    y2: guideEnd?.y ?? 0,
+    strokeConfig: {
+      color: rgba(229, 109, 72, contentPoint ? 0.22 : 0),
+      lineWidth: 1,
+      dash: [5, 6],
+    },
+  })
+  plane.overlay.dot.update({
+    ...(contentPoint ?? { x: 0, y: 0 }),
+    radius: plane.presentation.dotRadius,
+    fillConfig: { color: rgba(255, 252, 250, contentPoint ? 0.99 : 0) },
+    strokeConfig: { color: rgba(255, 255, 255, 0), lineWidth: 0 },
+  })
+  plane.overlay.pointHalo.update({
+    ...(contentPoint ?? { x: 0, y: 0 }),
+    radius: plane.presentation.dotRadius + 3,
+    fillConfig: { color: rgba(229, 109, 72, contentPoint ? 0.03 : 0) },
+    strokeConfig: { color: rgba(229, 109, 72, contentPoint ? 0.52 : 0), lineWidth: 1.1 },
+  })
+  const valueOnRight = localPoint.x < plane.width * 0.72
+  const labelRise = Math.max(
+    32,
+    Math.min(72, plane.presentation.projectedWidth * POINT_LABEL_RISE_RATIO[name]),
+  )
+  plane.overlay.value.update({
+    x: contentPoint
+      ? contentPoint.x + (valueOnRight ? plane.presentation.valueOffset : -plane.presentation.valueOffset)
+      : 0,
+    y: contentPoint ? Math.max(9, contentPoint.y - labelRise) : 0,
+    text: `(${formatPoint(value)})`,
+    textAlign: valueOnRight ? "left" : "right",
+    fillConfig: {
+      color: { ...colors.orange, a: contentPoint && plane.detailsVisible ? 1 : 0 },
+    },
+  })
+  if (name === "content") {
+    updateViewportProjection(
+      plane,
+      rectOnPlane(visibleContent, range),
+      mappingFocus === "content-view",
+    )
+  }
+  updateShapeProjection(plane, rectOnPlane(shape, range))
+  return {
+    point: contentPoint,
+    worldPoint: contentPoint
+      ? planeWorldPoint(plane, plane.basis, localPoint, PANEL_FACE_OFFSET - 0.012)
+      : undefined,
+  }
+}
+
+function updateCoordinatePlanes({
+  runtime,
+  sample,
+  clientRange,
+  shapeProjection,
+  visibleContent,
+  mappingFocus,
+}: {
+  runtime: StackRuntime
+  sample: CoordinateProbe
+  clientRange: Readonly<Rect>
+  shapeProjection: Readonly<CoordinateEvidence["shape"]>
+  visibleContent: Readonly<Rect>
+  mappingFocus: CoordinateMappingFocus
+}) {
+  const points: Partial<Record<PlaneName, Coordinate>> = {}
+  const worldPoints: Partial<Record<PlaneName, Vector3>> = {}
+  const ranges = {} as Record<PlaneName, Rect>
+  const materialFocusChanged = runtime.materialFocus !== mappingFocus
+  for (const name of Object.keys(runtime.planes) as PlaneName[]) {
+    const plane = runtime.planes[name]
+    const range = planeRange(name, sample, clientRange, shapeProjection[name])
+    ranges[name] = range
+    updateCoordinatePlaneFocus(
+      name,
+      plane,
+      planeIsActive(name, mappingFocus),
+      materialFocusChanged,
+    )
+    const projection = updateCoordinatePlaneProbe({
+      name,
+      plane,
+      range,
+      value: sample[name],
+      shape: shapeProjection[name],
+      visibleContent,
+      mappingFocus,
+    })
+    if (projection.point && projection.worldPoint) {
+      points[name] = projection.point
+      worldPoints[name] = projection.worldPoint
+    }
+  }
+  return { points, worldPoints, ranges }
+}
+
+type CoordinateSceneUpdateInput = Pick<CoordinateStackProps,
+  "clientRange" | "coordinateEvidence" | "cssDisplay" | "evidenceOpen" | "eventEvidence"
+  | "mappingFocus" | "onSceneLayoutChange"
+> & {
+  clientToRootView?: (point: Readonly<Coordinate>) => Coordinate
+  currentViewport: Readonly<ViewportState>
+  runtime: StackRuntime
+  sample: CoordinateProbe
+  text: ReturnType<typeof useI18n>["text"]
+}
+
+function updateCoordinateMappingLinks(
+  runtime: StackRuntime,
+  sample: CoordinateProbe,
+  ranges: Readonly<Record<PlaneName, Rect>>,
+  visibleContent: Readonly<Rect>,
+  mappingFocus: CoordinateMappingFocus,
+) {
+  const clientViewActive = mappingFocus === "view-client"
+  const clientCanvasDom = rectOnPlane({
+    x: sample.surface.left,
+    y: sample.surface.top,
+    width: sample.surface.width,
+    height: sample.surface.height,
+  }, ranges.client)
+  const viewPlaneRect = {
+    x: 0,
+    y: 0,
+    width: COORDINATE_PLANE_DOMAIN.width,
+    height: COORDINATE_PLANE_DOMAIN.height,
+  }
+  const contentViewport = rectOnPlane(visibleContent, ranges.content)
+  updateCornerLinks(
+    runtime.clientViewLinks,
+    runtime.planes.client,
+    clientCanvasDom,
+    runtime.planes.view,
+    viewPlaneRect,
+    clientViewActive,
+  )
+  updateCornerLinks(
+    runtime.viewContentLinks,
+    runtime.planes.view,
+    viewPlaneRect,
+    runtime.planes.content,
+    contentViewport,
+    !clientViewActive,
+    containsRect(ranges.content, visibleContent),
+  )
+}
+
+function updateCoordinateSignal(
+  runtime: StackRuntime,
+  sceneLayout: Readonly<CoordinateSceneLayout>,
+  sample: CoordinateProbe,
+  points: Readonly<Partial<Record<PlaneName, Coordinate>>>,
+  worldPoints: Readonly<Partial<Record<PlaneName, Vector3>>>,
+  clientToRootView: CoordinateSceneUpdateInput["clientToRootView"],
+) {
+  const outputDefinition = updateScenePanelGeometry(
+    runtime.outputPanel,
+    sceneLayout.output,
+    runtime,
+    OUTPUT_PANEL_THICKNESS,
+    OUTPUT_PANEL_BEVEL_RADIUS,
+    6,
+  )
+  const outputBasis = createPlaneBasis(outputDefinition)
+  runtime.outputPanel.edgeTint.setGeometry(rectMeshGeometry(
+    outputDefinition,
+    outputBasis,
+    {
+      x: -5,
+      y: 3,
+      width: 10,
+      height: Math.max(0, outputDefinition.height - 6),
+    },
+    OUTPUT_PANEL_THICKNESS / 2 + 0.002,
+  ))
+  const updateSignalMesh = (
+    index: 0 | 1 | 2,
+    start: Readonly<Vector3> | undefined,
+    end: Readonly<Vector3> | undefined,
+  ) => runtime.signalMeshes[index].setGeometry(
+    start && end ? worldLineMeshGeometry(start, end, 0.01) : emptyMeshGeometry(),
+  )
+  updateSignalMesh(0, worldPoints.client, worldPoints.view)
+  updateSignalMesh(1, worldPoints.view, worldPoints.content)
+  const outputPoint = clientToRootView?.(sample.client)
+  const outputWorldPoint = outputPoint
+    ? planeWorldPoint(outputDefinition, outputBasis, {
+      x: outputPoint.x - sceneLayout.output.x,
+      y: outputPoint.y - sceneLayout.output.y,
+    }, OUTPUT_PANEL_THICKNESS / 2 - 0.012)
+    : undefined
+  updateSignalMesh(2, worldPoints.content, outputWorldPoint)
+
+  const signalPoints = [points.client, points.view, points.content, outputPoint]
+  const hasSignal = signalPoints.every((point): point is Coordinate => point !== undefined)
+  const updateSignalPath = (
+    path: Path,
+    color: ReturnType<typeof rgba>,
+    lineWidth: number,
+  ) => path.update({
+    points: hasSignal
+      ? signalPoints.map((point) => new Point({ x: point.x, y: point.y }))
+      : [],
+    strokeConfig: {
+      color: { ...color, a: hasSignal ? color.a : 0 },
+      lineWidth,
+    },
+  })
+  updateSignalPath(
+    runtime.signalGlowPath,
+    COORDINATE_SIGNAL_STYLE.glow.color,
+    COORDINATE_SIGNAL_STYLE.glow.lineWidth,
+  )
+  updateSignalPath(
+    runtime.signalHighlightPath,
+    COORDINATE_SIGNAL_STYLE.highlight.color,
+    COORDINATE_SIGNAL_STYLE.highlight.lineWidth,
+  )
+}
+
+function updateOutputGroundEffects(
+  outputSignal: OutputSignalOverlay,
+  output: Readonly<Rect>,
+) {
+  outputSignal.groundGlow.update({
+    x: output.x + output.width * 0.06,
+    y: output.y + output.height + 4,
+    width: output.width * 0.84,
+    height: 72,
+    fillConfig: { color: rgba(95, 145, 255, 0.09) },
+  })
+  outputSignal.contactShadow.update({
+    x: output.x + 24,
+    y: output.y + output.height + 12,
+    width: output.width - 48,
+    height: 60,
+    fillConfig: { color: rgba(42, 47, 48, 0.03) },
+  })
+  const outputBottom = output.y + output.height
+  outputSignal.outputReflections.forEach((reflection, index) => {
+    const depths = [72, 64, 56] as const
+    const offsets = [4, 10, 16] as const
+    const starts = [0.02, 0.58, 0.75] as const
+    const widths = [0.42, 0.34, 0.18] as const
+    const colors = [
+      rgba(95, 145, 255, 0.06),
+      rgba(88, 174, 210, 0.052),
+      rgba(112, 158, 226, 0.035),
+    ] as const
+    reflection.update({
+      x: output.x + output.width * starts[index],
+      y: outputBottom + offsets[index],
+      width: output.width * widths[index],
+      height: depths[index],
+      fillConfig: { color: colors[index] },
+    })
+  })
+  outputSignal.outputReflectionEdges.forEach((edge, index) => {
+    const offsets = [10, 22, 36] as const
+    const insets = [30, 36, 44] as const
+    const alphas = [0.015, 0.006, 0] as const
+    edge.update({
+      x1: output.x + insets[index],
+      y1: outputBottom + offsets[index],
+      x2: output.x + output.width - insets[index],
+      y2: outputBottom + offsets[index],
+      strokeConfig: { color: rgba(95, 145, 255, alphas[index]), lineWidth: 1.2 - index * 0.3 },
+    })
+  })
+}
+
+function updateConsoleGroundEffects(
+  outputSignal: OutputSignalOverlay,
+  consoleFrame: Readonly<Rect>,
+) {
+  const consoleBottom = consoleFrame.y + consoleFrame.height
+  outputSignal.consoleContactShadow.update({
+    x: consoleFrame.x + 18,
+    y: consoleBottom - 1,
+    width: consoleFrame.width - 36,
+    height: 6,
+    fillConfig: { color: rgba(43, 46, 50, 0.35) },
+  })
+  outputSignal.consoleReflections.forEach((reflection, index) => {
+    const depths = [42, 26, 12] as const
+    const insets = [24, 19, 15] as const
+    const alphas = [0.025, 0.035, 0.05] as const
+    reflection.update({
+      x: consoleFrame.x + insets[index],
+      y: consoleBottom + 3,
+      width: consoleFrame.width - insets[index] * 2,
+      height: depths[index],
+      fillConfig: { color: rgba(142, 132, 116, alphas[index]) },
+    })
+  })
+  outputSignal.consoleReflectionEdges.forEach((edge, index) => {
+    const offsets = [7, 17, 29] as const
+    const insets = [16, 22, 30] as const
+    const alphas = [0.06, 0.02, 0.008] as const
+    edge.update({
+      x1: consoleFrame.x + insets[index],
+      y1: consoleBottom + offsets[index],
+      x2: consoleFrame.x + consoleFrame.width - insets[index],
+      y2: consoleBottom + offsets[index],
+      strokeConfig: { color: rgba(142, 132, 116, alphas[index]), lineWidth: 1.8 - index * 0.4 },
+    })
+  })
+}
+
+function updateCoordinatePhysicalPanels(
+  runtime: StackRuntime,
+  sceneLayout: Readonly<CoordinateSceneLayout>,
+) {
+  updateOutputGroundEffects(runtime.outputSignal, sceneLayout.output)
+  updateScenePanelGeometry(
+    runtime.consolePanel,
+    sceneLayout.console,
+    runtime,
+    CONSOLE_PANEL_THICKNESS,
+    CONSOLE_PANEL_BEVEL_RADIUS,
+    6,
+  )
+  updateConsoleGroundEffects(runtime.outputSignal, sceneLayout.console)
+}
+
+function updateCoordinateSceneOverlays({
+  runtime,
+  sceneLayout,
+  sample,
+  currentViewport,
+  cssDisplay,
+  eventEvidence,
+  evidenceOpen,
+  shapeProjection,
+  visibleContent,
+  text,
+}: {
+  runtime: StackRuntime
+  sceneLayout: Readonly<CoordinateSceneLayout>
+  sample: CoordinateProbe
+  currentViewport: Readonly<ViewportState>
+  cssDisplay: CoordinateDisplayState
+  eventEvidence?: Readonly<CoordinateEventEvidence>
+  evidenceOpen: boolean
+  shapeProjection: Readonly<CoordinateEvidence["shape"]>
+  visibleContent: Readonly<Rect>
+  text: CoordinateSceneUpdateInput["text"]
+}) {
+  updateOutputPanelOverlay(runtime.outputOverlay, sceneLayout.output, visibleContent)
+  updateConsolePanelOverlay(
+    runtime.consoleOverlay,
+    sceneLayout.console,
+    sample,
+    currentViewport,
+    cssDisplay,
+    eventEvidence,
+  )
+  updateConsoleControlTargets(runtime.consoleControlTargets, sceneLayout.console)
+  updateHeroOverlay(runtime.heroOverlay, runtime.viewSize, {
+    eyebrow: text("Coordinate laboratory · 01", "坐标实验室 · 01"),
+    first: text("One point,", "一个点，"),
+    second: text("three spaces.", "三个空间。"),
+    compact: text("One point, three spaces.", "一个点，三个空间。"),
+    subtitle: text(
+      "One point and one Shape, mapped across three coordinate spaces and rendered on Live Canvas.",
+      "同一点与同一 Shape，在三个坐标空间中映射，最终呈现于 Live Canvas。",
+    ),
+  })
+  updateEvidenceOverlay(
+    runtime.evidenceOverlay,
+    evidenceOpen,
+    runtime.viewSize,
+    sample,
+    currentViewport,
+    shapeProjection,
+    visibleContent,
+    eventEvidence,
+    {
+      heading: text("Projection evidence", "投影证据"),
+      intro: text("Zoom changes the projection, not the Shape", "缩放改变投影，不改变 Shape"),
+      labels: [
+        text("Content Shape geometry", "Content Shape 几何"),
+        "Viewport",
+        text("CSS View to Client", "CSS View 到 Client"),
+        text("View projection", "View 中的投影"),
+        text("Client footprint", "Client 中的显示区域"),
+        text("Visible Content window", "可见 Content 窗口"),
+        "Canvas event · Content · e.point",
+      ],
+    },
+  )
+}
+
+function updateCoordinateScene({
+  clientRange,
+  coordinateEvidence,
+  cssDisplay,
+  evidenceOpen,
+  eventEvidence,
+  mappingFocus,
+  onSceneLayoutChange,
+  clientToRootView,
+  currentViewport,
+  runtime,
+  sample,
+  text,
+}: CoordinateSceneUpdateInput) {
+  if (!coordinateEvidence) return
+  const { shape: shapeProjection, visibleContent } = coordinateEvidence
+  const sceneLayout = createCoordinateSceneLayout(runtime.viewSize.width, runtime.viewSize.height)
+  const { points, worldPoints, ranges } = updateCoordinatePlanes({
+    runtime,
+    sample,
+    clientRange,
+    shapeProjection,
+    visibleContent,
+    mappingFocus,
+  })
+
+  updateCoordinateMappingLinks(runtime, sample, ranges, visibleContent, mappingFocus)
+  updateCoordinateSignal(
+    runtime,
+    sceneLayout,
+    sample,
+    points,
+    worldPoints,
+    clientToRootView,
+  )
+  updateCoordinatePhysicalPanels(runtime, sceneLayout)
+  updateCoordinateSceneOverlays({
+    runtime,
+    sceneLayout,
+    sample,
+    currentViewport,
+    cssDisplay,
+    eventEvidence,
+    evidenceOpen,
+    shapeProjection,
+    visibleContent,
+    text,
+  })
+  onSceneLayoutChange?.(sceneLayout)
+  runtime.materialFocus = mappingFocus
+}
+
 export function CoordinateStack({
   clientRange,
   coordinateEvidence,
@@ -3030,24 +3982,19 @@ export function CoordinateStack({
   onViewportAction,
   probe,
   viewport,
-}: {
-  clientRange: Readonly<Rect>
-  coordinateEvidence?: Readonly<CoordinateEvidence>
-  cssDisplay: Readonly<{ offsetX: number; offsetY: number; scaleX: number; scaleY: number }>
-  evidenceOpen: boolean
-  eventEvidence?: Readonly<CoordinateEventEvidence>
-  mappingFocus: CoordinateMappingFocus
-  onCssDisplayChange: (patch: Partial<{ offsetX: number; offsetY: number; scaleX: number; scaleY: number }>) => void
-  onEvidenceToggle: () => void
-  onSceneLayoutChange?: (layout: Readonly<CoordinateSceneLayout>) => void
-  onViewportAction: (action: CoordinateViewportAction) => void
-  probe: CoordinateProbe
-  viewport: Readonly<ViewportState>
-}) {
+}: CoordinateStackProps) {
   const { text } = useI18n()
   const runtimeRef = useRef<StackRuntime>()
   const clientToRootViewRef = useRef<(point: Readonly<Coordinate>) => Coordinate>()
   const sceneMountGenerationRef = useRef(0)
+  const controlContextRef = useRef<CoordinateControlContext>()
+  controlContextRef.current = {
+    cssDisplay,
+    onCssDisplayChange,
+    onEvidenceToggle,
+    onViewportAction,
+    viewport,
+  }
   const [runtimeGeneration, setRuntimeGeneration] = useState(0)
   useEffect(() => () => {
     sceneMountGenerationRef.current += 1
@@ -3069,716 +4016,51 @@ export function CoordinateStack({
     },
     { backend: "canvas2d" },
   ], [camera, environment, lighting])
-  const controlListeners = useMemo<ListenerProps[]>(() => {
-    const selector = COORDINATE_CONSOLE_CONTROL_NAMES
-      .map((name) => `.coordinate-control-${name}`)
-      .join("|")
-    return [
-      {
-        name: "coordinate-console-controls",
-        selector: ".stay-canvas",
-        event: "mousedown",
-        callback: ({ e, tools }) => {
-          const runtime = runtimeRef.current
-          if (!runtime || !hasPointerPosition(e)) return
-          const [target] = tools.getContainPointChildren({
-            point: e.point,
-            selector,
-            returnFirst: true,
-            withRoot: false,
-          })
-          const name = target?.className.replace("coordinate-control-", "") as CoordinateConsoleControlName | undefined
-          if (!name) return
-          if (name === "css-reset") {
-            onCssDisplayChange({ offsetX: 0, offsetY: 0, scaleX: 0.85, scaleY: 0.85 })
-            return
-          }
-          if (name === "scale-x" || name === "scale-y") {
-            const frame = createCoordinateSceneLayout(runtime.viewSize.width, runtime.viewSize.height).console
-            const rect = coordinateConsoleControlRects(frame)[name]
-            const railStart = rect.x + 8
-            const railEnd = rect.x + rect.width - 8
-            const ratio = Math.max(0, Math.min(1, (e.point.x - railStart) / (railEnd - railStart)))
-            onCssDisplayChange({
-              ...(name === "scale-x"
-                ? {
-                    scaleX: Math.round((0.5 + ratio * 0.5) * 100) / 100,
-                    scaleY: Math.round((0.5 + ratio * 0.5) * 100) / 100,
-                  }
-                : { scaleY: Math.round((0.5 + ratio * 0.5) * 100) / 100 }),
-            })
-            return
-          }
-          if (name === "translate-x" || name === "translate-y") {
-            const frame = createCoordinateSceneLayout(runtime.viewSize.width, runtime.viewSize.height).console
-            const rect = coordinateConsoleControlRects(frame)[name]
-            if (name === "translate-x") {
-              const railStart = rect.x + 8
-              const railEnd = rect.x + rect.width - 8
-              const ratio = Math.max(0, Math.min(1, (e.point.x - railStart) / (railEnd - railStart)))
-              const current = Math.log(viewport.scale / 0.2) / Math.log(3 / 0.2)
-              onViewportAction(ratio >= current ? "zoom-in" : "zoom-out")
-              return
-            }
-            const direction = e.point.x < rect.x + rect.width / 2 ? -1 : 1
-            onCssDisplayChange({
-              offsetY: Math.max(0, Math.min(96, cssDisplay.offsetY + direction * 8)),
-            })
-            return
-          }
-          if (name === "evidence") {
-            onEvidenceToggle()
-            return
-          }
-          onViewportAction(name === "viewport-reset" ? "reset" : name)
-        },
-      },
-    ]
-  }, [cssDisplay.offsetY, onCssDisplayChange, onEvidenceToggle, onViewportAction, viewport.scale])
-
-  const update = (sample: CoordinateProbe, currentViewport: Readonly<ViewportState>) => {
-    const runtime = runtimeRef.current
-    if (!runtime || !coordinateEvidence) return
-    const { shape: shapeProjection, visibleContent } = coordinateEvidence
-    const sceneLayout = createCoordinateSceneLayout(runtime.viewSize.width, runtime.viewSize.height)
-    const points: Partial<Record<PlaneName, Coordinate>> = {}
-    const worldPoints: Partial<Record<PlaneName, Vector3>> = {}
-    const ranges = {} as Record<PlaneName, Rect>
-    const materialFocusChanged = runtime.materialFocus !== mappingFocus
-
-    for (const name of Object.keys(runtime.planes) as PlaneName[]) {
-      const plane = runtime.planes[name]
-      const plotInsets = PLANE_PLOT_INSETS[name]
-      const plotBottom = plane.height - plotInsets.bottom
-      const range = planeRange(name, sample, clientRange, shapeProjection[name])
-      ranges[name] = range
-      const value = sample[name]
-      const localPoint = pointOnPlane(value, range)
-      const contentPoint = pointIsInsidePlane(localPoint)
-        ? projectPlanePoint(plane, localPoint)
-        : undefined
-      const localShape = rectOnPlane(shapeProjection[name], range)
-      const isActive = planeIsActive(name, mappingFocus)
-
-      plane.overlay.rangeValue.update({
-        text: "",
-      })
-      const tickColor = rgba(38, 48, 45, plane.detailsVisible ? 0.94 : 0)
-      plane.overlay.xAxis.update({
-        ...projectPlanePoint(plane, {
-          x: plane.width - plotInsets.right + 7,
-          y: plotBottom,
-        }),
-        fillConfig: { color: tickColor },
-      })
-      plane.overlay.yAxis.update({
-        ...projectPlanePoint(plane, {
-          x: plotInsets.left - 12,
-          y: PLANE_PLOT_TOP - 8,
-        }),
-        fillConfig: { color: tickColor },
-      })
-      plane.overlay.xTicks.forEach((tick, index, ticks) => {
-        const localX = plotInsets.left + 8
-          + (plane.width - plotInsets.left - plotInsets.right - 16) * index / (ticks.length - 1)
-        const localY = plotBottom + 8
-        const position = projectPlanePoint(plane, { x: localX, y: localY })
-        tick.update({
-          ...position,
-          text: String(Math.round((range.x + range.width * localX / plane.width) / 10) * 10),
-          fillConfig: { color: tickColor },
-        })
-      })
-      plane.overlay.yTicks.forEach((tick, index, ticks) => {
-        const localX = plotInsets.left - 8
-        const localY = plotBottom
-          - (plotBottom - PLANE_PLOT_TOP) * index / (ticks.length - 1)
-        const position = projectPlanePoint(plane, { x: localX, y: localY })
-        tick.update({
-          x: position.x - 3,
-          y: position.y,
-          text: String(Math.round((range.y + range.height * localY / plane.height) / 10) * 10),
-          fillConfig: { color: tickColor },
-        })
-      })
-
-      if (materialFocusChanged) {
-        const material = coordinatePlaneGlassMaterial(
-          name,
-          plane.fill,
-          (isActive ? 1 : 0.82) * PANEL_FACE_ALPHA_SCALE,
-        )
-        plane.meshes.frameFill.setMaterial(material)
-      }
-      plane.overlay.title.update({
-        fillConfig: { color: { ...plane.stroke, a: isActive ? 0.9 : 0.72 } },
-      })
-      const guideStart = contentPoint
-        ? projectPlanePoint(plane, { x: localPoint.x, y: PLANE_PLOT_TOP })
-        : undefined
-      const guideEnd = contentPoint
-        ? projectPlanePoint(plane, { x: localPoint.x, y: plotBottom })
-        : undefined
-      plane.overlay.pointGuide.update({
-        x1: guideStart?.x ?? 0,
-        y1: guideStart?.y ?? 0,
-        x2: guideEnd?.x ?? 0,
-        y2: guideEnd?.y ?? 0,
-        strokeConfig: {
-          color: rgba(229, 109, 72, contentPoint ? 0.22 : 0),
-          lineWidth: 1,
-          dash: [5, 6],
-        },
-      })
-      plane.overlay.dot.update({
-        ...(contentPoint ?? { x: 0, y: 0 }),
-        radius: plane.presentation.dotRadius,
-        fillConfig: { color: rgba(255, 252, 250, contentPoint ? 0.99 : 0) },
-        strokeConfig: { color: rgba(255, 255, 255, 0), lineWidth: 0 },
-      })
-      plane.overlay.pointHalo.update({
-        ...(contentPoint ?? { x: 0, y: 0 }),
-        radius: plane.presentation.dotRadius + 3,
-        fillConfig: { color: rgba(229, 109, 72, contentPoint ? 0.03 : 0) },
-        strokeConfig: { color: rgba(229, 109, 72, contentPoint ? 0.52 : 0), lineWidth: 1.1 },
-      })
-      const valueOnRight = localPoint.x < plane.width * 0.72
-      const { valueOffset } = plane.presentation
-      const labelRise = Math.max(
-        32,
-        Math.min(72, plane.presentation.projectedWidth * POINT_LABEL_RISE_RATIO[name]),
-      )
-      plane.overlay.value.update({
-        x: contentPoint ? contentPoint.x + (valueOnRight ? valueOffset : -valueOffset) : 0,
-        y: contentPoint ? Math.max(9, contentPoint.y - labelRise) : 0,
-        text: `(${formatPoint(value)})`,
-        textAlign: valueOnRight ? "left" : "right",
-        fillConfig: {
-          color: {
-            ...colors.orange,
-            a: contentPoint && plane.detailsVisible ? 1 : 0,
-          },
-        },
-      })
-
-      if (name === "content") {
-        updateViewportProjection(
-          plane,
-          rectOnPlane(visibleContent, range),
-          mappingFocus === "content-view",
-        )
-      }
-      updateShapeProjection(plane, localShape)
-      if (contentPoint) {
-        points[name] = contentPoint
-        worldPoints[name] = planeWorldPoint(plane, plane.basis, localPoint, PANEL_FACE_OFFSET - 0.012)
-      }
-    }
-
-    const clientViewActive = mappingFocus === "view-client"
-    const clientCanvasDom = rectOnPlane({
-      x: sample.surface.left,
-      y: sample.surface.top,
-      width: sample.surface.width,
-      height: sample.surface.height,
-    }, ranges.client)
-    const viewPlaneRect = {
-      x: 0,
-      y: 0,
-      width: COORDINATE_PLANE_DOMAIN.width,
-      height: COORDINATE_PLANE_DOMAIN.height,
-    }
-    const contentViewport = rectOnPlane(visibleContent, ranges.content)
-    updateCornerLinks(
-      runtime.clientViewLinks,
-      runtime.planes.client,
-      clientCanvasDom,
-      runtime.planes.view,
-      viewPlaneRect,
-      clientViewActive,
-    )
-    updateCornerLinks(
-      runtime.viewContentLinks,
-      runtime.planes.view,
-      viewPlaneRect,
-      runtime.planes.content,
-      contentViewport,
-      !clientViewActive,
-      containsRect(ranges.content, visibleContent),
-    )
-    const outputDefinition = updateScenePanelGeometry(
-      runtime.outputPanel,
-      sceneLayout.output,
-      runtime,
-      OUTPUT_PANEL_THICKNESS,
-      OUTPUT_PANEL_BEVEL_RADIUS,
-      6,
-    )
-    const outputBasis = createPlaneBasis(outputDefinition)
-    runtime.outputPanel.edgeTint.setGeometry(rectMeshGeometry(
-      outputDefinition,
-      outputBasis,
-      {
-        x: -5,
-        y: 3,
-        width: 10,
-        height: Math.max(0, outputDefinition.height - 6),
-      },
-      OUTPUT_PANEL_THICKNESS / 2 + 0.002,
-    ))
-    const updateSignalMesh = (
-      index: 0 | 1 | 2,
-      start: Readonly<Vector3> | undefined,
-      end: Readonly<Vector3> | undefined,
-    ) => runtime.signalMeshes[index].setGeometry(
-      start && end ? worldLineMeshGeometry(start, end, 0.01) : emptyMeshGeometry(),
-    )
-    updateSignalMesh(0, worldPoints.client, worldPoints.view)
-    updateSignalMesh(1, worldPoints.view, worldPoints.content)
-    const outputPoint = clientToRootViewRef.current?.(sample.client)
-    const outputWorldPoint = outputPoint
-      ? planeWorldPoint(outputDefinition, outputBasis, {
-        x: outputPoint.x - sceneLayout.output.x,
-        y: outputPoint.y - sceneLayout.output.y,
-      }, OUTPUT_PANEL_THICKNESS / 2 - 0.012)
-      : undefined
-    updateSignalMesh(2, worldPoints.content, outputWorldPoint)
-    const signalPoints = [points.client, points.view, points.content, outputPoint]
-    const hasSignal = signalPoints.every((point): point is Coordinate => point !== undefined)
-    const curve = hasSignal ? signalPoints : []
-    const updateSignalPath = (
-      path: Path,
-      color: ReturnType<typeof rgba>,
-      lineWidth: number,
-    ) => path.update({
-      points: hasSignal
-        ? curve.map((point) => new Point({ x: point.x, y: point.y }))
-        : [],
-      strokeConfig: {
-        color: { ...color, a: hasSignal ? color.a : 0 },
-        lineWidth,
-      },
-    })
-    updateSignalPath(
-      runtime.signalGlowPath,
-      COORDINATE_SIGNAL_STYLE.glow.color,
-      COORDINATE_SIGNAL_STYLE.glow.lineWidth,
-    )
-    updateSignalPath(
-      runtime.signalHighlightPath,
-      COORDINATE_SIGNAL_STYLE.highlight.color,
-      COORDINATE_SIGNAL_STYLE.highlight.lineWidth,
-    )
-    runtime.outputSignal.groundGlow.update({
-      x: sceneLayout.output.x + sceneLayout.output.width * 0.06,
-      y: sceneLayout.output.y + sceneLayout.output.height + 4,
-      width: sceneLayout.output.width * 0.84,
-      height: 72,
-      fillConfig: { color: rgba(95, 145, 255, 0.09) },
-    })
-    runtime.outputSignal.contactShadow.update({
-      x: sceneLayout.output.x + 24,
-      y: sceneLayout.output.y + sceneLayout.output.height + 12,
-      width: sceneLayout.output.width - 48,
-      height: 60,
-      fillConfig: { color: rgba(42, 47, 48, 0.03) },
-    })
-    const outputBottom = sceneLayout.output.y + sceneLayout.output.height
-    runtime.outputSignal.outputReflections.forEach((reflection, index) => {
-      const depths = [72, 64, 56] as const
-      const offsets = [4, 10, 16] as const
-      const starts = [0.02, 0.58, 0.75] as const
-      const widths = [0.42, 0.34, 0.18] as const
-      const colors = [
-        rgba(95, 145, 255, 0.06),
-        rgba(88, 174, 210, 0.052),
-        rgba(112, 158, 226, 0.035),
-      ] as const
-      reflection.update({
-        x: sceneLayout.output.x + sceneLayout.output.width * starts[index],
-        y: outputBottom + offsets[index],
-        width: sceneLayout.output.width * widths[index],
-        height: depths[index],
-        fillConfig: { color: colors[index] },
-      })
-    })
-    runtime.outputSignal.outputReflectionEdges.forEach((edge, index) => {
-      const offsets = [10, 22, 36] as const
-      const insets = [30, 36, 44] as const
-      const alphas = [0.015, 0.006, 0] as const
-      edge.update({
-        x1: sceneLayout.output.x + insets[index],
-        y1: outputBottom + offsets[index],
-        x2: sceneLayout.output.x + sceneLayout.output.width - insets[index],
-        y2: outputBottom + offsets[index],
-        strokeConfig: { color: rgba(95, 145, 255, alphas[index]), lineWidth: 1.2 - index * 0.3 },
-      })
-    })
-    updateScenePanelGeometry(
-      runtime.consolePanel,
-      sceneLayout.console,
-      runtime,
-      CONSOLE_PANEL_THICKNESS,
-      CONSOLE_PANEL_BEVEL_RADIUS,
-      6,
-    )
-    const consoleBottom = sceneLayout.console.y + sceneLayout.console.height
-    runtime.outputSignal.consoleContactShadow.update({
-      x: sceneLayout.console.x + 18,
-      y: consoleBottom - 1,
-      width: sceneLayout.console.width - 36,
-      height: 6,
-      fillConfig: { color: rgba(43, 46, 50, 0.35) },
-    })
-    runtime.outputSignal.consoleReflections.forEach((reflection, index) => {
-      const depths = [42, 26, 12] as const
-      const insets = [24, 19, 15] as const
-      const alphas = [0.025, 0.035, 0.05] as const
-      reflection.update({
-        x: sceneLayout.console.x + insets[index],
-        y: consoleBottom + 3,
-        width: sceneLayout.console.width - insets[index] * 2,
-        height: depths[index],
-        fillConfig: { color: rgba(142, 132, 116, alphas[index]) },
-      })
-    })
-    runtime.outputSignal.consoleReflectionEdges.forEach((edge, index) => {
-      const offsets = [7, 17, 29] as const
-      const insets = [16, 22, 30] as const
-      const alphas = [0.06, 0.02, 0.008] as const
-      edge.update({
-        x1: sceneLayout.console.x + insets[index],
-        y1: consoleBottom + offsets[index],
-        x2: sceneLayout.console.x + sceneLayout.console.width - insets[index],
-        y2: consoleBottom + offsets[index],
-        strokeConfig: { color: rgba(142, 132, 116, alphas[index]), lineWidth: 1.8 - index * 0.4 },
-      })
-    })
-    updateOutputPanelOverlay(
-      runtime.outputOverlay,
-      sceneLayout.output,
-      visibleContent,
-    )
-    updateConsolePanelOverlay(
-      runtime.consoleOverlay,
-      sceneLayout.console,
-      sample,
-      currentViewport,
-      cssDisplay,
-      eventEvidence,
-    )
-    updateConsoleControlTargets(runtime.consoleControlTargets, sceneLayout.console)
-    updateHeroOverlay(runtime.heroOverlay, runtime.viewSize, {
-      eyebrow: text("Coordinate laboratory · 01", "坐标实验室 · 01"),
-      first: text("One point,", "一个点，"),
-      second: text("three spaces.", "三个空间。"),
-      compact: text("One point, three spaces.", "一个点，三个空间。"),
-      subtitle: text(
-        "One point and one Shape, mapped across three coordinate spaces and rendered on Live Canvas.",
-        "同一点与同一 Shape，在三个坐标空间中映射，最终呈现于 Live Canvas。",
-      ),
-    })
-    updateEvidenceOverlay(
-      runtime.evidenceOverlay,
-      evidenceOpen,
-      runtime.viewSize,
-      sample,
-      currentViewport,
-      shapeProjection,
-      visibleContent,
-      eventEvidence,
-      {
-        heading: text("Projection evidence", "投影证据"),
-        intro: text("Zoom changes the projection, not the Shape", "缩放改变投影，不改变 Shape"),
-        labels: [
-          text("Content Shape geometry", "Content Shape 几何"),
-          "Viewport",
-          text("CSS View to Client", "CSS View 到 Client"),
-          text("View projection", "View 中的投影"),
-          text("Client footprint", "Client 中的显示区域"),
-          text("Visible Content window", "可见 Content 窗口"),
-          "Canvas event · Content · e.point",
-        ],
-      },
-    )
-    onSceneLayoutChange?.(sceneLayout)
-    runtime.materialFocus = mappingFocus
-  }
+  const controlListeners = useMemo<ListenerProps[]>(() => [{
+    name: "coordinate-console-controls",
+    selector: ".stay-canvas",
+    event: "mousedown",
+    callback: ({ e, tools }) => {
+      const runtime = runtimeRef.current
+      const context = controlContextRef.current
+      if (!runtime || !context || !hasPointerPosition(e)) return
+      const name = resolveCoordinateControl(tools, e.point)
+      if (!name) return
+      dispatchCoordinateControl(name, e.point, runtime, context)
+    },
+  }], [])
 
   useEffect(
-    () => update(probe, viewport),
+    () => {
+      const runtime = runtimeRef.current
+      if (!runtime) return
+      updateCoordinateScene({
+        clientRange,
+        coordinateEvidence,
+        cssDisplay,
+        evidenceOpen,
+        eventEvidence,
+        mappingFocus,
+        onSceneLayoutChange,
+        clientToRootView: clientToRootViewRef.current,
+        currentViewport: viewport,
+        runtime,
+        sample: probe,
+        text,
+      })
+    },
     [clientRange, coordinateEvidence, cssDisplay, evidenceOpen, eventEvidence, mappingFocus, onSceneLayoutChange, probe, runtimeGeneration, text, viewport],
   )
 
   const mounted = (tools: StayTools) => {
     const sceneMountGeneration = ++sceneMountGenerationRef.current
-    const canvasArea = sceneCanvasArea(tools, STACK_WIDTH, STACK_HEIGHT)
-    const definitions = createPlaneDefinitions(
-      canvasArea.width,
-      canvasArea.height,
-      COORDINATE_PLANE_DOMAIN,
+    const runtime = mountCoordinateScene(
+      tools,
+      () => sceneMountGenerationRef.current === sceneMountGeneration,
     )
-    const planeNames: PlaneName[] = ["client", "view", "content"]
-    const detailsVisible = canvasArea.width >= 600
-    const planes = {} as Record<PlaneName, PlaneRuntime>
-    const outputPanel = {
-      face: new Mesh({
-        geometry: emptyMeshGeometry(),
-        material: coordinateOutputGlassMaterial(),
-        castShadow: false,
-        receiveShadow: false,
-      }),
-      depth: new Mesh({
-        geometry: emptyMeshGeometry(),
-        material: unlitMaterial(rgba(236, 240, 240, 1)),
-        castShadow: true,
-        receiveShadow: false,
-      }),
-      edgeTint: new Mesh({
-        geometry: emptyTexturedMeshGeometry(),
-        material: new TransparentImageMaterial({
-          texture: createCoordinateOutputEdgeTexture(),
-        }),
-        castShadow: false,
-        receiveShadow: false,
-      }),
-    }
-    const consolePanel = {
-      face: new Mesh({
-        geometry: emptyMeshGeometry(),
-        material: coordinateConsoleFaceMaterial(),
-        // The console is a screen-space control plinth, not a tall object in the
-        // installation. Let it receive the room lighting without projecting a
-        // false wall-sized shadow across the shared floor.
-        castShadow: false,
-        receiveShadow: true,
-      }),
-      depth: new Mesh({
-        geometry: emptyMeshGeometry(),
-        material: coordinateConsoleEdgeMaterial(),
-        castShadow: false,
-        receiveShadow: true,
-      }),
-    }
-    const outputOverlay = createOutputPanelOverlay()
-    const consoleOverlay = createConsolePanelOverlay()
-    const consoleControlTargets = createConsoleControlTargets()
-    const heroOverlay = createHeroOverlay()
-    const evidenceOverlay = createEvidenceOverlay()
-    const outputSignal: OutputSignalOverlay = {
-      groundGlow: new Rectangle({
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-        layer: GROUND_LAYER,
-        zIndex: -20,
-        filter: "blur(28px)",
-        fillConfig: { color: rgba(95, 145, 255, 0) },
-        strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
-      }),
-      contactShadow: new Rectangle({
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-        layer: GROUND_LAYER,
-        zIndex: -19,
-        filter: "blur(10px)",
-        fillConfig: { color: rgba(42, 47, 48, 0) },
-        strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
-      }),
-      outputReflections: ([28, 24, 18] as const).map((blur) => new Rectangle({
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-        layer: GROUND_LAYER,
-        zIndex: -21,
-        filter: `blur(${blur}px)`,
-        fillConfig: { color: rgba(95, 145, 255, 0) },
-        strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
-      })) as [Rectangle, Rectangle, Rectangle],
-      outputReflectionEdges: Array.from({ length: 3 }, () => new Line({
-        x1: 0,
-        y1: 0,
-        x2: 0,
-        y2: 0,
-        layer: GROUND_LAYER,
-        zIndex: -20,
-        strokeConfig: { color: rgba(95, 145, 255, 0), lineWidth: 1, lineCap: "round" },
-      })) as [Line, Line, Line],
-      consoleContactShadow: new Rectangle({
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-        layer: GROUND_LAYER,
-        zIndex: -19,
-        filter: "blur(2px)",
-        fillConfig: { color: rgba(48, 45, 40, 0) },
-        strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
-      }),
-      consoleReflections: ([12, 8, 4] as const).map((blur) => new Rectangle({
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-        layer: GROUND_LAYER,
-        zIndex: -21,
-        filter: `blur(${blur}px)`,
-        fillConfig: { color: rgba(142, 132, 116, 0) },
-        strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
-      })) as [Rectangle, Rectangle, Rectangle],
-      consoleReflectionEdges: Array.from({ length: 3 }, () => new Line({
-        x1: 0,
-        y1: 0,
-        x2: 0,
-        y2: 0,
-        layer: GROUND_LAYER,
-        zIndex: -20,
-        strokeConfig: { color: rgba(142, 132, 116, 0), lineWidth: 1, lineCap: "round" },
-      })) as [Line, Line, Line],
-    }
-    const meshes: Mesh[] = [
-      outputPanel.face,
-      outputPanel.depth,
-      outputPanel.edgeTint,
-      consolePanel.face,
-      consolePanel.depth,
-    ]
-    const overlays: Array<Circle | Line | Path | Polygon | Rectangle | StayText> = []
-    const planeTitles: StayText[] = []
-    const consoleShapes = Object.values(consoleOverlay).reduce<
-      Array<Circle | Line | Polygon | Rectangle | StayText>
-    >((result, shape) => {
-      if (Array.isArray(shape)) result.push(...shape)
-      else result.push(shape)
-      return result
-    }, [])
-    overlays.push(
-      ...Object.values(outputOverlay),
-      ...consoleShapes,
-      ...Object.values(heroOverlay),
-      outputSignal.groundGlow,
-      outputSignal.contactShadow,
-      ...outputSignal.outputReflections,
-      ...outputSignal.outputReflectionEdges,
-      outputSignal.consoleContactShadow,
-      ...outputSignal.consoleReflections,
-      ...outputSignal.consoleReflectionEdges,
-      evidenceOverlay.panel,
-      evidenceOverlay.heading,
-      evidenceOverlay.intro,
-      ...evidenceOverlay.labels,
-      ...evidenceOverlay.values,
-    )
-
-    planeNames.forEach((name) => {
-      const created = createPlaneRuntime(
-        name,
-        definitions[name],
-        detailsVisible,
-        canvasArea,
-      )
-      planes[name] = created.runtime
-      meshes.push(...created.meshes)
-      overlays.push(...created.overlays.filter((shape) => shape !== created.runtime.overlay.title))
-      planeTitles.push(created.runtime.overlay.title)
-    })
-
-    const createMappingLinks = () => Array.from({ length: 4 }, () => new Line({
-      x1: 0,
-      y1: 0,
-      x2: 0,
-      y2: 0,
-      layer: OVERLAY_LAYER,
-      zIndex: -20,
-      strokeConfig: { color: rgba(78, 89, 104, 0.12), lineWidth: 0.9, dash: [4, 6] },
-    })) as [Line, Line, Line, Line]
-    const clientViewLinks = createMappingLinks()
-    const viewContentLinks = createMappingLinks()
-    const signalMeshes: [Mesh, Mesh, Mesh] = [
-      new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(255, 238, 232, 0.52)) }),
-      new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(255, 238, 232, 0.52)) }),
-      new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(255, 238, 232, 0.08)) }),
-    ]
-    const signalGlowPath = createCoordinateSignalPath(COORDINATE_SIGNAL_STYLE.glow)
-    const signalHighlightPath = createCoordinateSignalPath(COORDINATE_SIGNAL_STYLE.highlight)
-    meshes.push(...signalMeshes)
-    overlays.push(
-      ...clientViewLinks,
-      ...viewContentLinks,
-      signalGlowPath,
-      signalHighlightPath,
-    )
-
-    const backdropChild = tools.webgl.appendChild({
-      className: "coordinate-room-backdrop",
-      layer: BACKDROP_WEBGL_LAYER,
-      meshes: [],
-    })
-    tools.webgl.appendChild({
-      className: "coordinate-native-scene",
-      layer: WEBGL_LAYER,
-      meshes,
-    })
-    void loadCoordinateRoomTexture().then((texture) => {
-      if (sceneMountGenerationRef.current !== sceneMountGeneration
-          || !tools.webgl.hasChild(backdropChild.id)) return
-      const backdrop = new Mesh({
-        geometry: coordinateRoomBackdropGeometry(
-          texture.width,
-          texture.height,
-          canvasArea.width,
-          canvasArea.height,
-        ),
-        material: new ImageMaterial({ texture }),
-      })
-      const lighting = new Mesh({
-        geometry: coordinateRoomLightingGeometry(canvasArea.width, canvasArea.height),
-        material: new TransparentImageMaterial({
-          texture: createCoordinateRoomLightingTexture(),
-        }),
-        castShadow: false,
-        receiveShadow: false,
-      })
-      backdropChild.setMeshes([backdrop, lighting])
-    }).catch((error) => {
-      console.error("Coordinate room WebGL texture failed", error)
-    })
-    tools.appendChild({ className: "coordinate-scene-overlay", shape: overlays })
-    tools.appendChild({
-      className: "coordinate-plane-titles",
-      placement: { type: "affine", scaleX: PLANE_TITLE_SCALE_X },
-      shape: planeTitles,
-    })
-    for (const name of Object.keys(consoleControlTargets) as CoordinateConsoleControlName[]) {
-      tools.appendChild({
-        className: `coordinate-control-${name}`,
-        shape: [consoleControlTargets[name]],
-      })
-    }
-    runtimeRef.current = {
-      planes,
-      definitions,
-      outputPanel,
-      outputOverlay,
-      consolePanel,
-      consoleOverlay,
-      consoleControlTargets,
-      heroOverlay,
-      evidenceOverlay,
-      outputSignal,
-      viewSize: { width: canvasArea.width, height: canvasArea.height },
-      clientViewLinks,
-      viewContentLinks,
-      signalMeshes,
-      signalGlowPath,
-      signalHighlightPath,
-    }
+    runtimeRef.current = runtime
     clientToRootViewRef.current = (point) => tools.coordinates.clientToView(point)
-    onSceneLayoutChange?.(createCoordinateSceneLayout(canvasArea.width, canvasArea.height))
+    onSceneLayoutChange?.(createCoordinateSceneLayout(runtime.viewSize.width, runtime.viewSize.height))
     setRuntimeGeneration((current) => current + 1)
   }
 

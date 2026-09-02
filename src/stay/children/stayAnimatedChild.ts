@@ -5,7 +5,10 @@ import type {
   ShapeBound,
   StayShapeTransitionConfig,
 } from "../../types/animation"
-import type { StayAnimatedChildProps } from "../../types/children"
+import type {
+  StayAnimatedChildProps,
+  StayAnimatedChildUpdateProps,
+} from "../../types/children"
 import { uuid4 } from "../../utils/identifiers"
 import { StayInstantChild } from "./stayInstantChild"
 import { Canvas } from "../../canvas"
@@ -163,6 +166,13 @@ export class StayAnimatedChild<
   // plain static child, destroying the timeline. (Overrides the base's `true`.)
   get participatesInHistory(): boolean {
     return false
+  }
+
+  override update(props: StayAnimatedChildUpdateProps): this {
+    if ("shape" in props) {
+      throw new Error("Animated Child composition is timeline-owned; use replaceSlice()")
+    }
+    return super.update(props)
   }
 
   onChildShapeChange(shape: T, _previousLayer: number) {

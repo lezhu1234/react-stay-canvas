@@ -26,11 +26,13 @@ export interface CreateChildProps {
   placement?: ChildPlacement
 }
 
+/** @deprecated There is no tools.updateChild API. Call child.update(...) instead. */
 export type updateChildProps<T extends StayInstantChild = StayInstantChild> = {
   child: T
   transition?: StayShapeTransitionConfig
 }
 
+/** @deprecated Use StayInstantChildUpdateProps with child.update(...) instead. */
 export interface UpdateStayChildProps<T> {
   id?: string
   className?: string
@@ -73,10 +75,14 @@ export type SelectorFunc = (child: StayInstantChild) => boolean
 export type StayInstantChildShapes = Map<string, InstantShape>
 
 export interface StayInstantChildUpdateProps<T extends InstantShape> {
-  id?: string
   className?: string
   shape?: T | T[] | Map<string, T>
-  placement?: ChildPlacementSnapshot
+  placement?: ChildPlacement
+}
+
+export interface StayAnimatedChildUpdateProps {
+  className?: string
+  placement?: ChildPlacement
 }
 
 export interface StayInstantChildProps<T extends InstantShape> {

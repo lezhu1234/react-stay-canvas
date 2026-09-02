@@ -132,7 +132,7 @@ export function stayTools(this: Stay<any, any>): StayTools {
     const child = this.children.get(snapshot.id)
     if (!child) throw new Error(`History Child ${snapshot.id} is missing`)
     if (snapshot.kind === "canvas2d" && isStayInstantChild(child)) {
-      child.update({
+      child.restoreHistorySnapshot({
         className: snapshot.className,
         shape: materializeHistoryShapes(snapshot.shape),
         placement: snapshot.placement,

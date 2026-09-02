@@ -110,7 +110,7 @@ label?.update({ text: "Renamed" })
 
 数组会自动用 `"0"`、`"1"` 等索引作为 `shapeMap` 的键。复制、导出和历史快照都会保留这些键。
 
-## 修改 Shape，而不是替换 Child
+## 修改 Shape 属性或 Child 组合
 
 公开更新路径是 Shape 自己的 `update(...)`：
 
@@ -123,7 +123,20 @@ child?.shape.update({
 })
 ```
 
-`update()` 会通知所属 Child 重绘相关 layer：同层更新只标记当前层，修改 `layer` 时会同时标记旧层和新层，旧 Canvas 会自动清除。`StayInstantChild.update(...)` 是撤销/重做使用的内部替换原语，不应作为应用代码的常规更新入口。
+Shape 的 `update()` 会通知所属 Child 重绘相关 layer：同层更新只标记当前层，修改 `layer` 时会同时标记旧层和新层，旧 Canvas 会自动清除。
+
+修改 Child 级状态或原子替换完整 Shape 组合时，使用 `StayInstantChild.update(...)`。例如，多 Shape 编辑取消时可以整体恢复原组合：
+
+```ts
+child.update({
+  className: "node:selected",
+  shape: originalShapes,
+  placement: { type: "affine", x: 24, y: 12 },
+})
+tools.log()
+```
+
+Child id 是稳定标识，不能通过 `update(...)` 修改。该方法会先校验全部替换 Shape 的 layer 与 placement，再修改 Child；同时标记旧、新 layer，并由下一次 `tools.log()` 作为一个历史步骤记录。
 
 `move()` 表示相对位移；连续手势开始前先调用 `moveInit()`，之后可以反复以“相对手势起点”的偏移调用 `move()`：
 

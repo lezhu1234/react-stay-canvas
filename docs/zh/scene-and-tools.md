@@ -118,7 +118,7 @@ const selectedNodes = tools.getChildrenBySelector(
 )
 ```
 
-`sortBy` 会影响返回顺序，也会影响 `getContainPointChildren({ returnFirst: true })` 选中的第一项。把排序规则写成稳定函数，避免重叠对象在不同调用中选择不一致。
+`sortBy` 会影响查询返回顺序，也会影响 `getContainPointChildren({ returnFirst: true })` 选中的第一项。Listener 自身未提供 `sortBy` 时，目标路由采用稳定默认规则：较小边界优先、相同面积保留场景插入顺序、root 最后兜底。工具查询不会套用这套 Listener 默认规则；未传 comparator 时保留 selector 的结果顺序。
 
 ## 点命中与区域查询
 

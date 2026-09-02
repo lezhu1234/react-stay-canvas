@@ -7,6 +7,9 @@ import type {
   PredefinedWheelEventName,
 } from "./types/events"
 
+const hasPlatformCommandModifier = (pressedKeys: ReadonlySet<string>) =>
+  pressedKeys.has("Control") || pressedKeys.has("Meta")
+
 export const mouseDownEvent: EventProps<PredefinedMouseEventName> = {
   name: "mousedown",
   trigger: MOUSE_EVENTS.MOUSE_DOWN,
@@ -18,7 +21,7 @@ export const UndoEvent: EventProps<PredefinedKeyEventName> = {
   trigger: KEYBOARRD_EVENTS.KEY_UP,
   conditionCallback: ({ e }) => {
     return (
-      e.pressedKeys.has("Control") &&
+      hasPlatformCommandModifier(e.pressedKeys) &&
       !e.pressedKeys.has("Shift") &&
       e.key?.toLowerCase() === "z"
     )
@@ -30,7 +33,7 @@ export const RedoEvent: EventProps<PredefinedKeyEventName> = {
   trigger: KEYBOARRD_EVENTS.KEY_UP,
   conditionCallback: ({ e }) => {
     return (
-      e.pressedKeys.has("Control") &&
+      hasPlatformCommandModifier(e.pressedKeys) &&
       e.pressedKeys.has("Shift") &&
       e.key?.toLowerCase() === "z"
     )

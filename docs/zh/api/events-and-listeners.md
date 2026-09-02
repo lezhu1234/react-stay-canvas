@@ -22,7 +22,7 @@ const saveListener: ListenerProps = {
 | `state` | 当前 Canvas state 满足表达式时才参与路由 |
 | `selector` | 目标查询；原生指针 action 省略时默认使用 root selector `.stay-canvas` |
 | `event` | 订阅一个或多个 action 名称 |
-| `sortBy` | 多个命中 Child 的稳定排序函数 |
+| `sortBy` | 覆盖默认的较小边界优先目标顺序 |
 | `callback` | action 路由完成后同步执行 |
 
 Listener 的目标在标准 drag/move 手势开始时确定，后续 continuation 和 terminal 阶段保持同一 owner。普通手动 action 即使使用同名 `drag`，也不会进入 Pointer Session owner 流程。

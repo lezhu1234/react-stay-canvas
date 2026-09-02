@@ -116,6 +116,7 @@ class Stay<EventName extends string, HistorySnapshot = unknown> {
         this.tools.getAvailiableStates(selector).includes(this.state),
       targetResolver: {
         rootChild: this.rootChild,
+        sceneChildren: () => this.getShapeChildren(),
         store: this.store,
         stateStore: this.stateStore,
         pointerTargets: createCanvas2DPointerTargetPicker(this.rootChild),

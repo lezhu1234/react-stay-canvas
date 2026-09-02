@@ -195,6 +195,8 @@ export function stayTools(this: Stay<any, any>): StayTools {
 
     //   return childProxy
     // },
+    canRedo: () => this.history.canRedo(),
+    canUndo: () => this.history.canUndo(),
     log: () => {
       this.history.assertOperationAllowed()
       const steps = [...this.unLogedChildrenIds]

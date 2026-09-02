@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 import { Circle, Path, Polygon, Rectangle, StayText, unionRects } from "react-stay-canvas"
 
 import {
+  createDiagramHistoryAdapter,
   type DiagramDocument,
   type DiagramEngine,
 } from "../example/src/examples/integrated/diagram/model"
@@ -86,8 +87,13 @@ function key(target: HTMLCanvasElement, type: "keydown" | "keyup", value: string
 }
 
 function createDiagram() {
-  const { stage, top } = createStage({ width: 900, height: 560, layers: 3 })
   const state = engine()
+  const { stage, top } = createStage({
+    width: 900,
+    height: 560,
+    layers: 3,
+    historyAdapter: createDiagramHistoryAdapter(state),
+  })
   seedDiagram(stage.tools, state, (en) => en)
   stage.registerEvent(DiagramClickEvent)
   stage.registerEvent(DiagramDoubleClickEvent)
@@ -328,6 +334,23 @@ describe("integrated diagram example", () => {
     })
     expect(() => replaceDiagramFromDocument(stage.tools, state, rootCollision)).toThrow("conflicts with the canvas")
     expect(toDiagramDocument(stage.tools)).toEqual(imported)
+  })
+
+  it("keeps external id sequences in the same history transaction as the diagram", () => {
+    const { stage, state } = createDiagram()
+    expect(state.nodeSequence).toBe(5)
+
+    const added = addDiagramNode(stage.tools, state)
+    expect(added.id).toBe("node-6")
+    expect(state.nodeSequence).toBe(6)
+
+    navigateDiagramHistory(stage.tools, state, "undo")
+    expect(stage.tools.getChildById(added.id)).toBeUndefined()
+    expect(state.nodeSequence).toBe(5)
+
+    const replacement = addDiagramNode(stage.tools, state)
+    expect(replacement.id).toBe("node-6")
+    expect(state.nodeSequence).toBe(6)
   })
 
   it("fits business diagram children without mutating their geometry or history", () => {

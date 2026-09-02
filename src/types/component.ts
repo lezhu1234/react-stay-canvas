@@ -9,6 +9,7 @@ import type {
   PredefinedMouseEventName,
   PredefinedWheelEventName,
 } from "./events"
+import type { HistoryAdapter } from "./history"
 import type { StayTools, ViewportOptions } from "./tools"
 
 export interface composeProps {
@@ -23,7 +24,10 @@ export type StayCanvasRefType = {
   focus: () => void
 }
 
-export interface StayCanvasProps<EventName extends string = string> {
+export interface StayCanvasProps<
+  EventName extends string = string,
+  HistorySnapshot = unknown,
+> {
   className?: string
   width?: number
   height?: number
@@ -40,4 +44,5 @@ export interface StayCanvasProps<EventName extends string = string> {
   recreateOnResize?: boolean
   focusOnInit?: boolean
   viewport?: ViewportOptions
+  historyAdapter?: HistoryAdapter<HistorySnapshot>
 }

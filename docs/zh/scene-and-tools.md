@@ -190,12 +190,14 @@ tools.redo()
 
 编辑器完成初始化后，可在加载不可撤销的背景内容之后调用 `resetHistory()`。它会清空 undo/redo，并把当前静态场景作为新的历史基线。
 
+应用状态可以通过可选的 [`historyAdapter`](./api/stay-canvas.md#historyadapter) 进入同一事务。适配器会在每次显式 `log()` 边界保存 before/after 快照，不会持有另一套历史栈；因此只有应用状态变化时也可以形成历史项。
+
 边界规则：
 
 - `appendChild()`、`removeChild()`、正常 Shape 变更和 `child.setPlacement()` 都会把静态 Child 标记为待记录；
 - `tools.webgl.appendChild()`、`tools.webgl.removeChild()` 与 Mesh geometry/model/material 变更进入同一待记录集合和事务；
-- `log()` 把从上一次快照到当前状态的变化组成一个历史项；
-- `resetHistory()` 清空 undo/redo，并把当前静态场景设为基线；
+- `log()` 把从上一次快照到当前状态的变化组成一个历史项；配置 `historyAdapter` 时也包含应用状态；
+- `resetHistory()` 清空 undo/redo，并把当前静态场景和适配后的应用状态设为基线；
 - 多个变更后只调用一次 `log()`，它们会成为同一个撤销单位；
 - `undo()` 后再记录新操作，会截断旧的 redo 尾部；
 - 动画 Child 不进入历史，移除后也不会被 undo 恢复；

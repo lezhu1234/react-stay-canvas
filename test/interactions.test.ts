@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { Rectangle, StayImage } from "react-stay-canvas"
 import { createStage } from "./helpers/stage"
 
@@ -136,6 +136,85 @@ describe("undo / redo / log", () => {
     stage.tools.redo()
 
     expect(stage.tools.getChildById(second.id)).toBeTruthy()
+  })
+
+  it("commits application state and Canvas changes as one history item", () => {
+    let applicationState = { title: "Draft", revision: 1 }
+    const restore = vi.fn((snapshot: typeof applicationState) => {
+      applicationState = structuredClone(snapshot)
+    })
+    const { stage } = createStage({
+      historyAdapter: {
+        capture: () => structuredClone(applicationState),
+        restore,
+      },
+    })
+    stage.tools.resetHistory()
+
+    const child = stage.tools.appendChild({ className: "box", shape: rect(0, 0) })
+    applicationState = { title: "Reviewed", revision: 2 }
+    stage.tools.log()
+
+    stage.tools.undo()
+    expect(stage.tools.getChildById(child.id)).toBeUndefined()
+    expect(applicationState).toEqual({ title: "Draft", revision: 1 })
+
+    stage.tools.redo()
+    expect(stage.tools.getChildById(child.id)).toBeTruthy()
+    expect(applicationState).toEqual({ title: "Reviewed", revision: 2 })
+    expect(restore).toHaveBeenCalledTimes(2)
+  })
+
+  it("records an explicit application-only transaction", () => {
+    let applicationState = 0
+    const { stage } = createStage({
+      historyAdapter: {
+        capture: () => applicationState,
+        restore: (snapshot) => {
+          applicationState = snapshot
+        },
+      },
+    })
+    stage.tools.resetHistory()
+
+    applicationState = 1
+    stage.tools.log()
+    applicationState = 2
+    stage.tools.log()
+    expect(stage.stack).toHaveLength(2)
+
+    stage.tools.undo()
+    expect(applicationState).toBe(1)
+
+    applicationState = 3
+    stage.tools.log()
+    expect(stage.stack).toHaveLength(2)
+    stage.tools.redo()
+    expect(applicationState).toBe(3)
+  })
+
+  it("leaves the Canvas and history cursor untouched when external restore fails", () => {
+    let applicationState = 0
+    let rejectRestore = false
+    const { stage } = createStage({
+      historyAdapter: {
+        capture: () => applicationState,
+        restore: (snapshot) => {
+          if (rejectRestore) throw new Error("restore failed")
+          applicationState = snapshot
+        },
+      },
+    })
+    stage.tools.resetHistory()
+    const child = stage.tools.appendChild({ className: "box", shape: rect(0, 0) })
+    applicationState = 1
+    stage.tools.log()
+    rejectRestore = true
+
+    expect(() => stage.tools.undo()).toThrow("restore failed")
+    expect(stage.tools.getChildById(child.id)).toBeTruthy()
+    expect(stage.stackIndex).toBe(1)
+    expect(applicationState).toBe(1)
   })
 
   it("preserves native object identity when diffing Shape snapshots", () => {

@@ -7,6 +7,7 @@
 ## Start here
 
 - [Getting started](./getting-started.md): install the package, render a scene, and understand sizing and layout.
+- [Migrate from 1.2.0](./migration-1.3.md): review required Path and StayText changes before adopting 1.3.0.
 - [Core concepts](./core-concepts.md): learn how Canvas layers, Children, Shapes, and StayTools fit together.
 - [Interaction and events](./interaction-and-events.md): understand Listeners, selectors, state, ActionEvent, manual actions, and Pointer Sessions.
 - [Shapes and animation](./shapes-and-animation.md): use built-in Shapes, compose objects, and build explicit keyframe timelines.

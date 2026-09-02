@@ -29,6 +29,17 @@ import { SetShapeChildCurrentTime } from "../types"
 
 import { Canvas } from "../../canvas"
 
+interface StayInstantChildHistorySnapshotProps<T extends InstantShape> {
+  className: string
+  shape: T | T[] | Map<string, T>
+  placement: ChildPlacementSnapshot
+}
+
+interface ShapeReplacement<T extends InstantShape> {
+  nextShapeMap: Map<string, T>
+  previousLayers: Set<number>
+}
+
 export class StayInstantChild<T extends InstantShape = InstantShape> {
   className: string
   id: string
@@ -299,28 +310,83 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
     return shapes
   }
 
-  /**
-   * @internal Replaces the child's shape(s) wholesale. This is an internal
-   * primitive used by undo/redo (which force-repaint separately) and does NOT
-   * go through the normal per-shape dirty-tracking. Consumers should mutate the
-   * shape instead — `child.shape.update({ ... })` — which repaints correctly.
-   */
-  update({ id, className, shape, placement }: StayInstantChildUpdateProps<T>) {
-    this.id = id ?? this.id
-    this.className = className ?? this.className
-    this.shapeMap = shape ? this.assignShapes(shape) : this.shapeMap
-    if (placement) {
-      this.replacePlacement(restoreChildPlacement(placement), false)
+  update({ className, shape, placement }: StayInstantChildUpdateProps<T>) {
+    // Resolve every fallible input before changing the Child so a rejected
+    // placement or layer cannot leave a partially applied batch.
+    const nextPlacement = placement === undefined
+      ? undefined
+      : resolveChildPlacement(placement)
+    const shapeReplacement = shape === undefined
+      ? undefined
+      : this.prepareShapeReplacement(shape)
+
+    let changed = false
+    if (className !== undefined && className !== this.className) {
+      this.className = className
+      changed = true
     }
-    // `shape` is now a getter derived from shapeMap — nothing else to assign.
+    if (shapeReplacement !== undefined) {
+      this.replaceShapeMap(shapeReplacement)
+      changed = true
+    }
+    if (nextPlacement !== undefined) {
+      changed = this.replacePlacement(nextPlacement, false) || changed
+    }
+
+    if (changed) this.#onChange?.(this.id)
+    return this
   }
 
-  private replacePlacement(placement: ChildPlacementRuntime, notify: boolean) {
+  /** @internal Restores a complete history snapshot without recording another change. */
+  restoreHistorySnapshot({
+    className,
+    shape,
+    placement,
+  }: StayInstantChildHistorySnapshotProps<T>) {
+    const nextPlacement = restoreChildPlacement(placement)
+    const shapeReplacement = this.prepareShapeReplacement(shape)
+
+    this.className = className
+    this.replaceShapeMap(shapeReplacement)
+    this.replacePlacement(nextPlacement, false)
+  }
+
+  private prepareShapeReplacement(shape: T | T[] | Map<string, T>): ShapeReplacement<T> {
+    const previousLayers = this.getLayers()
+    for (const candidate of this.getShapeCandidates(shape)) {
+      if (candidate.parent && candidate.parent !== this) {
+        throw new Error(`Shape already belongs to Child ${candidate.parent.id}`)
+      }
+    }
+    return {
+      nextShapeMap: this.assignShapes(shape),
+      previousLayers,
+    }
+  }
+
+  private getShapeCandidates(shape: T | T[] | Map<string, T>): Iterable<T> {
+    if (shape instanceof Map) return shape.values()
+    return Array.isArray(shape) ? shape : [shape]
+  }
+
+  private replaceShapeMap({ nextShapeMap, previousLayers }: ShapeReplacement<T>) {
+    const retainedShapes = new Set(nextShapeMap.values())
+    this.shapeMap.forEach((shape) => {
+      if (!retainedShapes.has(shape) && shape.parent === this) {
+        shape.parent = undefined
+      }
+    })
+    this.shapeMap = nextShapeMap
+    previousLayers.forEach((layer) => this.updatedLayers.add(layer))
+  }
+
+  private replacePlacement(placement: ChildPlacementRuntime, notify: boolean): boolean {
     const before = this.#placement.snapshot
     const after = placement.snapshot
-    if (childPlacementEquals(before, after)) return
+    if (childPlacementEquals(before, after)) return false
     this.#placement = placement
     this.getLayers().forEach((layer) => this.updatedLayers.add(layer))
     if (notify) this.#onChange?.(this.id)
+    return true
   }
 }

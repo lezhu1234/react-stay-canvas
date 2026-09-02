@@ -27,6 +27,7 @@ Create a static Child with `tools.appendChild(...)`.
 | `getShapeBound(shape)` | `Rect` | Conservative Content-space bound of one placed Shape |
 | `containsPointer(point)` | `boolean` | True when any Shape is hit |
 | `inArea(area)` | `boolean` | True when any Shape center is inside the area |
+| `update(props)` | `this` | Atomically update the class, complete Shape composition, and/or placement |
 | `setPlacement(placement)` | `this` | Replace the complete affine or projective placement |
 | `toLocalPoint(point)` | `PointType \| undefined` | Map Content into the finite Child-local domain |
 | `toContentPoint(point)` | `PointType \| undefined` | Map the finite Child-local domain into Content |
@@ -36,7 +37,7 @@ Create a static Child with `tools.appendChild(...)`.
 | `getLayers()` | `Set<number>` | Layers used by the Child |
 | `getShapes(layer)` | `T[]` | Shapes on one layer |
 
-`update(...)` is an internal replacement primitive for history restoration. Application code should call `child.shape.update(...)` or retrieve a specific Shape from `shapeMap` and update that Shape.
+Use a Shape's own `update(...)` for geometry and drawing properties. Use `child.update(...)` for Child-level changes or when a workflow must replace a complete single- or multi-Shape composition. The batch is validated before it is applied, repaints both removed and added layers, and participates in undo/redo after the next `tools.log()`.
 
 Shape geometry remains in Child-local coordinates. Rendering, bounds, hit testing, area queries, history, scene transfer, and region capture apply the same placement. Affine placement supports semantic fields or a raw Canvas-compatible matrix. Projective placement owns a 3×3 matrix plus a finite positive local domain that cannot touch or cross its horizon. Non-finite or non-invertible matrices throw because local hit testing requires an inverse.
 
@@ -55,6 +56,7 @@ Children are Canvas-bound runtime entities and do not expose a copy operation. U
 | `appendKeyFrame(name, shape, prependZeroShape?)` | Append one keyframe to a slice |
 | `appendKeyFrames(frameMap, prependZeroShape?)` | Append frames to several slices |
 | `replaceSlice(name, frames, prependZeroShape?)` | Atomically replace one non-empty slice; the current projection changes on the next seek |
+| `update({ className?, placement? })` | Update Child-level state; timeline-owned Shape composition is excluded |
 | `appendDefaultFrame(shape, prependZeroShape?)` | Append to the `default` slice |
 | `getSlice(name)` | Return a slice or an empty array |
 | `hasSlice(name)` | Test whether a slice exists |
@@ -64,6 +66,8 @@ Children are Canvas-bound runtime entities and do not expose a copy operation. U
 | `participatesInHistory` | Always `false` |
 
 `disappear(..., "afterEach")` appends a transparent frame at each slice's own end. With the default zero-duration transition, disappearance is immediate; pass a non-zero transition to animate it. `"afterAll"` adds delay so every slice begins its disappearance after the longest timeline has completed.
+
+Animated Shape composition belongs exclusively to `shapeFramesMap`. Replace a timeline slice with `replaceSlice(...)`; `StayAnimatedChild.update(...)` only accepts `className` and `placement`, and rejects a runtime `shape` field.
 
 ## Common ShapeProps
 

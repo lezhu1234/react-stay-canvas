@@ -171,6 +171,98 @@ describe("real drawing (node-canvas ctx spy)", () => {
     expect(stage.draw({}).updatedLayers).toEqual([0, 1])
   })
 
+  it("clears old layers and paints new layers after replacing a Child composition", () => {
+    const { stage, layers } = createStage({ layers: 2 })
+    const oldContext = layers[0].getContext("2d")!
+    const newContext = layers[1].getContext("2d")!
+    const clearOldLayer = vi.spyOn(oldContext, "clearRect")
+    const clearNewLayer = vi.spyOn(newContext, "clearRect")
+    const paintOldLayer = vi.spyOn(oldContext, "strokeRect")
+    const paintNewLayer = vi.spyOn(newContext, "strokeRect")
+    const child = stage.tools.appendChild({
+      className: "r",
+      shape: new Rectangle({
+        x: 2,
+        y: 3,
+        width: 4,
+        height: 5,
+        layer: 0,
+        strokeConfig: { color: rgba(1, 1, 1), lineWidth: 1 },
+      }),
+    })
+    stage.draw({})
+    clearOldLayer.mockClear()
+    clearNewLayer.mockClear()
+    paintOldLayer.mockClear()
+    paintNewLayer.mockClear()
+
+    child.update({
+      shape: new Rectangle({
+        x: 7,
+        y: 8,
+        width: 9,
+        height: 10,
+        layer: 1,
+        strokeConfig: { color: rgba(1, 1, 1), lineWidth: 1 },
+      }),
+    })
+    const result = stage.draw({})
+
+    expect(result.updatedLayers).toEqual([0, 1])
+    expect(clearOldLayer).toHaveBeenCalledOnce()
+    expect(clearNewLayer).toHaveBeenCalledOnce()
+    expect(paintOldLayer).not.toHaveBeenCalled()
+    expect(paintNewLayer).toHaveBeenCalledWith(7, 8, 9, 10)
+  })
+
+  it("keeps Shape ownership exclusive and detaches replaced Shapes", () => {
+    const { stage } = createStage({ layers: 1 })
+    const firstShape = new Rectangle({ x: 1, y: 2, width: 3, height: 4 })
+    const secondShape = new Rectangle({ x: 5, y: 6, width: 7, height: 8 })
+    const first = stage.tools.appendChild({ className: "first", shape: firstShape })
+    const second = stage.tools.appendChild({ className: "second", shape: secondShape })
+    stage.draw({})
+
+    expect(() => second.update({ shape: firstShape })).toThrow(
+      `Shape already belongs to Child ${first.id}`
+    )
+    expect(second.shape).toBe(secondShape)
+    expect(firstShape.parent).toBe(first)
+    expect(secondShape.parent).toBe(second)
+
+    const replacement = new Rectangle({ x: 9, y: 10, width: 11, height: 12 })
+    second.update({ shape: replacement })
+    stage.draw({})
+    expect(secondShape.parent).toBeUndefined()
+    expect(replacement.parent).toBe(second)
+
+    secondShape.update({ x: 100 })
+    expect(stage.draw({}).updatedLayers).toEqual([])
+  })
+
+  it("rejects an invalid replacement before changing the Child", () => {
+    const { stage } = createStage({ layers: 1 })
+    const original = new Rectangle({ x: 1, y: 2, width: 3, height: 4 })
+    const child = stage.tools.appendChild({
+      className: "original",
+      shape: original,
+      placement: { type: "affine", x: 5 },
+    })
+
+    expect(() => child.update({
+      className: "changed",
+      shape: new Rectangle({ x: 10, y: 20, width: 30, height: 40, layer: 1 }),
+      placement: { type: "affine", x: 50 },
+    })).toThrow("layer is out of range")
+
+    expect(child.className).toBe("original")
+    expect(child.shape).toBe(original)
+    expect(child.placement).toMatchObject({
+      type: "affine",
+      matrix: { e: 5, f: 0 },
+    })
+  })
+
   // Refactor cut 1: appendChild now marks the shape's layer dirty, so an
   // appended-but-never-mutated shape paints on the next draw (no poke needed).
   // (Was the "[known issue] appendChild alone does not paint" tripwire.)

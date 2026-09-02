@@ -34,7 +34,7 @@ export type TargetRegistration = {
   id: symbol
   eventNames: readonly string[]
   selector: string
-  sortBy: ChildSortFunction
+  sortBy?: ChildSortFunction
 }
 
 export type TargetDecision =
@@ -44,6 +44,7 @@ export type TargetDecision =
 
 export type TargetResolverContext = {
   rootChild: StayInstantChild
+  sceneChildren: () => readonly StayInstantChild[]
   store: Store
   stateStore: Store
   pointerTargets: PointerTargetPicker<StayInstantChild>
@@ -175,8 +176,8 @@ export class ActionTargetResolver {
 
     if (!eventDefinition.withTargetConditionCallback) return { kind: "targetless" }
 
-    const target = this.context
-      .select(registration.selector, registration.sortBy)
+    const target = this
+      .orderedCandidates(registration)
       .find((child) =>
         this.acceptsTarget(child, eventName, sourceEvent, eventDefinition, originEvent)
       )
@@ -248,13 +249,40 @@ export class ActionTargetResolver {
 
     return this.context
       .pointerTargets.hits(
-        this.context.select(registration.selector, registration.sortBy),
+        this.orderedCandidates(registration),
         coordinates,
         coordinateFrame
       )
       .find((child) =>
         this.acceptsTarget(child, eventName, sourceEvent, eventDefinition, originEvent)
       )
+  }
+
+  private orderedCandidates(
+    registration: TargetRegistration
+  ): StayInstantChild[] {
+    const candidates = this.context.select(
+      registration.selector,
+      registration.sortBy
+    )
+    if (registration.sortBy) return candidates
+
+    const sceneOrder = new Map(
+      this.context.sceneChildren().map((child, index) => [child, index])
+    )
+    const rootChild = this.context.rootChild
+    return candidates.sort((a, b) => {
+      if (a === b) return 0
+      if (a === rootChild) return 1
+      if (b === rootChild) return -1
+
+      const aBound = a.getBound()
+      const bBound = b.getBound()
+      const areaDifference =
+        aBound.width * aBound.height - bBound.width * bBound.height
+      if (areaDifference !== 0) return areaDifference
+      return (sceneOrder.get(a) ?? 0) - (sceneOrder.get(b) ?? 0)
+    })
   }
 
   private targetIfAccepted<T extends string>(

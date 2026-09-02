@@ -164,12 +164,16 @@ These legacy methods directly mutate Child/Shape coordinates. They are batch geo
 
 | Method | Meaning |
 | --- | --- |
-| `log()` | Commit pending static-Child diffs, including Shape or Mesh mutations, as one history item |
+| `canUndo()` | Return whether a committed item can currently be undone |
+| `canRedo()` | Return whether a committed item can currently be redone |
+| `log()` | Commit pending static-Child diffs and adapted application state as one history item |
 | `undo()` | Undo one item; logs when none remain |
 | `redo()` | Redo one item; logs when none remain |
 | `resetHistory()` | Clear undo/redo and use the current static scene as the new baseline |
 
-Canvas2D and WebGL2 static Children participate in the same History transaction and id namespace. Camera, EnvironmentMap, and Light changes are layer display state and are not recorded. Animated Children do not participate in history. See [Scenes and tools: History transactions](../scene-and-tools.md#history-transactions) for boundaries and examples.
+Canvas2D and WebGL2 static Children participate in the same History transaction and id namespace. An optional `historyAdapter` on `StayCanvas` adds application-owned snapshots to those same items. Camera, EnvironmentMap, and Light changes are layer display state and are not recorded. Animated Children do not participate in history. See [Scenes and tools: History transactions](../scene-and-tools.md#history-transactions) for boundaries and examples.
+
+`canUndo()` and `canRedo()` are read-only cursor queries for controls such as disabled toolbar buttons. Pending mutations do not change their result until `log()` commits an item. After `undo()`, redo remains available until `redo()`, `resetHistory()`, or a divergent `log()` discards that tail.
 
 ## Animation
 

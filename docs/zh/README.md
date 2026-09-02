@@ -7,6 +7,7 @@
 ## 从哪里开始
 
 - [快速开始](./getting-started.md)：安装库，渲染第一个场景，并理解尺寸和容器布局。
+- [从 1.2.0 迁移](./migration-1.3.md)：升级到 1.3.0 前检查 Path 与 StayText 的必要改动。
 - [核心概念](./core-concepts.md)：认识 Canvas、图层、Child、Shape 和 StayTools 之间的关系。
 - [交互与事件](./interaction-and-events.md)：理解 Listener、selector、state、ActionEvent、手动动作和 Pointer Session。
 - [Shape 与动画](./shapes-and-animation.md)：使用内置 Shape、组合对象并构建显式关键帧时间线。

@@ -6,6 +6,7 @@ import { InstantShape } from "../shapes/instantShape"
 import type { CanvasLayerConfig } from "../types/canvas"
 import type { SelectorFunc } from "../types/children"
 import type { EventProps, ListenerNamePayloadPair, ListenerProps } from "../types/events"
+import type { HistoryAdapter } from "../types/history"
 import type { DrawReturn, StayDrawProps, StayTools, ViewportOptions } from "../types/tools"
 import {
   DEFAULTSTATE,
@@ -37,7 +38,7 @@ import {
 } from "./historySnapshot"
 import { Renderer } from "./renderer"
 import { stayTools } from "./stayTools"
-import type { SetShapeChildCurrentTime, StackItem } from "./types"
+import type { SetShapeChildCurrentTime } from "./types"
 import type { StayWebGLChild } from "./webgl2/stayWebGLChild"
 
 class StayRootChild extends StayInstantChild<Root> {
@@ -46,14 +47,14 @@ class StayRootChild extends StayInstantChild<Root> {
   }
 }
 
-class Stay<EventName extends string> {
+class Stay<EventName extends string, HistorySnapshot = unknown> {
   readonly children = new ChildrenStore<StayChild>()
   readonly coordinates: CoordinateSystem
   actionRouter: ActionRouter<EventName>
   eventRuntime: EventRuntime<EventName>
   renderer: Renderer
   eventDispatcher: EventDispatcher
-  history: History
+  history: History<HistorySnapshot>
   height: number
   root: Canvas
   state: string
@@ -69,7 +70,12 @@ class Stay<EventName extends string> {
   rootId: string
   tools: StayTools
 
-  constructor(root: Canvas, passive: boolean, viewportOptions?: ViewportOptions) {
+  constructor(
+    root: Canvas,
+    passive: boolean,
+    viewportOptions?: ViewportOptions,
+    historyAdapter?: HistoryAdapter<HistorySnapshot>
+  ) {
     this.root = root
     this.coordinates = new CoordinateSystem(viewportOptions)
     this.passive = passive
@@ -96,7 +102,10 @@ class Stay<EventName extends string> {
     this.state = DEFAULTSTATE
     this.stateSet = new Set([DEFAULTSTATE])
 
-    this.history = new History(() => this.captureHistoryChildren())
+    this.history = new History(
+      () => this.captureHistoryChildren(),
+      historyAdapter
+    )
 
     this.actionRouter = new ActionRouter<EventName>({
       canvas: this.root,
@@ -107,6 +116,7 @@ class Stay<EventName extends string> {
         this.tools.getAvailiableStates(selector).includes(this.state),
       targetResolver: {
         rootChild: this.rootChild,
+        sceneChildren: () => this.getShapeChildren(),
         store: this.store,
         stateStore: this.stateStore,
         pointerTargets: createCanvas2DPointerTargetPicker(this.rootChild),
@@ -296,10 +306,6 @@ class Stay<EventName extends string> {
     }
   }
 
-  pushToStack(steps: StackItem<StayHistoryChildSnapshot>) {
-    this.history.pushToStack(steps)
-  }
-
   registerEvent(props: EventProps<EventName>) {
     this.eventRuntime.registerEvent(props)
   }
@@ -313,10 +319,6 @@ class Stay<EventName extends string> {
       if (isStayWebGLChild(child)) child.destroy()
     }
     return child
-  }
-
-  snapshotChildren() {
-    this.history.snapshot()
   }
 
   resize(width: number, height: number) {
@@ -343,18 +345,20 @@ class Stay<EventName extends string> {
 
 // Single construction point for "a Stay wrapping a Canvas built from layers +
 // dimensions" — used by both StayCanvas and the test harness so they can't drift.
-export function createStay(
+export function createStay<HistorySnapshot = unknown>(
   canvasLayers: HTMLCanvasElement[],
   layerConfigs: CanvasLayerConfig[],
   width: number,
   height: number,
   passive: boolean,
-  viewportOptions?: ViewportOptions
-): Stay<string> {
+  viewportOptions?: ViewportOptions,
+  historyAdapter?: HistoryAdapter<HistorySnapshot>
+): Stay<string, HistorySnapshot> {
   return new Stay(
     new Canvas(canvasLayers, layerConfigs, width, height),
     passive,
-    viewportOptions
+    viewportOptions,
+    historyAdapter
   )
 }
 

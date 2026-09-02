@@ -4,7 +4,7 @@
 
 A layered Canvas rendering and interaction library for React, with shapes, children, selectors, state, history, animation, and composable events.
 
-[中文文档](./docs/zh/README.md) · [English documentation](./docs/en/README.md) · [示例 / Examples](https://lezhu1234.github.io/react-stay-canvas/)
+[中文文档](./docs/zh/README.md) · [English documentation](./docs/en/README.md) · [1.3.0 迁移](./docs/zh/migration-1.3.md) · [1.3.0 migration](./docs/en/migration-1.3.md) · [Changelog](./CHANGELOG.md) · [示例 / Examples](https://lezhu1234.github.io/react-stay-canvas/)
 
 ## 安装 / Installation
 

@@ -110,7 +110,7 @@ label?.update({ text: "Renamed" })
 
 Arrays become `shapeMap` entries named `"0"`, `"1"`, and so on. Copies, scene exports, and history snapshots retain those map keys.
 
-## Update the Shape, not the Child container
+## Update Shape properties or the Child composition
 
 The public mutation path is the Shape's own `update(...)` method:
 
@@ -123,7 +123,20 @@ child?.shape.update({
 })
 ```
 
-`update()` tells the owning Child which layers need repainting. A same-layer update dirties that layer; changing `layer` dirties both the previous and next layers so the old Canvas is cleared automatically. `StayInstantChild.update(...)` is an internal replacement primitive used by undo and redo; it is not the normal application-level mutation API.
+Shape `update()` tells the owning Child which layers need repainting. A same-layer update dirties that layer; changing `layer` dirties both the previous and next layers so the old Canvas is cleared automatically.
+
+Use `StayInstantChild.update(...)` when changing Child-level state or atomically replacing the full Shape composition, such as restoring a cancelled multi-Shape edit:
+
+```ts
+child.update({
+  className: "node:selected",
+  shape: originalShapes,
+  placement: { type: "affine", x: 24, y: 12 },
+})
+tools.log()
+```
+
+The Child id is stable and cannot be changed through `update(...)`. The update validates every replacement Shape layer and the placement before changing the Child, dirties both old and new layers, and is recorded by the next `tools.log()` as one history step.
 
 `move()` applies a relative offset. At the start of a continuous gesture, call `moveInit()` once, then pass offsets relative to that gesture start:
 

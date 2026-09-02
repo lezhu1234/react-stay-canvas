@@ -11,6 +11,7 @@ import {
   StayCanvas,
   PerspectiveCamera,
   type CanvasLayerConfig,
+  type HistoryAdapter,
   type StayCanvasProps,
   type StayCanvasRefType,
   type WebGL2LayerConfig,
@@ -34,6 +35,7 @@ import {
 | `recreateOnResize` | `boolean` | `false` | width/height 改变时是否显式采用破坏性重建 |
 | `focusOnInit` | `boolean` | `true` | 初始化后是否聚焦顶层 Canvas |
 | `viewport` | `{ minScale?, maxScale? }` | `{ minScale: 0.1, maxScale: 10 }` | 非破坏性视口缩放范围；创建运行时后固定 |
+| `historyAdapter` | `HistoryAdapter<TSnapshot>` | — | 让应用持有的状态与 Canvas 场景进入同一组 undo/redo 事务 |
 
 ### layers
 
@@ -97,6 +99,30 @@ Shape 的 `layer` 从 0 开始，并且只能指向 Canvas2D 图层。负 Shape 
 3. 在新的 `mounted` 回调中重新建立场景和外部引用。
 
 `reCreate()` 会销毁旧输入监听、渲染循环和场景对象。旧 `StayTools`、Child 与 Shape 引用随后都应视为失效。
+
+### historyAdapter
+
+当一次编辑操作同时改变 Canvas 对象和应用持有的状态时，可以传入 `historyAdapter`：
+
+```tsx
+type EditorSnapshot = {
+  activePage: number
+  labels: Record<string, string>
+}
+
+<StayCanvas
+  historyAdapter={{
+    capture: () => structuredClone(editorStateRef.current),
+    restore: (snapshot: EditorSnapshot) => updateEditorState(snapshot),
+  }}
+/>
+```
+
+适配器不会创建第二套历史栈。`log()` 会把应用状态的 before/after 快照与待提交的静态 Child 变更写入同一个历史项；`undo()` 恢复 before，`redo()` 恢复 after。`resetHistory()` 清空这套共享历史，并同时把当前场景和当前应用状态设为新基线。只要配置了适配器，即使本次只修改应用状态，`log()` 也会作为一次显式提交。
+
+库会原样保存 `capture()` 返回的值，不会替应用做拷贝；必要时应使用 `structuredClone` 或应用自己的不可变数据结构返回独立快照。`capture()` 和 `restore()` 都必须同步执行。`restore()` 只负责应用状态，不能修改 Canvas 场景，也不能调用 `log()`、`undo()`、`redo()` 或 `resetHistory()`。如果 `restore()` 抛错，Canvas 对象和历史游标会保持在当前位置。
+
+适配器在运行时创建时读取。普通 React rerender 不会替换它；只有在明确要重建完整运行时和场景时才调用 `reCreate()`。
 
 ### recreateOnResize
 

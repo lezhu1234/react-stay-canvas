@@ -88,7 +88,7 @@ The main `ListenerProps` fields are:
 | `event` | One action name or an array of action names |
 | `state` | Canvas states in which the Listener is available; defaults to `default-state` |
 | `selector` | Children that may become targets; defaults to the `.stay-canvas` root Child |
-| `sortBy` | Candidate ordering; provide an explicit comparator for overlapping targets |
+| `sortBy` | Candidate ordering; defaults to smaller Child bounds first, with root last |
 | `callback` | Scene or application logic for accepted actions |
 
 Listeners run in registration order. State is read before each Listener and each action, so a synchronous `switchState` in an earlier Listener is visible to later Listeners.
@@ -112,7 +112,7 @@ The selector language supports `&`, `|`, `!`, and parentheses. Do not put whites
 
 A Child `className` is not a DOM-style whitespace-separated list. `node:active` has base class `node`; `.node` matches the base and `.node:active` matches the full value.
 
-For pointer actions, the router first selects candidate Children and then hit-tests them at the current Canvas coordinate. The current default comparator does not provide a stable ordering guarantee, so overlapping targets should always supply `sortBy(a, b)`.
+For pointer actions, the router first selects candidate Children and then hit-tests them at the current Canvas coordinate. Without `sortBy`, smaller Child bounds come first, equal bounds keep scene insertion order, and the root Child remains the final fallback. Supply `sortBy(a, b)` when the product needs a different priority such as explicit z-order.
 
 `withTargetConditionCallback` on an Event definition is a second target filter. It receives each candidate `target`; the Child it accepts is the same Child later exposed as `e.target`.
 
@@ -297,8 +297,8 @@ The default Event definitions provide these commonly used actions:
 | `moveend` | An active move ends normally, or its session is cancelled |
 | `zoomin`, `zoomout` | Wheel `deltaY` is respectively below or above zero |
 | `keydown`, `keyup` | Keyboard input while the Canvas has focus |
-| `undo` | Z is released while Control remains pressed |
-| `redo` | Z is released while Control and Shift remain pressed |
+| `undo` | Z is released while Control or Meta remains pressed |
+| `redo` | Z is released while Control/Meta and Shift remain pressed |
 | `dragover`, `drop` | Native browser drag-and-drop input |
 
 `undo` and `redo` are action names; they do not call `tools.undo()` or `tools.redo()` automatically. Register Listeners to perform those commands.
@@ -314,7 +314,7 @@ The default Event definitions provide these commonly used actions:
 
 Keyboard actions are emitted only while the top Canvas has focus. `focusOnInit` is enabled by default, and `StayCanvasRef.focus()` can restore focus. Releasing a key outside the Canvas reconciles internal pressed state but does not synthesize a Canvas `keyup` action.
 
-The predefined `startmove`, `undo`, and `redo` actions currently use Control and do not map macOS Command to Control. The `startmove` condition remains for backward compatibility, but Control plus the primary button must not be exposed as a macOS product interaction because macOS reserves Control-click for secondary click. Cross-platform panning must override it with Space plus the primary button, as in the Transform example. Add explicit `Meta` support for standard macOS shortcuts.
+The predefined `undo` and `redo` actions accept Control on Windows/Linux and Meta on macOS. The legacy `startmove` condition remains Control plus the primary button for backward compatibility, but must not be exposed as a macOS product interaction because macOS reserves Control-click for secondary click. Cross-platform panning must override it with Space plus the primary button, as in the Transform example.
 
 Set `passive={false}` on `StayCanvas` when a Wheel Listener needs to call `originEvent.preventDefault()`.
 

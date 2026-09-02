@@ -22,7 +22,7 @@ const saveListener: ListenerProps = {
 | `state` | Route only when the current Canvas state matches the expression |
 | `selector` | Target query; native pointer actions default to the root selector `.stay-canvas` when omitted |
 | `event` | Subscribe to one or more action names |
-| `sortBy` | Stable ordering when several Children match |
+| `sortBy` | Override the default smallest-bound-first target ordering |
 | `callback` | Runs synchronously after action routing |
 
 Standard drag and move gestures choose their target when the gesture begins. Continuation and terminal phases retain that owner. A manual action named `drag` remains an ordinary action and does not enter Pointer Session ownership.

@@ -118,7 +118,7 @@ const selectedNodes = tools.getChildrenBySelector(
 )
 ```
 
-`sortBy` controls the returned order and which item `getContainPointChildren({ returnFirst: true })` picks. Use a stable comparator so overlapping objects do not produce inconsistent selections.
+`sortBy` controls the returned query order and which item `getContainPointChildren({ returnFirst: true })` picks. Listener target routing uses a stable default when its own `sortBy` is omitted: smaller bounds first, equal bounds in scene insertion order, and root last. Tool queries do not apply this Listener default; they retain their selector result order unless the call supplies a comparator.
 
 ## Point hits and area queries
 

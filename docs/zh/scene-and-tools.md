@@ -188,6 +188,8 @@ tools.undo()
 tools.redo()
 ```
 
+可用 `tools.canUndo()` 和 `tools.canRedo()` 计算历史按钮的禁用状态。它们只读取已提交的历史游标，不会执行任何操作；Canvas 或应用的待提交修改只有在调用 `tools.log()` 后才会反映到查询结果中。
+
 编辑器完成初始化后，可在加载不可撤销的背景内容之后调用 `resetHistory()`。它会清空 undo/redo，并把当前静态场景作为新的历史基线。
 
 应用状态可以通过可选的 [`historyAdapter`](./api/stay-canvas.md#historyadapter) 进入同一事务。适配器会在每次显式 `log()` 边界保存 before/after 快照，不会持有另一套历史栈；因此只有应用状态变化时也可以形成历史项。

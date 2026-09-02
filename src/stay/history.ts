@@ -54,14 +54,22 @@ export class History<TExternalSnapshot = unknown> {
     this.snapshot(after)
   }
 
+  canUndo() {
+    return this.stackIndex > 0
+  }
+
+  canRedo() {
+    return this.stackIndex < this.stack.length
+  }
+
   peekUndo() {
     this.assertOperationAllowed()
-    return this.stackIndex > 0 ? this.stack[this.stackIndex - 1] : undefined
+    return this.canUndo() ? this.stack[this.stackIndex - 1] : undefined
   }
 
   peekRedo() {
     this.assertOperationAllowed()
-    return this.stackIndex < this.stack.length ? this.stack[this.stackIndex] : undefined
+    return this.canRedo() ? this.stack[this.stackIndex] : undefined
   }
 
   restoreExternal(

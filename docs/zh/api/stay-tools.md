@@ -164,12 +164,16 @@ renderer 会先画所有 opaque Mesh。Glass Mesh 保持 depth test、关闭 dep
 
 | 方法 | 说明 |
 | --- | --- |
+| `canUndo()` | 返回当前是否存在已提交、可撤销的历史项 |
+| `canRedo()` | 返回当前是否存在已提交、可重做的历史项 |
 | `log()` | 把待记录的静态 Child 差异和适配后的应用状态提交为一个历史项 |
 | `undo()` | 撤销一个历史项；无可撤销项时只输出日志 |
 | `redo()` | 重做一个历史项；无可重做项时只输出日志 |
 | `resetHistory()` | 清空 undo/redo，并把当前静态场景作为新的历史基线 |
 
 Canvas2D 与 WebGL2 静态 Child 进入同一 History 事务和 id 命名空间；`StayCanvas` 上可选的 `historyAdapter` 会把应用持有的快照加入这些相同历史项。Camera、EnvironmentMap 与 Light 修改属于图层显示状态，不进入历史。动画 Child 不参与历史。调用边界与示例见[场景与工具：历史记录](../scene-and-tools.md#历史记录)。
+
+`canUndo()` 与 `canRedo()` 是只读的历史游标查询，适合决定工具栏按钮是否禁用。尚未 `log()` 的修改不会改变查询结果。调用 `undo()` 后，redo 会保持可用，直到执行 `redo()`、`resetHistory()`，或用一次分叉的 `log()` 丢弃原 redo 尾部。
 
 ## 动画
 

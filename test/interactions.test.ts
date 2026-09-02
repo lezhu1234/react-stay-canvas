@@ -44,6 +44,46 @@ describe("zoom", () => {
 })
 
 describe("undo / redo / log", () => {
+  it("reports committed undo and redo availability without moving the cursor", () => {
+    const { stage } = createStage()
+
+    expect(stage.tools.canUndo()).toBe(false)
+    expect(stage.tools.canRedo()).toBe(false)
+
+    stage.tools.appendChild({ className: "first", shape: rect(0, 0) })
+    expect(stage.tools.canUndo()).toBe(false)
+    stage.tools.log()
+    expect(stage.tools.canUndo()).toBe(true)
+    expect(stage.tools.canRedo()).toBe(false)
+
+    stage.tools.undo()
+    expect(stage.tools.canUndo()).toBe(false)
+    expect(stage.tools.canRedo()).toBe(true)
+
+    stage.tools.redo()
+    expect(stage.tools.canUndo()).toBe(true)
+    expect(stage.tools.canRedo()).toBe(false)
+
+    stage.tools.resetHistory()
+    expect(stage.tools.canUndo()).toBe(false)
+    expect(stage.tools.canRedo()).toBe(false)
+  })
+
+  it("keeps redo available until a divergent operation is committed", () => {
+    const { stage } = createStage()
+    stage.tools.appendChild({ className: "first", shape: rect(0, 0) })
+    stage.tools.log()
+    stage.tools.appendChild({ className: "second", shape: rect(20, 20) })
+    stage.tools.log()
+    stage.tools.undo()
+
+    stage.tools.appendChild({ className: "replacement", shape: rect(40, 40) })
+    expect(stage.tools.canRedo()).toBe(true)
+    stage.tools.log()
+    expect(stage.tools.canRedo()).toBe(false)
+    expect(stage.tools.canUndo()).toBe(true)
+  })
+
   it("steps back and forward through logged snapshots", () => {
     const { stage } = createStage()
     const { appendChild, log, undo, redo, getChildrenWithoutRoot } = stage.tools
@@ -237,13 +277,18 @@ describe("undo / redo / log", () => {
     applicationState = 2
     stage.tools.log()
     expect(stage.stack).toHaveLength(2)
+    expect(stage.tools.canUndo()).toBe(true)
+    expect(stage.tools.canRedo()).toBe(false)
 
     stage.tools.undo()
     expect(applicationState).toBe(1)
+    expect(stage.tools.canUndo()).toBe(true)
+    expect(stage.tools.canRedo()).toBe(true)
 
     applicationState = 3
     stage.tools.log()
     expect(stage.stack).toHaveLength(2)
+    expect(stage.tools.canRedo()).toBe(false)
     stage.tools.redo()
     expect(applicationState).toBe(3)
   })
@@ -270,6 +315,8 @@ describe("undo / redo / log", () => {
     expect(stage.tools.getChildById(child.id)).toBeTruthy()
     expect(stage.stackIndex).toBe(1)
     expect(applicationState).toBe(1)
+    expect(stage.tools.canUndo()).toBe(true)
+    expect(stage.tools.canRedo()).toBe(false)
   })
 
   it("preserves native object identity when diffing Shape snapshots", () => {

@@ -136,6 +136,8 @@ export interface AnimatedTools {
 }
 
 export interface InstantTools {
+  canRedo: () => boolean
+  canUndo: () => boolean
   log: () => void
   redo: () => void
   resetHistory: () => void

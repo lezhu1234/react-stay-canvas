@@ -188,6 +188,8 @@ tools.undo()
 tools.redo()
 ```
 
+Use `tools.canUndo()` and `tools.canRedo()` to derive disabled states for history controls. They only inspect the committed history cursor and never perform an operation. Pending Canvas or application changes become visible to these queries only after `tools.log()`.
+
 For an initialized editor, call `resetHistory()` after loading non-undoable background content. It clears both history stacks and treats the current static scene as the new baseline.
 
 Application state can join the same transaction through the optional [`historyAdapter`](./api/stay-canvas.md#historyadapter). The adapter captures before/after snapshots on each explicit `log()` boundary; it does not own another stack. This also allows an application-only change to become a history item.

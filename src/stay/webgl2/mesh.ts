@@ -11,6 +11,7 @@ import {
   LambertMaterial,
   meshMaterialUsesLighting,
   StandardMaterial,
+  TransparentImageMaterial,
   UnlitMaterial,
   type MeshMaterial,
 } from "./material"
@@ -231,7 +232,14 @@ export class Mesh {
     const copiedPlanarReflection = planarReflection
       ? copyPlanarReflection(planarReflection)
       : undefined
-    assertMeshState(copied, copiedModelMatrix, copiedMaterial, copiedPlanarReflection)
+    const copiedCastShadow = copyBoolean(castShadow, "Mesh castShadow")
+    assertMeshState(
+      copied,
+      copiedModelMatrix,
+      copiedMaterial,
+      copiedPlanarReflection,
+      copiedCastShadow,
+    )
     this.#positions = copied.positions
     this.#normals = copied.normals
     this.#uvs = copied.uvs
@@ -239,7 +247,7 @@ export class Mesh {
     this.#localBoundsCenter = copied.localBoundsCenter
     this.#modelMatrix = copiedModelMatrix
     this.#material = copiedMaterial
-    this.#castShadow = copyBoolean(castShadow, "Mesh castShadow")
+    this.#castShadow = copiedCastShadow
     this.#receiveShadow = copyBoolean(receiveShadow, "Mesh receiveShadow")
     this.#planarReflection = copiedPlanarReflection
   }
@@ -252,7 +260,13 @@ export class Mesh {
       && arrayValuesEqual(this.#indices, geometry.indices)
     ) return
     const copied = copyGeometry(geometry)
-    assertMeshState(copied, this.#modelMatrix, this.#material, this.#planarReflection)
+    assertMeshState(
+      copied,
+      this.#modelMatrix,
+      this.#material,
+      this.#planarReflection,
+      this.#castShadow,
+    )
     if (
       arrayValuesEqual(this.#positions, copied.positions)
       && optionalArrayValuesEqual(this.#normals, copied.normals)
@@ -271,7 +285,13 @@ export class Mesh {
   setModelMatrix(modelMatrix: ArrayLike<number>) {
     if (float32ValuesEqual(this.#modelMatrix, modelMatrix)) return
     const copied = copyMatrix4(modelMatrix, "Mesh model matrix")
-    assertMeshState(this.#geometryState(), copied, this.#material, this.#planarReflection)
+    assertMeshState(
+      this.#geometryState(),
+      copied,
+      this.#material,
+      this.#planarReflection,
+      this.#castShadow,
+    )
     if (arrayValuesEqual(this.#modelMatrix, copied)) return
     this.#modelMatrix = copied
     this.#notifyChange()
@@ -280,16 +300,23 @@ export class Mesh {
   setMaterial(material: MeshMaterial) {
     if (!(material instanceof UnlitMaterial)
         && !(material instanceof ImageMaterial)
+        && !(material instanceof TransparentImageMaterial)
         && !(material instanceof LambertMaterial)
         && !(material instanceof StandardMaterial)
         && !(material instanceof GlassMaterial)) {
       throw new TypeError(
-        "Mesh material must be an UnlitMaterial, ImageMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
+        "Mesh material must be an UnlitMaterial, ImageMaterial, TransparentImageMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
       )
     }
     if (materialsEqual(this.#material, material)) return
     const copied = copyMeshMaterial(material)
-    assertMeshState(this.#geometryState(), this.#modelMatrix, copied, this.#planarReflection)
+    assertMeshState(
+      this.#geometryState(),
+      this.#modelMatrix,
+      copied,
+      this.#planarReflection,
+      this.#castShadow,
+    )
     if (materialsEqual(this.#material, copied)) return
     this.#material = copied
     this.#notifyChange()
@@ -298,6 +325,7 @@ export class Mesh {
   setCastShadow(castShadow: boolean) {
     const next = copyBoolean(castShadow, "Mesh castShadow")
     if (this.#castShadow === next) return
+    assertTransparentImageDoesNotCastShadow(this.#material, next)
     this.#castShadow = next
     this.#notifyChange()
   }
@@ -418,7 +446,13 @@ function materialsEqual(first: MeshMaterial, second: MeshMaterial) {
   if (first instanceof ImageMaterial && second instanceof ImageMaterial) {
     return first.texture === second.texture
   }
-  if (first instanceof ImageMaterial || second instanceof ImageMaterial) return false
+  if (first instanceof TransparentImageMaterial
+      && second instanceof TransparentImageMaterial) {
+    return first.texture === second.texture
+  }
+  if (first instanceof ImageMaterial || second instanceof ImageMaterial
+      || first instanceof TransparentImageMaterial
+      || second instanceof TransparentImageMaterial) return false
   if (!arrayValuesEqual(first.color, second.color)) return false
   if (first instanceof StandardMaterial && second instanceof StandardMaterial) {
     return first.metallic === second.metallic
@@ -448,13 +482,25 @@ function assertMeshState(
   modelMatrix: Matrix4,
   material: MeshMaterial,
   planarReflection: PlanarReflection | undefined,
+  castShadow: boolean,
 ) {
-  if (material instanceof ImageMaterial && !geometry.uvs) {
-    throw new RangeError("ImageMaterial Mesh geometry requires uvs")
+  if ((material instanceof ImageMaterial || material instanceof TransparentImageMaterial)
+      && !geometry.uvs) {
+    throw new RangeError(`${material.constructor.name} Mesh geometry requires uvs`)
   }
   if (meshMaterialUsesLighting(material)) {
     if (!geometry.normals) throw new RangeError("Lit Mesh geometry requires normals")
     normalMatrix3FromMatrix4(modelMatrix)
   }
   assertPlanarReflectionMaterial(material, planarReflection)
+  assertTransparentImageDoesNotCastShadow(material, castShadow)
+}
+
+function assertTransparentImageDoesNotCastShadow(
+  material: MeshMaterial,
+  castShadow: boolean,
+) {
+  if (castShadow && material instanceof TransparentImageMaterial) {
+    throw new RangeError("TransparentImageMaterial Mesh cannot cast shadows")
+  }
 }

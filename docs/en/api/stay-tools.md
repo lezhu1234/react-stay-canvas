@@ -63,6 +63,27 @@ const glass = new GlassMaterial({
 mesh.setMaterial(glass)
 ```
 
+`ImageTexture` deep-copies row-major sRGB RGBA8 pixels. Its `alphaMode` defaults to `"opaque"`, which requires every alpha byte to be `255` and is consumed by `ImageMaterial` in the opaque pass. `alphaMode: "straight"` preserves unassociated RGB plus linear coverage alpha and is consumed by `TransparentImageMaterial`. Both image materials require one top-origin UV pair per vertex and do not require normals:
+
+```ts
+const texture = new ImageTexture({
+  width: 2,
+  height: 1,
+  alphaMode: "straight",
+  data: new Uint8Array([
+    255, 255, 255, 255,
+    255, 255, 255, 0,
+  ]),
+})
+const decal = new Mesh({
+  geometry: { positions, uvs, indices },
+  material: new TransparentImageMaterial({ texture }),
+  castShadow: false,
+})
+```
+
+The transparent upload derives premultiplied-linear texels from the straight sRGB CPU snapshot before sRGB encoding, so hardware filtering and mip generation preserve coverage without dark fringes. The shader samples that premultiplied result directly. `TransparentImageMaterial` is unlit, has no tint or sampler options, does not receive lighting or shadows, and rejects `castShadow: true`; use Glass when scene-color refraction, reflection, or transmissive shadows are required. Texture sampling is currently fixed to clamped bilinear filtering with trilinear mip selection.
+
 `UnlitMaterial`, `LambertMaterial`, and `StandardMaterial` are opaque and require color alpha `1`. `StandardMaterial` uses metallic-roughness lighting. `metallic` defaults to `0`, `roughness` defaults to `1`, and both must be from `0` to `1`. Lambert, Standard, and Glass consume directional and point lights; Standard also consumes directional shadows, the camera view, and an optional `EnvironmentMap`, while continuing to write depth in the opaque pass. Point-light radiance uses `intensity / distance²`; a configured `range` multiplies it by `clamp(1 - (distance / range)^4, 0, 1)`. Replacing a Standard material changes only CPU material values and shader uniforms; it does not advance the geometry revision.
 
 A Standard Mesh may opt into one layer-local planar reflection receiver:
@@ -80,7 +101,7 @@ const floor = new Mesh({
 
 The plane is expressed in the receiver Mesh's local space and follows its model matrix. The normal is copied and normalized. `resolutionScale` defaults to `0.5` and must be greater than `0` and at most `1`. Use `mesh.setPlanarReflection()` to replace or clear the descriptor and `mesh.getPlanarReflection()` to read a defensive copy. A WebGL2 layer accepts at most one receiver and rejects a second one before rendering mutates GPU state. The reflected pass contains only Meshes from that same WebGL2 layer, excludes the receiver to prevent recursion, and clips geometry on the opposite side of the plane. It does not capture Canvas2D Shapes, DOM content, another WebGL2 layer, or another Canvas.
 
-Material and Light RGB values are authored as sRGB display colors. The renderer converts every material and light color to linear values before shading, stores opaque and premultiplied Glass results in one linear scene target, and encodes the completed frame to sRGB only in the final output pass. Alpha remains linear coverage. `GlassMaterial.attenuationColor` is also linear because it represents a physical transmission ratio rather than a display color.
+Material and Light RGB values are authored as sRGB display colors. The renderer converts every material and light color to linear values before shading, stores opaque and premultiplied transparent results in one linear scene target, and encodes the completed frame to sRGB only in the final output pass. Alpha remains linear coverage. `GlassMaterial.attenuationColor` is also linear because it represents a physical transmission ratio rather than a display color.
 
 `GlassMaterial` requires alpha strictly between `0` and `1`, `ior` greater than `1` (default `1.5`), `roughness` from `0` to `1` (default `0`), and non-negative `thickness` in world units (default `0.1`). The renderer uses those values for Fresnel response, directional- and point-light specular highlights, and screen-space refraction through the layer's opaque WebGL2 scene color. Refraction displaces the current fragment by the projected difference between refracted and unrefracted travel, and falls back to the undisplaced sample when that path leaves the scene-color target. Roughness selects progressively filtered scene-color and environment mip levels; zero is sharp and one selects the broadest available blur. A zero thickness keeps transmission and Fresnel shading but samples the undisplaced screen position.
 
@@ -90,7 +111,7 @@ Scene-color refraction is intentionally layer-local: it can bend opaque WebGL2 M
 
 When the WebGL2 layer config supplies an `EnvironmentMap`, its RGBA8 bytes are interpreted as sRGB. Standard and Glass sample the hardware-decoded texture along the world-space equirectangular reflection direction and select a mip LOD with their roughness. The environment belongs to layer display state, not Material History or scene transfer. Refraction still cannot sample DOM/CSS content behind the Canvas or other transparent Meshes. The current linear target remains LDR RGBA8: it does not preserve radiance above `1`, provide exposure or tone mapping, use HDR prefiltered radiance, or implement physical multi-surface transmission.
 
-The renderer draws opaque Meshes first. Glass Meshes keep depth testing, disable depth writes, and are stable-sorted back to front by their transformed local bounding-box center in camera view space. This is standard object-level transparency: separate non-intersecting surfaces compose predictably, while intersecting transparent Meshes and self-overlapping geometry may require geometry splitting or a future order-independent transparency path.
+The renderer draws opaque Meshes first. Glass and TransparentImage Meshes share one transparent queue: they keep depth testing, disable depth writes, use premultiplied-alpha blending, and are stable-sorted back to front by their transformed local bounding-box center in camera view space. This is standard object-level transparency: separate non-intersecting surfaces compose predictably, while intersecting transparent Meshes and self-overlapping geometry may require geometry splitting or a future order-independent transparency path.
 
 Shadow behavior is explicit CPU Mesh state. `castShadow` and `receiveShadow` both default to `false`; update them with `setCastShadow()` and `setReceiveShadow()`. A lit receiver samples the layer's directional shadow maps, and Glass can both receive and cast directional shadows. PointLight does not cast shadows yet, so these flags do not occlude its contribution. `DirectionalLight.shadow.filterRadius` controls the fixed 3×3 PCF tap radius in shadow-map texels: it defaults to `1`, while `0` collapses all taps to the minimum bilinear hardware-comparison footprint. Increasing it softens the edge without allocating another render target; `mapSize` and the configured shadow frustum still determine how much world space one texel covers. Opaque casters block direct light; a Glass caster multiplies its existing boundary transmission (`1 - color alpha`) by the same Beer-Lambert RGB computed from `attenuationColor`, `attenuationDistance`, and `thickness`. The RGB part of `color` remains a boundary tint and is not a second shadow-color source. The current bounded shadow-map model stores only the nearest Glass caster at each light-space texel; overlapping transmissive volumes do not accumulate yet. Opaque occlusion is kept in a separate depth map, so an opaque caster still blocks light when it lies behind a Glass caster. Shadow flags are preserved by History and scene transfer without changing geometry revisions.
 
@@ -106,7 +127,7 @@ Without any configured lights, Lambert renders dark. Standard can still show ref
 | `webgl.exportChildren(children)` | Capture deep-owned CPU Mesh fragments with source ids |
 | `webgl.importChildren(fragment)` | Materialize new Child ids and independent Mesh state |
 
-`Mesh`, `UnlitMaterial`, `LambertMaterial`, `StandardMaterial`, `GlassMaterial`, `EnvironmentMap`, `AmbientLight`, `DirectionalLight`, `PointLight`, `PerspectiveCamera`, `StayWebGLChild`, and the minimal Matrix4 helpers are exported from the package root. GPU programs, VAOs, buffers, scene-color/environment/shadow targets, shaders, and layer runtimes remain internal. WebGL2 Child picking/raycast, point-light shadows, general-purpose material textures, multi-layer transmissive shadows, order-independent transparency, and Canvas capture are not part of this surface yet.
+`Mesh`, `UnlitMaterial`, `LambertMaterial`, `StandardMaterial`, `GlassMaterial`, `ImageMaterial`, `TransparentImageMaterial`, `ImageTexture`, `EnvironmentMap`, `AmbientLight`, `DirectionalLight`, `PointLight`, `PerspectiveCamera`, `StayWebGLChild`, and the minimal Matrix4 helpers are exported from the package root. GPU programs, VAOs, buffers, scene-color/environment/shadow targets, shaders, and layer runtimes remain internal. WebGL2 Child picking/raycast, point-light shadows, material tint or programmable samplers, PBR/normal/roughness/thickness textures, multi-layer transmissive shadows, order-independent transparency, and Canvas capture are not part of this surface yet.
 
 ## State and display
 

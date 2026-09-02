@@ -6,8 +6,10 @@ import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   Line,
+  Point,
   Rectangle,
   StayCanvas,
+  TransparentImageMaterial,
   type MeshGeometryInput,
   type StayTools,
   type ViewportState,
@@ -33,20 +35,27 @@ import DiagramExample from "../example/src/examples/integrated/DiagramExample"
 import MotionStudioExample from "../example/src/examples/integrated/MotionStudioExample"
 import {
   coverImageSourceRect,
+  coordinateOutputGlassMaterial,
+  coordinatePlaneEdgeSupport,
   coordinateRoomBackdropGeometry,
   coordinateRoomBackdropCrop,
   coordinatePlaneGlassMaterial,
+  createCoordinatePlaneEdgeTexture,
   createPlaneDefinitions,
+  createCoordinateSignalPath,
   expandRangeToAspect,
+  gradeCoordinateRoomPixels,
 } from "../example/src/examples/simple/CoordinateStack"
 import {
   COORDINATE_CONSOLE_CONTROL_NAMES,
   coordinateConsoleControlRects,
+  coordinateConsoleIsCompact,
   createFrontFacingPanelDefinition,
   createCoordinateSceneLayout,
   createPlaneBevelFaceProfile,
   createPlaneBasis,
   planeVolumeGeometry,
+  planeVolumeProfileGeometry,
   planePresentationMetrics,
   projectPlanePoint,
   rectMeshGeometry,
@@ -60,7 +69,9 @@ import {
   mapProjectiveLocalToContentPoint,
 } from "../src/stay/transforms/projective2D"
 import { CoordinateSystem } from "../src/stay/coordinates/coordinateSystem"
-import CoordinatesExample from "../example/src/examples/simple/CoordinatesExample"
+import CoordinatesExample, {
+  coordinateContentBoundsStyle,
+} from "../example/src/examples/simple/CoordinatesExample"
 import { getExampleByPath } from "../example/src/examples/catalog"
 import {
   clippedRectEdges,
@@ -87,6 +98,11 @@ vi.stubGlobal("OffscreenCanvas", class {
   getContext() {
     return { measureText: () => ({ width: 56, fontBoundingBoxAscent: 10, fontBoundingBoxDescent: 2 }) }
   }
+})
+
+vi.stubGlobal("Path2D", class {
+  moveTo() {}
+  lineTo() {}
 })
 
 let root: Root | undefined
@@ -243,6 +259,17 @@ afterEach(() => {
 })
 
 describe("Example Canvas workspace", () => {
+  it("shows Content bounds only while the Content-to-View mapping owns focus", () => {
+    expect(coordinateContentBoundsStyle("view-client")).toMatchObject({
+      fillConfig: { color: { a: 0 } },
+      strokeConfig: { color: { a: 0 }, lineWidth: 1 },
+    })
+    expect(coordinateContentBoundsStyle("content-view")).toMatchObject({
+      fillConfig: { color: { a: 0.006 } },
+      strokeConfig: { color: { a: 0.18 }, lineWidth: 1 },
+    })
+  })
+
   it("keeps the logical coordinate domain independent from visual stage geometry", () => {
     const probe: CoordinateProbe = {
       client: { x: 1262, y: 398 },
@@ -372,6 +399,66 @@ describe("Example Canvas workspace", () => {
     expect(geometry.uvs[2]).toBeLessThanOrEqual(1)
     expect(geometry.uvs[5]).toBeLessThanOrEqual(1)
     expect(expectedQuad.every((point) => point[2] === -19)).toBe(true)
+  })
+
+  it("grades the room wall and upper window while preserving the source data", () => {
+    const source = new Uint8ClampedArray([
+      100, 110, 120, 255,
+      100, 110, 120, 255,
+      100, 110, 120, 255,
+    ])
+    const graded = gradeCoordinateRoomPixels(source, 3, 1)
+
+    expect(Array.from(source)).toEqual([
+      100, 110, 120, 255,
+      100, 110, 120, 255,
+      100, 110, 120, 255,
+    ])
+    expect(Array.from(graded.slice(0, 4))).toEqual([68, 79, 92, 255])
+    expect(Array.from(graded.slice(4, 8))).toEqual([68, 79, 92, 255])
+    expect(Array.from(graded.slice(8, 12))).toEqual([80, 97, 113, 255])
+    expect(() => gradeCoordinateRoomPixels(source, 2, 2)).toThrow(RangeError)
+  })
+
+  it("restores room texture detail before applying the spatial grade", () => {
+    const width = 5
+    const height = 5
+    const source = new Uint8ClampedArray(width * height * 4)
+    for (let offset = 0; offset < source.length; offset += 4) {
+      source.set([128, 128, 128, 255], offset)
+    }
+    const centerOffset = (2 * width + 2) * 4
+    source.set([170, 170, 170, 255], centerOffset)
+    const original = Array.from(source)
+
+    const graded = gradeCoordinateRoomPixels(source, width, height)
+    const aboveOffset = (width + 2) * 4
+
+    expect(Array.from(source)).toEqual(original)
+    expect(graded[centerOffset] - graded[aboveOffset]).toBeGreaterThan(60)
+    expect(graded[centerOffset + 3]).toBe(255)
+  })
+
+  it("remaps the window landscape without moving its floor anchor", () => {
+    const width = 2
+    const height = 101
+    const source = new Uint8ClampedArray(width * height * 4)
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const offset = (y * width + x) * 4
+        source[offset] = y * 2
+        source[offset + 1] = y * 2
+        source[offset + 2] = y * 2
+        source[offset + 3] = 255
+      }
+    }
+
+    const graded = gradeCoordinateRoomPixels(source, width, height)
+    const windowPixelAt = (y: number) => graded[(y * width + 1) * 4]
+
+    expect(windowPixelAt(51)).toBe(92)
+    expect(windowPixelAt(60)).toBe(120)
+    expect(graded[(60 * width + 1) * 4 + 3]).toBe(255)
   })
 
   it("places the Output frame front-on at the shared WebGL ground", () => {
@@ -611,7 +698,7 @@ describe("Example Canvas workspace", () => {
     }
   })
 
-  it("keeps optical Glass thickness stable across plane material updates", () => {
+  it("keeps the source Glass thin and stable across material updates", () => {
     const active = coordinatePlaneGlassMaterial(
       "view",
       { r: 164, g: 204, b: 255, a: 0.24 },
@@ -622,9 +709,181 @@ describe("Example Canvas workspace", () => {
       0.82,
     )
 
-    expect(active.thickness).toBe(Math.fround(0.32))
+    expect(active.thickness).toBe(Math.fround(0.06))
+    expect(active.ior).toBeCloseTo(1.22)
+    expect(active.roughness).toBe(Math.fround(0.05))
     expect(inactive.thickness).toBe(active.thickness)
     expect(inactive.color[3]).toBeCloseTo(Math.fround(0.24 * 0.82))
+  })
+
+  it("keeps Output optical travel equal to its physical panel thickness", () => {
+    expect(coordinateOutputGlassMaterial().thickness).toBe(Math.fround(0.06))
+  })
+
+  it("keeps UVs on empty rectangle meshes used by image materials", () => {
+    const plane = createPlaneDefinitions(1012, 524, COORDINATE_PLANE_DOMAIN).client
+    const geometry = rectMeshGeometry(plane, createPlaneBasis(plane), undefined, 0.09)
+
+    expect(Array.from(geometry.uvs ?? [])).toHaveLength(6)
+    expect(Array.from(geometry.indices ?? [])).toEqual([0, 1, 2])
+  })
+
+  it("renders source volume through one UV-mapped transparent material shell", () => {
+    const plane = createPlaneDefinitions(1390, 578, COORDINATE_PLANE_DOMAIN).view
+    const geometry = planeVolumeProfileGeometry(
+      plane,
+      createPlaneBasis(plane),
+      0.06,
+      0.015,
+      5,
+    )
+    const texture = createCoordinatePlaneEdgeTexture("view")
+    const material = new TransparentImageMaterial({ texture })
+    const snapshot = texture.copySnapshot()
+    const contentSnapshot = createCoordinatePlaneEdgeTexture("content").copySnapshot()
+    const rowAlpha = (row: number) => Array.from(
+      { length: snapshot.width },
+      (_, index) => snapshot.data[(row * snapshot.width + index) * 4 + 3],
+    )
+    const primaryPeak = (alpha: number[]) => Math.max(...alpha.slice(0, alpha.length / 2))
+    const secondaryPeak = (alpha: number[]) => Math.max(...alpha.slice(alpha.length * 0.6))
+    const topAlpha = rowAlpha(0)
+    const rightAlpha = rowAlpha(8)
+    const bottomAlpha = rowAlpha(17)
+    const leftAlpha = rowAlpha(26)
+    const contentBottomAlpha = Array.from(
+      { length: contentSnapshot.width },
+      (_, index) => contentSnapshot.data[(17 * contentSnapshot.width + index) * 4 + 3],
+    )
+
+    expect(material.kind).toBe("transparent-image")
+    expect(texture.alphaMode).toBe("straight")
+    expect(texture.height).toBe(36)
+    expect(geometry.normals).toBeUndefined()
+    expect(geometry.uvs?.length).toBe(geometry.positions.length / 3 * 2)
+    expect(Array.from(geometry.positions.slice(0, 6)))
+      .toEqual(Array.from(geometry.positions.slice(-6)))
+    expect(geometry.uvs?.[geometry.uvs.length - 1]).toBe(1)
+    expect(secondaryPeak(topAlpha) / primaryPeak(topAlpha)).toBeGreaterThan(0.3)
+    expect(secondaryPeak(topAlpha) / primaryPeak(topAlpha)).toBeLessThan(0.65)
+    expect(primaryPeak(rightAlpha)).toBeGreaterThan(200)
+    expect(secondaryPeak(rightAlpha) / primaryPeak(rightAlpha)).toBeLessThan(0.15)
+    expect(primaryPeak(bottomAlpha)).toBeGreaterThan(80)
+    expect(secondaryPeak(bottomAlpha) / primaryPeak(bottomAlpha)).toBeLessThan(0.2)
+    expect(primaryPeak(leftAlpha)).toBeGreaterThan(200)
+    expect(secondaryPeak(leftAlpha) / primaryPeak(leftAlpha)).toBeLessThan(0.15)
+    expect(primaryPeak(contentBottomAlpha)).toBeGreaterThan(100)
+    expect(secondaryPeak(contentBottomAlpha) / primaryPeak(contentBottomAlpha)).toBeLessThan(0.15)
+
+    expect(coordinatePlaneEdgeSupport("client", { x: 0, y: -1 }).outside).toBe(5)
+    expect(coordinatePlaneEdgeSupport("client", { x: 1, y: 0 }).outside).toBe(7.5)
+    expect(coordinatePlaneEdgeSupport("client", { x: 0, y: 1 }).outside).toBe(11.5)
+    expect(coordinatePlaneEdgeSupport("client", { x: -1, y: 0 }).outside).toBe(7.5)
+    const angle = (degrees: number) => {
+      const radians = degrees * Math.PI / 180
+      return { x: Math.cos(radians), y: Math.sin(radians) }
+    }
+    const beforeCorner = coordinatePlaneEdgeSupport("client", angle(44)).outside
+    const afterCorner = coordinatePlaneEdgeSupport("client", angle(46)).outside
+    expect(Math.abs(beforeCorner - afterCorner)).toBeLessThan(0.5)
+  })
+
+  it("keeps the Canvas signal continuous while allowing segment-specific optics", () => {
+    const signal = createCoordinateSignalPath({
+      color: { r: 255, g: 180, b: 160, a: 0.88 },
+      layer: 1,
+      lineWidth: 1.2,
+      zIndex: 18,
+    })
+    signal.update({
+      points: [
+        new Point({ x: 0, y: 0 }),
+        new Point({ x: 10, y: 6 }),
+        new Point({ x: 20, y: 4 }),
+      ],
+    })
+
+    expect(signal.points).toHaveLength(3)
+    expect(signal.zIndex).toBe(18)
+    expect(signal.strokeConfig.lineWidth).toBe(1.2)
+    expect(signal.strokeConfig.lineCap).toBe("round")
+    expect(signal.strokeConfig.lineJoin).toBe("round")
+
+    const glow = createCoordinateSignalPath({
+      color: { r: 255, g: 170, b: 150, a: 0.65 },
+      layer: 3,
+      lineWidth: 2,
+      zIndex: 17,
+      shadowBlur: 6,
+      shadowColor: "rgb(255 120 90 / 0.9)",
+      shadowPasses: 2,
+    })
+    expect(glow.layer).toBe(3)
+    expect(glow.shapeStore.get("shadowBlur")).toBe(6)
+    expect(glow.shapeStore.get("shadowColor")).toBe("rgb(255 120 90 / 0.9)")
+    expect(glow.shapeStore.get("shadowGapColor")).toBe("rgb(255 120 90 / 0.9)")
+    expect(glow.shapeStore.get("highlightGapAlpha")).toBe(1)
+    expect(glow.shapeStore.get("shadowPasses")).toBe(2)
+    expect(glow.stateDrawFuncMap.default.stroke).toBeTypeOf("function")
+    glow.update({
+      points: [
+        new Point({ x: 0, y: 0 }),
+        new Point({ x: 10, y: 0 }),
+        new Point({ x: 20, y: 0 }),
+        new Point({ x: 30, y: 0 }),
+      ],
+    })
+    const glowContext = {
+      beginPath: vi.fn(),
+      lineTo: vi.fn(),
+      moveTo: vi.fn(),
+      restore: vi.fn(),
+      save: vi.fn(),
+      stroke: vi.fn(),
+      translate: vi.fn(),
+      shadowBlur: 0,
+      shadowColor: "",
+      shadowOffsetX: 0,
+      shadowOffsetY: 0,
+    }
+    glow.stateDrawFuncMap.default.stroke?.call(glow, { context: glowContext } as never)
+    expect(glowContext.stroke).toHaveBeenCalledTimes(4)
+    expect(glowContext.moveTo.mock.calls).toEqual([
+      [0, 0], [20, 0], [0, 0], [20, 0],
+    ])
+    expect(glowContext.translate).toHaveBeenCalledWith(-10_000, 0)
+    expect(glowContext.restore).toHaveBeenCalledOnce()
+
+    const highlight = createCoordinateSignalPath({
+      color: { r: 255, g: 250, b: 247, a: 1 },
+      layer: 3,
+      lineWidth: 1.6,
+      zIndex: 18,
+      highlightGapAlpha: 0.05,
+    })
+    expect(highlight.shapeStore.get("highlightGapAlpha")).toBe(0.05)
+    expect(highlight.stateDrawFuncMap.default.stroke).toBeTypeOf("function")
+    highlight.update({ points: glow.points })
+    const addColorStop = vi.fn()
+    const highlightContext = {
+      beginPath: vi.fn(),
+      createLinearGradient: vi.fn(() => ({ addColorStop })),
+      lineTo: vi.fn(),
+      moveTo: vi.fn(),
+      restore: vi.fn(),
+      save: vi.fn(),
+      stroke: vi.fn(),
+      strokeStyle: "",
+    }
+    highlight.stateDrawFuncMap.default.stroke?.call(highlight, { context: highlightContext } as never)
+    expect(highlightContext.stroke).toHaveBeenCalledTimes(2)
+    expect(addColorStop.mock.calls).toEqual([
+      [0, "rgb(255 250 247 / 1)"],
+      [0.35, "rgb(255 250 247 / 0.05)"],
+      [0.65, "rgb(255 250 247 / 0.05)"],
+      [1, "rgb(255 250 247 / 1)"],
+    ])
+    expect(highlightContext.restore).toHaveBeenCalledOnce()
   })
 
   it("defines a bounded Content scene and connects all corresponding plane corners", () => {
@@ -744,8 +1003,8 @@ describe("Example Canvas workspace", () => {
     expect(contentToView).toHaveBeenCalledTimes(8)
     expect(contentToClient).toHaveBeenCalledTimes(8)
     expect(viewToContent).toHaveBeenCalledTimes(4)
-    expect(evidence.shape.view).toEqual({ x: 330, y: 380, width: 380, height: 240 })
-    expect(evidence.shape.client).toEqual({ x: 760, y: 810, width: 760, height: 480 })
+    expect(evidence.shape.view).toEqual({ x: 330, y: 500, width: 380, height: 220 })
+    expect(evidence.shape.client).toEqual({ x: 760, y: 1050, width: 760, height: 440 })
     expect(evidence.visibleContent).toEqual({ x: -20, y: -10, width: 160, height: 120 })
   })
 
@@ -817,13 +1076,38 @@ describe("Example Canvas workspace", () => {
 
   it("owns Output and Console geometry in the root StayCanvas View model", () => {
     expect(createCoordinateSceneLayout(1440, 1000)).toMatchObject({
-      output: { x: 970, y: 184, width: 400, height: 500 },
-      console: { x: 90, y: 720, width: 1260, height: 228 },
+      output: { x: 958, y: 166, width: 482, height: 500 },
+      console: { x: 90, y: 781, width: 1260, height: 162 },
+    })
+    expect(createCoordinateSceneLayout(1672, 941)).toMatchObject({
+      output: { x: 1112, y: 156, width: 560, height: 500 },
+      console: { x: 90, y: 722, width: 1472, height: 162 },
     })
     expect(createCoordinateSceneLayout(800, 600)).toMatchObject({
       output: { x: 476, y: 30, width: 300, height: 443 },
       console: { x: 36, y: 506, width: 728, height: 82 },
     })
+    for (const [width, height] of [
+      [320, 720],
+      [568, 720],
+      [800, 720],
+      [1280, 720],
+      [1672, 941],
+    ] as const) {
+      const consoleFrame = createCoordinateSceneLayout(width, height).console
+      const controls = coordinateConsoleControlRects(consoleFrame)
+      for (const control of Object.values(controls)) {
+        if (control.width === 0 || control.height === 0) continue
+        expect(control.x).toBeGreaterThanOrEqual(consoleFrame.x)
+        expect(control.y).toBeGreaterThanOrEqual(consoleFrame.y)
+        expect(control.x + control.width).toBeLessThanOrEqual(consoleFrame.x + consoleFrame.width)
+        expect(control.y + control.height).toBeLessThanOrEqual(consoleFrame.y + consoleFrame.height)
+        expect(control.x + control.width).toBeLessThanOrEqual(width)
+        expect(control.y + control.height).toBeLessThanOrEqual(height)
+      }
+    }
+    expect(coordinateConsoleIsCompact(createCoordinateSceneLayout(568, 720).console)).toBe(true)
+    expect(coordinateConsoleIsCompact(createCoordinateSceneLayout(800, 720).console)).toBe(true)
     for (const [width, height] of [
       [568, 260],
       [568, 320],
@@ -1152,7 +1436,7 @@ describe("Example Canvas workspace", () => {
     expect(experience?.querySelector(":scope > .coordinate-source-slot")).toBe(stackCard)
     expect(workspace?.querySelector(":scope > .coordinate-live-exhibit")).not.toBeNull()
     expect(stackCard?.classList.contains("coordinate-focus-view-client")).toBe(true)
-    expect(stackLayers).toHaveLength(2)
+    expect(stackLayers).toHaveLength(4)
     expect(liveLayers).toHaveLength(2)
     expect(workspace?.querySelector(".coordinate-live-exhibit .coordinate-live-heading")?.textContent)
       .toContain("Live Canvas")
@@ -1181,8 +1465,10 @@ describe("Example Canvas workspace", () => {
     expect(liveLayers?.[0].width).toBe(1082)
     expect(liveLayers?.[0].height).toBe(565)
 
-    expect(webGL2Contexts.get(stackLayers![0])?.spies.drawElements).toHaveBeenCalled()
+    expect(webGL2Contexts.has(stackLayers![0])).toBe(true)
     expect(webGL2Contexts.has(stackLayers![1])).toBe(false)
+    expect(webGL2Contexts.get(stackLayers![2])?.spies.drawElements).toHaveBeenCalled()
+    expect(webGL2Contexts.has(stackLayers![3])).toBe(false)
 
     const flow = container.querySelector(".coordinate-flow")
     expect(flow?.textContent).toContain("Coordinates")
@@ -1197,7 +1483,7 @@ describe("Example Canvas workspace", () => {
       .find((item) => item.querySelector("dt")?.textContent === label)
       ?.querySelector("dd")?.textContent
     const contentGeometry = proofValue("Content Shape geometry")
-    expect(contentGeometry).toBe("145, 180 / 190×120")
+    expect(contentGeometry).toBe("145, 240 / 190×110")
     expect(container.querySelector(".coordinate-proof-stable small")?.textContent)
       .toContain("Demo Content bounds 0, 0 / 480×360")
     expect(container.querySelector(".coordinate-proof-stable small")?.textContent)
@@ -1264,8 +1550,8 @@ describe("Example Canvas workspace", () => {
     act(() => frames.splice(0).forEach((frame) => frame(0)))
 
     const stackLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-stack-canvas canvas")
-    expect(stackLayers).toHaveLength(2)
-    const overlayCanvas = stackLayers[1]
+    expect(stackLayers).toHaveLength(4)
+    const overlayCanvas = stackLayers[stackLayers.length - 1]
     const visibleOverlayDraws = textDraws.filter((draw) => draw.canvas === overlayCanvas
       && draw.globalAlpha > 0
       && !draw.fillStyle.replaceAll(" ", "").endsWith(",0)"))
@@ -1342,7 +1628,7 @@ describe("Example Canvas workspace", () => {
     })
     act(() => frames.splice(0).forEach((frame) => frame(0)))
     const stackLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-stack-canvas canvas")
-    const top = stackLayers[1]
+    const top = stackLayers[stackLayers.length - 1]
     const click = (name: CoordinateConsoleControlName, xRatio?: number) => {
       clickCoordinateConsoleControl({
         canvas: top,
@@ -1360,27 +1646,23 @@ describe("Example Canvas workspace", () => {
 
     expect(COORDINATE_CONSOLE_CONTROL_NAMES).toHaveLength(10)
     expect(cssState()).toBe("translate(0, 0) scale(0.85, 0.85)")
-    expect(viewportState()).toBe("translate(0, 0) scale(1.10)")
+    expect(viewportState()).toBe("translate(59, 19) scale(0.82)")
 
     click("scale-x")
     expect(cssState()).toBe("translate(0, 0) scale(0.75, 0.75)")
     click("translate-x", 0.75)
-    expect(cssState()).toBe("translate(72, 48) scale(0.75, 0.75)")
+    expect(cssState()).toBe("translate(0, 0) scale(0.75, 0.75)")
+    expect(viewportState()).toMatch(/scale\(0\.98\)$/)
     click("css-reset")
     expect(cssState()).toBe("translate(0, 0) scale(0.85, 0.85)")
 
-    click("zoom-in")
-    expect(viewportState()).toMatch(/scale\(1\.32\)$/)
-    click("zoom-out")
-    expect(viewportState()).toBe("translate(0, 0) scale(1.10)")
+    click("translate-x", 0.25)
+    expect(viewportState()).toBe("translate(59, 19) scale(0.82)")
     click("viewport-reset")
-    expect(viewportState()).toBe("translate(0, 0) scale(1.10)")
+    expect(viewportState()).toBe("translate(59, 19) scale(0.82)")
 
     expect(evidenceState()).toBe("closed")
     expect(evidence?.hidden).toBe(true)
-    click("evidence")
-    expect(evidenceState()).toBe("open")
-    expect(evidence?.hidden).toBe(false)
     restorePointerEvents()
   })
 
@@ -1429,7 +1711,8 @@ describe("Example Canvas workspace", () => {
         root?.render(<I18nProvider><CoordinatesExample /></I18nProvider>)
       })
       act(() => frames.splice(0).forEach((frame) => frame(0)))
-      const top = container.querySelectorAll<HTMLCanvasElement>(".coordinate-stack-canvas canvas")[1]
+      const stackLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-stack-canvas canvas")
+      const top = stackLayers[stackLayers.length - 1]
       const cssState = () => container.querySelector(".coordinate-css-state code")?.textContent
       const viewportState = () => container.querySelector(".coordinate-viewport-state code")?.textContent
       const click = (name: CoordinateConsoleControlName, width: number, height: number) => {
@@ -1455,14 +1738,22 @@ describe("Example Canvas workspace", () => {
       click("css-reset", 800, 600)
       expect(cssState()).toBe("translate(0, 0) scale(0.85, 0.85)")
       click("zoom-in", 800, 600)
-      expect(viewportState()).toContain("scale(1.32)")
+      expect(viewportState()).toContain("scale(0.98)")
       click("zoom-out", 800, 600)
-      expect(viewportState()).toContain("scale(1.10)")
+      expect(viewportState()).toContain("scale(0.82)")
       click("zoom-in", 800, 600)
       click("viewport-reset", 800, 600)
-      expect(viewportState()).toBe("translate(0, 0) scale(1.10)")
+      expect(viewportState()).toBe("translate(59, 19) scale(0.82)")
       expect(container.querySelector(".coordinate-evidence-state")?.textContent).toBe("closed")
       click("evidence", 800, 600)
+      expect(container.querySelector(".coordinate-evidence-state")?.textContent).toBe("open")
+      click("evidence", 800, 600)
+      expect(container.querySelector(".coordinate-evidence-state")?.textContent).toBe("closed")
+
+      viewportHeight = 720
+      act(() => callbacks.forEach((callback) => callback([], {} as ResizeObserver)))
+      act(() => frames.splice(0).forEach((frame) => frame(48)))
+      click("evidence", 800, 720)
       expect(container.querySelector(".coordinate-evidence-state")?.textContent).toBe("open")
     } finally {
       globalThis.ResizeObserver = originalResizeObserver
@@ -1510,8 +1801,8 @@ describe("Example Canvas workspace", () => {
       frames.splice(0).forEach((frame) => frame(16))
     })
     const after = container.querySelector(".coordinate-flow-client strong")?.textContent
-    expect(before).toBe("837, 245")
-    expect(after).toBe("675, 245")
+    expect(before).toBe("814, 254")
+    expect(after).toBe("652, 254")
   })
 
   it("recreates responsive coordinate canvases when their surfaces resize", () => {
@@ -1550,7 +1841,7 @@ describe("Example Canvas workspace", () => {
       expect([...container.querySelectorAll(".coordinate-zoom-proof dl > div")]
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
         ?.querySelector("dd")?.textContent)
-        .toBe("0, 0 / 40%")
+        .toBe("59, 19 / 40%")
     } finally {
       globalThis.ResizeObserver = originalResizeObserver
     }
@@ -1580,6 +1871,40 @@ describe("Example Canvas workspace", () => {
     expect(container.querySelector<HTMLCanvasElement>("canvas")?.width).toBe(210)
     expect(container.querySelector<HTMLCanvasElement>("canvas")?.height).toBe(81)
     expect(sceneCanvasArea(tools!, 240, 120)).toEqual({ x: 0, y: 0, width: 210, height: 81 })
+  })
+
+  it("ends a Space pan and restores the cursor even without pointer movement", () => {
+    const restorePointerEvents = installPointerEvents()
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    try {
+      act(() => {
+        root?.render(<I18nProvider><CoordinatesExample /></I18nProvider>)
+      })
+
+      const liveLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")
+      const top = liveLayers[liveLayers.length - 1]
+
+      act(() => {
+        top.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }))
+        top.dispatchEvent(pointer("pointerdown", 100, 100, { button: 0, buttons: 1 }))
+      })
+      expect(top.style.cursor).toBe("grabbing")
+
+      act(() => {
+        top.dispatchEvent(pointer("pointerup", 100, 100, { button: 0, buttons: 0 }))
+      })
+      expect(top.style.cursor).toBe("grab")
+
+      act(() => {
+        top.dispatchEvent(new KeyboardEvent("keyup", { key: " ", bubbles: true }))
+      })
+      expect(top.style.cursor).toBe("default")
+    } finally {
+      restorePointerEvents()
+    }
   })
 
   it("keeps reporting pointer samples outside the finite coordinate planes", () => {
@@ -1671,7 +1996,7 @@ describe("Example Canvas workspace", () => {
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
       expect(container.querySelector(".coordinate-flow-client strong")?.textContent).toBe("150, 130")
       expect(viewBeforeCancellation).toBe("163, 125")
-      expect(viewportBeforeCancellation?.querySelector("dd")?.textContent).toBe("63, 37 / 110%")
+      expect(viewportBeforeCancellation?.querySelector("dd")?.textContent).toBe("122, 56 / 82%")
       expect(container.querySelector(".coordinate-flow-operation span")?.textContent)
         .toContain("inverse CSS scale")
       expect(container.querySelector(".coordinate-flow-operation code")?.textContent)
@@ -1686,7 +2011,7 @@ describe("Example Canvas workspace", () => {
       const viewportAfterCancellation = [...container.querySelectorAll(".coordinate-zoom-proof dl > div")]
         .find((item) => item.querySelector("dt")?.textContent === "Viewport")
       expect(container.querySelector(".coordinate-flow-view strong")?.textContent).toBe(viewBeforeCancellation)
-      expect(viewportAfterCancellation?.querySelector("dd")?.textContent).toBe("0, 0 / 110%")
+      expect(viewportAfterCancellation?.querySelector("dd")?.textContent).toBe("59, 19 / 82%")
 
       act(() => {
         top.dispatchEvent(pointer("pointerdown", 200, 200, { button: 0, buttons: 1 }))
@@ -1700,17 +2025,18 @@ describe("Example Canvas workspace", () => {
         .find((item) => item.querySelector("dt")?.textContent === "Canvas event · Content · e.point")
         ?.querySelector("dd")
       expect(container.querySelector(".coordinate-flow-view strong")?.textContent).toBe("275, 250")
-      expect(viewportAfterRelease?.querySelector("dd")?.textContent).toBe("50, 37 / 110%")
-      expect(eventPoint?.textContent).toBe("250, 227 · match")
+      expect(viewportAfterRelease?.querySelector("dd")?.textContent).toBe("109, 56 / 82%")
+      expect(eventPoint?.textContent).toBe("264, 282 · match")
 
-      const rootTop = container.querySelectorAll<HTMLCanvasElement>(".coordinate-stack-canvas canvas")[1]
+      const rootLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-stack-canvas canvas")
+      const rootTop = rootLayers[rootLayers.length - 1]
       clickCoordinateConsoleControl({
         canvas: rootTop,
         name: "viewport-reset",
         viewHeight: 480,
         viewWidth: 920,
       })
-      expect(eventPoint?.textContent).toBe("250, 227 · match")
+      expect(eventPoint?.textContent).toBe("264, 282 · match")
 
       act(() => {
         top.dispatchEvent(new WheelEvent("wheel", {
@@ -1721,7 +2047,7 @@ describe("Example Canvas workspace", () => {
           deltaY: -100,
         }))
       })
-      expect(eventPoint?.textContent).toBe("68, 68 · match")
+      expect(eventPoint?.textContent).toBe("20, 68 · match")
     } finally {
       restorePointerEvents()
     }

@@ -12,9 +12,11 @@ import {
   ImageMaterial,
   LambertMaterial,
   StandardMaterial,
+  TransparentImageMaterial,
   UnlitMaterial,
 } from "../src/stay/webgl2/material"
 import { ImageTexture } from "../src/stay/webgl2/imageTexture"
+import { imageTextureUploadPixels } from "../src/stay/webgl2/imageTextureResources"
 import { AmbientLight, DirectionalLight, PointLight } from "../src/stay/webgl2/light"
 import { EnvironmentMap } from "../src/stay/webgl2/environmentMap"
 import { PerspectiveCamera } from "../src/stay/webgl2/perspectiveCamera"
@@ -230,6 +232,74 @@ describe("internal WebGL2 scene runtime", () => {
     expect(() => mesh.setMaterial(new ImageMaterial({ texture })))
       .not.toThrow()
     expect(mesh.geometryRevision).toBe(0)
+  })
+
+  it("keeps straight-alpha image pixels authoritative and derives premultiplied GPU bytes", () => {
+    const source = new Uint8Array([
+      255, 128, 32, 128,
+      255, 255, 255, 0,
+    ])
+    const texture = new ImageTexture({
+      width: 2,
+      height: 1,
+      alphaMode: "straight",
+      data: source,
+    })
+    source.fill(0)
+
+    const snapshot = texture.copySnapshot()
+    expect(snapshot.alphaMode).toBe("straight")
+    expect(snapshot.data).toEqual(new Uint8Array([
+      255, 128, 32, 128,
+      255, 255, 255, 0,
+    ]))
+    expect(imageTextureUploadPixels(snapshot)).toEqual(new Uint8Array([
+      188, 93, 21, 128,
+      0, 0, 0, 0,
+    ]))
+    expect(() => new ImageMaterial({ texture }))
+      .toThrow("alphaMode must be opaque")
+    expect(() => new TransparentImageMaterial({ texture: imageTexture() }))
+      .toThrow("alphaMode must be straight")
+    expect(() => new ImageTexture({
+      width: 1,
+      height: 1,
+      alphaMode: "premultiplied" as never,
+      data: new Uint8Array([0, 0, 0, 0]),
+    })).toThrow("alphaMode must be opaque or straight")
+  })
+
+  it("validates transparent image UV and shadow state atomically", () => {
+    const texture = new ImageTexture({
+      width: 1,
+      height: 1,
+      alphaMode: "straight",
+      data: new Uint8Array([255, 255, 255, 128]),
+    })
+    const material = new TransparentImageMaterial({ texture })
+    expect(() => new Mesh({ geometry: triangle(), material }))
+      .toThrow("TransparentImageMaterial Mesh geometry requires uvs")
+    expect(() => new Mesh({
+      geometry: texturedTriangle(),
+      material,
+      castShadow: true,
+    })).toThrow("cannot cast shadows")
+
+    const mesh = new Mesh({ geometry: texturedTriangle(), material })
+    const changes: boolean[] = []
+    mesh.subscribeChanges(() => changes.push(mesh.castShadow))
+    expect(() => mesh.setCastShadow(true)).toThrow("cannot cast shadows")
+    expect(mesh.castShadow).toBe(false)
+    expect(changes).toEqual([])
+
+    const opaque = new Mesh({
+      geometry: texturedTriangle(),
+      material: new ImageMaterial({ texture: imageTexture() }),
+      castShadow: true,
+    })
+    expect(() => opaque.setMaterial(material)).toThrow("cannot cast shadows")
+    expect(opaque.getMaterial()).toBeInstanceOf(ImageMaterial)
+    expect(opaque.castShadow).toBe(true)
   })
 
   it("reuses program and mesh buffers until CPU geometry changes", () => {
@@ -654,6 +724,54 @@ describe("internal WebGL2 scene runtime", () => {
     runtime.render([glass, first], camera(), [new AmbientLight()])
     expect(gl.spies.createTexture).toHaveBeenCalledTimes(4)
     expect(gl.spies.texImage2D).toHaveBeenCalledTimes(4)
+    runtime.dispose()
+  })
+
+  it("uploads and blends straight-alpha textures in the depth-sorted transparent queue", () => {
+    const canvas = document.createElement("canvas")
+    canvas.width = 240
+    canvas.height = 160
+    const gl = createRecordingWebGL2Context(canvas)
+    const runtime = new WebGL2SceneRuntime(gl.context)
+    const texture = new ImageTexture({
+      width: 2,
+      height: 1,
+      alphaMode: "straight",
+      data: new Uint8Array([
+        255, 128, 32, 128,
+        255, 255, 255, 0,
+      ]),
+    })
+    const transparentImage = new Mesh({
+      geometry: texturedTriangle(-1),
+      material: new TransparentImageMaterial({ texture }),
+    })
+    const glass = new Mesh({
+      geometry: litTriangle(),
+      material: new GlassMaterial({ thickness: 0.2 }),
+    })
+
+    runtime.render([glass, transparentImage], camera(), [new AmbientLight()])
+
+    const transparentShader = gl.spies.shaderSource.mock.calls
+      .map(([, source]) => String(source))
+      .find((source) => source.includes("output_color = texture(u_image_texture, image_uv)"))
+    expect(transparentShader).toBeDefined()
+    expect(gl.spies.blendFunc).toHaveBeenCalledWith(
+      gl.spies.ONE,
+      gl.spies.ONE_MINUS_SRC_ALPHA,
+    )
+    const imageUpload = gl.spies.texImage2D.mock.calls.find((call) =>
+      call[3] === 2 && call[4] === 1)
+    expect(imageUpload?.[8]).toEqual(new Uint8Array([
+      188, 93, 21, 128,
+      0, 0, 0, 0,
+    ]))
+    const resolveOrder = gl.spies.blitFramebuffer.mock.invocationCallOrder[0]
+    const transparentDrawOrder = gl.spies.drawElements.mock.invocationCallOrder[0]
+    const glassDrawOrder = gl.spies.drawElements.mock.invocationCallOrder[1]
+    expect(resolveOrder).toBeLessThan(transparentDrawOrder)
+    expect(transparentDrawOrder).toBeLessThan(glassDrawOrder)
     runtime.dispose()
   })
 
@@ -1537,7 +1655,7 @@ describe("internal WebGL2 scene runtime", () => {
       kind: "lambert",
       color: [1, 1, 1, 1],
     } as never)).toThrow(
-      "must be an UnlitMaterial, ImageMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
+      "must be an UnlitMaterial, ImageMaterial, TransparentImageMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
     )
   })
 

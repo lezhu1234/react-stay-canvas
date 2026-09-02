@@ -11,9 +11,11 @@ import {
   PointLight,
   StayWebGLChild,
   StandardMaterial,
+  TransparentImageMaterial,
   type StayTools,
   type StayWebGLSceneFragment,
   type GlassAttenuationColor,
+  type ImageTextureAlphaMode,
   type WebGL2LayerConfig,
   type PlanarReflection,
   translationMatrix4,
@@ -47,6 +49,27 @@ const imageMesh = new Mesh({
     indices: [0, 1, 2, 0, 2, 3],
   },
   material: new ImageMaterial({ texture: imageTexture }),
+})
+const transparentAlphaMode: ImageTextureAlphaMode = "straight"
+const transparentTexture = new ImageTexture({
+  width: 2,
+  height: 2,
+  alphaMode: transparentAlphaMode,
+  data: new Uint8Array([
+    255, 255, 255, 255,
+    255, 255, 255, 128,
+    255, 255, 255, 64,
+    255, 255, 255, 0,
+  ]),
+})
+const transparentImageMesh = new Mesh({
+  geometry: {
+    positions: [-1, 1, 0, 1, 1, 0, 1, -1, 0, -1, -1, 0],
+    uvs: [0, 0, 1, 0, 1, 1, 0, 1],
+    indices: [0, 1, 2, 0, 2, 3],
+  },
+  material: new TransparentImageMaterial({ texture: transparentTexture }),
+  castShadow: false,
 })
 mesh.setModelMatrix(translationMatrix4(0.2, 0, 0))
 mesh.setMaterial(new LambertMaterial({ color: [0.3, 0.6, 1, 1] }))
@@ -148,6 +171,7 @@ import { WebGL2LayerRuntime } from "react-stay-canvas"
 void camera
 void child
 void imageMesh
+void transparentImageMesh
 void layer
 void glassIor
 void glassAttenuationColor

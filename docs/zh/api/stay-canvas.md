@@ -78,7 +78,7 @@ import {
 />
 ```
 
-Canvas2D 仍是默认 backend。WebGL2 是显式 opt-in 的原生 Mesh 场景，不再是 Shape 栅格后端。Mesh Child 通过 `tools.webgl.appendChild()` 添加；Canvas2D Shape 只能进入 Canvas2D 图层，`StayWebGLChild` 则只占用一个 WebGL2 图层。不透明 Mesh 的可见性由 depth 决定；Glass Mesh 保持 depth test，并在 opaque pass 后稳定地从远到近排序。Shape `zIndex` 不跨 backend 比较。
+Canvas2D 仍是默认 backend。WebGL2 是显式 opt-in 的原生 Mesh 场景，不再是 Shape 栅格后端。Mesh Child 通过 `tools.webgl.appendChild()` 添加；Canvas2D Shape 只能进入 Canvas2D 图层，`StayWebGLChild` 则只占用一个 WebGL2 图层。不透明 Mesh 的可见性由 depth 决定；Glass 与 TransparentImage Mesh 保持 depth test，并在 opaque pass 后稳定地从远到近排序。Shape `zIndex` 不跨 backend 比较。
 
 `lights` 与 `environment` 都是可选的图层显示状态。`EnvironmentMap`、`AmbientLight`、`DirectionalLight`、`PointLight` 的修改与 Camera 修改一样，只会标脏拥有它们的 WebGL2 图层；它们不进入 Child History 或场景传输。`EnvironmentMap` 会深拷贝一张 2:1、逐行排列的经纬 sRGB RGBA8 图；第一行表示 +Y 极点，水平方向环绕 world Y，`intensity` 是非负的线性强度倍率。只改 intensity 时仅更新 uniform；修改像素时复用现有 GPU texture 上传并重建 roughness mip chain。一个图层当前最多接受四个方向光、四个点光和一张方向光 shadow map。`directionToLight` 表示从表面指向光源的 world-space 向量，Light 会把它归一化。`PointLight.position` 使用 world space，radiance 按平方反比衰减；省略 `range` 表示作用距离无限，提供正数 range 时使用平滑的四次截止，并在 range 外不再贡献。点光阴影暂不支持。方向光阴影使用显式正交相机（`target`、`up`、`distance`、`width`、`height`、`near`、`far`）以及 `mapSize`、`bias`；核心不会自动 fit scene。只修改灯光或阴影相机时会复用 Mesh geometry upload；shadow 与 environment GPU 资源只在各自 source、context 或 layer 生命周期要求时重建。
 

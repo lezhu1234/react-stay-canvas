@@ -1,9 +1,12 @@
 export type ImageTexturePixelData = Uint8Array | Uint8ClampedArray
+export type ImageTextureAlphaMode = "opaque" | "straight"
 
 export interface ImageTextureProps {
   readonly width: number
   readonly height: number
-  /** Row-major opaque sRGB RGBA8 pixels. The first row is sampled at v = 0. */
+  /** Defaults to `opaque`; `straight` accepts unassociated sRGB RGBA8 pixels. */
+  readonly alphaMode?: ImageTextureAlphaMode
+  /** Row-major sRGB RGBA8 pixels. The first row is sampled at v = 0. */
   readonly data: ImageTexturePixelData
 }
 
@@ -11,6 +14,7 @@ export interface ImageTextureProps {
 export interface ImageTextureSnapshot {
   readonly width: number
   readonly height: number
+  readonly alphaMode: ImageTextureAlphaMode
   readonly data: Uint8Array
 }
 
@@ -21,9 +25,18 @@ function positiveDimension(value: number, name: string) {
   return value
 }
 
-function copyPixels({ width, height, data }: ImageTextureProps) {
+function copyAlphaMode(value: ImageTextureAlphaMode | undefined): ImageTextureAlphaMode {
+  const alphaMode = value ?? "opaque"
+  if (alphaMode !== "opaque" && alphaMode !== "straight") {
+    throw new TypeError("ImageTexture alphaMode must be opaque or straight")
+  }
+  return alphaMode
+}
+
+function copyPixels({ width, height, alphaMode: inputAlphaMode, data }: ImageTextureProps) {
   const copiedWidth = positiveDimension(width, "width")
   const copiedHeight = positiveDimension(height, "height")
+  const alphaMode = copyAlphaMode(inputAlphaMode)
   if (!(data instanceof Uint8Array) && !(data instanceof Uint8ClampedArray)) {
     throw new TypeError("ImageTexture data must be a Uint8Array or Uint8ClampedArray")
   }
@@ -36,24 +49,28 @@ function copyPixels({ width, height, data }: ImageTextureProps) {
     throw new RangeError(`ImageTexture data must contain exactly ${expectedLength} RGBA8 values`)
   }
   const copied = new Uint8Array(data)
-  for (let index = 3; index < copied.length; index += 4) {
-    if (copied[index] !== 255) {
-      throw new RangeError("ImageTexture alpha must be 255 for every opaque pixel")
+  if (alphaMode === "opaque") {
+    for (let index = 3; index < copied.length; index += 4) {
+      if (copied[index] !== 255) {
+        throw new RangeError("ImageTexture alpha must be 255 for every opaque pixel")
+      }
     }
   }
-  return { width: copiedWidth, height: copiedHeight, data: copied }
+  return { width: copiedWidth, height: copiedHeight, alphaMode, data: copied }
 }
 
-/** Immutable CPU-owned opaque sRGB image data for an ImageMaterial. */
+/** Immutable CPU-owned sRGB RGBA8 image data for an image material. */
 export class ImageTexture {
   readonly width: number
   readonly height: number
+  readonly alphaMode: ImageTextureAlphaMode
   readonly #data: Uint8Array
 
   constructor(props: ImageTextureProps) {
     const image = copyPixels(props)
     this.width = image.width
     this.height = image.height
+    this.alphaMode = image.alphaMode
     this.#data = image.data
     Object.freeze(this)
   }
@@ -63,6 +80,7 @@ export class ImageTexture {
     return {
       width: this.width,
       height: this.height,
+      alphaMode: this.alphaMode,
       data: new Uint8Array(this.#data),
     }
   }

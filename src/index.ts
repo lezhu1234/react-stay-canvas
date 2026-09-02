@@ -19,6 +19,7 @@ export {
   ImageMaterial,
   LambertMaterial,
   StandardMaterial,
+  TransparentImageMaterial,
   UnlitMaterial,
 } from "./stay/webgl2/material"
 export type {
@@ -30,11 +31,13 @@ export type {
   MeshMaterial,
   MeshMaterialSnapshot,
   StandardMaterialProps,
+  TransparentImageMaterialProps,
   UnlitMaterialProps,
 } from "./stay/webgl2/material"
 export { ImageTexture } from "./stay/webgl2/imageTexture"
 export type {
   ImageTexturePixelData,
+  ImageTextureAlphaMode,
   ImageTextureProps,
 } from "./stay/webgl2/imageTexture"
 export { AmbientLight, DirectionalLight, PointLight } from "./stay/webgl2/light"

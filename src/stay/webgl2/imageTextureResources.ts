@@ -1,4 +1,4 @@
-import { ImageTexture } from "./imageTexture"
+import { ImageTexture, type ImageTextureSnapshot } from "./imageTexture"
 
 export interface ImageTextureResources {
   readonly texture: WebGLTexture
@@ -28,6 +28,39 @@ function assertTextureSize(
   }
 }
 
+function srgbByteToLinear(value: number) {
+  const channel = value / 255
+  return channel <= 0.04045
+    ? channel / 12.92
+    : ((channel + 0.055) / 1.055) ** 2.4
+}
+
+function linearToSrgbByte(value: number) {
+  const channel = value <= 0.0031308
+    ? value * 12.92
+    : 1.055 * value ** (1 / 2.4) - 0.055
+  return Math.round(Math.min(1, Math.max(0, channel)) * 255)
+}
+
+/** @internal Derives GPU bytes whose sRGB decode produces premultiplied linear RGBA. */
+export function imageTextureUploadPixels(snapshot: ImageTextureSnapshot) {
+  if (snapshot.alphaMode === "opaque") return snapshot.data
+  const pixels = new Uint8Array(snapshot.data.length)
+  for (let index = 0; index < snapshot.data.length; index += 4) {
+    const alphaByte = snapshot.data[index + 3]
+    const alpha = alphaByte / 255
+    pixels[index] = linearToSrgbByte(srgbByteToLinear(snapshot.data[index]) * alpha)
+    pixels[index + 1] = linearToSrgbByte(
+      srgbByteToLinear(snapshot.data[index + 1]) * alpha,
+    )
+    pixels[index + 2] = linearToSrgbByte(
+      srgbByteToLinear(snapshot.data[index + 2]) * alpha,
+    )
+    pixels[index + 3] = alphaByte
+  }
+  return pixels
+}
+
 export function createImageTextureResources(
   context: WebGL2RenderingContext,
   image: ImageTexture,
@@ -37,6 +70,7 @@ export function createImageTextureResources(
   if (!texture) throw new Error("Unable to create WebGL2 ImageTexture")
   try {
     const snapshot = image.copySnapshot()
+    const uploadPixels = imageTextureUploadPixels(snapshot)
     context.bindTexture(context.TEXTURE_2D, texture)
     context.texParameteri(
       context.TEXTURE_2D,
@@ -55,7 +89,7 @@ export function createImageTextureResources(
       0,
       context.RGBA,
       context.UNSIGNED_BYTE,
-      snapshot.data,
+      uploadPixels,
     )
     context.generateMipmap(context.TEXTURE_2D)
     assertContextUpload(context, "ImageTexture upload")

@@ -9,9 +9,9 @@ import type {
 
 export const LAB_SHAPE: Readonly<Rect> = {
   x: 145,
-  y: 180,
+  y: 240,
   width: 190,
-  height: 120,
+  height: 110,
 }
 
 export const LAB_CONTENT_BOUNDS: Readonly<Rect> = {
@@ -29,9 +29,24 @@ export type CoordinatePlaneDomain = Readonly<{
 export type CoordinatePlaneName = "client" | "view" | "content"
 
 const PLANE_VERTICAL_RANGE_ALIGNMENT: Readonly<Record<CoordinatePlaneName, number>> = {
-  client: 0.03,
-  view: 0.125,
-  content: 0.13,
+  client: 0.446,
+  view: 0.482,
+  content: 0.401,
+}
+
+const PLANE_RANGE_SCALE: Readonly<Record<CoordinatePlaneName, Readonly<{
+  x: number
+  y: number
+}>>> = {
+  client: { x: 0.94, y: 0.6 },
+  view: { x: 1.025, y: 0.72 },
+  content: { x: 1.31, y: 0.93 },
+}
+
+const PLANE_RANGE_X_OFFSET: Readonly<Record<CoordinatePlaneName, number>> = {
+  client: 20,
+  view: 0,
+  content: -9,
 }
 
 // This is the diagram's logical drawing domain, not a physical panel size.
@@ -210,6 +225,28 @@ export function coordinatePlaneRange(
     // unavoidable aspect-ratio padding differs so corresponding geometry stays
     // legible across the staged physical planes.
     y: range.y - verticalSurplus * PLANE_VERTICAL_RANGE_ALIGNMENT[name],
+  }
+}
+
+/**
+ * Frames each explanatory chart around the same real projected Shape. The
+ * panels intentionally own independent axis windows: Client, View and Content
+ * have different numeric extents, while the anchor prevents those windows from
+ * moving the Shape's visual entry point.
+ */
+export function frameCoordinatePlaneRange(
+  name: CoordinatePlaneName,
+  range: Readonly<Rect>,
+  anchor: Readonly<Coordinate>,
+): Rect {
+  const scale = PLANE_RANGE_SCALE[name]
+  const width = range.width * scale.x
+  const height = range.height * scale.y
+  return {
+    x: anchor.x - (anchor.x - range.x) * scale.x - PLANE_RANGE_X_OFFSET[name],
+    y: anchor.y - (anchor.y - range.y) * scale.y,
+    width,
+    height,
   }
 }
 

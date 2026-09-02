@@ -10,6 +10,7 @@ import {
   ImageMaterial,
   LambertMaterial,
   StandardMaterial,
+  TransparentImageMaterial,
   UnlitMaterial,
 } from "../src/stay/webgl2/material"
 import { StayWebGLChild } from "../src/stay/webgl2/stayWebGLChild"
@@ -290,6 +291,37 @@ describe("internal Stay WebGL Child runtime", () => {
     expect((restoredMaterial as ImageMaterial).texture).toBe(texture)
     restored.meshes[0].setGeometry({ ...triangle(), uvs: [0, 1, 1, 1, 0.5, 0] })
     expect(original.meshes[0].copyGeometrySnapshot().uvs).toEqual(new Float32Array(uvs))
+    original.destroy()
+    restored.destroy()
+  })
+
+  it("captures and restores transparent image material identity", () => {
+    const texture = new ImageTexture({
+      width: 1,
+      height: 1,
+      alphaMode: "straight",
+      data: new Uint8Array([120, 180, 255, 96]),
+    })
+    const original = new StayWebGLChild({
+      id: "transparent-image-source",
+      className: "edge-profile",
+      layer: 0,
+      meshes: [new Mesh({
+        geometry: { ...triangle(), uvs },
+        material: new TransparentImageMaterial({ texture }),
+      })],
+    })
+
+    const snapshot = captureStayWebGLChildSnapshot(original)
+    const restored = restoreStayWebGLChildSnapshot(snapshot)
+    const restoredMaterial = restored.meshes[0].getMaterial()
+
+    expect(snapshot.meshes[0].material).toEqual({
+      kind: "transparent-image",
+      texture,
+    })
+    expect(restoredMaterial).toBeInstanceOf(TransparentImageMaterial)
+    expect((restoredMaterial as TransparentImageMaterial).texture).toBe(texture)
     original.destroy()
     restored.destroy()
   })

@@ -116,7 +116,7 @@ Child placement 把其中全部 Shape 从同一个局部对象映射到 Content�
 
 多 Shape Child 中的每个 Shape 都可以选择不同图层。例如连线图编辑器可以让边显示在底层、节点显示在上层，同时仍把节点矩形和文字组织成一个 Child。
 
-每个原生图层只有一个 backend 所有者。Canvas2D 图层消费 Shape RenderPlan；WebGL2 图层通过一台 Camera 和持久 GPU cache 消费 `StayWebGLChild` Mesh。两类 Child 共享同一份 identity store、selector、脏层调度、History 事务、state 和场景传输所有权，但不共享几何与排序：Shape `zIndex` 只属于 Canvas2D；不透明 WebGL2 Mesh 由原生 depth 决定遮挡，透明队列则把 Glass Mesh 稳定地从远到近排序。WebGL2 context loss 只暂停对应图层，也不会触发隐式 Canvas2D fallback。
+每个原生图层只有一个 backend 所有者。Canvas2D 图层消费 Shape RenderPlan；WebGL2 图层通过一台 Camera 和持久 GPU cache 消费 `StayWebGLChild` Mesh。两类 Child 共享同一份 identity store、selector、脏层调度、History 事务、state 和场景传输所有权，但不共享几何与排序：Shape `zIndex` 只属于 Canvas2D；不透明 WebGL2 Mesh 由原生 depth 决定遮挡，透明队列则把 Glass 与 TransparentImage Mesh 稳定地从远到近排序。WebGL2 context loss 只暂停对应图层，也不会触发隐式 Canvas2D fallback。
 
 ## `StayTools`：当前实例的操作入口
 

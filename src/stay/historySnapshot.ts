@@ -117,7 +117,8 @@ function valuesEqual(before: unknown, after: unknown): boolean {
     return beforeBytes.every((value, index) => value === afterBytes[index])
   }
   if (before instanceof ImageTexture && after instanceof ImageTexture) {
-    if (before.width !== after.width || before.height !== after.height) return false
+    if (before.width !== after.width || before.height !== after.height
+        || before.alphaMode !== after.alphaMode) return false
     const beforePixels = before.copySnapshot().data
     const afterPixels = after.copySnapshot().data
     return beforePixels.every((value, index) => value === afterPixels[index])

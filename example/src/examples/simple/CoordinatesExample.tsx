@@ -7,6 +7,7 @@ import {
   type ListenerProps,
   MOUSE_EVENTS,
   Rectangle,
+  type ShapeDrawProps,
   StayCanvas,
   StayText,
   type StayTools,
@@ -49,12 +50,15 @@ const DEFAULT_CSS_DISPLAY: Readonly<CssDisplayTransform> = {
 }
 
 const VIEWPORT_MIN_SCALE = 0.4
-const INITIAL_VIEWPORT_SCALE = 1.1
+const INITIAL_VIEWPORT_SCALE = 0.818
+const LIVE_PLOT_BOTTOM = 496
+const LIVE_PLOT_RIGHT = 650
+const LIVE_GRID_STEP = 100 / 3
 const INITIAL_CONTENT_POINT: Readonly<Coordinate> = {
-  x: LAB_SHAPE.x + LAB_SHAPE.width / 2,
-  // Keep the real sample just above the Shape so the truthful projections form
-  // one readable path through the physically equivalent staged planes.
-  y: LAB_SHAPE.y - 15,
+  x: LAB_SHAPE.x + 71,
+  // Keep the real sample above the Shape by enough logical space for the point,
+  // glow, and Shape edge to remain distinct after the initial viewport scale.
+  y: LAB_SHAPE.y - 28,
 }
 
 const INITIAL_PROBE: CoordinateProbe = {
@@ -65,10 +69,17 @@ const INITIAL_PROBE: CoordinateProbe = {
   surface: { left: 0, top: 0, width: 320, height: 440, scaleX: 1, scaleY: 1 },
 }
 
+function fillLiveShape(this: Rectangle, { context }: ShapeDrawProps) {
+  const gradient = context.createLinearGradient(this.x, this.y, this.x, this.y + this.height)
+  gradient.addColorStop(0, "rgb(34 77 186 / 0.72)")
+  gradient.addColorStop(1, "rgb(42 87 194 / 0.72)")
+  context.fillStyle = gradient
+  context.fillRect(this.x, this.y, this.width, this.height)
+}
+
 const spaceMoveEnd: EventProps<string> = {
   name: "moveend",
   trigger: MOUSE_EVENTS.MOUSE_UP,
-  conditionCallback: ({ e, store }) => Boolean(e.cancelled || store.get("coordinatePanning")),
   successCallback: ({ store, deleteEvent }) => {
     store.set("coordinatePanning", false)
     deleteEvent("move")
@@ -146,9 +157,17 @@ function initialContentViewport(width: number, height: number): Readonly<Viewpor
     height / safeBottom,
   ))
   return {
-    x: 0,
-    y: 0,
+    x: 59,
+    y: 19,
     scale,
+  }
+}
+
+export function coordinateContentBoundsStyle(mappingFocus: CoordinateMappingFocus) {
+  const visible = mappingFocus === "content-view"
+  return {
+    fillConfig: { color: rgba(47, 138, 104, visible ? 0.006 : 0) },
+    strokeConfig: { color: rgba(47, 138, 104, visible ? 0.18 : 0), lineWidth: 1 },
   }
 }
 
@@ -173,6 +192,10 @@ export default function CoordinatesExample() {
   const [mappingFocus, setMappingFocus] = useState<CoordinateMappingFocus>("view-client")
   const [evidenceOpen, setEvidenceOpen] = useState(false)
   const [sceneLayout, setSceneLayout] = useState(() => createCoordinateSceneLayout(1280, 720))
+
+  useLayoutEffect(() => {
+    contentBoundsRef.current?.update(coordinateContentBoundsStyle(mappingFocus))
+  }, [mappingFocus])
 
   const captureCoordinateEvidence = (
     tools: StayTools,
@@ -235,8 +258,8 @@ export default function CoordinatesExample() {
     marker.horizontal.update({ x1: -600, y1: point.y, x2: 1400, y2: point.y })
     marker.vertical.update({ x1: point.x, y1: -600, x2: point.x, y2: 1200 })
     marker.label.update({
-      x: point.x + 12,
-      y: point.y - 12,
+      x: point.x - 28,
+      y: point.y - 152,
       text: `(${formatPoint(point)})`,
     })
   }
@@ -397,44 +420,143 @@ export default function CoordinatesExample() {
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
     const grid = new Map<string, Line>()
-    for (let x = -600; x <= 1400; x += 50) {
-      grid.set(`x:${x}`, new Line({ x1: x, y1: -600, x2: x, y2: 1200, zIndex: -10, strokeConfig: { color: { r: 91, g: 111, b: 116, a: 0.22 }, lineWidth: x === 0 ? 1.4 : 0.75 } }))
+    const liveGridColor = { r: 255, g: 255, b: 255, a: 0.88 }
+    for (let x = 0; x <= LIVE_PLOT_RIGHT; x += LIVE_GRID_STEP) {
+      grid.set(`x:${x}`, new Line({ x1: x, y1: 0, x2: x, y2: LIVE_PLOT_BOTTOM, zIndex: -10, strokeConfig: { color: liveGridColor, lineWidth: x === 0 ? 1.4 : 0.75 } }))
     }
-    for (let y = -600; y <= 1200; y += 50) {
-      grid.set(`y:${y}`, new Line({ x1: -600, y1: y, x2: 1400, y2: y, zIndex: -10, strokeConfig: { color: { r: 91, g: 111, b: 116, a: 0.22 }, lineWidth: y === 0 ? 1.4 : 0.75 } }))
+    for (let y = 0; y <= LIVE_PLOT_BOTTOM; y += LIVE_GRID_STEP) {
+      grid.set(`y:${y}`, new Line({
+        x1: 0,
+        y1: y,
+        x2: LIVE_PLOT_RIGHT,
+        y2: y,
+        zIndex: -10,
+        strokeConfig: {
+          color: y === 0 ? rgba(255, 255, 255, 0.5) : liveGridColor,
+          lineWidth: y === 0 ? 1 : 0.75,
+        },
+      }))
     }
     const gridChild = tools.appendChild({ className: "coordinate-grid", shape: grid })
-    const axisColor = rgba(45, 54, 53, 0.68)
+    const homeViewport = initialContentViewport(gridChild.canvas.width, gridChild.canvas.height)
+    const visibleLeft = -homeViewport.x / homeViewport.scale
+    const visibleTop = -homeViewport.y / homeViewport.scale
+    const visibleRight = visibleLeft + gridChild.canvas.width / homeViewport.scale
+    const visibleBottom = visibleTop + gridChild.canvas.height / homeViewport.scale
+    const plotWidth = Math.min(LIVE_PLOT_RIGHT, visibleRight)
+    const plotHeight = Math.min(LIVE_PLOT_BOTTOM, visibleBottom)
+    tools.appendChild({
+      className: "coordinate-live-glass-wash",
+      shape: [
+        new Rectangle({
+          x: 0,
+          y: 0,
+          width: plotWidth,
+          height: plotHeight,
+          zIndex: -12,
+          filter: "blur(4px)",
+          fillConfig: { color: rgba(224, 228, 226, 0.34) },
+          strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
+        }),
+        new Rectangle({
+          x: -plotWidth * 0.08,
+          y: plotHeight * 0.72,
+          width: plotWidth * 0.44,
+          height: plotHeight * 0.36,
+          zIndex: -11,
+          filter: "blur(18px)",
+          fillConfig: { color: rgba(176, 184, 182, 0.12) },
+          strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
+        }),
+        new Rectangle({
+          x: -plotWidth * 0.06,
+          y: -plotHeight * 0.04,
+          width: plotWidth * 0.32,
+          height: plotHeight * 1.08,
+          zIndex: -11,
+          filter: "blur(18px)",
+          fillConfig: { color: rgba(250, 251, 250, 0.025) },
+          strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
+        }),
+        new Rectangle({
+          x: plotWidth * 0.55,
+          y: plotHeight * 0.4,
+          width: plotWidth * 0.48,
+          height: plotHeight * 0.65,
+          zIndex: -11,
+          filter: "blur(18px)",
+          fillConfig: { color: rgba(224, 227, 225, 0.18) },
+          strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
+        }),
+        new Rectangle({
+          x: plotWidth * 0.24,
+          y: plotHeight * 0.78,
+          width: plotWidth * 0.52,
+          height: plotHeight * 0.3,
+          zIndex: -11,
+          filter: "blur(14px)",
+          fillConfig: { color: rgba(250, 251, 250, 0.12) },
+          strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
+        }),
+        new Rectangle({
+          x: plotWidth * 0.68,
+          y: plotHeight * 0.72,
+          width: plotWidth * 0.4,
+          height: plotHeight * 0.36,
+          zIndex: -11,
+          filter: "blur(18px)",
+          fillConfig: { color: rgba(250, 251, 250, 0.1) },
+          strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
+        }),
+      ],
+    })
+    const axisLineColor = rgba(255, 255, 255, 0.9)
+    const axisTextColor = rgba(25, 32, 31, 0.94)
     tools.appendChild({
       className: "coordinate-live-axes",
       shape: [
-        new Line({ x1: 0, y1: 360, x2: 350, y2: 360, zIndex: -8, strokeConfig: { color: axisColor, lineWidth: 1.3 } }),
-        new Line({ x1: 350, y1: 360, x2: 340, y2: 355, zIndex: -8, strokeConfig: { color: axisColor, lineWidth: 1.3 } }),
-        new Line({ x1: 350, y1: 360, x2: 340, y2: 365, zIndex: -8, strokeConfig: { color: axisColor, lineWidth: 1.3 } }),
-        new Line({ x1: 0, y1: 0, x2: 0, y2: 360, zIndex: -8, strokeConfig: { color: axisColor, lineWidth: 1.3 } }),
-        new Line({ x1: 0, y1: 360, x2: -5, y2: 350, zIndex: -8, strokeConfig: { color: axisColor, lineWidth: 1.3 } }),
-        new Line({ x1: 0, y1: 360, x2: 5, y2: 350, zIndex: -8, strokeConfig: { color: axisColor, lineWidth: 1.3 } }),
-        new StayText({ x: 334, y: 340, text: "X", zIndex: -7, font: { size: 12, fontWeight: 700 }, fillConfig: { color: axisColor } }),
-        new StayText({ x: 10, y: 12, text: "Y ↓", zIndex: -7, font: { size: 12, fontWeight: 700 }, fillConfig: { color: axisColor } }),
-        ...([0, 100, 200, 300, 400] as const).map((value) => new StayText({
+        new Line({ x1: 0, y1: LIVE_PLOT_BOTTOM, x2: LIVE_PLOT_RIGHT, y2: LIVE_PLOT_BOTTOM, zIndex: -8, strokeConfig: { color: axisLineColor, lineWidth: 1.3 } }),
+        new Line({ x1: 0, y1: 0, x2: 0, y2: LIVE_PLOT_BOTTOM, zIndex: -8, strokeConfig: { color: axisLineColor, lineWidth: 1.3 } }),
+        new Line({ x1: LIVE_PLOT_RIGHT, y1: 0, x2: LIVE_PLOT_RIGHT, y2: LIVE_PLOT_BOTTOM, zIndex: -8, strokeConfig: { color: rgba(255, 255, 255, 1), lineWidth: 1.8 } }),
+        new StayText({
+          x: LIVE_PLOT_RIGHT + 22,
+          y: LIVE_PLOT_BOTTOM + 22,
+          text: "x",
+          zIndex: -7,
+          textAlign: "right",
+          textBaseline: "middle",
+          font: { size: 18, fontWeight: 400 },
+          fillConfig: { color: axisTextColor },
+        }),
+        new StayText({
+          x: -20,
+          y: visibleTop + 5,
+          text: "y ↓",
+          zIndex: -7,
+          textAlign: "right",
+          textBaseline: "top",
+          font: { size: 18, fontWeight: 400 },
+          fillConfig: { color: axisTextColor },
+        }),
+        ...([0, 100, 200, 300, 400, 500] as const).map((value) => new StayText({
           x: value,
-          y: 342,
+          y: LIVE_PLOT_BOTTOM + 18,
           text: String(value),
           zIndex: -7,
           textAlign: "center",
           textBaseline: "top",
-          font: { size: 9, fontWeight: 520, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" },
-          fillConfig: { color: rgba(45, 54, 53, 0.68) },
+          font: { size: 20, fontWeight: 300, fontFamily: '"Helvetica Neue", Arial, sans-serif' },
+          fillConfig: { color: rgba(25, 32, 31, 0.92) },
         })),
-        ...([0, 100, 200, 300] as const).map((value) => new StayText({
-          x: 10,
+        ...([100, 200, 300, 400] as const).map((value) => new StayText({
+          x: -26,
           y: value,
           text: String(value),
           zIndex: -7,
-          textAlign: "left",
+          textAlign: "right",
           textBaseline: "middle",
-          font: { size: 9, fontWeight: 520, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" },
-          fillConfig: { color: rgba(45, 54, 53, 0.68) },
+          font: { size: 20, fontWeight: 300, fontFamily: '"Helvetica Neue", Arial, sans-serif' },
+          fillConfig: { color: rgba(25, 32, 31, 0.92) },
         })),
       ],
     })
@@ -446,8 +568,7 @@ export default function CoordinatesExample() {
     const contentBounds = new Rectangle({
       ...LAB_CONTENT_BOUNDS,
       zIndex: -5,
-      fillConfig: { color: rgba(47, 138, 104, 0.006) },
-      strokeConfig: { color: rgba(47, 138, 104, 0.18), lineWidth: 1 },
+      ...coordinateContentBoundsStyle("view-client"),
     })
     contentBoundsRef.current = contentBounds
     tools.appendChild({
@@ -456,7 +577,15 @@ export default function CoordinatesExample() {
     })
     const contentShape = new Rectangle({
       ...LAB_SHAPE,
-      fillConfig: { color: rgba(54, 105, 221, 0.55) },
+      stateDrawFuncMap: {
+        default: {
+          commonDraw: Rectangle.prototype.commonDraw,
+          stroke: Rectangle.prototype.stroke,
+          fill: fillLiveShape,
+          afterDraw: Rectangle.prototype.afterDraw,
+        },
+      },
+      fillConfig: { color: rgba(38, 82, 190, 0.72) },
       strokeConfig: { color: rgba(89, 145, 255, 1), lineWidth: 1.8 },
     })
     contentShapeRef.current = contentShape
@@ -481,25 +610,32 @@ export default function CoordinatesExample() {
       y: 0,
       radius: 13,
       zIndex: 19,
-      fillConfig: { color: rgba(229, 109, 72, 0.1) },
-      strokeConfig: { color: rgba(229, 109, 72, 0.65), lineWidth: 1.5 },
+      fillConfig: { color: rgba(229, 109, 72, 0.07) },
+      strokeConfig: { color: rgba(229, 109, 72, 0.48), lineWidth: 1.2 },
     })
     const dot = new Circle({
       x: 0,
       y: 0,
       radius: 7.5,
       zIndex: 20,
-      fillConfig: { color: colors.orange },
-      strokeConfig: { color: colors.paper, lineWidth: 2.5 },
+      fillConfig: { color: { ...colors.orange, a: 0.92 } },
+      strokeConfig: { color: rgba(255, 255, 255, 0.96), lineWidth: 1.8 },
     })
     const markerGuideStyle = { color: rgba(229, 109, 72, 0.48), lineWidth: 1.2, dash: [6, 6] }
     const horizontal = new Line({ x1: -600, y1: 0, x2: 1400, y2: 0, zIndex: 19, strokeConfig: markerGuideStyle })
     const vertical = new Line({ x1: 0, y1: -600, x2: 0, y2: 1200, zIndex: 19, strokeConfig: markerGuideStyle })
-    const label = new StayText({ x: 12, y: -12, text: "(0, 0)", textBaseline: "bottom", font: { size: 13, fontWeight: 700 }, zIndex: 20, fillConfig: { color: colors.orange } })
+    const label = new StayText({
+      x: -28,
+      y: -152,
+      text: "(0, 0)",
+      textBaseline: "bottom",
+      font: { size: 16, fontWeight: 500 },
+      zIndex: 20,
+      fillConfig: { color: colors.orange },
+    })
     markerRef.current = { halo, dot, horizontal, vertical, label }
     tools.appendChild({ className: "coordinate-marker", shape: [halo, dot, horizontal, vertical, label] })
     const surface = surfaceFrame(gridChild.canvas.getSurfaceMetrics())
-    const homeViewport = initialContentViewport(gridChild.canvas.width, gridChild.canvas.height)
     homeViewportRef.current = homeViewport
     const currentViewport = tools.viewport.restore(homeViewport)
     const content = { ...INITIAL_CONTENT_POINT }

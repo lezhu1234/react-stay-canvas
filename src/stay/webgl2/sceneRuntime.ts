@@ -15,6 +15,7 @@ import {
   ImageMaterial,
   meshMaterialUsesLighting,
   meshMaterialIsTransparent,
+  TransparentImageMaterial,
   type MeshMaterial,
 } from "./material"
 import { ImageTexture } from "./imageTexture"
@@ -82,13 +83,24 @@ interface UnlitPipelineResources extends ClipPipelineResources {
   readonly colorLocation: WebGLUniformLocation
 }
 
-interface ImagePipelineResources extends ClipPipelineResources {
-  readonly kind: "image"
+interface ImagePipelineBaseResources extends ClipPipelineResources {
   readonly program: WebGLProgram
   readonly viewProjectionLocation: WebGLUniformLocation
   readonly modelLocation: WebGLUniformLocation
   readonly imageTextureLocation: WebGLUniformLocation
 }
+
+interface OpaqueImagePipelineResources extends ImagePipelineBaseResources {
+  readonly kind: "image"
+}
+
+interface TransparentImagePipelineResources extends ImagePipelineBaseResources {
+  readonly kind: "transparent-image"
+}
+
+type ImagePipelineResources =
+  | OpaqueImagePipelineResources
+  | TransparentImagePipelineResources
 
 interface LitPipelineBaseResources extends ClipPipelineResources {
   readonly program: WebGLProgram
@@ -317,6 +329,20 @@ ${CLIP_PLANE_FRAGMENT_INPUTS}
 void main() {
   apply_clip_plane();
   output_color = vec4(texture(u_image_texture, image_uv).rgb, 1.0);
+}
+`
+
+const TRANSPARENT_IMAGE_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+uniform sampler2D u_image_texture;
+in vec2 image_uv;
+in vec3 world_position;
+out vec4 output_color;
+${CLIP_PLANE_FRAGMENT_INPUTS}
+
+void main() {
+  apply_clip_plane();
+  output_color = texture(u_image_texture, image_uv);
 }
 `
 
@@ -799,6 +825,11 @@ function pipelineShaderSources(kind: MeshMaterial["kind"]) {
       return { vertex: UNLIT_VERTEX_SHADER, fragment: UNLIT_FRAGMENT_SHADER }
     case "image":
       return { vertex: IMAGE_VERTEX_SHADER, fragment: IMAGE_FRAGMENT_SHADER }
+    case "transparent-image":
+      return {
+        vertex: IMAGE_VERTEX_SHADER,
+        fragment: TRANSPARENT_IMAGE_FRAGMENT_SHADER,
+      }
     case "lambert":
       return { vertex: LAMBERT_VERTEX_SHADER, fragment: LAMBERT_FRAGMENT_SHADER }
     case "standard":
@@ -861,7 +892,7 @@ function createPipeline(
       throw new Error(`Unable to link WebGL2 program: ${info}`)
     }
     const clipPipeline = clipPipelineLocations(context, program)
-    if (kind === "image") {
+    if (kind === "image" || kind === "transparent-image") {
       return {
         kind,
         program,
@@ -1234,7 +1265,9 @@ function imageTexturesUsedBy(meshes: readonly Mesh[]) {
   const textures = new Set<ImageTexture>()
   meshes.forEach((mesh) => {
     const material = mesh.getMaterial()
-    if (material instanceof ImageMaterial) textures.add(material.texture)
+    if (material instanceof ImageMaterial || material instanceof TransparentImageMaterial) {
+      textures.add(material.texture)
+    }
   })
   return textures
 }
@@ -1400,7 +1433,8 @@ export class WebGL2SceneRuntime {
         context.useProgram(pipeline.program)
         activePipeline = pipeline
         this.#applyClipPlaneUniforms(pipeline, clipPlane)
-        if (pipeline.kind === "unlit" || pipeline.kind === "image") {
+        if (pipeline.kind === "unlit" || pipeline.kind === "image"
+            || pipeline.kind === "transparent-image") {
           context.uniformMatrix4fv(
             pipeline.viewProjectionLocation,
             false,
@@ -1437,7 +1471,8 @@ export class WebGL2SceneRuntime {
       uploadChangedGeometry(context, mesh, resources)
       context.bindVertexArray(resources.vertexArray)
       const model = mesh.getModelMatrix()
-      if (pipeline.kind === "unlit" || pipeline.kind === "image") {
+      if (pipeline.kind === "unlit" || pipeline.kind === "image"
+          || pipeline.kind === "transparent-image") {
         context.uniformMatrix4fv(pipeline.modelLocation, false, model)
       } else {
         context.uniformMatrix4fv(pipeline.modelLocation, false, model)
@@ -1451,13 +1486,21 @@ export class WebGL2SceneRuntime {
           shadow && mesh.receiveShadow ? 1 : 0,
         )
       }
-      if (pipeline.kind !== "image" && material.kind !== "image") {
+      if (pipeline.kind !== "image" && pipeline.kind !== "transparent-image"
+          && material.kind !== "image" && material.kind !== "transparent-image") {
         context.uniform4fv(
           pipeline.colorLocation,
           linearizeSrgbColorWithAlpha(material.color),
         )
       }
       if (pipeline.kind === "image" && material instanceof ImageMaterial) {
+        const image = this.#imageTextureResources(material.texture)
+        context.uniform1i(pipeline.imageTextureLocation, 0)
+        context.activeTexture(context.TEXTURE0)
+        context.bindTexture(context.TEXTURE_2D, image.texture)
+      }
+      if (pipeline.kind === "transparent-image"
+          && material instanceof TransparentImageMaterial) {
         const image = this.#imageTextureResources(material.texture)
         context.uniform1i(pipeline.imageTextureLocation, 0)
         context.activeTexture(context.TEXTURE0)
@@ -1617,7 +1660,7 @@ export class WebGL2SceneRuntime {
   ): ShadowFrame | undefined {
     if (!selected) return undefined
     const opaqueCasters = meshes.filter((mesh) =>
-      mesh.castShadow && mesh.getMaterial().kind !== "glass")
+      mesh.castShadow && !meshMaterialIsTransparent(mesh.getMaterial()))
     const transmissiveCasters = meshes.filter((mesh) =>
       mesh.castShadow && mesh.getMaterial().kind === "glass")
     const hasLitReceiver = meshes.some((mesh) =>

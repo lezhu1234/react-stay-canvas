@@ -16,14 +16,15 @@ import type {
   LineSegment,
 } from "./coordinateLabModel"
 
-export const PLANE_GRID_COLUMNS = 6
-export const PLANE_GRID_ROWS = 5
+export const PLANE_GRID_COLUMNS = 20
+export const PLANE_GRID_ROWS = 10
 
 const CAMERA_FIELD_OF_VIEW = Math.PI / 3.4
 const CAMERA_POSITION_X = 4.2
+const CAMERA_NEAR = 0.1
 const COMPACT_GROUND_HEIGHT = -3
 const EXPANDED_GROUND_HEIGHT = -2
-const EXPANDED_LAYOUT_SCALE = 0.8
+const EXPANDED_LAYOUT_SCALE = 0.87
 const COMPACT_PANEL_HEIGHT_TRIM = 0.85
 const SOURCE_FIT_MIN_SCALE = 0.28
 const SHORT_SURFACE_REFERENCE_HEIGHT = 420
@@ -32,14 +33,26 @@ const SOURCE_FIT_REFERENCE_HEIGHT = 560
 const SOURCE_FIT_REFERENCE_WIDTH = 1200
 const BEVEL_FACE_CORNER_RATIO = 0.28
 const SOURCE_GROUP_CENTER_FRACTION = 0.3
-const STAGE_FLOOR_DROP = 0.45
-const STAGE_PANEL_WORLD_WIDTH = 4
-const STAGE_PANEL_WORLD_HEIGHT = 4
+const STAGE_FLOOR_DROP = 0.65
+const STAGE_PANEL_WORLD_WIDTH = 4.15
+const STAGE_PANEL_WORLD_HEIGHT = 4.15
 const PANEL_LAYOUT = [
-  { centerFraction: 0.185, stageCenterFraction: 0.137, stageScale: 1, compactDepth: 7.5, depth: 7.25, stageDepth: 6.2, worldWidth: 4.4, stageWorldWidth: STAGE_PANEL_WORLD_WIDTH, worldHeight: 6.2, stageWorldHeight: STAGE_PANEL_WORLD_HEIGHT, yaw: 0.18, stageYaw: 0.14, verticalOffset: 0 },
-  { centerFraction: 0.43, stageCenterFraction: 0.397, stageScale: 1, compactDepth: 9, depth: 9.2, stageDepth: 7.8, worldWidth: 4.4, stageWorldWidth: STAGE_PANEL_WORLD_WIDTH, worldHeight: 6.2, stageWorldHeight: STAGE_PANEL_WORLD_HEIGHT, yaw: 0.28, stageYaw: 0.3, verticalOffset: 0 },
-  { centerFraction: 0.614, stageCenterFraction: 0.614, stageScale: 1, compactDepth: 10.7, depth: 11.3, stageDepth: 8.7, worldWidth: 4.4, stageWorldWidth: STAGE_PANEL_WORLD_WIDTH, worldHeight: 6.2, stageWorldHeight: STAGE_PANEL_WORLD_HEIGHT, yaw: 0.38, stageYaw: 0.36, verticalOffset: 0 },
+  { centerFraction: 0.185, stageCenterFraction: 0.1308, stageScale: 1, compactDepth: 7.5, depth: 7.25, stageDepth: 6.99, worldWidth: 4.4, stageWorldWidth: STAGE_PANEL_WORLD_WIDTH, worldHeight: 6.2, stageWorldHeight: STAGE_PANEL_WORLD_HEIGHT, yaw: 0.18, stageYaw: 0.58, verticalOffset: 0 },
+  { centerFraction: 0.43, stageCenterFraction: 0.3733, stageScale: 1, compactDepth: 9, depth: 9.2, stageDepth: 7.82, worldWidth: 4.4, stageWorldWidth: STAGE_PANEL_WORLD_WIDTH, worldHeight: 6.2, stageWorldHeight: STAGE_PANEL_WORLD_HEIGHT, yaw: 0.28, stageYaw: 0.7, verticalOffset: 0 },
+  { centerFraction: 0.614, stageCenterFraction: 0.5593, stageScale: 1, compactDepth: 10.7, depth: 11.3, stageDepth: 8.59, worldWidth: 4.4, stageWorldWidth: STAGE_PANEL_WORLD_WIDTH, worldHeight: 6.2, stageWorldHeight: STAGE_PANEL_WORLD_HEIGHT, yaw: 0.38, stageYaw: 0.46, verticalOffset: 0 },
 ] as const
+
+const PLANE_TITLE_X_FRACTION: Readonly<Record<PlaneName, number>> = {
+  client: 0.36,
+  view: 0.23,
+  content: 0.27,
+}
+
+const PLANE_TITLE_Y_OFFSET: Readonly<Record<PlaneName, number>> = {
+  client: 7,
+  view: 0,
+  content: -2,
+}
 
 export type PlaneName = CoordinatePlaneName
 export type QuadPoints = [Coordinate, Coordinate, Coordinate, Coordinate]
@@ -99,6 +112,10 @@ export const COORDINATE_CONSOLE_CONTROL_NAMES = [
 
 export type CoordinateConsoleControlName = typeof COORDINATE_CONSOLE_CONTROL_NAMES[number]
 
+export function coordinateConsoleIsCompact(frame: Readonly<Rect>) {
+  return frame.height < 110 || frame.width < 900
+}
+
 function progressBetween(value: number, start: number, end: number) {
   return Math.min(1, Math.max(0, (value - start) / (end - start)))
 }
@@ -116,20 +133,20 @@ export function createCoordinateSceneLayout(
   const mediumHeight = height <= 840
   const narrow = width <= 1040
   const consoleInset = width <= 1100 ? 36 : 90
-  const expandedConsole = height >= 960
-  const consoleHeight = short ? 82 : mediumHeight ? 144 : expandedConsole ? 228 : 158
-  const consoleBottom = short ? 12 : mediumHeight ? 12 : expandedConsole ? 52 : 118
+  const consoleRightInset = width >= 1600 ? 110 : consoleInset
+  const consoleHeight = short ? 82 : mediumHeight ? 144 : 162
+  const consoleBottom = short ? 12 : mediumHeight ? 12 : 57
   const consoleY = height - consoleHeight - consoleBottom
   const outputWidth = narrow
     ? width >= 320 ? Math.min(300, width - 48) : 300
-    : Math.round(Math.min(400, width * 0.3))
-  const outputInset = width >= 1390 ? 70 : 24
+    : Math.round(Math.min(560, width * 0.335))
+  const outputInset = width >= 1390 ? 0 : 24
   const outputX = width - outputWidth - outputInset
   const outputY = short
     ? 30
     : mediumHeight
       ? 96
-      : 166 + Math.min(18, Math.max(8, height * 0.018))
+      : Math.round(Math.min(166, height * 0.166))
   const preferredOutputHeight = short
     ? 443
     : mediumHeight
@@ -159,7 +176,7 @@ export function createCoordinateSceneLayout(
     console: {
       x: consoleInset,
       y: consoleY,
-      width: width - consoleInset * 2,
+      width: width - consoleInset - consoleRightInset,
       height: consoleHeight,
     },
     outputHeaderHeight: short ? 62 : mediumHeight ? 76 : 70,
@@ -175,7 +192,7 @@ export function createCoordinateSceneLayout(
 export function coordinateConsoleControlRects(
   frame: Readonly<Rect>,
 ): Record<CoordinateConsoleControlName, Rect> {
-  const compact = frame.height < 110
+  const compact = coordinateConsoleIsCompact(frame)
   const hidden = { x: 0, y: 0, width: 0, height: 0 }
   if (compact) {
     const actionInset = 14
@@ -199,35 +216,38 @@ export function coordinateConsoleControlRects(
       evidence: action(4),
     }
   }
-  const spacious = frame.height >= 150
-  const tall = frame.height >= 190
-  const leftStart = frame.x + 18
-  const leftEnd = frame.x + frame.width * 0.3
-  const railStart = leftStart + 74
-  const railEnd = leftEnd - 54
-  const firstRailY = frame.y + (tall ? 110 : spacious ? 68 : 49)
-  const secondRailY = frame.y + (tall ? 174 : spacious ? 112 : 73)
-  const viewportLeft = frame.x + frame.width * 0.735
-  const actionSize = tall || spacious ? 44 : 40
-  const actionGap = spacious ? 28 : 12
-  const actionY = frame.y + (tall ? 92 : spacious ? 66 : 40)
-  const actionRect = (index: number): Rect => ({
-    x: viewportLeft + (actionSize + actionGap) * index,
-    y: actionY,
-    width: actionSize,
-    height: actionSize,
+  const railY = frame.y + frame.height * 0.63
+  const cssRail = {
+    x: frame.x + frame.width * 0.048,
+    y: railY - 12,
+    width: frame.width * 0.154,
+    height: 24,
+  }
+  const viewportRail = {
+    x: frame.x + frame.width * 0.258,
+    y: railY - 12,
+    width: frame.width * 0.171,
+    height: 24,
+  }
+  const buttonSize = Math.min(62, frame.height - 72)
+  const buttonY = frame.y + (frame.height - buttonSize) * 0.41
+  const button = (centerRatio: number): Rect => ({
+    x: frame.x + frame.width * centerRatio - buttonSize / 2,
+    y: buttonY,
+    width: buttonSize,
+    height: buttonSize,
   })
   return {
-    "css-reset": { x: leftEnd - 52, y: frame.y + (tall ? 18 : 8), width: 56, height: 28 },
-    "scale-x": { x: railStart - 8, y: firstRailY - 12, width: railEnd - railStart + 16, height: 24 },
+    "css-reset": button(0.86),
+    "scale-x": cssRail,
     "scale-y": hidden,
-    "translate-x": { x: railStart - 8, y: secondRailY - 12, width: railEnd - railStart + 16, height: 24 },
+    "translate-x": viewportRail,
     "translate-y": hidden,
-    "zoom-in": actionRect(0),
-    "zoom-out": actionRect(1),
+    "zoom-in": hidden,
+    "zoom-out": hidden,
     pan: hidden,
-    "viewport-reset": actionRect(2),
-    evidence: actionRect(3),
+    "viewport-reset": button(0.933),
+    evidence: hidden,
   }
 }
 
@@ -276,15 +296,15 @@ function sourceSlotScale(width: number) {
 
 export const planePalette = {
   client: {
-    fill: rgba(255, 252, 250, 0.2),
-    stroke: rgba(45, 87, 96, 1),
+    fill: rgba(255, 252, 250, 0.12),
+    stroke: rgba(24, 22, 21, 1),
   },
   view: {
-    fill: rgba(248, 252, 255, 0.2),
+    fill: rgba(248, 252, 255, 0.16),
     stroke: rgba(48, 91, 184, 1),
   },
   content: {
-    fill: rgba(248, 255, 250, 0.2),
+    fill: rgba(248, 255, 250, 0.24),
     stroke: rgba(39, 119, 76, 1),
   },
 } as const
@@ -294,9 +314,46 @@ export function createCoordinateCamera() {
     position: [CAMERA_POSITION_X, 0, 0],
     target: [CAMERA_POSITION_X, 0, -1],
     verticalFieldOfView: CAMERA_FIELD_OF_VIEW,
-    near: 0.1,
+    near: CAMERA_NEAR,
     far: 20,
   })
+}
+
+export function projectCoordinateWorldPoint(
+  viewWidth: number,
+  viewHeight: number,
+  point: Readonly<Vector3>,
+): Coordinate {
+  if (viewWidth <= 0 || viewHeight <= 0 || point[2] >= -CAMERA_NEAR) {
+    throw new RangeError("world point must project inside the coordinate camera")
+  }
+  const depth = -point[2]
+  const halfFieldHeight = Math.tan(CAMERA_FIELD_OF_VIEW / 2)
+  const aspect = viewWidth / viewHeight
+  return {
+    x: ((point[0] - CAMERA_POSITION_X) / (depth * halfFieldHeight * aspect) + 1) * viewWidth / 2,
+    y: (1 - point[1] / (depth * halfFieldHeight)) * viewHeight / 2,
+  }
+}
+
+/** Inverts the coordinate camera projection at an explicit positive depth. */
+export function screenCoordinateToWorldAtDepth(
+  viewWidth: number,
+  viewHeight: number,
+  point: Readonly<Coordinate>,
+  depth: number,
+): Vector3 {
+  if (viewWidth <= 0 || viewHeight <= 0 || !Number.isFinite(depth)
+      || depth <= CAMERA_NEAR || depth >= 20) {
+    throw new RangeError("screen point depth must remain inside the coordinate camera")
+  }
+  const halfHeight = depth * Math.tan(CAMERA_FIELD_OF_VIEW / 2)
+  const halfWidth = halfHeight * viewWidth / viewHeight
+  return [
+    CAMERA_POSITION_X + (point.x / viewWidth * 2 - 1) * halfWidth,
+    (1 - point.y / viewHeight * 2) * halfHeight,
+    -depth,
+  ]
 }
 
 /**
@@ -316,18 +373,26 @@ export function screenFacingWorldQuad(
   if (!Number.isFinite(depth) || depth <= 0.1 || depth >= 20) {
     throw new RangeError("screen-facing quad depth must remain inside the coordinate camera")
   }
-  const halfHeight = depth * Math.tan(CAMERA_FIELD_OF_VIEW / 2)
-  const halfWidth = halfHeight * viewWidth / viewHeight
-  const worldPoint = (x: number, y: number): Vector3 => [
-    CAMERA_POSITION_X + (x / viewWidth * 2 - 1) * halfWidth,
-    (1 - y / viewHeight * 2) * halfHeight,
-    -depth,
-  ]
   return [
-    worldPoint(frame.x, frame.y),
-    worldPoint(frame.x + frame.width, frame.y),
-    worldPoint(frame.x + frame.width, frame.y + frame.height),
-    worldPoint(frame.x, frame.y + frame.height),
+    screenCoordinateToWorldAtDepth(viewWidth, viewHeight, frame, depth),
+    screenCoordinateToWorldAtDepth(
+      viewWidth,
+      viewHeight,
+      { x: frame.x + frame.width, y: frame.y },
+      depth,
+    ),
+    screenCoordinateToWorldAtDepth(
+      viewWidth,
+      viewHeight,
+      { x: frame.x + frame.width, y: frame.y + frame.height },
+      depth,
+    ),
+    screenCoordinateToWorldAtDepth(
+      viewWidth,
+      viewHeight,
+      { x: frame.x, y: frame.y + frame.height },
+      depth,
+    ),
   ]
 }
 
@@ -362,14 +427,6 @@ export function createPlaneDefinitions(
     COMPACT_GROUND_HEIGHT
     + (EXPANDED_GROUND_HEIGHT - COMPACT_GROUND_HEIGHT) * stageExpansion
   ) * groundSceneScale
-
-  const projectWorldPoint = (point: Vector3): Coordinate => {
-    const depth = -point[2]
-    return {
-      x: ((point[0] - CAMERA_POSITION_X) / (depth * halfFieldHeight * aspect) + 1) * width / 2,
-      y: (1 - point[1] / (depth * halfFieldHeight)) * height / 2,
-    }
-  }
 
   const panelWorldQuad = ({
     centerFraction,
@@ -433,12 +490,20 @@ export function createPlaneDefinitions(
   const definition = (name: PlaneName, index: number): PlaneDefinition => {
     const layout = PANEL_LAYOUT[index]
     const worldQuad = panelWorldQuad(layout)
-    const [topLeft, topRight, bottomRight, bottomLeft] = worldQuad.map(projectWorldPoint) as QuadPoints
+    const [topLeft, topRight, bottomRight, bottomLeft] = worldQuad.map(
+      (point) => projectCoordinateWorldPoint(width, height, point),
+    ) as QuadPoints
+    const projectedHeight = Math.max(
+      Math.hypot(bottomLeft.x - topLeft.x, bottomLeft.y - topLeft.y),
+      Math.hypot(bottomRight.x - topRight.x, bottomRight.y - topRight.y),
+    )
     return {
       width: domain.width,
       height: domain.height,
-      labelX: (topLeft.x + topRight.x) / 2,
-      labelY: Math.min(topLeft.y, topRight.y) + Math.max(18, height * 0.04),
+      labelX: topLeft.x + (topRight.x - topLeft.x) * PLANE_TITLE_X_FRACTION[name],
+      labelY: Math.min(topLeft.y, topRight.y)
+        + Math.max(28, projectedHeight * 0.157)
+        + PLANE_TITLE_Y_OFFSET[name],
       placement: projectivePlacementFromQuad(
         { x: 0, y: 0, width: domain.width, height: domain.height },
         { topLeft, topRight, bottomRight, bottomLeft },
@@ -545,11 +610,11 @@ export function planePresentationMetrics(
   )
 
   return {
-    detailSize: Math.max(9, Math.min(16, projectedWidth * 0.045)),
+    detailSize: Math.max(9.5, Math.min(14, projectedWidth * 0.048)),
     dotRadius: Math.max(4, Math.min(7, projectedWidth * 0.018)),
     projectedWidth,
-    rangeSize: Math.max(8, Math.min(17, projectedWidth * 0.05)),
-    titleSize: Math.max(10, Math.min(24, projectedWidth * 0.065)),
+    rangeSize: Math.max(10, Math.min(17, projectedWidth * 0.05)),
+    titleSize: Math.max(22, Math.min(31, 18 + projectedWidth * 0.035)),
     valueOffset: Math.max(6, Math.min(10, projectedWidth * 0.025)),
   }
 }
@@ -722,6 +787,65 @@ export function createPlaneBevelFaceProfile(
   }
 }
 
+export function planeBevelFacePerimeter(
+  face: Readonly<PlaneBevelFaceProfile>,
+  segments: number,
+) {
+  return roundedRectPoints(face.rect, face.radiusX, face.radiusY, segments)
+}
+
+/** Builds one UV-mapped rounded side shell from the physical front to back face. */
+export function planeVolumeProfileGeometry(
+  plane: PlaneDefinition,
+  basis: PlaneBasis,
+  thickness: number,
+  bevelRadius: number,
+  bevelSegments: number,
+): MeshGeometryInput {
+  if (!Number.isFinite(thickness) || thickness <= 0) {
+    throw new RangeError("profiled plane volume thickness must be positive")
+  }
+  const face = createPlaneBevelFaceProfile(plane, basis, bevelRadius)
+  const horizontalLength = Math.hypot(...basis.horizontal)
+  const verticalLength = Math.hypot(...basis.vertical)
+  const backRadiusX = bevelRadius / horizontalLength * plane.width
+  const backRadiusY = bevelRadius / verticalLength * plane.height
+  const front = roundedRectPoints(
+    face.rect,
+    face.radiusX,
+    face.radiusY,
+    bevelSegments,
+  ).map((point) => planeWorldPoint(plane, basis, point, thickness / 2))
+  const back = roundedRectPoints(
+    { x: 0, y: 0, width: plane.width, height: plane.height },
+    backRadiusX,
+    backRadiusY,
+    bevelSegments,
+  ).map((point) => planeWorldPoint(plane, basis, point, -thickness / 2))
+  const positions: number[] = []
+  const uvs: number[] = []
+  const indices: number[] = []
+  for (let index = 0; index <= front.length; index += 1) {
+    const sourceIndex = index % front.length
+    positions.push(...front[sourceIndex], ...back[sourceIndex])
+    const longitudinal = index === front.length
+      ? 1
+      : (index + 0.5) / front.length
+    uvs.push(0, longitudinal, 1, longitudinal)
+    if (index === front.length) continue
+    const next = index + 1
+    indices.push(
+      index * 2,
+      next * 2,
+      next * 2 + 1,
+      index * 2,
+      next * 2 + 1,
+      index * 2 + 1,
+    )
+  }
+  return { positions, uvs, indices }
+}
+
 export function roundedRectMeshGeometry(
   plane: PlaneDefinition,
   basis: PlaneBasis,
@@ -858,10 +982,19 @@ export function rectMeshGeometry(
   rect: Readonly<Rect> | undefined,
   depthOffset: number,
 ): MeshGeometryInput {
-  if (!rect || rect.width <= 0 || rect.height <= 0) return emptyMeshGeometry()
+  if (!rect || rect.width <= 0 || rect.height <= 0) {
+    return {
+      ...emptyMeshGeometry(),
+      uvs: [0, 0, 0, 0, 0, 0],
+    }
+  }
   const builder: GeometryBuilder = { positions: [], normals: [], indices: [] }
   appendPlaneQuad(builder, plane, basis, pointsForRect(rect), depthOffset)
-  return builder
+  return {
+    ...builder,
+    // appendPlaneQuad emits top-left, bottom-left, bottom-right, top-right.
+    uvs: [0, 0, 0, 1, 1, 1, 1, 0],
+  }
 }
 
 export function lineMeshGeometry(

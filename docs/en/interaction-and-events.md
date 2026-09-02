@@ -182,6 +182,45 @@ const dragListener: ListenerProps = {
 
 The outer `callback` runs for every accepted action. Only the returned function whose key matches the current `e.name` then runs, and its returned object is merged into that Listener's `composeStore`.
 
+### Typed callback stores
+
+The runtime always owns native Maps, but applications can describe their keys without adding another state layer:
+
+```tsx
+import type { ContentPoint, ListenerProps } from "react-stay-canvas"
+
+interface EditorStore {
+  selectedId: string
+  selection: Set<string>
+}
+
+interface SelectStateStore {
+  dragOrigin: ContentPoint
+}
+
+type SelectListener = {
+  name: "select-item"
+  payload: { id: string }
+}
+
+const selectListener: ListenerProps<
+  SelectListener,
+  "drag",
+  { started: boolean },
+  EditorStore,
+  SelectStateStore
+> = {
+  name: "select-item",
+  event: "drag",
+  callback: ({ payload, store, stateStore }) => {
+    store.set("selectedId", payload.id)
+    stateStore.set("dragOrigin", { x: 20, y: 30 } as ContentPoint)
+  },
+}
+```
+
+Use the same final two schemas in `EventProps<EventName, StoreSchema, StateStoreSchema>` and `StayCanvasProps<EventName, HistorySnapshot, StoreSchema, StateStoreSchema>` when a complete Canvas definition should share them. `composeStore` remains the third `ListenerProps` generic because every Listener owns a different composition shape. These generics only constrain access; `store` starts empty, and `stateStore` still clears on every `switchState()`.
+
 ## `originEvent` and `ActionEvent`
 
 A Listener callback receives two event objects:

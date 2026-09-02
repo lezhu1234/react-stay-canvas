@@ -35,7 +35,12 @@ function resolveLayerConfigs(
 }
 
 const StayCanvas = forwardRef(
-  <EventName extends string, HistorySnapshot>(
+  <
+    EventName extends string,
+    HistorySnapshot,
+    StoreSchema extends object,
+    StateStoreSchema extends object,
+  >(
     {
       width = 500,
       height = 500,
@@ -49,7 +54,12 @@ const StayCanvas = forwardRef(
       focusOnInit = true,
       viewport,
       historyAdapter,
-    }: StayCanvasProps<EventName, HistorySnapshot>,
+    }: StayCanvasProps<
+      EventName,
+      HistorySnapshot,
+      StoreSchema,
+      StateStoreSchema
+    >,
     ref: Ref<StayCanvasRefType>
   ) => {
     const initialized = useRef(false)
@@ -217,8 +227,18 @@ const StayCanvas = forwardRef(
       </>
     )
   }
-) as <EventName extends string = string, HistorySnapshot = unknown>(
-  props: StayCanvasProps<EventName, HistorySnapshot> & React.RefAttributes<StayCanvasRefType>
+) as <
+  EventName extends string = string,
+  HistorySnapshot = unknown,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
+>(
+  props: StayCanvasProps<
+    EventName,
+    HistorySnapshot,
+    StoreSchema,
+    StateStoreSchema
+  > & React.RefAttributes<StayCanvasRefType>
 ) => React.ReactElement | null
 
 export default StayCanvas

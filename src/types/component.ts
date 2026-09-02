@@ -3,6 +3,7 @@ import type { CanvasLayerConfig } from "./canvas"
 import type { Dict } from "./common"
 import type {
   EventProps,
+  ListenerNamePayloadPair,
   ListenerProps,
   PredefinedEventListenerProps,
   PredefinedKeyEventName,
@@ -27,17 +28,40 @@ export type StayCanvasRefType = {
 export interface StayCanvasProps<
   EventName extends string = string,
   HistorySnapshot = unknown,
+  StoreSchema extends object = never,
+  StateStoreSchema extends object = never,
 > {
   className?: string
   width?: number
   height?: number
   layers?: number | CanvasLayerConfig[]
-  eventList?: EventProps<EventName>[]
+  eventList?: EventProps<EventName, StoreSchema, StateStoreSchema>[]
   listenerList?: (
-    | ListenerProps
-    | PredefinedEventListenerProps<PredefinedWheelEventName>
-    | PredefinedEventListenerProps<PredefinedMouseEventName>
-    | PredefinedEventListenerProps<PredefinedKeyEventName>
+    | ListenerProps<
+        ListenerNamePayloadPair,
+        EventName,
+        any,
+        StoreSchema,
+        StateStoreSchema
+      >
+    | PredefinedEventListenerProps<
+        PredefinedWheelEventName,
+        any,
+        StoreSchema,
+        StateStoreSchema
+      >
+    | PredefinedEventListenerProps<
+        PredefinedMouseEventName,
+        any,
+        StoreSchema,
+        StateStoreSchema
+      >
+    | PredefinedEventListenerProps<
+        PredefinedKeyEventName,
+        any,
+        StoreSchema,
+        StateStoreSchema
+      >
   )[]
   passive?: boolean
   mounted?: (tools: StayTools) => void

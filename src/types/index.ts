@@ -7,6 +7,7 @@ export type {
   NumberInRangeZeroOne,
   NumericString,
   Positive,
+  StayStore,
   storeType,
   ZeroToOne,
 } from "./common"

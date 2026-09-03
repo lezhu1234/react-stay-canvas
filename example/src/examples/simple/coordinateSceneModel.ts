@@ -794,58 +794,6 @@ export function planeBevelFacePerimeter(
   return roundedRectPoints(face.rect, face.radiusX, face.radiusY, segments)
 }
 
-/** Builds one UV-mapped rounded side shell from the physical front to back face. */
-export function planeVolumeProfileGeometry(
-  plane: PlaneDefinition,
-  basis: PlaneBasis,
-  thickness: number,
-  bevelRadius: number,
-  bevelSegments: number,
-): MeshGeometryInput {
-  if (!Number.isFinite(thickness) || thickness <= 0) {
-    throw new RangeError("profiled plane volume thickness must be positive")
-  }
-  const face = createPlaneBevelFaceProfile(plane, basis, bevelRadius)
-  const horizontalLength = Math.hypot(...basis.horizontal)
-  const verticalLength = Math.hypot(...basis.vertical)
-  const backRadiusX = bevelRadius / horizontalLength * plane.width
-  const backRadiusY = bevelRadius / verticalLength * plane.height
-  const front = roundedRectPoints(
-    face.rect,
-    face.radiusX,
-    face.radiusY,
-    bevelSegments,
-  ).map((point) => planeWorldPoint(plane, basis, point, thickness / 2))
-  const back = roundedRectPoints(
-    { x: 0, y: 0, width: plane.width, height: plane.height },
-    backRadiusX,
-    backRadiusY,
-    bevelSegments,
-  ).map((point) => planeWorldPoint(plane, basis, point, -thickness / 2))
-  const positions: number[] = []
-  const uvs: number[] = []
-  const indices: number[] = []
-  for (let index = 0; index <= front.length; index += 1) {
-    const sourceIndex = index % front.length
-    positions.push(...front[sourceIndex], ...back[sourceIndex])
-    const longitudinal = index === front.length
-      ? 1
-      : (index + 0.5) / front.length
-    uvs.push(0, longitudinal, 1, longitudinal)
-    if (index === front.length) continue
-    const next = index + 1
-    indices.push(
-      index * 2,
-      next * 2,
-      next * 2 + 1,
-      index * 2,
-      next * 2 + 1,
-      index * 2 + 1,
-    )
-  }
-  return { positions, uvs, indices }
-}
-
 export function roundedRectMeshGeometry(
   plane: PlaneDefinition,
   basis: PlaneBasis,

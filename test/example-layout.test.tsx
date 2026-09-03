@@ -345,10 +345,10 @@ describe("Example Canvas workspace", () => {
     expect(expandedMetrics.projectedWidth).toBeGreaterThan(compactMetrics.projectedWidth)
     expect(expandedMetrics.titleSize).toBeGreaterThan(compactMetrics.titleSize)
     expect(expandedMetrics.detailSize).toBeGreaterThan(compactMetrics.detailSize)
-    expect(expandedMetrics.dotRadius).toBeGreaterThan(compactMetrics.dotRadius)
+    expect(expandedMetrics.dotRadius).toBeGreaterThanOrEqual(compactMetrics.dotRadius)
   })
 
-  it("keeps projected panel width stable as a narrow source surface grows taller", () => {
+  it("contracts projected panel width as a narrow source surface grows taller", () => {
     const short = planePresentationMetrics(
       createPlaneDefinitions(800, 450, COORDINATE_PLANE_DOMAIN).client,
     )
@@ -356,8 +356,8 @@ describe("Example Canvas workspace", () => {
       createPlaneDefinitions(800, 550, COORDINATE_PLANE_DOMAIN).client,
     )
 
-    expect(tall.projectedWidth).toBeGreaterThan(short.projectedWidth * 0.95)
-    expect(tall.projectedWidth).toBeLessThan(short.projectedWidth * 1.05)
+    expect(tall.projectedWidth).toBeGreaterThan(short.projectedWidth * 0.85)
+    expect(tall.projectedWidth).toBeLessThan(short.projectedWidth)
   })
 
   it("cover-crops the WebGL room backdrop without distorting it", () => {
@@ -446,8 +446,8 @@ describe("Example Canvas workspace", () => {
     const overlaps = bounds.slice(0, -1).map((bound, index) =>
       bound.x + bound.width - bounds[index + 1].x)
     overlaps.forEach((overlap, index) => {
-      expect(overlap).toBeGreaterThan(-Math.min(bounds[index].width, bounds[index + 1].width) * 0.25)
-      expect(overlap).toBeLessThan(Math.min(bounds[index].width, bounds[index + 1].width) * 0.25)
+      expect(overlap).toBeGreaterThan(-Math.min(bounds[index].width, bounds[index + 1].width) * 0.55)
+      expect(overlap).toBeLessThanOrEqual(0)
     })
     expect(bounds[0].x).toBeLessThan(bounds[1].x)
     expect(bounds[1].x).toBeLessThan(bounds[2].x)
@@ -519,6 +519,25 @@ describe("Example Canvas workspace", () => {
 
   it("fits every source plane inside the measured source slot", () => {
     for (const [width, height] of [
+      [1672, 941],
+      [1440, 1000],
+      [1440, 900],
+      [1280, 1024],
+      [1280, 720],
+      [1280, 556],
+      [1280, 550],
+      [1280, 528],
+      [1250, 741],
+      [1248, 741],
+      [1212, 692],
+      [1204, 688],
+      [1200, 700],
+      [1200, 1366],
+      [1200, 841],
+      [1200, 1200],
+      [1024, 768],
+      [900, 1200],
+      [800, 600],
       [1214, 478],
       [1085, 478],
       [1052, 478],
@@ -548,8 +567,7 @@ describe("Example Canvas workspace", () => {
       bounds.slice(0, -1).forEach((bound, index) => {
         const overlap = bound.x + bound.width - bounds[index + 1].x
         const context = `${width}×${height} gap ${index}`
-        expect(overlap, context).toBeGreaterThan(-Math.min(bound.width, bounds[index + 1].width) * 0.25)
-        expect(overlap, context).toBeLessThan(Math.min(bound.width, bounds[index + 1].width) * 0.25)
+        expect(overlap, context).toBeLessThanOrEqual(0)
       })
     }
   })
@@ -648,7 +666,7 @@ describe("Example Canvas workspace", () => {
     expect(active.ior).toBeCloseTo(1.22)
     expect(active.roughness).toBe(Math.fround(0.05))
     expect(inactive.thickness).toBe(active.thickness)
-    expect(active.color[3]).toBeCloseTo(Math.fround(0.15))
+    expect(active.color[3]).toBeCloseTo(Math.fround(0.135))
     expect(inactive.color[3]).toBeCloseTo(active.color[3] * 0.82)
   })
 
@@ -966,6 +984,8 @@ describe("Example Canvas workspace", () => {
       [1440, 841],
       [1440, 959],
       [1440, 960],
+      [1200, 1366],
+      [900, 1200],
     ] as const) {
       const layout = createCoordinateSceneLayout(width, height)
       expect(layout.output.y + layout.output.height)

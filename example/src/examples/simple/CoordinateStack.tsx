@@ -152,18 +152,18 @@ type CoordinateSignalStyle = Readonly<{
 }>
 const COORDINATE_SIGNAL_STYLE = {
   glow: {
-    color: rgba(255, 170, 150, 0.65),
+    color: rgba(245, 139, 112, 0.42),
     layer: OVERLAY_LAYER,
-    lineWidth: 4,
+    lineWidth: 2.4,
     zIndex: 17,
-    shadowBlur: 10,
-    shadowColor: "rgb(255 110 75 / 0.65)",
-    shadowPasses: 2,
+    shadowBlur: 6,
+    shadowColor: "rgb(235 105 74 / 0.4)",
+    shadowPasses: 1,
   },
   highlight: {
-    color: rgba(255, 250, 247, 1),
+    color: rgba(255, 248, 244, 0.92),
     layer: OVERLAY_LAYER,
-    lineWidth: 1.6,
+    lineWidth: 1.1,
     zIndex: 18,
   },
 } as const satisfies Readonly<Record<"glow" | "highlight", CoordinateSignalStyle>>
@@ -179,9 +179,9 @@ const SOURCE_OPTICAL_BEVEL_RADIUS: Readonly<Record<PlaneName, number>> = {
   content: 0.065,
 }
 const PLANE_FACE_ALPHA: Readonly<Record<PlaneName, number>> = {
-  client: 0.15,
-  view: 0.15,
-  content: 0.15,
+  client: 0.13,
+  view: 0.135,
+  content: 0.14,
 }
 const PLANE_TITLE_SCALE_X = 0.82
 const PLANE_PLOT_TOP = 82
@@ -212,23 +212,23 @@ const PLANE_GLASS_ATTENUATION: Readonly<Record<PlaneName, {
   content: { color: [0.92, 1, 0.95], distance: 2 },
 }
 const PLANE_BEVEL_COLOR: Readonly<Record<PlaneName, ReturnType<typeof rgba>>> = {
-  client: rgba(255, 252, 250, 0.4),
-  view: rgba(244, 249, 255, 0.4),
-  content: rgba(245, 255, 249, 0.4),
+  client: rgba(255, 246, 241, 0.58),
+  view: rgba(230, 244, 255, 0.58),
+  content: rgba(231, 255, 241, 0.58),
 }
 const PLANE_GROUND_GLOW: Readonly<Record<PlaneName, ReturnType<typeof rgba>>> = {
-  client: rgba(255, 150, 135, 0.07),
-  view: rgba(110, 155, 255, 0.09),
-  content: rgba(88, 190, 160, 0.08),
+  client: rgba(245, 126, 105, 0.13),
+  view: rgba(87, 137, 245, 0.14),
+  content: rgba(63, 171, 132, 0.13),
 }
 const PLANE_CONTACT_SHADOW: Readonly<Record<PlaneName, Readonly<{
   alpha: number
   blur: number
   offset: number
 }>>> = {
-  client: { alpha: 0.1, blur: 1.2, offset: 1 },
-  view: { alpha: 0.1, blur: 1.2, offset: 1 },
-  content: { alpha: 0.1, blur: 1.2, offset: 1 },
+  client: { alpha: 0.16, blur: 1.4, offset: 1 },
+  view: { alpha: 0.16, blur: 1.4, offset: 1 },
+  content: { alpha: 0.16, blur: 1.4, offset: 1 },
 }
 const unlitMaterial = (color: ReturnType<typeof rgba>) =>
   new UnlitMaterial({ color: meshColor(color) })
@@ -1167,15 +1167,15 @@ function createPlaneRuntime(
   const groundLeft = projectPlanePoint(plane, { x: 12, y: plane.height })
   const groundRight = projectPlanePoint(plane, { x: plane.width - 12, y: plane.height })
   const groundWidth = Math.abs(groundRight.x - groundLeft.x)
-  const groundBleed = presentation.projectedWidth * 0.02
+  const groundBleed = 0
   const groundGlow = new Rectangle({
     x: Math.min(groundLeft.x, groundRight.x) - groundBleed,
     y: (groundLeft.y + groundRight.y) / 2 + 1,
     width: groundWidth + groundBleed * 2,
-    height: Math.max(28, presentation.projectedWidth * 0.09),
+    height: Math.max(20, presentation.projectedWidth * 0.06),
     layer: GROUND_LAYER,
     zIndex: -20,
-    filter: "blur(18px)",
+    filter: "blur(12px)",
     fillConfig: { color: PLANE_GROUND_GLOW[name] },
     strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
   })
@@ -1844,32 +1844,34 @@ function updateHeroOverlay(
   copy: Readonly<{ eyebrow: string; first: string; second: string; compact: string; subtitle: string }>,
 ) {
   const short = viewSize.height <= 740
-  const narrow = viewSize.width <= 900
-  const x = short ? 12 : narrow ? 18 : 56
-  const titleSize = short ? 19 : narrow ? 32 : 48
-  const titleWeight = short ? 600 : 400
-  const titleY = short ? 10 : narrow ? 32 : 68
+  const wideHeroSpace = viewSize.width >= 1440
+    && viewSize.width / Math.max(1, viewSize.height) >= 1.6
+  const compact = short || !wideHeroSpace
+  const x = compact ? 12 : 56
+  const titleSize = compact ? 19 : 48
+  const titleWeight = compact ? 600 : 400
+  const titleY = compact ? 0 : 68
   const lineGap = titleSize * 0.98
   overlay.eyebrow.update({
     x,
-    y: short ? 0 : narrow ? 12 : 28,
+    y: compact ? 0 : 28,
     text: "",
   })
   overlay.titleFirst.update({
     x,
     y: titleY,
-    text: short ? copy.compact : copy.first,
+    text: compact ? copy.compact : copy.first,
     font: { fontFamily: '"Helvetica Neue", "PingFang SC", "Noto Sans CJK SC", sans-serif', size: titleSize, fontWeight: titleWeight },
   })
   overlay.titleSecond.update({
     x,
     y: titleY + lineGap,
-    text: short ? "" : copy.second,
+    text: compact ? "" : copy.second,
     font: { fontFamily: '"Helvetica Neue", "PingFang SC", "Noto Sans CJK SC", sans-serif', size: titleSize, fontWeight: titleWeight },
   })
   overlay.subtitle.update({
     x,
-    y: titleY + lineGap * 2 + (narrow ? 5 : 10),
+    y: titleY + lineGap * 2 + 10,
     // Keep the accessible copy in the semantic DOM, but preserve the open
     // installation gap between the hero and the first physical pane.
     text: "",
@@ -2806,8 +2808,8 @@ function createCoordinateMappingLinks() {
 
 function createCoordinateSignalMeshes(): [Mesh, Mesh] {
   return [
-    new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(255, 238, 232, 0.52)) }),
-    new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(255, 238, 232, 0.52)) }),
+    new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(244, 192, 176, 0.32)) }),
+    new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(244, 192, 176, 0.32)) }),
   ]
 }
 
@@ -2876,9 +2878,10 @@ function mountCoordinateScene(
     outputSignal,
   )
   const planeTitles: StayText[] = []
+  const showSourceDetails = canvasArea.width >= 1024
 
   for (const name of ["client", "view", "content"] as const) {
-    const created = createPlaneRuntime(name, definitions[name], canvasArea.width >= 600)
+    const created = createPlaneRuntime(name, definitions[name], showSourceDetails)
     planes[name] = created.runtime
     sourceOpticalMeshes.push(...created.meshes)
     overlays.push(...created.overlays.filter((shape) => shape !== created.runtime.overlay.title))

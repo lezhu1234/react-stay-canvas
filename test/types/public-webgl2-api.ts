@@ -3,15 +3,19 @@ import {
   DirectionalLight,
   EnvironmentMap,
   GlassMaterial,
+  ImageMaterial,
+  ImageTexture,
   LambertMaterial,
   Mesh,
   PerspectiveCamera,
   PointLight,
   StayWebGLChild,
   StandardMaterial,
+  TransparentImageMaterial,
   type StayTools,
   type StayWebGLSceneFragment,
   type GlassAttenuationColor,
+  type ImageTextureAlphaMode,
   type WebGL2LayerConfig,
   translationMatrix4,
 } from "react-stay-canvas"
@@ -29,6 +33,42 @@ const mesh = new Mesh({
   material: new LambertMaterial({ color: [0.2, 0.5, 0.9, 1] }),
   castShadow: true,
   receiveShadow: true,
+})
+const pixels = new Uint8Array([
+  255, 0, 0, 255,
+  0, 255, 0, 255,
+  0, 0, 255, 255,
+  255, 255, 255, 255,
+])
+const imageTexture = new ImageTexture({ width: 2, height: 2, data: pixels })
+const imageMesh = new Mesh({
+  geometry: {
+    positions: [-1, 1, 0, 1, 1, 0, 1, -1, 0, -1, -1, 0],
+    uvs: [0, 0, 1, 0, 1, 1, 0, 1],
+    indices: [0, 1, 2, 0, 2, 3],
+  },
+  material: new ImageMaterial({ texture: imageTexture }),
+})
+const transparentAlphaMode: ImageTextureAlphaMode = "straight"
+const transparentTexture = new ImageTexture({
+  width: 2,
+  height: 2,
+  alphaMode: transparentAlphaMode,
+  data: new Uint8Array([
+    255, 255, 255, 255,
+    255, 255, 255, 128,
+    255, 255, 255, 64,
+    255, 255, 255, 0,
+  ]),
+})
+const transparentImageMesh = new Mesh({
+  geometry: {
+    positions: [-1, 1, 0, 1, 1, 0, 1, -1, 0, -1, -1, 0],
+    uvs: [0, 0, 1, 0, 1, 1, 0, 1],
+    indices: [0, 1, 2, 0, 2, 3],
+  },
+  material: new TransparentImageMaterial({ texture: transparentTexture }),
+  castShadow: false,
 })
 mesh.setModelMatrix(translationMatrix4(0.2, 0, 0))
 mesh.setMaterial(new LambertMaterial({ color: [0.3, 0.6, 1, 1] }))
@@ -56,6 +96,7 @@ const glassThickness: number = glass.thickness
 mesh.setMaterial(glass)
 mesh.setCastShadow(false)
 mesh.setReceiveShadow(true)
+mesh.setMaterial(standard)
 
 const ambient = new AmbientLight({ color: [0.9, 0.95, 1], intensity: 0.3 })
 const key = new DirectionalLight({
@@ -122,6 +163,8 @@ import { WebGL2LayerRuntime } from "react-stay-canvas"
 
 void camera
 void child
+void imageMesh
+void transparentImageMesh
 void layer
 void glassIor
 void glassAttenuationColor

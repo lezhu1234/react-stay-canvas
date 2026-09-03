@@ -1,3 +1,5 @@
+import { ImageTexture } from "./imageTexture"
+
 export type MeshColor = readonly [number, number, number, number]
 export type GlassAttenuationColor = readonly [number, number, number]
 
@@ -29,6 +31,14 @@ export interface GlassMaterialProps {
   readonly roughness?: number
   /** Distance travelled through the medium in world units. */
   readonly thickness?: number
+}
+
+export interface ImageMaterialProps {
+  readonly texture: ImageTexture
+}
+
+export interface TransparentImageMaterialProps {
+  readonly texture: ImageTexture
 }
 
 function copyColor(
@@ -141,6 +151,42 @@ export class UnlitMaterial {
   }
 }
 
+/** An immutable opaque, unlit sRGB image material. */
+export class ImageMaterial {
+  readonly kind = "image"
+  readonly texture: ImageTexture
+  readonly #materialBrand = "image"
+
+  constructor({ texture }: ImageMaterialProps) {
+    if (!(texture instanceof ImageTexture)) {
+      throw new TypeError("ImageMaterial texture must be an ImageTexture")
+    }
+    if (texture.alphaMode !== "opaque") {
+      throw new RangeError("ImageMaterial texture alphaMode must be opaque")
+    }
+    this.texture = texture
+    Object.freeze(this)
+  }
+}
+
+/** An immutable unlit premultiplied image material rendered in the transparent queue. */
+export class TransparentImageMaterial {
+  readonly kind = "transparent-image"
+  readonly texture: ImageTexture
+  readonly #materialBrand = "transparent-image"
+
+  constructor({ texture }: TransparentImageMaterialProps) {
+    if (!(texture instanceof ImageTexture)) {
+      throw new TypeError("TransparentImageMaterial texture must be an ImageTexture")
+    }
+    if (texture.alphaMode !== "straight") {
+      throw new RangeError("TransparentImageMaterial texture alphaMode must be straight")
+    }
+    this.texture = texture
+    Object.freeze(this)
+  }
+}
+
 /** An immutable opaque diffuse material lit by the layer's ambient and directional lights. */
 export class LambertMaterial {
   readonly kind = "lambert"
@@ -200,12 +246,16 @@ export class GlassMaterial {
 
 export type MeshMaterial =
   | UnlitMaterial
+  | ImageMaterial
+  | TransparentImageMaterial
   | LambertMaterial
   | StandardMaterial
   | GlassMaterial
 
 export type MeshMaterialSnapshot = Readonly<
   | { kind: "unlit"; color: MeshColor }
+  | { kind: "image"; texture: ImageTexture }
+  | { kind: "transparent-image"; texture: ImageTexture }
   | { kind: "lambert"; color: MeshColor }
   | {
     kind: "standard"
@@ -226,6 +276,10 @@ export type MeshMaterialSnapshot = Readonly<
 
 export function copyMeshMaterial(material: MeshMaterial): MeshMaterial {
   if (material instanceof UnlitMaterial) return new UnlitMaterial({ color: material.color })
+  if (material instanceof ImageMaterial) return new ImageMaterial({ texture: material.texture })
+  if (material instanceof TransparentImageMaterial) {
+    return new TransparentImageMaterial({ texture: material.texture })
+  }
   if (material instanceof LambertMaterial) return new LambertMaterial({ color: material.color })
   if (material instanceof StandardMaterial) {
     return new StandardMaterial({
@@ -245,11 +299,14 @@ export function copyMeshMaterial(material: MeshMaterial): MeshMaterial {
     })
   }
   throw new TypeError(
-    "Mesh material must be an UnlitMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
+    "Mesh material must be an UnlitMaterial, ImageMaterial, TransparentImageMaterial, LambertMaterial, StandardMaterial, or GlassMaterial"
   )
 }
 
 export function captureMeshMaterial(material: MeshMaterial): MeshMaterialSnapshot {
+  if (material instanceof ImageMaterial || material instanceof TransparentImageMaterial) {
+    return { kind: material.kind, texture: material.texture }
+  }
   if (material instanceof StandardMaterial) {
     return {
       kind: material.kind,
@@ -274,6 +331,12 @@ export function captureMeshMaterial(material: MeshMaterial): MeshMaterialSnapsho
 
 export function materializeMeshMaterial(snapshot: MeshMaterialSnapshot): MeshMaterial {
   if (snapshot.kind === "unlit") return new UnlitMaterial({ color: snapshot.color })
+  if (snapshot.kind === "image") {
+    return new ImageMaterial({ texture: snapshot.texture })
+  }
+  if (snapshot.kind === "transparent-image") {
+    return new TransparentImageMaterial({ texture: snapshot.texture })
+  }
   if (snapshot.kind === "lambert") return new LambertMaterial({ color: snapshot.color })
   if (snapshot.kind === "standard") {
     return new StandardMaterial({
@@ -302,7 +365,7 @@ export function meshMaterialUsesLighting(material: MeshMaterial) {
     || material instanceof GlassMaterial
 }
 
-/** @internal Only GlassMaterial participates in the transparent render queue. */
+/** @internal Transparent materials are depth-sorted and blended after the opaque resolve. */
 export function meshMaterialIsTransparent(material: MeshMaterial) {
-  return material instanceof GlassMaterial
+  return material instanceof GlassMaterial || material instanceof TransparentImageMaterial
 }

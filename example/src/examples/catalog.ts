@@ -108,7 +108,7 @@ export const catalog: ExampleDefinition[] = [
   },
   {
     path: "/simple/coordinates",
-    presentation: "immersive",
+    presentation: "canvas-only",
     sourcePaths: [
       "./examples/simple/CoordinatesExample.tsx",
       "./examples/simple/CoordinateStack.tsx",

@@ -13,20 +13,30 @@ export type {
 } from "./stay/webgl2/mesh"
 export {
   GlassMaterial,
+  ImageMaterial,
   LambertMaterial,
   StandardMaterial,
+  TransparentImageMaterial,
   UnlitMaterial,
 } from "./stay/webgl2/material"
 export type {
   GlassAttenuationColor,
   GlassMaterialProps,
+  ImageMaterialProps,
   LambertMaterialProps,
   MeshColor,
   MeshMaterial,
   MeshMaterialSnapshot,
   StandardMaterialProps,
+  TransparentImageMaterialProps,
   UnlitMaterialProps,
 } from "./stay/webgl2/material"
+export { ImageTexture } from "./stay/webgl2/imageTexture"
+export type {
+  ImageTexturePixelData,
+  ImageTextureAlphaMode,
+  ImageTextureProps,
+} from "./stay/webgl2/imageTexture"
 export { AmbientLight, DirectionalLight, PointLight } from "./stay/webgl2/light"
 export type {
   AmbientLightProps,

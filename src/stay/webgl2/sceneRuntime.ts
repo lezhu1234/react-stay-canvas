@@ -12,9 +12,17 @@ import {
 } from "./math3D"
 import { Mesh } from "./mesh"
 import {
+  ImageMaterial,
+  meshMaterialUsesLighting,
   meshMaterialIsTransparent,
+  TransparentImageMaterial,
   type MeshMaterial,
 } from "./material"
+import { ImageTexture } from "./imageTexture"
+import {
+  createImageTextureResources,
+  type ImageTextureResources,
+} from "./imageTextureResources"
 import { PerspectiveCamera } from "./perspectiveCamera"
 import { EnvironmentMap } from "./environmentMap"
 import {
@@ -56,9 +64,29 @@ import {
 interface UnlitPipelineResources {
   readonly kind: "unlit"
   readonly program: WebGLProgram
-  readonly modelViewProjectionLocation: WebGLUniformLocation
+  readonly viewProjectionLocation: WebGLUniformLocation
+  readonly modelLocation: WebGLUniformLocation
   readonly colorLocation: WebGLUniformLocation
 }
+
+interface ImagePipelineBaseResources {
+  readonly program: WebGLProgram
+  readonly viewProjectionLocation: WebGLUniformLocation
+  readonly modelLocation: WebGLUniformLocation
+  readonly imageTextureLocation: WebGLUniformLocation
+}
+
+interface OpaqueImagePipelineResources extends ImagePipelineBaseResources {
+  readonly kind: "image"
+}
+
+interface TransparentImagePipelineResources extends ImagePipelineBaseResources {
+  readonly kind: "transparent-image"
+}
+
+type ImagePipelineResources =
+  | OpaqueImagePipelineResources
+  | TransparentImagePipelineResources
 
 interface LitPipelineBaseResources {
   readonly program: WebGLProgram
@@ -124,12 +152,13 @@ type LitPipelineResources =
   | LambertPipelineResources
   | StandardPipelineResources
   | GlassPipelineResources
-type PipelineResources = UnlitPipelineResources | LitPipelineResources
+type PipelineResources = UnlitPipelineResources | ImagePipelineResources | LitPipelineResources
 
 interface MeshResources {
   readonly vertexArray: WebGLVertexArrayObject
   readonly positionBuffer: WebGLBuffer
   readonly normalBuffer: WebGLBuffer
+  readonly uvBuffer: WebGLBuffer
   readonly indexBuffer: WebGLBuffer
   geometryRevision: number
   indexCount: number
@@ -161,6 +190,13 @@ interface DrawItem {
   readonly material: MeshMaterial
 }
 
+interface CameraFrame {
+  readonly position: readonly [number, number, number]
+  readonly view: Matrix4
+  readonly projection: Matrix4
+  readonly viewProjection: Matrix4
+}
+
 interface TransparentDrawItem extends DrawItem {
   readonly inputOrder: number
   readonly viewDepth: number
@@ -168,10 +204,24 @@ interface TransparentDrawItem extends DrawItem {
 
 const UNLIT_VERTEX_SHADER = `#version 300 es
 layout(location = 0) in vec3 a_position;
-uniform mat4 u_model_view_projection;
+uniform mat4 u_view_projection;
+uniform mat4 u_model;
 
 void main() {
-  gl_Position = u_model_view_projection * vec4(a_position, 1.0);
+  gl_Position = u_view_projection * u_model * vec4(a_position, 1.0);
+}
+`
+
+const IMAGE_VERTEX_SHADER = `#version 300 es
+layout(location = 0) in vec3 a_position;
+layout(location = 2) in vec2 a_uv;
+uniform mat4 u_view_projection;
+uniform mat4 u_model;
+out vec2 image_uv;
+
+void main() {
+  gl_Position = u_view_projection * u_model * vec4(a_position, 1.0);
+  image_uv = a_uv;
 }
 `
 
@@ -216,6 +266,28 @@ out vec4 output_color;
 
 void main() {
   output_color = u_color;
+}
+`
+
+const IMAGE_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+uniform sampler2D u_image_texture;
+in vec2 image_uv;
+out vec4 output_color;
+
+void main() {
+  output_color = vec4(texture(u_image_texture, image_uv).rgb, 1.0);
+}
+`
+
+const TRANSPARENT_IMAGE_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+uniform sampler2D u_image_texture;
+in vec2 image_uv;
+out vec4 output_color;
+
+void main() {
+  output_color = texture(u_image_texture, image_uv);
 }
 `
 
@@ -584,33 +656,29 @@ void main() {
     u_roughness * u_scene_color_max_lod
   );
   vec3 lit_tint = u_color.rgb * illumination;
-  float transmission = scene_color.a * (1.0 - u_color.a) * (1.0 - fresnel);
+  float boundary_weight = u_color.a * (1.0 - fresnel);
+  float transmission_weight = scene_color.a
+    * (1.0 - u_color.a)
+    * (1.0 - fresnel);
   vec3 volume_transmittance = volume_attenuation(
     u_attenuation_color,
     u_has_volume_attenuation,
     u_log_attenuation_exponent
   );
   vec3 refracted_color = scene_color.a > 0.00001
-    ? scene_color.rgb / scene_color.a * u_color.rgb * volume_transmittance
+    ? scene_color.rgb / scene_color.a * volume_transmittance
     : vec3(0.0);
-  vec3 surface_color = mix(lit_tint, refracted_color, transmission);
-  vec3 reflection_color = vec3(1.0);
+  vec3 reflection_color = vec3(0.42);
   if (u_has_environment) {
     vec3 reflected_direction = normalize(reflect(-view_direction, normal));
     reflection_color = environment_radiance(reflected_direction, u_roughness);
   }
-  if (u_has_environment) {
-    float alpha = u_color.a + (1.0 - u_color.a) * fresnel;
-    vec3 premultiplied_color = surface_color * (alpha - fresnel)
-      + reflection_color * fresnel
-      + direct_specular;
-    output_color = vec4(min(premultiplied_color, vec3(alpha)), alpha);
-  } else {
-    surface_color = mix(surface_color, vec3(1.0), fresnel * 0.42);
-    float alpha = u_color.a + (1.0 - u_color.a) * fresnel * 0.34;
-    vec3 premultiplied_color = surface_color * alpha + direct_specular;
-    output_color = vec4(min(premultiplied_color, vec3(alpha)), alpha);
-  }
+  float alpha = boundary_weight + transmission_weight + fresnel;
+  vec3 premultiplied_color = lit_tint * boundary_weight
+    + refracted_color * transmission_weight
+    + reflection_color * fresnel
+    + direct_specular;
+  output_color = vec4(min(premultiplied_color, vec3(alpha)), alpha);
 }
 `
 
@@ -664,16 +732,23 @@ function requireUniform(
 }
 
 function pipelineShaderSources(kind: MeshMaterial["kind"]) {
-  if (kind === "unlit") {
-    return { vertex: UNLIT_VERTEX_SHADER, fragment: UNLIT_FRAGMENT_SHADER }
+  switch (kind) {
+    case "unlit":
+      return { vertex: UNLIT_VERTEX_SHADER, fragment: UNLIT_FRAGMENT_SHADER }
+    case "image":
+      return { vertex: IMAGE_VERTEX_SHADER, fragment: IMAGE_FRAGMENT_SHADER }
+    case "transparent-image":
+      return {
+        vertex: IMAGE_VERTEX_SHADER,
+        fragment: TRANSPARENT_IMAGE_FRAGMENT_SHADER,
+      }
+    case "lambert":
+      return { vertex: LAMBERT_VERTEX_SHADER, fragment: LAMBERT_FRAGMENT_SHADER }
+    case "standard":
+      return { vertex: LAMBERT_VERTEX_SHADER, fragment: STANDARD_FRAGMENT_SHADER }
+    case "glass":
+      return { vertex: GLASS_VERTEX_SHADER, fragment: GLASS_FRAGMENT_SHADER }
   }
-  if (kind === "lambert") {
-    return { vertex: LAMBERT_VERTEX_SHADER, fragment: LAMBERT_FRAGMENT_SHADER }
-  }
-  if (kind === "standard") {
-    return { vertex: LAMBERT_VERTEX_SHADER, fragment: STANDARD_FRAGMENT_SHADER }
-  }
-  return { vertex: GLASS_VERTEX_SHADER, fragment: GLASS_FRAGMENT_SHADER }
 }
 
 function environmentPipelineLocations(
@@ -716,17 +791,23 @@ function createPipeline(
       const info = context.getProgramInfoLog(program) || "unknown program error"
       throw new Error(`Unable to link WebGL2 program: ${info}`)
     }
+    if (kind === "image" || kind === "transparent-image") {
+      return {
+        kind,
+        program,
+        viewProjectionLocation: requireUniform(context, program, "u_view_projection"),
+        modelLocation: requireUniform(context, program, "u_model"),
+        imageTextureLocation: requireUniform(context, program, "u_image_texture"),
+      }
+    }
     const colorLocation = requireUniform(context, program, "u_color")
     if (kind === "unlit") {
       return {
         kind,
         program,
         colorLocation,
-        modelViewProjectionLocation: requireUniform(
-          context,
-          program,
-          "u_model_view_projection"
-        ),
+        viewProjectionLocation: requireUniform(context, program, "u_view_projection"),
+        modelLocation: requireUniform(context, program, "u_model"),
       }
     }
     const litPipeline = {
@@ -859,7 +940,10 @@ function requireBuffer(context: WebGL2RenderingContext, name: string) {
 function uploadGeometry(
   context: WebGL2RenderingContext,
   geometry: ReturnType<Mesh["copyGeometrySnapshot"]>,
-  resources: Pick<MeshResources, "vertexArray" | "positionBuffer" | "normalBuffer" | "indexBuffer">
+  resources: Pick<
+    MeshResources,
+    "vertexArray" | "positionBuffer" | "normalBuffer" | "uvBuffer" | "indexBuffer"
+  >
 ) {
   context.bindVertexArray(resources.vertexArray)
   context.bindBuffer(context.ARRAY_BUFFER, resources.positionBuffer)
@@ -869,6 +953,12 @@ function uploadGeometry(
     context.ARRAY_BUFFER,
     geometry.normals ?? new Float32Array(),
     context.STATIC_DRAW
+  )
+  context.bindBuffer(context.ARRAY_BUFFER, resources.uvBuffer)
+  context.bufferData(
+    context.ARRAY_BUFFER,
+    geometry.uvs ?? new Float32Array(),
+    context.STATIC_DRAW,
   )
   context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, resources.indexBuffer)
   context.bufferData(context.ELEMENT_ARRAY_BUFFER, geometry.indices, context.STATIC_DRAW)
@@ -883,16 +973,19 @@ function createMeshResources(
   if (!vertexArray) throw new Error("Unable to create WebGL2 vertex array")
   let positionBuffer: WebGLBuffer | undefined
   let normalBuffer: WebGLBuffer | undefined
+  let uvBuffer: WebGLBuffer | undefined
   let indexBuffer: WebGLBuffer | undefined
   try {
     positionBuffer = requireBuffer(context, "position")
     normalBuffer = requireBuffer(context, "normal")
+    uvBuffer = requireBuffer(context, "uv")
     indexBuffer = requireBuffer(context, "index")
     const geometry = mesh.copyGeometrySnapshot()
     uploadGeometry(context, geometry, {
       vertexArray,
       positionBuffer,
       normalBuffer,
+      uvBuffer,
       indexBuffer,
     })
     context.bindBuffer(context.ARRAY_BUFFER, positionBuffer)
@@ -901,11 +994,15 @@ function createMeshResources(
     context.bindBuffer(context.ARRAY_BUFFER, normalBuffer)
     context.enableVertexAttribArray(1)
     context.vertexAttribPointer(1, 3, context.FLOAT, false, 0, 0)
+    context.bindBuffer(context.ARRAY_BUFFER, uvBuffer)
+    context.enableVertexAttribArray(2)
+    context.vertexAttribPointer(2, 2, context.FLOAT, false, 0, 0)
     context.bindVertexArray(null)
     return {
       vertexArray,
       positionBuffer,
       normalBuffer,
+      uvBuffer,
       indexBuffer,
       geometryRevision: geometry.revision,
       indexCount: geometry.indices.length,
@@ -913,6 +1010,7 @@ function createMeshResources(
   } catch (error) {
     context.bindVertexArray(null)
     if (indexBuffer) context.deleteBuffer(indexBuffer)
+    if (uvBuffer) context.deleteBuffer(uvBuffer)
     if (normalBuffer) context.deleteBuffer(normalBuffer)
     if (positionBuffer) context.deleteBuffer(positionBuffer)
     context.deleteVertexArray(vertexArray)
@@ -1012,17 +1110,15 @@ function viewDepth(mesh: Mesh, viewMatrix: Matrix4) {
     + viewMatrix[14]
 }
 
-function buildRenderQueues(meshes: readonly Mesh[], camera: PerspectiveCamera) {
+function buildRenderQueues(meshes: readonly Mesh[], viewMatrix: Matrix4) {
   const opaque: DrawItem[] = []
   const transparent: TransparentDrawItem[] = []
-  let viewMatrix: Matrix4 | undefined
   meshes.forEach((mesh, inputOrder) => {
     const material = mesh.getMaterial()
     if (!meshMaterialIsTransparent(material)) {
       opaque.push({ mesh, material })
       return
     }
-    viewMatrix ??= camera.getViewMatrix()
     transparent.push({
       mesh,
       material,
@@ -1041,6 +1137,17 @@ function renderQueuesUseEnvironment(queues: ReturnType<typeof buildRenderQueues>
   return queues.opaque.some(usesEnvironment) || queues.transparent.some(usesEnvironment)
 }
 
+function imageTexturesUsedBy(meshes: readonly Mesh[]) {
+  const textures = new Set<ImageTexture>()
+  meshes.forEach((mesh) => {
+    const material = mesh.getMaterial()
+    if (material instanceof ImageMaterial || material instanceof TransparentImageMaterial) {
+      textures.add(material.texture)
+    }
+  })
+  return textures
+}
+
 /**
  * @internal Owns one WebGL2 context's derived GPU cache. Mesh, Material, Light,
  * and Camera CPU state stay authoritative; restoration recreates handles lazily.
@@ -1049,6 +1156,7 @@ export class WebGL2SceneRuntime {
   #context: WebGL2RenderingContext
   readonly #pipelines = new Map<MeshMaterial["kind"], PipelineResources>()
   readonly #meshes = new Map<Mesh, MeshResources>()
+  readonly #imageTextures = new Map<ImageTexture, ImageTextureResources>()
   #shadowPipeline?: ShadowPipelineResources
   #shadowMap?: ShadowMapResources
   #transmissiveShadowPipeline?: TransmissiveShadowPipelineResources
@@ -1081,6 +1189,9 @@ export class WebGL2SceneRuntime {
     }
 
     this.#pruneMeshResources(new Set(meshes))
+    const imageTextures = imageTexturesUsedBy(meshes)
+    this.#pruneImageTextureResources(imageTextures)
+    imageTextures.forEach((texture) => this.#imageTextureResources(texture))
     const shadowLight = findShadowLight(lights)
     if (meshes.length === 0) {
       this.#configureEmptyFrame(width, height)
@@ -1088,111 +1199,32 @@ export class WebGL2SceneRuntime {
       return
     }
 
-    const shadow = this.#renderShadowPass(meshes, shadowLight)
-    const queues = buildRenderQueues(meshes, camera)
-    const sceneTarget = this.#sceneTargetResources(width, height)
-    const environmentTexture = environment && renderQueuesUseEnvironment(queues)
-      ? this.#environmentTextureResources(environment)
-      : undefined
-    this.#configureFrame(sceneTarget)
     const aspect = width / height
     const view = camera.getViewMatrix()
     const projection = camera.getProjectionMatrix(aspect)
-    const viewProjection = multiplyMatrix4(projection, view)
-    let lighting: LightingSnapshot | undefined
-    let activePipeline: PipelineResources | undefined
-    const draw = ({ mesh, material }: DrawItem) => {
-      const pipeline = this.#pipeline(material.kind)
-      if (pipeline !== activePipeline) {
-        context.useProgram(pipeline.program)
-        activePipeline = pipeline
-        if (pipeline.kind !== "unlit") {
-          lighting ??= lightingSnapshot(lights)
-          this.#applyLitFrameUniforms(pipeline, viewProjection, lighting, shadow)
-          if (pipeline.kind === "standard" || pipeline.kind === "glass") {
-            this.#applyEnvironmentFrameUniforms(
-              pipeline,
-              camera,
-              environment,
-              environmentTexture,
-            )
-          }
-          if (pipeline.kind === "glass") {
-            context.uniformMatrix4fv(pipeline.viewLocation, false, view)
-            context.uniformMatrix4fv(pipeline.projectionLocation, false, projection)
-            context.uniform1i(pipeline.sceneColorLocation, 1)
-            context.activeTexture(context.TEXTURE1)
-            context.bindTexture(context.TEXTURE_2D, sceneTarget.resolveTexture)
-            context.uniform1f(
-              pipeline.sceneColorMaxLodLocation,
-              sceneTarget.maxMipLevel,
-            )
-          }
-        }
-      }
-      const resources = this.#meshResources(mesh)
-      uploadChangedGeometry(context, mesh, resources)
-      context.bindVertexArray(resources.vertexArray)
-      if (pipeline.kind === "unlit") {
-        context.uniformMatrix4fv(
-          pipeline.modelViewProjectionLocation,
-          false,
-          multiplyMatrix4(viewProjection, mesh.getModelMatrix())
-        )
-      } else {
-        const model = mesh.getModelMatrix()
-        context.uniformMatrix4fv(pipeline.modelLocation, false, model)
-        context.uniformMatrix3fv(
-          pipeline.normalMatrixLocation,
-          false,
-          normalMatrix3FromMatrix4(model)
-        )
-        context.uniform1i(
-          pipeline.receiveShadowLocation,
-          shadow && mesh.receiveShadow ? 1 : 0
-        )
-      }
-      context.uniform4fv(
-        pipeline.colorLocation,
-        linearizeSrgbColorWithAlpha(material.color),
-      )
-      if (pipeline.kind === "standard" && material.kind === "standard") {
-        context.uniform1f(pipeline.metallicLocation, material.metallic)
-        context.uniform1f(pipeline.roughnessLocation, material.roughness)
-      }
-      if (pipeline.kind === "glass" && material.kind === "glass") {
-        context.uniform3fv(
-          pipeline.attenuationColorLocation,
-          new Float32Array(material.attenuationColor),
-        )
-        const attenuation = volumeAttenuationUniforms(material)
-        context.uniform1i(
-          pipeline.hasVolumeAttenuationLocation,
-          attenuation.enabled ? 1 : 0,
-        )
-        context.uniform1f(
-          pipeline.logAttenuationExponentLocation,
-          attenuation.logExponent,
-        )
-        context.uniform1f(pipeline.iorLocation, material.ior)
-        context.uniform1f(pipeline.roughnessLocation, material.roughness)
-        context.uniform1f(pipeline.thicknessLocation, material.thickness)
-      }
-      context.drawElements(
-        context.TRIANGLES,
-        resources.indexCount,
-        context.UNSIGNED_SHORT,
-        0
-      )
+    const mainCamera: CameraFrame = {
+      position: camera.getPosition(),
+      view,
+      projection,
+      viewProjection: multiplyMatrix4(projection, view),
     }
+    const allQueues = buildRenderQueues(meshes, view)
+    const environmentTexture = environment && renderQueuesUseEnvironment(allQueues)
+      ? this.#environmentTextureResources(environment)
+      : undefined
+    const shadow = this.#renderShadowPass(meshes, shadowLight)
     try {
-      queues.opaque.forEach(draw)
-      if (queues.transparent.length > 0) {
-        resolveSceneTarget(context, sceneTarget, true)
-        this.#configureTransparentPass(sceneTarget)
-        queues.transparent.forEach(draw)
-      }
-      resolveSceneTarget(context, sceneTarget, false)
+      const sceneTarget = this.#sceneTargetResources(width, height)
+      this.#drawSceneToTarget(
+        meshes,
+        mainCamera,
+        lights,
+        environment,
+        environmentTexture,
+        shadow,
+        sceneTarget,
+        false,
+      )
       presentScene(
         context,
         this.#outputPipelineResources(),
@@ -1219,6 +1251,138 @@ export class WebGL2SceneRuntime {
       context.bindVertexArray(null)
       context.useProgram(null)
     }
+  }
+
+  #drawSceneToTarget(
+    meshes: readonly Mesh[],
+    camera: CameraFrame,
+    lights: readonly WebGLLight[],
+    environment: EnvironmentMap | undefined,
+    environmentTexture: EnvironmentTextureResources | undefined,
+    shadow: ShadowFrame | undefined,
+    target: SceneTargetResources,
+    generateFinalMipmaps: boolean,
+  ) {
+    const context = this.#context
+    const queues = buildRenderQueues(meshes, camera.view)
+    this.#configureFrame(target)
+    let lighting: LightingSnapshot | undefined
+    let activePipeline: PipelineResources | undefined
+    const draw = ({ mesh, material }: DrawItem) => {
+      const pipeline = this.#pipeline(material.kind)
+      if (pipeline !== activePipeline) {
+        context.useProgram(pipeline.program)
+        activePipeline = pipeline
+        if (pipeline.kind === "unlit" || pipeline.kind === "image"
+            || pipeline.kind === "transparent-image") {
+          context.uniformMatrix4fv(
+            pipeline.viewProjectionLocation,
+            false,
+            camera.viewProjection,
+          )
+        } else {
+          lighting ??= lightingSnapshot(lights)
+          this.#applyLitFrameUniforms(
+            pipeline,
+            camera.viewProjection,
+            lighting,
+            shadow,
+          )
+          if (pipeline.kind === "standard" || pipeline.kind === "glass") {
+            this.#applyEnvironmentFrameUniforms(
+              pipeline,
+              camera.position,
+              environment,
+              environmentTexture,
+            )
+          }
+          if (pipeline.kind === "glass") {
+            context.uniformMatrix4fv(pipeline.viewLocation, false, camera.view)
+            context.uniformMatrix4fv(pipeline.projectionLocation, false, camera.projection)
+            context.uniform1i(pipeline.sceneColorLocation, 1)
+            context.activeTexture(context.TEXTURE1)
+            context.bindTexture(context.TEXTURE_2D, target.resolveTexture)
+            context.uniform1f(pipeline.sceneColorMaxLodLocation, target.maxMipLevel)
+          }
+        }
+      }
+
+      const resources = this.#meshResources(mesh)
+      uploadChangedGeometry(context, mesh, resources)
+      context.bindVertexArray(resources.vertexArray)
+      const model = mesh.getModelMatrix()
+      if (pipeline.kind === "unlit" || pipeline.kind === "image"
+          || pipeline.kind === "transparent-image") {
+        context.uniformMatrix4fv(pipeline.modelLocation, false, model)
+      } else {
+        context.uniformMatrix4fv(pipeline.modelLocation, false, model)
+        context.uniformMatrix3fv(
+          pipeline.normalMatrixLocation,
+          false,
+          normalMatrix3FromMatrix4(model),
+        )
+        context.uniform1i(
+          pipeline.receiveShadowLocation,
+          shadow && mesh.receiveShadow ? 1 : 0,
+        )
+      }
+      if (pipeline.kind !== "image" && pipeline.kind !== "transparent-image"
+          && material.kind !== "image" && material.kind !== "transparent-image") {
+        context.uniform4fv(
+          pipeline.colorLocation,
+          linearizeSrgbColorWithAlpha(material.color),
+        )
+      }
+      if (pipeline.kind === "image" && material instanceof ImageMaterial) {
+        const image = this.#imageTextureResources(material.texture)
+        context.uniform1i(pipeline.imageTextureLocation, 0)
+        context.activeTexture(context.TEXTURE0)
+        context.bindTexture(context.TEXTURE_2D, image.texture)
+      }
+      if (pipeline.kind === "transparent-image"
+          && material instanceof TransparentImageMaterial) {
+        const image = this.#imageTextureResources(material.texture)
+        context.uniform1i(pipeline.imageTextureLocation, 0)
+        context.activeTexture(context.TEXTURE0)
+        context.bindTexture(context.TEXTURE_2D, image.texture)
+      }
+      if (pipeline.kind === "standard" && material.kind === "standard") {
+        context.uniform1f(pipeline.metallicLocation, material.metallic)
+        context.uniform1f(pipeline.roughnessLocation, material.roughness)
+      }
+      if (pipeline.kind === "glass" && material.kind === "glass") {
+        context.uniform3fv(
+          pipeline.attenuationColorLocation,
+          new Float32Array(material.attenuationColor),
+        )
+        const attenuation = volumeAttenuationUniforms(material)
+        context.uniform1i(
+          pipeline.hasVolumeAttenuationLocation,
+          attenuation.enabled ? 1 : 0,
+        )
+        context.uniform1f(
+          pipeline.logAttenuationExponentLocation,
+          attenuation.logExponent,
+        )
+        context.uniform1f(pipeline.iorLocation, material.ior)
+        context.uniform1f(pipeline.roughnessLocation, material.roughness)
+        context.uniform1f(pipeline.thicknessLocation, material.thickness)
+      }
+      context.drawElements(
+        context.TRIANGLES,
+        resources.indexCount,
+        context.UNSIGNED_SHORT,
+        0,
+      )
+    }
+
+    queues.opaque.forEach(draw)
+    if (queues.transparent.length > 0) {
+      resolveSceneTarget(context, target, true)
+      this.#configureTransparentPass(target)
+      queues.transparent.forEach(draw)
+    }
+    resolveSceneTarget(context, target, generateFinalMipmaps)
   }
 
   restoreContext(context: WebGL2RenderingContext = this.#context) {
@@ -1299,11 +1463,11 @@ export class WebGL2SceneRuntime {
   ): ShadowFrame | undefined {
     if (!selected) return undefined
     const opaqueCasters = meshes.filter((mesh) =>
-      mesh.castShadow && mesh.getMaterial().kind !== "glass")
+      mesh.castShadow && !meshMaterialIsTransparent(mesh.getMaterial()))
     const transmissiveCasters = meshes.filter((mesh) =>
       mesh.castShadow && mesh.getMaterial().kind === "glass")
     const hasLitReceiver = meshes.some((mesh) =>
-      mesh.receiveShadow && mesh.getMaterial().kind !== "unlit")
+      mesh.receiveShadow && meshMaterialUsesLighting(mesh.getMaterial()))
     if ((opaqueCasters.length === 0 && transmissiveCasters.length === 0)
         || !hasLitReceiver) {
       return undefined
@@ -1496,14 +1660,14 @@ export class WebGL2SceneRuntime {
 
   #applyEnvironmentFrameUniforms(
     pipeline: StandardPipelineResources | GlassPipelineResources,
-    camera: PerspectiveCamera,
+    cameraPosition: readonly [number, number, number],
     environment: EnvironmentMap | undefined,
     environmentTexture: EnvironmentTextureResources | undefined,
   ) {
     const context = this.#context
     context.uniform3fv(
       pipeline.cameraPositionLocation,
-      new Float32Array(camera.getPosition()),
+      new Float32Array(cameraPosition),
     )
     context.uniform1i(pipeline.environmentMapLocation, 2)
     context.uniform1i(pipeline.hasEnvironmentLocation, environmentTexture ? 1 : 0)
@@ -1589,6 +1753,24 @@ export class WebGL2SceneRuntime {
     }
   }
 
+  #imageTextureResources(image: ImageTexture) {
+    const existing = this.#imageTextures.get(image)
+    if (existing) return existing
+    const context = this.#context
+    context.activeTexture(context.TEXTURE0)
+    const created = createImageTextureResources(context, image)
+    this.#imageTextures.set(image, created)
+    return created
+  }
+
+  #pruneImageTextureResources(liveTextures: ReadonlySet<ImageTexture>) {
+    this.#imageTextures.forEach((resources, texture) => {
+      if (liveTextures.has(texture)) return
+      this.#context.deleteTexture(resources.texture)
+      this.#imageTextures.delete(texture)
+    })
+  }
+
   #meshResources(mesh: Mesh) {
     const existing = this.#meshes.get(mesh)
     if (existing) return existing
@@ -1607,6 +1789,7 @@ export class WebGL2SceneRuntime {
 
   #deleteMeshResources(resources: MeshResources) {
     this.#context.deleteBuffer(resources.indexBuffer)
+    this.#context.deleteBuffer(resources.uvBuffer)
     this.#context.deleteBuffer(resources.normalBuffer)
     this.#context.deleteBuffer(resources.positionBuffer)
     this.#context.deleteVertexArray(resources.vertexArray)
@@ -1632,6 +1815,8 @@ export class WebGL2SceneRuntime {
     this.#meshes.clear()
     this.#pipelines.forEach((pipeline) => this.#context.deleteProgram(pipeline.program))
     this.#pipelines.clear()
+    this.#imageTextures.forEach((resources) => this.#context.deleteTexture(resources.texture))
+    this.#imageTextures.clear()
     if (this.#shadowPipeline) this.#context.deleteProgram(this.#shadowPipeline.program)
     if (this.#transmissiveShadowPipeline) {
       this.#context.deleteProgram(this.#transmissiveShadowPipeline.program)
@@ -1661,6 +1846,7 @@ export class WebGL2SceneRuntime {
   #forgetResources() {
     this.#meshes.clear()
     this.#pipelines.clear()
+    this.#imageTextures.clear()
     this.#shadowPipeline = undefined
     this.#shadowMap = undefined
     this.#transmissiveShadowPipeline = undefined

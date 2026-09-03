@@ -131,8 +131,10 @@ default framebuffer's negotiated samples. Its resolve framebuffer owns one singl
 texture. Opaque Meshes write linear color and depth to the draw framebuffer. When Glass is present,
 the opaque color is resolved into the texture and mipmapped; Glass then samples only that resolved
 opaque color while blending premultiplied linear output back into the original draw framebuffer with
-depth tests and no depth writes. This separation prevents framebuffer feedback and preserves the
-existing object-level transparency contract. After Glass, or immediately after an opaque-only pass,
+depth tests and no depth writes. `TransparentImageMaterial` does not sample scene color, but shares
+the same back-to-front transparent queue, depth behavior, and premultiplied blend state. This
+separation prevents framebuffer feedback and preserves the existing object-level transparency
+contract. After the transparent queue, or immediately after an opaque-only pass,
 the complete scene resolves into the same texture. One fullscreen output pipeline converts straight
 linear color to sRGB, restores the context's straight or premultiplied alpha representation, and
 presents to the default framebuffer. Empty frames clear the default framebuffer without allocating a
@@ -146,13 +148,17 @@ uniform-only, while pixel revision changes re-upload that texture. Scene targets
 and environment textures are derived GPU state, recreated only for resize or context lifecycle
 changes, and forgotten on context loss. The RGBA8 scene target deliberately remains LDR; a future
 capability-gated format descriptor can select a floating-point target while exposure and tone mapping
-remain isolated to the same output pipeline. Glass applies immutable material-owned Beer-Lambert attenuation to the
-refracted scene color. `attenuationColor` is the remaining per-channel transmission after
+remain isolated to the same output pipeline. Glass applies immutable material-owned Beer-Lambert
+attenuation to the refracted scene color. `attenuationColor` is the remaining per-channel transmission after
 `attenuationDistance`; the explicit `thickness` is the travel distance. An omitted attenuation
 distance is represented to the shader as a disabled branch. For enabled attenuation, the CPU derives
 a finite logarithmic thickness/distance exponent from canonical material values before uniform upload;
 this preserves valid Float32 subnormal endpoints that a GPU may otherwise flush to zero. The default
-material preserves the pre-attenuation result without another GPU resource. Glass Meshes disable
+material preserves the pre-attenuation result without another GPU resource. Opaque `ImageTexture`
+pixels remain sRGB RGBA8 with alpha fixed at 255. A straight-alpha `ImageTexture` keeps its CPU RGBA8
+snapshot authoritative while upload derives premultiplied-linear RGB, re-encodes it for
+`SRGB8_ALPHA8`, and generates the mip chain; `TransparentImageMaterial` samples those texels without
+lighting, tint, scene-color refraction, or shadow casting. Glass and TransparentImage Meshes disable
 depth writes, use premultiplied-alpha
 blending, and stable-sort back to front by the model-transformed local AABB center in camera view
 space. That center is derived Mesh state, not a second scene transform. The current contract is
@@ -176,8 +182,9 @@ small compatibility entry points so existing links continue to reach the topic i
 documentation must use package exports, tests, and repository examples as factual sources instead
 of reintroducing another declaration copy in those files.
 
-Runnable behavior belongs in the GitHub Pages example gallery. Each route presents only the live
-result and the exact component source rendered by that result. Automated regression coverage stays
+Runnable behavior belongs in the GitHub Pages example gallery. Each route presents the live result;
+routes with source presentation also show the exact component source rendered by that result, while
+canvas-only presentations intentionally omit the source panel. Automated regression coverage stays
 with the source and tests; machine-local operator evidence does not belong in the published gallery
 or the repository documentation. Maintainer architecture documents explain internal ownership and
 must not become a second user-facing API reference.

@@ -10,6 +10,7 @@ import { StayWebGLChild } from "./stayWebGLChild"
 export interface WebGLMeshSnapshot {
   readonly positions: Float32Array
   readonly normals?: Float32Array
+  readonly uvs?: Float32Array
   readonly indices: Uint16Array
   readonly modelMatrix: Matrix4
   readonly material: MeshMaterialSnapshot
@@ -41,6 +42,7 @@ function captureMesh(mesh: Mesh): WebGLMeshSnapshot {
   return {
     positions: geometry.positions,
     normals: geometry.normals,
+    uvs: geometry.uvs,
     indices: geometry.indices,
     modelMatrix: mesh.getModelMatrix(),
     material: captureMeshMaterial(mesh.getMaterial()),
@@ -54,6 +56,7 @@ function materializeMesh(snapshot: WebGLMeshSnapshot) {
     geometry: {
       positions: snapshot.positions,
       normals: snapshot.normals,
+      uvs: snapshot.uvs,
       indices: snapshot.indices,
     },
     modelMatrix: snapshot.modelMatrix,

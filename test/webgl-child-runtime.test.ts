@@ -3,11 +3,14 @@ import { describe, expect, it, vi } from "vitest"
 import { ChildrenStore } from "../src/stay/children/childrenStore"
 import { captureChildHistory } from "../src/stay/historySnapshot"
 import { identityMatrix4, translationMatrix4 } from "../src/stay/webgl2/math3D"
+import { ImageTexture } from "../src/stay/webgl2/imageTexture"
 import { Mesh } from "../src/stay/webgl2/mesh"
 import {
   GlassMaterial,
+  ImageMaterial,
   LambertMaterial,
   StandardMaterial,
+  TransparentImageMaterial,
   UnlitMaterial,
 } from "../src/stay/webgl2/material"
 import { StayWebGLChild } from "../src/stay/webgl2/stayWebGLChild"
@@ -32,6 +35,16 @@ const triangle = (z = 0) => ({
 })
 
 const normals = [0, 0, 1, 0, 0, 1, 0, 0, 1]
+const uvs = [0, 0, 1, 0, 0.5, 1]
+
+const imageTexture = () => new ImageTexture({
+  width: 2,
+  height: 1,
+  data: new Uint8Array([
+    255, 0, 0, 255,
+    0, 0, 255, 255,
+  ]),
+})
 
 const mesh = (z = 0) => new Mesh({
   geometry: triangle(z),
@@ -243,6 +256,64 @@ describe("internal Stay WebGL Child runtime", () => {
       metallic: 0.15,
       roughness: 0.28,
     }))
+    original.destroy()
+    restored.destroy()
+  })
+
+  it("captures image uvs while safely sharing an immutable CPU texture", () => {
+    const texture = imageTexture()
+    const original = new StayWebGLChild({
+      id: "image-source",
+      className: "room-image",
+      layer: 0,
+      meshes: [new Mesh({
+        geometry: { ...triangle(), uvs },
+        material: new ImageMaterial({ texture }),
+      })],
+    })
+
+    const snapshot = captureStayWebGLChildSnapshot(original)
+    const restored = restoreStayWebGLChildSnapshot(snapshot)
+    const restoredMaterial = restored.meshes[0].getMaterial()
+
+    expect(snapshot.meshes[0].uvs).toEqual(new Float32Array(uvs))
+    expect(snapshot.meshes[0].uvs).not.toBe(original.meshes[0].copyGeometrySnapshot().uvs)
+    expect(snapshot.meshes[0].material).toEqual({ kind: "image", texture })
+    expect(restoredMaterial).toBeInstanceOf(ImageMaterial)
+    expect((restoredMaterial as ImageMaterial).texture).toBe(texture)
+    restored.meshes[0].setGeometry({ ...triangle(), uvs: [0, 1, 1, 1, 0.5, 0] })
+    expect(original.meshes[0].copyGeometrySnapshot().uvs).toEqual(new Float32Array(uvs))
+    original.destroy()
+    restored.destroy()
+  })
+
+  it("captures and restores transparent image material identity", () => {
+    const texture = new ImageTexture({
+      width: 1,
+      height: 1,
+      alphaMode: "straight",
+      data: new Uint8Array([120, 180, 255, 96]),
+    })
+    const original = new StayWebGLChild({
+      id: "transparent-image-source",
+      className: "edge-profile",
+      layer: 0,
+      meshes: [new Mesh({
+        geometry: { ...triangle(), uvs },
+        material: new TransparentImageMaterial({ texture }),
+      })],
+    })
+
+    const snapshot = captureStayWebGLChildSnapshot(original)
+    const restored = restoreStayWebGLChildSnapshot(snapshot)
+    const restoredMaterial = restored.meshes[0].getMaterial()
+
+    expect(snapshot.meshes[0].material).toEqual({
+      kind: "transparent-image",
+      texture,
+    })
+    expect(restoredMaterial).toBeInstanceOf(TransparentImageMaterial)
+    expect((restoredMaterial as TransparentImageMaterial).texture).toBe(texture)
     original.destroy()
     restored.destroy()
   })

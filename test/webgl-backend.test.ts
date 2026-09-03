@@ -6,12 +6,15 @@ import {
   DirectionalLight,
   EnvironmentMap,
   GlassMaterial,
+  ImageMaterial,
+  ImageTexture,
   LambertMaterial,
   Mesh,
   PerspectiveCamera,
   PointLight,
   Rectangle,
   Root,
+  StandardMaterial,
   UnlitMaterial,
   type WebGL2LayerConfig,
 } from "react-stay-canvas"
@@ -70,14 +73,14 @@ describe("public native WebGL2 layer backend", () => {
     expect(gl?.spies.drawElements).toHaveBeenCalledOnce()
     expect(gl?.spies.texImage2D).toHaveBeenCalledOnce()
     expect(gl?.spies.createProgram).toHaveBeenCalledTimes(2)
-    expect(gl?.spies.createBuffer).toHaveBeenCalledTimes(3)
+    expect(gl?.spies.createBuffer).toHaveBeenCalledTimes(4)
     expect(gl?.spies.createVertexArray).toHaveBeenCalledTimes(2)
 
     mesh.setMaterial(unlit([0.9, 0.3, 0.2, 1]))
     expect(stage.draw({ now: 2 }).updatedLayers).toEqual([0])
     expect(gl?.spies.createProgram).toHaveBeenCalledTimes(2)
-    expect(gl?.spies.createBuffer).toHaveBeenCalledTimes(3)
-    expect(gl?.spies.bufferData).toHaveBeenCalledTimes(3)
+    expect(gl?.spies.createBuffer).toHaveBeenCalledTimes(4)
+    expect(gl?.spies.bufferData).toHaveBeenCalledTimes(4)
 
     sceneCamera.setPose([0.2, 0, 3], [0, 0, 0])
     expect(stage.draw({ now: 3 }).updatedLayers).toEqual([0])
@@ -133,7 +136,7 @@ describe("public native WebGL2 layer backend", () => {
     point.setPosition([2, 3, 4])
     point.setRange(10)
     expect(stage.draw({ now: 3.5 }).updatedLayers).toEqual([0])
-    expect(gl?.spies.bufferData).toHaveBeenCalledTimes(3)
+    expect(gl?.spies.bufferData).toHaveBeenCalledTimes(4)
 
     stage.destroy()
     key.setIntensity(0.5)
@@ -299,6 +302,46 @@ describe("public native WebGL2 layer backend", () => {
     expect(child.meshes[0].getMaterial()).toEqual(unlit([0.9, 0.2, 0.1, 1]))
   })
 
+  it("records same-size ImageTexture pixel changes in shared History", () => {
+    const first = new ImageTexture({
+      width: 1,
+      height: 1,
+      data: new Uint8Array([10, 0, 0, 255]),
+    })
+    const second = new ImageTexture({
+      width: 1,
+      height: 1,
+      data: new Uint8Array([20, 0, 0, 255]),
+    })
+    let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
+    const { stage } = createStage({ layers: [{
+      backend: "webgl2",
+      camera: camera(),
+      context: (canvas) => {
+        gl ??= createRecordingWebGL2Context(canvas)
+        return gl.context
+      },
+    }] })
+    const mesh = new Mesh({
+      geometry: { ...triangle(), uvs: [0, 0, 1, 0, 0.5, 1] },
+      material: new ImageMaterial({ texture: first }),
+    })
+    const child = stage.tools.webgl.appendChild({
+      className: "image-history",
+      layer: 0,
+      meshes: [mesh],
+    })
+    stage.tools.log()
+
+    mesh.setMaterial(new ImageMaterial({ texture: second }))
+    stage.tools.log()
+    stage.tools.undo()
+
+    expect((child.meshes[0].getMaterial() as ImageMaterial).texture).toBe(first)
+    stage.tools.redo()
+    expect((child.meshes[0].getMaterial() as ImageMaterial).texture).toBe(second)
+  })
+
   it("pauses on context loss and rebuilds resources after restore", () => {
     let gl: ReturnType<typeof createRecordingWebGL2Context> | undefined
     const onContextLost = vi.fn()
@@ -338,7 +381,7 @@ describe("public native WebGL2 layer backend", () => {
 
     stage.tools.webgl.removeChild(child.id)
     stage.draw({ now: 4 })
-    expect(gl!.spies.deleteBuffer).toHaveBeenCalledTimes(3)
+    expect(gl!.spies.deleteBuffer).toHaveBeenCalledTimes(4)
     expect(gl!.spies.deleteVertexArray).toHaveBeenCalledOnce()
 
     stage.destroy()

@@ -14,6 +14,7 @@ import {
   captureStayWebGLChildSnapshot,
   type StayWebGLChildSnapshot,
 } from "./webgl2/stayWebGLChildSnapshot"
+import { ImageTexture } from "./webgl2/imageTexture"
 import { stayWebGLChildHistory } from "./webgl2/stayWebGLChildRuntime"
 
 export interface HistoryChildSnapshot {
@@ -114,6 +115,13 @@ function valuesEqual(before: unknown, after: unknown): boolean {
     const beforeBytes = new Uint8Array(before.buffer, before.byteOffset, before.byteLength)
     const afterBytes = new Uint8Array(after.buffer, after.byteOffset, after.byteLength)
     return beforeBytes.every((value, index) => value === afterBytes[index])
+  }
+  if (before instanceof ImageTexture && after instanceof ImageTexture) {
+    if (before.width !== after.width || before.height !== after.height
+        || before.alphaMode !== after.alphaMode) return false
+    const beforePixels = before.copySnapshot().data
+    const afterPixels = after.copySnapshot().data
+    return beforePixels.every((value, index) => value === afterPixels[index])
   }
   const beforePrototype = Object.getPrototypeOf(before)
   if (beforePrototype !== Object.prototype && beforePrototype !== null) {

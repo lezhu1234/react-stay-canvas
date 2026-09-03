@@ -505,9 +505,9 @@ export default function CoordinatesExample() {
   const mounted = (tools: StayTools) => {
     toolsRef.current = tools
     const grid = new Map<string, Line>()
-    const liveGridColor = { r: 255, g: 255, b: 255, a: 0.88 }
+    const liveGridColor = { r: 175, g: 187, b: 183, a: 0.8 }
     for (let x = 0; x <= LIVE_PLOT_RIGHT; x += LIVE_GRID_STEP) {
-      grid.set(`x:${x}`, new Line({ x1: x, y1: 0, x2: x, y2: LIVE_PLOT_BOTTOM, zIndex: -10, strokeConfig: { color: liveGridColor, lineWidth: x === 0 ? 1.4 : 0.75 } }))
+      grid.set(`x:${x}`, new Line({ x1: x, y1: 0, x2: x, y2: LIVE_PLOT_BOTTOM, zIndex: -10, strokeConfig: { color: liveGridColor, lineWidth: x === 0 ? 1.4 : 0.9 } }))
     }
     for (let y = 0; y <= LIVE_PLOT_BOTTOM; y += LIVE_GRID_STEP) {
       grid.set(`y:${y}`, new Line({
@@ -518,7 +518,7 @@ export default function CoordinatesExample() {
         zIndex: -10,
         strokeConfig: {
           color: y === 0 ? rgba(255, 255, 255, 0.5) : liveGridColor,
-          lineWidth: y === 0 ? 1 : 0.75,
+          lineWidth: y === 0 ? 1 : 0.9,
         },
       }))
     }
@@ -539,58 +539,8 @@ export default function CoordinatesExample() {
           width: plotWidth,
           height: plotHeight,
           zIndex: -12,
-          filter: "blur(4px)",
-          fillConfig: { color: rgba(224, 228, 226, 0.34) },
-          strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
-        }),
-        new Rectangle({
-          x: -plotWidth * 0.08,
-          y: plotHeight * 0.72,
-          width: plotWidth * 0.44,
-          height: plotHeight * 0.36,
-          zIndex: -11,
-          filter: "blur(18px)",
-          fillConfig: { color: rgba(176, 184, 182, 0.12) },
-          strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
-        }),
-        new Rectangle({
-          x: -plotWidth * 0.06,
-          y: -plotHeight * 0.04,
-          width: plotWidth * 0.32,
-          height: plotHeight * 1.08,
-          zIndex: -11,
-          filter: "blur(18px)",
-          fillConfig: { color: rgba(250, 251, 250, 0.025) },
-          strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
-        }),
-        new Rectangle({
-          x: plotWidth * 0.55,
-          y: plotHeight * 0.4,
-          width: plotWidth * 0.48,
-          height: plotHeight * 0.65,
-          zIndex: -11,
-          filter: "blur(18px)",
-          fillConfig: { color: rgba(224, 227, 225, 0.18) },
-          strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
-        }),
-        new Rectangle({
-          x: plotWidth * 0.24,
-          y: plotHeight * 0.78,
-          width: plotWidth * 0.52,
-          height: plotHeight * 0.3,
-          zIndex: -11,
-          filter: "blur(14px)",
-          fillConfig: { color: rgba(250, 251, 250, 0.12) },
-          strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
-        }),
-        new Rectangle({
-          x: plotWidth * 0.68,
-          y: plotHeight * 0.72,
-          width: plotWidth * 0.4,
-          height: plotHeight * 0.36,
-          zIndex: -11,
-          filter: "blur(18px)",
-          fillConfig: { color: rgba(250, 251, 250, 0.1) },
+          filter: "blur(2px)",
+          fillConfig: { color: rgba(236, 239, 238, 0.55) },
           strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
         }),
       ],

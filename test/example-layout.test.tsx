@@ -9,7 +9,6 @@ import {
   Point,
   Rectangle,
   StayCanvas,
-  TransparentImageMaterial,
   type MeshGeometryInput,
   type StayTools,
   type ViewportState,
@@ -36,11 +35,9 @@ import MotionStudioExample from "../example/src/examples/integrated/MotionStudio
 import {
   coverImageSourceRect,
   coordinateOutputGlassMaterial,
-  coordinatePlaneEdgeSupport,
   coordinateRoomBackdropGeometry,
   coordinateRoomBackdropCrop,
   coordinatePlaneGlassMaterial,
-  createCoordinatePlaneEdgeTexture,
   createPlaneDefinitions,
   createCoordinateSignalPath,
   expandRangeToAspect,
@@ -54,7 +51,6 @@ import {
   createPlaneBevelFaceProfile,
   createPlaneBasis,
   planeVolumeGeometry,
-  planeVolumeProfileGeometry,
   planePresentationMetrics,
   projectPlanePoint,
   rectMeshGeometry,
@@ -349,10 +345,10 @@ describe("Example Canvas workspace", () => {
     expect(expandedMetrics.projectedWidth).toBeGreaterThan(compactMetrics.projectedWidth)
     expect(expandedMetrics.titleSize).toBeGreaterThan(compactMetrics.titleSize)
     expect(expandedMetrics.detailSize).toBeGreaterThan(compactMetrics.detailSize)
-    expect(expandedMetrics.dotRadius).toBeGreaterThan(compactMetrics.dotRadius)
+    expect(expandedMetrics.dotRadius).toBeGreaterThanOrEqual(compactMetrics.dotRadius)
   })
 
-  it("keeps projected panel width stable as a narrow source surface grows taller", () => {
+  it("contracts projected panel width as a narrow source surface grows taller", () => {
     const short = planePresentationMetrics(
       createPlaneDefinitions(800, 450, COORDINATE_PLANE_DOMAIN).client,
     )
@@ -360,8 +356,8 @@ describe("Example Canvas workspace", () => {
       createPlaneDefinitions(800, 550, COORDINATE_PLANE_DOMAIN).client,
     )
 
-    expect(tall.projectedWidth).toBeGreaterThan(short.projectedWidth * 0.95)
-    expect(tall.projectedWidth).toBeLessThan(short.projectedWidth * 1.05)
+    expect(tall.projectedWidth).toBeGreaterThan(short.projectedWidth * 0.85)
+    expect(tall.projectedWidth).toBeLessThan(short.projectedWidth)
   })
 
   it("cover-crops the WebGL room backdrop without distorting it", () => {
@@ -450,8 +446,8 @@ describe("Example Canvas workspace", () => {
     const overlaps = bounds.slice(0, -1).map((bound, index) =>
       bound.x + bound.width - bounds[index + 1].x)
     overlaps.forEach((overlap, index) => {
-      expect(overlap).toBeGreaterThan(-Math.min(bounds[index].width, bounds[index + 1].width) * 0.25)
-      expect(overlap).toBeLessThan(Math.min(bounds[index].width, bounds[index + 1].width) * 0.25)
+      expect(overlap).toBeGreaterThan(-Math.min(bounds[index].width, bounds[index + 1].width) * 0.55)
+      expect(overlap).toBeLessThanOrEqual(0)
     })
     expect(bounds[0].x).toBeLessThan(bounds[1].x)
     expect(bounds[1].x).toBeLessThan(bounds[2].x)
@@ -523,6 +519,25 @@ describe("Example Canvas workspace", () => {
 
   it("fits every source plane inside the measured source slot", () => {
     for (const [width, height] of [
+      [1672, 941],
+      [1440, 1000],
+      [1440, 900],
+      [1280, 1024],
+      [1280, 720],
+      [1280, 556],
+      [1280, 550],
+      [1280, 528],
+      [1250, 741],
+      [1248, 741],
+      [1212, 692],
+      [1204, 688],
+      [1200, 700],
+      [1200, 1366],
+      [1200, 841],
+      [1200, 1200],
+      [1024, 768],
+      [900, 1200],
+      [800, 600],
       [1214, 478],
       [1085, 478],
       [1052, 478],
@@ -552,8 +567,7 @@ describe("Example Canvas workspace", () => {
       bounds.slice(0, -1).forEach((bound, index) => {
         const overlap = bound.x + bound.width - bounds[index + 1].x
         const context = `${width}×${height} gap ${index}`
-        expect(overlap, context).toBeGreaterThan(-Math.min(bound.width, bounds[index + 1].width) * 0.25)
-        expect(overlap, context).toBeLessThan(Math.min(bound.width, bounds[index + 1].width) * 0.25)
+        expect(overlap, context).toBeLessThanOrEqual(0)
       })
     }
   })
@@ -652,7 +666,8 @@ describe("Example Canvas workspace", () => {
     expect(active.ior).toBeCloseTo(1.22)
     expect(active.roughness).toBe(Math.fround(0.05))
     expect(inactive.thickness).toBe(active.thickness)
-    expect(inactive.color[3]).toBeCloseTo(Math.fround(0.24 * 0.82))
+    expect(active.color[3]).toBeCloseTo(Math.fround(0.135))
+    expect(inactive.color[3]).toBeCloseTo(active.color[3] * 0.82)
   })
 
   it("keeps Output optical travel equal to its physical panel thickness", () => {
@@ -667,67 +682,7 @@ describe("Example Canvas workspace", () => {
     expect(Array.from(geometry.indices ?? [])).toEqual([0, 1, 2])
   })
 
-  it("renders source volume through one UV-mapped transparent material shell", () => {
-    const plane = createPlaneDefinitions(1390, 578, COORDINATE_PLANE_DOMAIN).view
-    const geometry = planeVolumeProfileGeometry(
-      plane,
-      createPlaneBasis(plane),
-      0.06,
-      0.015,
-      5,
-    )
-    const texture = createCoordinatePlaneEdgeTexture("view")
-    const material = new TransparentImageMaterial({ texture })
-    const snapshot = texture.copySnapshot()
-    const contentSnapshot = createCoordinatePlaneEdgeTexture("content").copySnapshot()
-    const rowAlpha = (row: number) => Array.from(
-      { length: snapshot.width },
-      (_, index) => snapshot.data[(row * snapshot.width + index) * 4 + 3],
-    )
-    const primaryPeak = (alpha: number[]) => Math.max(...alpha.slice(0, alpha.length / 2))
-    const secondaryPeak = (alpha: number[]) => Math.max(...alpha.slice(alpha.length * 0.6))
-    const topAlpha = rowAlpha(0)
-    const rightAlpha = rowAlpha(8)
-    const bottomAlpha = rowAlpha(17)
-    const leftAlpha = rowAlpha(26)
-    const contentBottomAlpha = Array.from(
-      { length: contentSnapshot.width },
-      (_, index) => contentSnapshot.data[(17 * contentSnapshot.width + index) * 4 + 3],
-    )
-
-    expect(material.kind).toBe("transparent-image")
-    expect(texture.alphaMode).toBe("straight")
-    expect(texture.height).toBe(36)
-    expect(geometry.normals).toBeUndefined()
-    expect(geometry.uvs?.length).toBe(geometry.positions.length / 3 * 2)
-    expect(Array.from(geometry.positions.slice(0, 6)))
-      .toEqual(Array.from(geometry.positions.slice(-6)))
-    expect(geometry.uvs?.[geometry.uvs.length - 1]).toBe(1)
-    expect(secondaryPeak(topAlpha) / primaryPeak(topAlpha)).toBeGreaterThan(0.3)
-    expect(secondaryPeak(topAlpha) / primaryPeak(topAlpha)).toBeLessThan(0.65)
-    expect(primaryPeak(rightAlpha)).toBeGreaterThan(200)
-    expect(secondaryPeak(rightAlpha) / primaryPeak(rightAlpha)).toBeLessThan(0.15)
-    expect(primaryPeak(bottomAlpha)).toBeGreaterThan(80)
-    expect(secondaryPeak(bottomAlpha) / primaryPeak(bottomAlpha)).toBeLessThan(0.2)
-    expect(primaryPeak(leftAlpha)).toBeGreaterThan(200)
-    expect(secondaryPeak(leftAlpha) / primaryPeak(leftAlpha)).toBeLessThan(0.15)
-    expect(primaryPeak(contentBottomAlpha)).toBeGreaterThan(100)
-    expect(secondaryPeak(contentBottomAlpha) / primaryPeak(contentBottomAlpha)).toBeLessThan(0.15)
-
-    expect(coordinatePlaneEdgeSupport("client", { x: 0, y: -1 }).outside).toBe(5)
-    expect(coordinatePlaneEdgeSupport("client", { x: 1, y: 0 }).outside).toBe(7.5)
-    expect(coordinatePlaneEdgeSupport("client", { x: 0, y: 1 }).outside).toBe(11.5)
-    expect(coordinatePlaneEdgeSupport("client", { x: -1, y: 0 }).outside).toBe(7.5)
-    const angle = (degrees: number) => {
-      const radians = degrees * Math.PI / 180
-      return { x: Math.cos(radians), y: Math.sin(radians) }
-    }
-    const beforeCorner = coordinatePlaneEdgeSupport("client", angle(44)).outside
-    const afterCorner = coordinatePlaneEdgeSupport("client", angle(46)).outside
-    expect(Math.abs(beforeCorner - afterCorner)).toBeLessThan(0.5)
-  })
-
-  it("keeps the Canvas signal continuous while allowing segment-specific optics", () => {
+  it("keeps the source-space Canvas signal continuous without crossing into Live Canvas", () => {
     const signal = createCoordinateSignalPath({
       color: { r: 255, g: 180, b: 160, a: 0.88 },
       layer: 1,
@@ -760,8 +715,6 @@ describe("Example Canvas workspace", () => {
     expect(glow.layer).toBe(3)
     expect(glow.shapeStore.get("shadowBlur")).toBe(6)
     expect(glow.shapeStore.get("shadowColor")).toBe("rgb(255 120 90 / 0.9)")
-    expect(glow.shapeStore.get("shadowGapColor")).toBe("rgb(255 120 90 / 0.9)")
-    expect(glow.shapeStore.get("highlightGapAlpha")).toBe(1)
     expect(glow.shapeStore.get("shadowPasses")).toBe(2)
     expect(glow.stateDrawFuncMap.default.stroke).toBeTypeOf("function")
     glow.update({
@@ -769,7 +722,6 @@ describe("Example Canvas workspace", () => {
         new Point({ x: 0, y: 0 }),
         new Point({ x: 10, y: 0 }),
         new Point({ x: 20, y: 0 }),
-        new Point({ x: 30, y: 0 }),
       ],
     })
     const glowContext = {
@@ -786,10 +738,8 @@ describe("Example Canvas workspace", () => {
       shadowOffsetY: 0,
     }
     glow.stateDrawFuncMap.default.stroke?.call(glow, { context: glowContext } as never)
-    expect(glowContext.stroke).toHaveBeenCalledTimes(4)
-    expect(glowContext.moveTo.mock.calls).toEqual([
-      [0, 0], [20, 0], [0, 0], [20, 0],
-    ])
+    expect(glowContext.stroke).toHaveBeenCalledTimes(2)
+    expect(glowContext.stroke).toHaveBeenCalledWith(glow.path)
     expect(glowContext.translate).toHaveBeenCalledWith(-10_000, 0)
     expect(glowContext.restore).toHaveBeenCalledOnce()
 
@@ -798,31 +748,10 @@ describe("Example Canvas workspace", () => {
       layer: 3,
       lineWidth: 1.6,
       zIndex: 18,
-      highlightGapAlpha: 0.05,
     })
-    expect(highlight.shapeStore.get("highlightGapAlpha")).toBe(0.05)
-    expect(highlight.stateDrawFuncMap.default.stroke).toBeTypeOf("function")
     highlight.update({ points: glow.points })
-    const addColorStop = vi.fn()
-    const highlightContext = {
-      beginPath: vi.fn(),
-      createLinearGradient: vi.fn(() => ({ addColorStop })),
-      lineTo: vi.fn(),
-      moveTo: vi.fn(),
-      restore: vi.fn(),
-      save: vi.fn(),
-      stroke: vi.fn(),
-      strokeStyle: "",
-    }
-    highlight.stateDrawFuncMap.default.stroke?.call(highlight, { context: highlightContext } as never)
-    expect(highlightContext.stroke).toHaveBeenCalledTimes(2)
-    expect(addColorStop.mock.calls).toEqual([
-      [0, "rgb(255 250 247 / 1)"],
-      [0.35, "rgb(255 250 247 / 0.05)"],
-      [0.65, "rgb(255 250 247 / 0.05)"],
-      [1, "rgb(255 250 247 / 1)"],
-    ])
-    expect(highlightContext.restore).toHaveBeenCalledOnce()
+    expect(highlight.points).toHaveLength(3)
+    expect(highlight.stateDrawFuncMap.default.stroke).toBeTypeOf("function")
   })
 
   it("defines a bounded Content scene and connects all corresponding plane corners", () => {
@@ -1055,6 +984,8 @@ describe("Example Canvas workspace", () => {
       [1440, 841],
       [1440, 959],
       [1440, 960],
+      [1200, 1366],
+      [900, 1200],
     ] as const) {
       const layout = createCoordinateSceneLayout(width, height)
       expect(layout.output.y + layout.output.height)

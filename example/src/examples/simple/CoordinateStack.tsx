@@ -17,7 +17,6 @@ import {
   Point,
   Polygon,
   Rectangle,
-  StandardMaterial,
   StayCanvas,
   StayText,
   TransparentImageMaterial,
@@ -66,16 +65,13 @@ import {
   type CoordinateConsoleControlName,
   planePresentationMetrics,
   planeVolumeGeometry,
-  planeVolumeProfileGeometry,
   planeWorldPoint,
   PLANE_GRID_COLUMNS,
   PLANE_GRID_ROWS,
-  projectCoordinateWorldPoint,
   projectPlanePoint,
   rectMeshGeometry,
   roundedRectMeshGeometry,
   screenFacingWorldQuad,
-  screenCoordinateToWorldAtDepth,
   transparentMeshColor,
   worldLineMeshGeometry,
   type PlaneBasis,
@@ -143,8 +139,6 @@ const SIGNAL_SHADOW_SOURCE_OFFSET = 10_000
 const SIGNAL_SHADOW_STORE_KEY = {
   blur: "shadowBlur",
   color: "shadowColor",
-  gapColor: "shadowGapColor",
-  gapAlpha: "highlightGapAlpha",
   passes: "shadowPasses",
 } as const
 type CoordinateSignalStyle = Readonly<{
@@ -154,27 +148,23 @@ type CoordinateSignalStyle = Readonly<{
   zIndex: number
   shadowBlur?: number
   shadowColor?: string
-  shadowGapColor?: string
   shadowPasses?: number
-  highlightGapAlpha?: number
 }>
 const COORDINATE_SIGNAL_STYLE = {
   glow: {
-    color: rgba(255, 170, 150, 0.65),
+    color: rgba(245, 139, 112, 0.42),
     layer: OVERLAY_LAYER,
-    lineWidth: 4,
+    lineWidth: 2.4,
     zIndex: 17,
-    shadowBlur: 10,
-    shadowColor: "rgb(255 110 75 / 0.65)",
-    shadowGapColor: "rgb(255 110 75 / 0.10)",
-    shadowPasses: 2,
+    shadowBlur: 6,
+    shadowColor: "rgb(235 105 74 / 0.4)",
+    shadowPasses: 1,
   },
   highlight: {
-    color: rgba(255, 250, 247, 1),
+    color: rgba(255, 248, 244, 0.92),
     layer: OVERLAY_LAYER,
-    lineWidth: 1.6,
+    lineWidth: 1.1,
     zIndex: 18,
-    highlightGapAlpha: 0.05,
   },
 } as const satisfies Readonly<Record<"glow" | "highlight", CoordinateSignalStyle>>
 const ROOM_BACKDROP_DEPTH = 19
@@ -183,7 +173,16 @@ const PANEL_OPTICAL_THICKNESS = 0.06
 const PANEL_FACE_OFFSET = PANEL_THICKNESS / 2
 const PANEL_BEVEL_RADIUS = 0.03
 const PANEL_BEVEL_SEGMENTS = 8
-const PANEL_FACE_ALPHA_SCALE = 1.35
+const SOURCE_OPTICAL_BEVEL_RADIUS: Readonly<Record<PlaneName, number>> = {
+  client: 0.04,
+  view: 0.055,
+  content: 0.065,
+}
+const PLANE_FACE_ALPHA: Readonly<Record<PlaneName, number>> = {
+  client: 0.13,
+  view: 0.135,
+  content: 0.14,
+}
 const PLANE_TITLE_SCALE_X = 0.82
 const PLANE_PLOT_TOP = 82
 const PLANE_PLOT_INSETS: Readonly<Record<PlaneName, Readonly<{
@@ -208,286 +207,33 @@ const PLANE_GLASS_ATTENUATION: Readonly<Record<PlaneName, {
   color: GlassAttenuationColor
   distance: number
 }>> = {
-  client: { color: [1, 0.88, 0.82], distance: 2 },
-  view: { color: [0.8, 0.9, 1], distance: 2 },
-  content: { color: [0.8, 1, 0.86], distance: 2 },
+  client: { color: [1, 0.94, 0.92], distance: 2 },
+  view: { color: [0.92, 0.96, 1], distance: 2 },
+  content: { color: [0.92, 1, 0.95], distance: 2 },
 }
-const PLANE_EDGE_PROFILE_COLORS: Readonly<Record<PlaneName, Readonly<{
-  inside: readonly [number, number, number]
-  peak: readonly [number, number, number]
-  body: readonly [number, number, number]
-  secondary: readonly [number, number, number]
-  outside: readonly [number, number, number]
-}>>> = {
-  client: {
-    inside: [244, 240, 238], peak: [255, 253, 251], body: [226, 222, 219],
-    secondary: [250, 247, 244], outside: [218, 212, 208],
-  },
-  view: {
-    inside: [243, 246, 250], peak: [253, 254, 255], body: [224, 227, 231],
-    secondary: [248, 250, 253], outside: [216, 222, 230],
-  },
-  content: {
-    inside: [233, 241, 236], peak: [253, 255, 253], body: [205, 214, 208],
-    secondary: [248, 252, 249], outside: [200, 212, 204],
-  },
-}
-const PLANE_EDGE_PROFILE_WIDTH = 32
-type PlaneEdgeDirection = "top" | "right" | "bottom" | "left"
-type PlaneEdgeAlphaKeyframe = readonly [index: number, alpha: number]
-
-function interpolatePlaneEdgeAlpha(keyframes: readonly PlaneEdgeAlphaKeyframe[]) {
-  return Array.from({ length: PLANE_EDGE_PROFILE_WIDTH }, (_, index) => {
-    const endIndex = keyframes.findIndex(([frameIndex]) => frameIndex >= index)
-    if (endIndex <= 0) return keyframes[Math.max(0, endIndex)][1]
-    const [startPosition, startAlpha] = keyframes[endIndex - 1]
-    const [endPosition, endAlpha] = keyframes[endIndex]
-    const progress = (index - startPosition) / (endPosition - startPosition)
-    return Math.round(startAlpha + (endAlpha - startAlpha) * progress)
-  })
-}
-
-const edgeAlpha = (...keyframes: PlaneEdgeAlphaKeyframe[]) =>
-  interpolatePlaneEdgeAlpha(keyframes)
-
-// Each pane and direction owns a complete optical response. Shared profiles
-// made unlike projected edges converge to the same narrow rail even when their
-// scalar weights differed; explicit keyframes preserve width, peak hierarchy,
-// and peak separation as independent material properties.
-const PLANE_EDGE_PROFILE_ALPHA: Readonly<Record<PlaneName, Readonly<Record<
-  PlaneEdgeDirection,
-  readonly number[]
->>>> = {
-  client: {
-    top: edgeAlpha([0, 0], [4, 30], [6, 180], [7, 180], [9, 40], [18, 0], [22, 40], [26, 0], [31, 0]),
-    right: edgeAlpha([0, 0], [4, 30], [8, 195], [11, 180], [15, 55], [19, 0], [31, 0]),
-    bottom: edgeAlpha([0, 0], [2, 55], [4, 115], [7, 72], [10, 40], [13, 0], [31, 0]),
-    left: edgeAlpha([0, 0], [2, 0], [5, 255], [7, 110], [10, 30], [13, 0], [31, 0]),
-  },
-  view: {
-    top: edgeAlpha([0, 0], [3, 48], [6, 245], [8, 255], [12, 42], [18, 8], [22, 100], [26, 0], [31, 0]),
-    right: edgeAlpha([0, 0], [6, 10], [9, 180], [10, 240], [12, 80], [16, 20], [20, 0], [31, 0]),
-    bottom: edgeAlpha([0, 0], [3, 50], [6, 125], [8, 100], [12, 40], [16, 0], [31, 0]),
-    left: edgeAlpha([0, 0], [1, 0], [5, 255], [8, 100], [11, 25], [14, 0], [31, 0]),
-  },
-  content: {
-    top: edgeAlpha([0, 0], [3, 52], [6, 250], [8, 255], [11, 30], [18, 5], [22, 55], [26, 0], [31, 0]),
-    right: edgeAlpha([0, 0], [4, 8], [8, 90], [10, 160], [13, 90], [16, 35], [20, 0], [31, 0]),
-    bottom: edgeAlpha([0, 0], [1, 40], [3, 155], [4, 125], [6, 35], [8, 0], [31, 0]),
-    left: edgeAlpha([0, 0], [1, 0], [5, 231], [8, 140], [11, 35], [14, 0], [31, 0]),
-  },
-}
-type PlaneEdgeSupport = Readonly<{ inside: number; outside: number }>
-const PLANE_EDGE_OPTICAL_SUPPORT: Readonly<Record<PlaneName, Readonly<{
-  top: PlaneEdgeSupport
-  right: PlaneEdgeSupport
-  bottom: PlaneEdgeSupport
-  left: PlaneEdgeSupport
-}>>> = {
-  client: {
-    top: { inside: 1.5, outside: 5 },
-    right: { inside: 1.5, outside: 7.5 },
-    bottom: { inside: 1.5, outside: 11.5 },
-    left: { inside: 1.5, outside: 7.5 },
-  },
-  view: {
-    top: { inside: 1.5, outside: 5 },
-    right: { inside: 1.5, outside: 8 },
-    bottom: { inside: 1.5, outside: 17 },
-    left: { inside: 1.5, outside: 7.5 },
-  },
-  content: {
-    top: { inside: 1.5, outside: 5 },
-    right: { inside: 1.5, outside: 8 },
-    bottom: { inside: 1.5, outside: 14 },
-    left: { inside: 1.5, outside: 7.5 },
-  },
+const PLANE_BEVEL_COLOR: Readonly<Record<PlaneName, ReturnType<typeof rgba>>> = {
+  client: rgba(255, 246, 241, 0.58),
+  view: rgba(230, 244, 255, 0.58),
+  content: rgba(231, 255, 241, 0.58),
 }
 const PLANE_GROUND_GLOW: Readonly<Record<PlaneName, ReturnType<typeof rgba>>> = {
-  client: rgba(255, 150, 135, 0.18),
-  view: rgba(110, 155, 255, 0.42),
-  content: rgba(88, 190, 160, 0.14),
+  client: rgba(245, 126, 105, 0.13),
+  view: rgba(87, 137, 245, 0.14),
+  content: rgba(63, 171, 132, 0.13),
 }
 const PLANE_CONTACT_SHADOW: Readonly<Record<PlaneName, Readonly<{
   alpha: number
   blur: number
   offset: number
 }>>> = {
-  client: { alpha: 0.08, blur: 2, offset: 5.33 },
-  view: { alpha: 0.016, blur: 2.5, offset: 6.5 },
-  content: { alpha: 0.14, blur: 2, offset: 9 },
+  client: { alpha: 0.16, blur: 1.4, offset: 1 },
+  view: { alpha: 0.16, blur: 1.4, offset: 1 },
+  content: { alpha: 0.16, blur: 1.4, offset: 1 },
 }
 const unlitMaterial = (color: ReturnType<typeof rgba>) =>
   new UnlitMaterial({ color: meshColor(color) })
-const standardMaterial = (
-  color: ReturnType<typeof rgba>,
-  metallic: number,
-  roughness: number,
-) => new StandardMaterial({ color: meshColor(color), metallic, roughness })
-
 let coordinateShapeTexture: ImageTexture | undefined
 let coordinateOutputEdgeTexture: ImageTexture | undefined
-
-const PLANE_FACE_INSET = 3
-const PLANE_FACE_DEPTH_OFFSET = PANEL_FACE_OFFSET + 0.004
-const PLANE_FACE_TEXTURE_SIZE = 64
-const PLANE_FACE_EDGE_FADE_WIDTH = 0.14
-
-const PLANE_FACE_OPTICS: Readonly<Record<PlaneName, Readonly<{
-  shadowTint: readonly [number, number, number]
-  highlightTint: readonly [number, number, number]
-  opacity: number
-  opacityGradient: number
-  reflection: Readonly<{
-    screenAngle: number
-    center: number
-    width: number
-    strength: number
-  }>
-}>>> = {
-  client: {
-    shadowTint: [154, 145, 140],
-    highlightTint: [255, 250, 247],
-    opacity: 0.13,
-    opacityGradient: 0,
-    reflection: { screenAngle: 16, center: 0, width: 1.05, strength: 1 },
-  },
-  view: {
-    shadowTint: [158, 166, 182],
-    highlightTint: [245, 250, 253],
-    opacity: 0.57,
-    opacityGradient: 0,
-    reflection: { screenAngle: 7.5, center: 0, width: 1.05, strength: 1 },
-  },
-  content: {
-    shadowTint: [248, 255, 250],
-    highlightTint: [248, 255, 250],
-    opacity: 0.48,
-    opacityGradient: 0.9,
-    reflection: { screenAngle: -1.5, center: 0, width: 1.05, strength: 1 },
-  },
-}
-
-function coordinatePlaneFaceScreenPoint(
-  plane: PlaneDefinition,
-  basis: PlaneBasis,
-  viewSize: Readonly<{ width: number; height: number }>,
-  horizontal: number,
-  vertical: number,
-) {
-  const localWidth = plane.width - PLANE_FACE_INSET * 2
-  const localHeight = plane.height - PLANE_FACE_INSET * 2
-  return projectCoordinateWorldPoint(
-    viewSize.width,
-    viewSize.height,
-    planeWorldPoint(plane, basis, {
-      x: PLANE_FACE_INSET + horizontal * localWidth,
-      y: PLANE_FACE_INSET + vertical * localHeight,
-    }, PLANE_FACE_DEPTH_OFFSET),
-  )
-}
-
-function createCoordinatePlaneReflectionPosition(
-  plane: PlaneDefinition,
-  basis: PlaneBasis,
-  viewSize: Readonly<{ width: number; height: number }>,
-  screenAngle: number,
-) {
-  const angle = screenAngle * Math.PI / 180
-  const screenGradient = { x: Math.cos(angle), y: Math.sin(angle) }
-  const center = coordinatePlaneFaceScreenPoint(plane, basis, viewSize, 0.5, 0.5)
-  const derivativeStep = 1 / PLANE_FACE_TEXTURE_SIZE
-  const left = coordinatePlaneFaceScreenPoint(
-    plane, basis, viewSize, 0.5 - derivativeStep, 0.5,
-  )
-  const right = coordinatePlaneFaceScreenPoint(
-    plane, basis, viewSize, 0.5 + derivativeStep, 0.5,
-  )
-  const top = coordinatePlaneFaceScreenPoint(
-    plane, basis, viewSize, 0.5, 0.5 - derivativeStep,
-  )
-  const bottom = coordinatePlaneFaceScreenPoint(
-    plane, basis, viewSize, 0.5, 0.5 + derivativeStep,
-  )
-  const horizontalResponse = (
-    (right.x - left.x) * screenGradient.x
-    + (right.y - left.y) * screenGradient.y
-  ) / (derivativeStep * 2)
-  const verticalResponse = (
-    (bottom.x - top.x) * screenGradient.x
-    + (bottom.y - top.y) * screenGradient.y
-  ) / (derivativeStep * 2)
-  const response = Math.hypot(horizontalResponse, verticalResponse)
-  if (!Number.isFinite(response) || response <= 1e-8) {
-    throw new RangeError("coordinate plane face projection must have a visible gradient")
-  }
-
-  // A screen-linear scalar field keeps its gradient direction stable after
-  // projective interpolation. Normalizing by the center Jacobian preserves the
-  // existing UV-ramp amplitude while the projected pane changes responsively.
-  return (horizontal: number, vertical: number) => {
-    const screen = coordinatePlaneFaceScreenPoint(
-      plane, basis, viewSize, horizontal, vertical,
-    )
-    return (
-      (screen.x - center.x) * screenGradient.x
-      + (screen.y - center.y) * screenGradient.y
-    ) / response
-  }
-}
-
-function createCoordinatePlaneFaceTexture(
-  name: PlaneName,
-  plane: PlaneDefinition,
-  basis: PlaneBasis,
-  viewSize: Readonly<{ width: number; height: number }>,
-) {
-  const width = PLANE_FACE_TEXTURE_SIZE
-  const height = PLANE_FACE_TEXTURE_SIZE
-  const data = new Uint8Array(width * height * 4)
-  const optics = PLANE_FACE_OPTICS[name]
-  const reflectionPositionAt = createCoordinatePlaneReflectionPosition(
-    plane,
-    basis,
-    viewSize,
-    optics.reflection.screenAngle,
-  )
-  for (let y = 0; y < height; y += 1) {
-    const vertical = y / (height - 1)
-    for (let x = 0; x < width; x += 1) {
-      const horizontal = x / (width - 1)
-      const edgeDistance = Math.min(horizontal, 1 - horizontal, vertical, 1 - vertical)
-      const edgeFadeProgress = Math.max(
-        0,
-        Math.min(1, edgeDistance / PLANE_FACE_EDGE_FADE_WIDTH),
-      )
-      const edgeFade = edgeFadeProgress * edgeFadeProgress * (3 - 2 * edgeFadeProgress)
-      const reflectionPosition = reflectionPositionAt(horizontal, vertical)
-      const reflectionProgress = Math.max(0, Math.min(
-        1,
-        (reflectionPosition - optics.reflection.center) / optics.reflection.width + 0.5,
-      ))
-      const reflection = reflectionProgress * reflectionProgress * (3 - 2 * reflectionProgress)
-      const tone = 0.5 + (reflection - 0.5) * optics.reflection.strength
-      const alpha = Math.max(0, Math.min(
-        1,
-        optics.opacity + (reflection - 0.5) * optics.opacityGradient,
-      )) * edgeFade
-      const offset = (y * width + x) * 4
-      data[offset] = Math.round(
-        optics.shadowTint[0] + (optics.highlightTint[0] - optics.shadowTint[0]) * tone,
-      )
-      data[offset + 1] = Math.round(
-        optics.shadowTint[1] + (optics.highlightTint[1] - optics.shadowTint[1]) * tone,
-      )
-      data[offset + 2] = Math.round(
-        optics.shadowTint[2] + (optics.highlightTint[2] - optics.shadowTint[2]) * tone,
-      )
-      data[offset + 3] = Math.round(alpha * 255)
-    }
-  }
-  return new ImageTexture({ width, height, alphaMode: "straight", data })
-}
 
 export function createCoordinateShapeTexture() {
   if (coordinateShapeTexture) return coordinateShapeTexture
@@ -594,10 +340,10 @@ const glassMaterial = (
 export function coordinatePlaneGlassMaterial(
   name: PlaneName,
   color: ReturnType<typeof rgba>,
-  alphaScale = 1,
+  focusScale = 1,
 ) {
   return glassMaterial(
-    { ...color, a: color.a * alphaScale },
+    { ...color, a: PLANE_FACE_ALPHA[name] * focusScale },
     PANEL_OPTICAL_THICKNESS,
     PLANE_GLASS_ROUGHNESS[name],
     PLANE_GLASS_ATTENUATION[name],
@@ -605,15 +351,25 @@ export function coordinatePlaneGlassMaterial(
   )
 }
 
+function coordinatePlaneBevelMaterial(name: PlaneName) {
+  return glassMaterial(
+    PLANE_BEVEL_COLOR[name],
+    PANEL_THICKNESS,
+    0.055,
+    PLANE_GLASS_ATTENUATION[name],
+    1.48,
+  )
+}
+
 export function coordinateOutputGlassMaterial() {
-  return glassMaterial(rgba(200, 208, 210, 0.15), OUTPUT_PANEL_THICKNESS, 0.035, {
-    color: [0.78, 0.82, 0.82],
-    distance: 0.24,
+  return glassMaterial(rgba(224, 230, 230, 0.16), OUTPUT_PANEL_THICKNESS, 0.035, {
+    color: [0.88, 0.92, 0.92],
+    distance: 0.4,
   })
 }
 
 function coordinateConsoleFaceMaterial() {
-  return glassMaterial(rgba(212, 216, 216, 0.27), 0.065, 0.07, {
+  return glassMaterial(rgba(220, 224, 223, 0.21), 0.065, 0.07, {
     color: [0.92, 0.92, 0.92],
     distance: 1.2,
   }, 1.33)
@@ -629,7 +385,6 @@ function coordinateConsoleEdgeMaterial() {
 function strokeCoordinateSignalGlow(this: Path, { context }: ShapeDrawProps) {
   const shadowBlur = this.shapeStore.get(SIGNAL_SHADOW_STORE_KEY.blur)
   const shadowColor = this.shapeStore.get(SIGNAL_SHADOW_STORE_KEY.color)
-  const shadowGapColor = this.shapeStore.get(SIGNAL_SHADOW_STORE_KEY.gapColor)
   const shadowPasses = this.shapeStore.get(SIGNAL_SHADOW_STORE_KEY.passes)
   context.save()
   context.shadowBlur = typeof shadowBlur === "number" ? shadowBlur : 0
@@ -638,63 +393,9 @@ function strokeCoordinateSignalGlow(this: Path, { context }: ShapeDrawProps) {
   context.shadowOffsetX = SIGNAL_SHADOW_SOURCE_OFFSET
   context.shadowOffsetY = 0
   const passCount = typeof shadowPasses === "number" ? Math.max(1, Math.floor(shadowPasses)) : 1
-  const [clientPoint, viewPoint, contentPoint, outputPoint] = this.points
   for (let pass = 0; pass < passCount; pass += 1) {
-    if (!clientPoint || !viewPoint || !contentPoint || !outputPoint) {
-      context.stroke(this.path)
-      continue
-    }
-    context.beginPath()
-    context.moveTo(clientPoint.x, clientPoint.y)
-    context.lineTo(viewPoint.x, viewPoint.y)
-    context.lineTo(contentPoint.x, contentPoint.y)
-    context.stroke()
-    context.shadowColor = typeof shadowGapColor === "string" ? shadowGapColor : context.shadowColor
-    context.beginPath()
-    context.moveTo(contentPoint.x, contentPoint.y)
-    context.lineTo(outputPoint.x, outputPoint.y)
-    context.stroke()
-    context.shadowColor = typeof shadowColor === "string" ? shadowColor : "transparent"
-  }
-  context.restore()
-}
-
-function signalColor(color: ReturnType<typeof rgba>, alpha: number) {
-  return `rgb(${color.r} ${color.g} ${color.b} / ${alpha})`
-}
-
-function strokeCoordinateSignalHighlight(this: Path, { context }: ShapeDrawProps) {
-  const [clientPoint, viewPoint, contentPoint, outputPoint] = this.points
-  if (!clientPoint || !viewPoint || !contentPoint || !outputPoint) {
     context.stroke(this.path)
-    return
   }
-  const gapAlpha = this.shapeStore.get(SIGNAL_SHADOW_STORE_KEY.gapAlpha)
-  const middleAlpha = typeof gapAlpha === "number" ? gapAlpha : 1
-  const color = this.strokeConfig.color
-  context.save()
-  context.strokeStyle = signalColor(color, color.a)
-  context.beginPath()
-  context.moveTo(clientPoint.x, clientPoint.y)
-  context.lineTo(viewPoint.x, viewPoint.y)
-  context.lineTo(contentPoint.x, contentPoint.y)
-  context.stroke()
-
-  const gapGradient = context.createLinearGradient(
-    contentPoint.x,
-    contentPoint.y,
-    outputPoint.x,
-    outputPoint.y,
-  )
-  gapGradient.addColorStop(0, signalColor(color, color.a))
-  gapGradient.addColorStop(0.35, signalColor(color, color.a * middleAlpha))
-  gapGradient.addColorStop(0.65, signalColor(color, color.a * middleAlpha))
-  gapGradient.addColorStop(1, signalColor(color, color.a))
-  context.strokeStyle = gapGradient
-  context.beginPath()
-  context.moveTo(contentPoint.x, contentPoint.y)
-  context.lineTo(outputPoint.x, outputPoint.y)
-  context.stroke()
   context.restore()
 }
 
@@ -706,15 +407,11 @@ export function createCoordinateSignalPath(style: CoordinateSignalStyle) {
     shapeStore: new Map<string, unknown>([
       [SIGNAL_SHADOW_STORE_KEY.blur, style.shadowBlur ?? 0],
       [SIGNAL_SHADOW_STORE_KEY.color, style.shadowColor ?? "transparent"],
-      [SIGNAL_SHADOW_STORE_KEY.gapColor, style.shadowGapColor ?? style.shadowColor ?? "transparent"],
-      [SIGNAL_SHADOW_STORE_KEY.gapAlpha, style.highlightGapAlpha ?? 1],
       [SIGNAL_SHADOW_STORE_KEY.passes, style.shadowPasses ?? 1],
     ]),
     stateDrawFuncMap: style.shadowBlur
       ? { default: { stroke: strokeCoordinateSignalGlow } }
-      : style.highlightGapAlpha
-        ? { default: { stroke: strokeCoordinateSignalHighlight } }
-        : undefined,
+      : undefined,
     strokeConfig: {
       color: style.color,
       lineWidth: style.lineWidth,
@@ -1027,7 +724,6 @@ function loadCoordinateRoomTexture() {
 
 type PlaneMeshes = {
   frameFill: Mesh
-  frameOptics: Mesh
   frameDepth: Mesh
   grid: Mesh
   axes: Mesh
@@ -1174,11 +870,9 @@ type StackRuntime = {
   viewSize: { width: number; height: number }
   clientViewLinks: [Line, Line, Line, Line]
   viewContentLinks: [Line, Line, Line, Line]
-  signalMeshes: [Mesh, Mesh, Mesh]
+  signalMeshes: [Mesh, Mesh]
   signalGlowPath: Path
   signalHighlightPath: Path
-  outputDefinition?: PlaneDefinition
-  outputBasis?: PlaneBasis
   sceneLayoutInitialized?: boolean
   evidenceOpen?: boolean
   heroCopyKey?: string
@@ -1253,159 +947,6 @@ function cornerSegments(rect: Readonly<Rect>): LineSegment[] {
   ]
 }
 
-function mixChannel(start: number, end: number, progress: number) {
-  return Math.round(start + (end - start) * progress)
-}
-
-function planeEdgeProfileColor(
-  colors: typeof PLANE_EDGE_PROFILE_COLORS[PlaneName],
-  index: number,
-) {
-  const segment = index <= 5
-    ? { startIndex: 0, endIndex: 5, start: colors.inside, end: colors.peak }
-    : index <= 10
-      ? { startIndex: 5, endIndex: 10, start: colors.peak, end: colors.peak }
-      : index <= 16
-        ? { startIndex: 10, endIndex: 16, start: colors.peak, end: colors.body }
-        : index <= 28
-          ? { startIndex: 16, endIndex: 28, start: colors.body, end: colors.secondary }
-        : { startIndex: 28, endIndex: 31, start: colors.secondary, end: colors.outside }
-  const progress = (index - segment.startIndex) / (segment.endIndex - segment.startIndex)
-  return segment.start.map((channel, channelIndex) =>
-    mixChannel(channel, segment.end[channelIndex], progress))
-}
-
-function planeEdgeDirectionAlpha(
-  name: PlaneName,
-  outward: Readonly<{ x: number; y: number }>,
-  index: number,
-) {
-  const horizontal: PlaneEdgeDirection = outward.x < 0 ? "left" : "right"
-  const vertical: PlaneEdgeDirection = outward.y < 0 ? "top" : "bottom"
-  const horizontalWeight = Math.abs(outward.x)
-  const verticalWeight = Math.abs(outward.y)
-  const weight = horizontalWeight + verticalWeight
-  const horizontalAlpha = PLANE_EDGE_PROFILE_ALPHA[name][horizontal][index]
-  const verticalAlpha = PLANE_EDGE_PROFILE_ALPHA[name][vertical][index]
-  return Math.round((
-    horizontalAlpha * horizontalWeight + verticalAlpha * verticalWeight
-  ) / weight)
-}
-
-/** One direction-aware profile texture owns every edge and rounded transition. */
-export function createCoordinatePlaneEdgeTexture(name: PlaneName) {
-  const width = PLANE_EDGE_PROFILE_WIDTH
-  const height = 4 * (PANEL_BEVEL_SEGMENTS + 1)
-  const data = new Uint8Array(width * height * 4)
-  const colors = PLANE_EDGE_PROFILE_COLORS[name]
-  const cornerStarts = [-Math.PI / 2, 0, Math.PI / 2, Math.PI]
-  for (let row = 0; row < height; row += 1) {
-    const corner = Math.floor(row / (PANEL_BEVEL_SEGMENTS + 1))
-    const cornerIndex = row % (PANEL_BEVEL_SEGMENTS + 1)
-    const angle = cornerStarts[corner]
-      + Math.PI / 2 * cornerIndex / PANEL_BEVEL_SEGMENTS
-    const outward = { x: Math.cos(angle), y: Math.sin(angle) }
-    for (let index = 0; index < width; index += 1) {
-      const color = planeEdgeProfileColor(colors, index)
-      const offset = (row * width + index) * 4
-      for (let channel = 0; channel < 3; channel += 1) {
-        data[offset + channel] = color[channel]
-      }
-      data[offset + 3] = planeEdgeDirectionAlpha(name, outward, index)
-    }
-  }
-  return new ImageTexture({ width, height, alphaMode: "straight", data })
-}
-
-export function coordinatePlaneEdgeSupport(
-  name: PlaneName,
-  outward: Readonly<{ x: number; y: number }>,
-): PlaneEdgeSupport {
-  const supports = PLANE_EDGE_OPTICAL_SUPPORT[name]
-  const horizontal = outward.x < 0 ? supports.left : supports.right
-  const vertical = outward.y < 0 ? supports.top : supports.bottom
-  return {
-    inside: Math.hypot(
-      outward.x * horizontal.inside,
-      outward.y * vertical.inside,
-    ),
-    outside: Math.hypot(
-      outward.x * horizontal.outside,
-      outward.y * vertical.outside,
-    ),
-  }
-}
-
-function opticalPlaneVolumeProfileGeometry(
-  name: PlaneName,
-  plane: PlaneDefinition,
-  basis: PlaneBasis,
-  viewSize: Readonly<{ width: number; height: number }>,
-) {
-  const geometry = planeVolumeProfileGeometry(
-    plane,
-    basis,
-    PANEL_THICKNESS,
-    PANEL_BEVEL_RADIUS,
-    PANEL_BEVEL_SEGMENTS,
-  )
-  const positions = Array.from(geometry.positions)
-  const pairCount = positions.length / 6
-  const uniquePairCount = pairCount - 1
-  const frontWorld = (index: number): Vector3 => [
-    positions[index * 6],
-    positions[index * 6 + 1],
-    positions[index * 6 + 2],
-  ]
-  const frontScreen = Array.from({ length: uniquePairCount }, (_, index) =>
-    projectCoordinateWorldPoint(viewSize.width, viewSize.height, frontWorld(index)))
-
-  for (let index = 0; index < uniquePairCount; index += 1) {
-    const front = frontScreen[index]
-    const previous = frontScreen[(index - 1 + uniquePairCount) % uniquePairCount]
-    const next = frontScreen[(index + 1) % uniquePairCount]
-    const tangent = { x: next.x - previous.x, y: next.y - previous.y }
-    const tangentLength = Math.hypot(tangent.x, tangent.y)
-    const outward = {
-      x: tangent.y / tangentLength,
-      y: -tangent.x / tangentLength,
-    }
-    const support = coordinatePlaneEdgeSupport(name, outward)
-    // The transparent ribbon is an optical rim, so keep it just in front of
-    // the transmissive face. Otherwise the face composites over the inward
-    // shoulder and collapses the authored profile into a one-pixel outline.
-    const profileDepth = -frontWorld(index)[2] - 0.001
-    const expandedBack = screenCoordinateToWorldAtDepth(
-      viewSize.width,
-      viewSize.height,
-      {
-        x: front.x + outward.x * support.outside,
-        y: front.y + outward.y * support.outside,
-      },
-      profileDepth,
-    )
-    const expandedFront = screenCoordinateToWorldAtDepth(
-      viewSize.width,
-      viewSize.height,
-      {
-        x: front.x - outward.x * support.inside,
-        y: front.y - outward.y * support.inside,
-      },
-      profileDepth,
-    )
-    positions[index * 6] = expandedFront[0]
-    positions[index * 6 + 1] = expandedFront[1]
-    positions[index * 6 + 2] = expandedFront[2]
-    positions[index * 6 + 3] = expandedBack[0]
-    positions[index * 6 + 4] = expandedBack[1]
-    positions[index * 6 + 5] = expandedBack[2]
-  }
-  for (let offset = 0; offset < 6; offset += 1) {
-    positions[uniquePairCount * 6 + offset] = positions[offset]
-  }
-  return { ...geometry, positions }
-}
-
 function gridPosition(index: number, count: number, size: number) {
   return index / (count + 1) * size
 }
@@ -1453,14 +994,14 @@ function createPlaneRuntime(
   name: PlaneName,
   plane: PlaneDefinition,
   detailsVisible: boolean,
-  viewSize: Readonly<{ width: number; height: number }>,
 ): { meshes: Mesh[]; overlays: Array<Circle | Line | Polygon | Rectangle | StayText>; runtime: PlaneRuntime } {
   const basis = createPlaneBasis(plane)
   const presentation = planePresentationMetrics(plane)
   const plotInsets = PLANE_PLOT_INSETS[name]
   const plotBottom = plane.height - plotInsets.bottom
   const axisColor = rgba(222, 228, 225, 0.9)
-  const face = createPlaneBevelFaceProfile(plane, basis, PANEL_BEVEL_RADIUS)
+  const bevelRadius = SOURCE_OPTICAL_BEVEL_RADIUS[name]
+  const face = createPlaneBevelFaceProfile(plane, basis, bevelRadius)
   const frameFill = new Mesh({
     geometry: roundedRectMeshGeometry(
       plane,
@@ -1471,36 +1012,22 @@ function createPlaneRuntime(
       PANEL_BEVEL_SEGMENTS,
       PANEL_FACE_OFFSET,
     ),
-    material: coordinatePlaneGlassMaterial(name, plane.fill, PANEL_FACE_ALPHA_SCALE),
+    material: coordinatePlaneGlassMaterial(name, plane.fill),
     // The shallow facade owns a restrained transmissive projection so the
     // physical pane connects to the shared floor without becoming opaque.
     castShadow: true,
     receiveShadow: false,
   })
-  const frameOptics = new Mesh({
-    geometry: rectMeshGeometry(plane, basis, {
-      x: PLANE_FACE_INSET,
-      y: PLANE_FACE_INSET,
-      width: plane.width - PLANE_FACE_INSET * 2,
-      height: plane.height - PLANE_FACE_INSET * 2,
-    }, PLANE_FACE_DEPTH_OFFSET),
-    material: new TransparentImageMaterial({
-      texture: createCoordinatePlaneFaceTexture(name, plane, basis, viewSize),
-    }),
-    castShadow: false,
-    receiveShadow: false,
-  })
   const frameDepth = new Mesh({
-    geometry: opticalPlaneVolumeProfileGeometry(
-      name,
+    geometry: planeVolumeGeometry(
       plane,
       basis,
-      viewSize,
+      PANEL_THICKNESS,
+      bevelRadius,
+      PANEL_BEVEL_SEGMENTS,
     ),
-    material: new TransparentImageMaterial({
-      texture: createCoordinatePlaneEdgeTexture(name),
-    }),
-    castShadow: false,
+    material: coordinatePlaneBevelMaterial(name),
+    castShadow: true,
     receiveShadow: false,
   })
   const grid = new Mesh({
@@ -1510,8 +1037,8 @@ function createPlaneRuntime(
       x2: Math.max(face.rect.x, Math.min(face.rect.x + face.rect.width, segment.x2)),
       y1: Math.max(face.rect.y, Math.min(face.rect.y + face.rect.height, segment.y1)),
       y2: Math.max(face.rect.y, Math.min(face.rect.y + face.rect.height, segment.y2)),
-    })), 0.5, PANEL_FACE_OFFSET + 0.006),
-    material: unlitMaterial(rgba(200, 210, 207, 1)),
+    })), 0.65, PANEL_FACE_OFFSET + 0.006),
+    material: unlitMaterial(rgba(175, 188, 184, 1)),
   })
   const axes = new Mesh({
     geometry: lineMeshGeometry(plane, basis, [
@@ -1640,15 +1167,15 @@ function createPlaneRuntime(
   const groundLeft = projectPlanePoint(plane, { x: 12, y: plane.height })
   const groundRight = projectPlanePoint(plane, { x: plane.width - 12, y: plane.height })
   const groundWidth = Math.abs(groundRight.x - groundLeft.x)
-  const groundBleed = presentation.projectedWidth * 0.06
+  const groundBleed = 0
   const groundGlow = new Rectangle({
     x: Math.min(groundLeft.x, groundRight.x) - groundBleed,
     y: (groundLeft.y + groundRight.y) / 2 + 1,
     width: groundWidth + groundBleed * 2,
-    height: Math.max(44, presentation.projectedWidth * 0.16),
+    height: Math.max(20, presentation.projectedWidth * 0.06),
     layer: GROUND_LAYER,
     zIndex: -20,
-    filter: "blur(22px)",
+    filter: "blur(12px)",
     fillConfig: { color: PLANE_GROUND_GLOW[name] },
     strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
   })
@@ -1667,13 +1194,13 @@ function createPlaneRuntime(
     fillConfig: { color: rgba(46, 43, 39, PLANE_CONTACT_SHADOW[name].alpha) },
     strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
   })
-  const reflectionDepth = Math.max(34, Math.min(54, presentation.projectedWidth * 0.14))
+  const reflectionDepth = Math.max(20, Math.min(30, presentation.projectedWidth * 0.08))
   const reflectionInset = Math.abs(groundRight.x - groundLeft.x) * 0.055 * direction
   const reflectionColor = PLANE_GROUND_GLOW[name]
   const reflections = ([
-    { depth: reflectionDepth, alphaScale: 0.26, blur: 10 },
-    { depth: reflectionDepth * 0.62, alphaScale: 0.19, blur: 7 },
-    { depth: reflectionDepth * 0.28, alphaScale: 0.12, blur: 4 },
+    { depth: reflectionDepth, alphaScale: 0.16, blur: 10 },
+    { depth: reflectionDepth * 0.62, alphaScale: 0.09, blur: 7 },
+    { depth: reflectionDepth * 0.28, alphaScale: 0.04, blur: 4 },
   ] as const).map(({ depth, alphaScale, blur }) => new Polygon({
     points: [
       { x: groundLeft.x + contactInset, y: groundLeft.y + 4 },
@@ -1688,8 +1215,8 @@ function createPlaneRuntime(
     strokeConfig: { color: rgba(0, 0, 0, 0), lineWidth: 0 },
   }))
   const reflectionEdges = ([
-    { offset: 8, alphaScale: 0.18, lineWidth: 1.2 },
-    { offset: 18, alphaScale: 0.07, lineWidth: 0.9 },
+    { offset: 6, alphaScale: 0.04, lineWidth: 0.7 },
+    { offset: 12, alphaScale: 0.01, lineWidth: 0.5 },
   ] as const).map(({ offset, alphaScale, lineWidth }) => {
     const edgeInset = offset * 0.28 * direction
     return new Line({
@@ -1708,7 +1235,6 @@ function createPlaneRuntime(
   })
   const meshes: PlaneMeshes = {
     frameFill,
-    frameOptics,
     frameDepth,
     grid,
     axes,
@@ -2318,32 +1844,34 @@ function updateHeroOverlay(
   copy: Readonly<{ eyebrow: string; first: string; second: string; compact: string; subtitle: string }>,
 ) {
   const short = viewSize.height <= 740
-  const narrow = viewSize.width <= 900
-  const x = short ? 12 : narrow ? 18 : 56
-  const titleSize = short ? 19 : narrow ? 32 : 48
-  const titleWeight = short ? 600 : 400
-  const titleY = short ? 10 : narrow ? 32 : 68
+  const wideHeroSpace = viewSize.width >= 1440
+    && viewSize.width / Math.max(1, viewSize.height) >= 1.6
+  const compact = short || !wideHeroSpace
+  const x = compact ? 12 : 56
+  const titleSize = compact ? 19 : 48
+  const titleWeight = compact ? 600 : 400
+  const titleY = compact ? 0 : 68
   const lineGap = titleSize * 0.98
   overlay.eyebrow.update({
     x,
-    y: short ? 0 : narrow ? 12 : 28,
+    y: compact ? 0 : 28,
     text: "",
   })
   overlay.titleFirst.update({
     x,
     y: titleY,
-    text: short ? copy.compact : copy.first,
+    text: compact ? copy.compact : copy.first,
     font: { fontFamily: '"Helvetica Neue", "PingFang SC", "Noto Sans CJK SC", sans-serif', size: titleSize, fontWeight: titleWeight },
   })
   overlay.titleSecond.update({
     x,
     y: titleY + lineGap,
-    text: short ? "" : copy.second,
+    text: compact ? "" : copy.second,
     font: { fontFamily: '"Helvetica Neue", "PingFang SC", "Noto Sans CJK SC", sans-serif', size: titleSize, fontWeight: titleWeight },
   })
   overlay.subtitle.update({
     x,
-    y: titleY + lineGap * 2 + (narrow ? 5 : 10),
+    y: titleY + lineGap * 2 + 10,
     // Keep the accessible copy in the semantic DOM, but preserve the open
     // installation gap between the hero and the first physical pane.
     text: "",
@@ -3278,11 +2806,10 @@ function createCoordinateMappingLinks() {
   })) as [Line, Line, Line, Line]
 }
 
-function createCoordinateSignalMeshes(): [Mesh, Mesh, Mesh] {
+function createCoordinateSignalMeshes(): [Mesh, Mesh] {
   return [
-    new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(255, 238, 232, 0.52)) }),
-    new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(255, 238, 232, 0.52)) }),
-    new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(255, 238, 232, 0.08)) }),
+    new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(244, 192, 176, 0.32)) }),
+    new Mesh({ geometry: emptyMeshGeometry(), material: unlitMaterial(rgba(244, 192, 176, 0.32)) }),
   ]
 }
 
@@ -3335,6 +2862,7 @@ function mountCoordinateScene(
   const heroOverlay = createHeroOverlay()
   const evidenceOverlay = createEvidenceOverlay()
   const outputSignal = createCoordinateOutputSignal()
+  const sourceOpticalMeshes: Mesh[] = []
   const meshes = [
     outputPanel.face,
     outputPanel.depth,
@@ -3350,11 +2878,12 @@ function mountCoordinateScene(
     outputSignal,
   )
   const planeTitles: StayText[] = []
+  const showSourceDetails = canvasArea.width >= 1024
 
   for (const name of ["client", "view", "content"] as const) {
-    const created = createPlaneRuntime(name, definitions[name], canvasArea.width >= 600, canvasArea)
+    const created = createPlaneRuntime(name, definitions[name], showSourceDetails)
     planes[name] = created.runtime
-    meshes.push(...created.meshes)
+    sourceOpticalMeshes.push(...created.meshes)
     overlays.push(...created.overlays.filter((shape) => shape !== created.runtime.overlay.title))
     planeTitles.push(created.runtime.overlay.title)
   }
@@ -3376,6 +2905,11 @@ function mountCoordinateScene(
     className: "coordinate-room-backdrop",
     layer: BACKDROP_WEBGL_LAYER,
     meshes: [],
+  })
+  tools.webgl.appendChild({
+    className: "coordinate-source-optical-scene",
+    layer: BACKDROP_WEBGL_LAYER,
+    meshes: sourceOpticalMeshes,
   })
   tools.webgl.appendChild({
     className: "coordinate-native-scene",
@@ -3473,7 +3007,7 @@ function updateCoordinatePlaneFocus(
     plane.meshes.frameFill.setMaterial(coordinatePlaneGlassMaterial(
       name,
       plane.fill,
-      (active ? 1 : 0.82) * PANEL_FACE_ALPHA_SCALE,
+      active ? 1 : 0.9,
     ))
     plane.overlay.title.update({
       fillConfig: { color: { ...plane.stroke, a: active ? 0.9 : 0.72 } },
@@ -3620,7 +3154,6 @@ type CoordinateSceneUpdateInput = Pick<CoordinateStackProps,
   "clientRange" | "coordinateEvidence" | "cssDisplay" | "evidenceOpen" | "eventEvidence"
   | "mappingFocus" | "onSceneLayoutChange"
 > & {
-  clientToRootView?: (point: Readonly<Coordinate>) => Coordinate
   currentViewport: Readonly<ViewportState>
   runtime: StackRuntime
   sample: CoordinateProbe
@@ -3669,18 +3202,11 @@ function updateCoordinateMappingLinks(
 
 function updateCoordinateSignal(
   runtime: StackRuntime,
-  sceneLayout: Readonly<CoordinateSceneLayout>,
-  sample: CoordinateProbe,
   points: Readonly<Partial<Record<PlaneName, Coordinate>>>,
   worldPoints: Readonly<Partial<Record<PlaneName, Vector3>>>,
-  clientToRootView: CoordinateSceneUpdateInput["clientToRootView"],
 ) {
-  const { outputDefinition, outputBasis } = runtime
-  if (!outputDefinition || !outputBasis) {
-    throw new Error("Coordinate output geometry must be initialized before its signal")
-  }
   const updateSignalMesh = (
-    index: 0 | 1 | 2,
+    index: 0 | 1,
     start: Readonly<Vector3> | undefined,
     end: Readonly<Vector3> | undefined,
   ) => runtime.signalMeshes[index].setGeometry(
@@ -3688,16 +3214,8 @@ function updateCoordinateSignal(
   )
   updateSignalMesh(0, worldPoints.client, worldPoints.view)
   updateSignalMesh(1, worldPoints.view, worldPoints.content)
-  const outputPoint = clientToRootView?.(sample.client)
-  const outputWorldPoint = outputPoint
-    ? planeWorldPoint(outputDefinition, outputBasis, {
-      x: outputPoint.x - sceneLayout.output.x,
-      y: outputPoint.y - sceneLayout.output.y,
-    }, OUTPUT_PANEL_THICKNESS / 2 - 0.012)
-    : undefined
-  updateSignalMesh(2, worldPoints.content, outputWorldPoint)
 
-  const signalPoints = [points.client, points.view, points.content, outputPoint]
+  const signalPoints = [points.client, points.view, points.content]
   const hasSignal = signalPoints.every((point): point is Coordinate => point !== undefined)
   const updateSignalPath = (
     path: Path,
@@ -3837,8 +3355,6 @@ function updateCoordinatePhysicalPanels(
     },
     OUTPUT_PANEL_THICKNESS / 2 + 0.002,
   ))
-  runtime.outputDefinition = outputDefinition
-  runtime.outputBasis = outputBasis
   updateOutputGroundEffects(runtime.outputSignal, sceneLayout.output)
   updateScenePanelGeometry(
     runtime.consolePanel,
@@ -3939,7 +3455,6 @@ function updateCoordinateScene({
   eventEvidence,
   mappingFocus,
   onSceneLayoutChange,
-  clientToRootView,
   currentViewport,
   runtime,
   sample,
@@ -3965,11 +3480,8 @@ function updateCoordinateScene({
   updateCoordinateMappingLinks(runtime, sample, ranges, visibleContent, mappingFocus)
   updateCoordinateSignal(
     runtime,
-    sceneLayout,
-    sample,
     points,
     worldPoints,
-    clientToRootView,
   )
   updateCoordinateSceneOverlays({
     runtime,
@@ -4004,7 +3516,6 @@ export function CoordinateStack({
 }: CoordinateStackProps) {
   const { text } = useI18n()
   const runtimeRef = useRef<StackRuntime>()
-  const clientToRootViewRef = useRef<(point: Readonly<Coordinate>) => Coordinate>()
   const sceneMountGenerationRef = useRef(0)
   const controlContextRef = useRef<CoordinateControlContext>()
   controlContextRef.current = {
@@ -4026,6 +3537,8 @@ export function CoordinateStack({
       backend: "webgl2",
       camera,
       context: coordinateWebGL2Context,
+      environment,
+      lights: lighting,
     },
     { backend: "canvas2d", context: coordinateCanvas2DContext },
     {
@@ -4063,7 +3576,6 @@ export function CoordinateStack({
         eventEvidence,
         mappingFocus,
         onSceneLayoutChange,
-        clientToRootView: clientToRootViewRef.current,
         currentViewport: viewport,
         runtime,
         sample: probe,
@@ -4080,7 +3592,6 @@ export function CoordinateStack({
       () => sceneMountGenerationRef.current === sceneMountGeneration,
     )
     runtimeRef.current = runtime
-    clientToRootViewRef.current = (point) => tools.coordinates.clientToView(point)
     setRuntimeGeneration((current) => current + 1)
   }
 

@@ -37,9 +37,9 @@ const STAGE_FLOOR_DROP = 0.65
 const STAGE_PANEL_WORLD_WIDTH = 4.15
 const STAGE_PANEL_WORLD_HEIGHT = 4.15
 const PANEL_LAYOUT = [
-  { centerFraction: 0.185, stageCenterFraction: 0.1308, stageScale: 1, compactDepth: 7.5, depth: 7.25, stageDepth: 6.99, worldWidth: 4.4, stageWorldWidth: STAGE_PANEL_WORLD_WIDTH, worldHeight: 6.2, stageWorldHeight: STAGE_PANEL_WORLD_HEIGHT, yaw: 0.18, stageYaw: 0.58, verticalOffset: 0 },
-  { centerFraction: 0.43, stageCenterFraction: 0.3733, stageScale: 1, compactDepth: 9, depth: 9.2, stageDepth: 7.82, worldWidth: 4.4, stageWorldWidth: STAGE_PANEL_WORLD_WIDTH, worldHeight: 6.2, stageWorldHeight: STAGE_PANEL_WORLD_HEIGHT, yaw: 0.28, stageYaw: 0.7, verticalOffset: 0 },
-  { centerFraction: 0.614, stageCenterFraction: 0.5593, stageScale: 1, compactDepth: 10.7, depth: 11.3, stageDepth: 8.59, worldWidth: 4.4, stageWorldWidth: STAGE_PANEL_WORLD_WIDTH, worldHeight: 6.2, stageWorldHeight: STAGE_PANEL_WORLD_HEIGHT, yaw: 0.38, stageYaw: 0.46, verticalOffset: 0 },
+  { centerFraction: 0.155, stageCenterFraction: 0.115, stageScale: 1, compactDepth: 7.5, depth: 7.25, stageDepth: 6.99, worldWidth: 4.4, stageWorldWidth: STAGE_PANEL_WORLD_WIDTH, worldHeight: 6.2, stageWorldHeight: STAGE_PANEL_WORLD_HEIGHT, yaw: 0.18, stageYaw: 0.58, verticalOffset: 0 },
+  { centerFraction: 0.46, stageCenterFraction: 0.39, stageScale: 1, compactDepth: 9, depth: 9.2, stageDepth: 7.82, worldWidth: 4.4, stageWorldWidth: STAGE_PANEL_WORLD_WIDTH, worldHeight: 6.2, stageWorldHeight: STAGE_PANEL_WORLD_HEIGHT, yaw: 0.28, stageYaw: 0.7, verticalOffset: 0 },
+  { centerFraction: 0.655, stageCenterFraction: 0.59, stageScale: 1, compactDepth: 10.7, depth: 11.3, stageDepth: 8.59, worldWidth: 4.4, stageWorldWidth: STAGE_PANEL_WORLD_WIDTH, worldHeight: 6.2, stageWorldHeight: STAGE_PANEL_WORLD_HEIGHT, yaw: 0.38, stageYaw: 0.46, verticalOffset: 0 },
 ] as const
 
 const PLANE_TITLE_X_FRACTION: Readonly<Record<PlaneName, number>> = {
@@ -140,13 +140,16 @@ export function createCoordinateSceneLayout(
   const outputWidth = narrow
     ? width >= 320 ? Math.min(300, width - 48) : 300
     : Math.round(Math.min(560, width * 0.335))
-  const outputInset = width >= 1390 ? 0 : 24
+  const outputInset = width >= 1200 ? 0 : 24
   const outputX = width - outputWidth - outputInset
   const outputY = short
     ? 30
     : mediumHeight
       ? 96
-      : Math.round(Math.min(166, height * 0.166))
+      : Math.round(Math.max(
+        Math.min(166, height * 0.166),
+        height * 0.6 - 500,
+      ))
   const preferredOutputHeight = short
     ? 443
     : mediumHeight
@@ -262,7 +265,14 @@ function sourceFitScale(width: number, height: number) {
   const referenceHeight = SOURCE_FIT_REFERENCE_HEIGHT
     + (SHORT_SURFACE_REFERENCE_HEIGHT - SOURCE_FIT_REFERENCE_HEIGHT) * shortSurfaceMix
   const shortSurfaceScaleLimit = 1 - shortSurfaceMix * 0.18
-  const mediumLandscapeScaleLimit = height <= 740 && width >= 1250 ? 0.78 : 1
+  const mediumLandscapeHeightMix = progressBetween(height, 478, 520)
+    * (1 - progressBetween(height, 740, 840))
+  const mediumLandscapeWidthMix = progressBetween(width, 1040, 1160)
+  const mediumLandscapeScaleLimit = 1
+    - mediumLandscapeHeightMix
+    * mediumLandscapeWidthMix
+    * progressBetween(width / Math.max(1, height), 1.4, 1.75)
+    * 0.22
 
   return Math.max(
     SOURCE_FIT_MIN_SCALE,
@@ -294,17 +304,35 @@ function sourceSlotScale(width: number) {
   return 0.82 + progressBetween(width, 1280, 1440) * 0.02
 }
 
+function sourcePanelWidthScale(width: number, height: number) {
+  const widthScale = width <= 800
+    ? 0.7
+    : width <= 1040
+      ? 0.7 + progressBetween(width, 800, 1040) * 0.1
+      : width <= 1280
+        ? 0.8 + progressBetween(width, 1040, 1280) * 0.1
+        : 0.9 + progressBetween(width, 1280, 1440) * 0.1
+  // Taller stages increase the projected pane width without adding horizontal
+  // room. Scale silhouettes by aspect so the semantic signal never erases the
+  // negative space between adjacent panes.
+  const aspect = width / Math.max(1, height)
+  const aspectScale = aspect < 1
+    ? 0.7 * aspect
+    : 0.7 + progressBetween(aspect, 1, 1.75) * 0.3
+  return widthScale * aspectScale
+}
+
 export const planePalette = {
   client: {
-    fill: rgba(255, 252, 250, 0.12),
+    fill: rgba(255, 246, 242, 0.12),
     stroke: rgba(24, 22, 21, 1),
   },
   view: {
-    fill: rgba(248, 252, 255, 0.16),
+    fill: rgba(238, 248, 255, 0.16),
     stroke: rgba(48, 91, 184, 1),
   },
   content: {
-    fill: rgba(248, 255, 250, 0.24),
+    fill: rgba(239, 255, 246, 0.24),
     stroke: rgba(39, 119, 76, 1),
   },
 } as const
@@ -460,7 +488,13 @@ export function createPlaneDefinitions(
       + (stageWorldWidth - worldWidth) * stageLayoutMix
     const sceneWorldHeight = worldHeight
       + (stageWorldHeight - worldHeight) * stageLayoutMix
-    const halfWidth = sceneWorldWidth * scenePanelScale * panelStageScale * layoutScale * horizontalSceneScale / 2
+    const halfWidth = sceneWorldWidth
+      * scenePanelScale
+      * panelStageScale
+      * layoutScale
+      * horizontalSceneScale
+      * sourcePanelWidthScale(width, height)
+      / 2
     const scaledHeight = (
       sceneWorldHeight * scenePanelScale * panelStageScale * layoutScale
       - COMPACT_PANEL_HEIGHT_TRIM * (1 - stageExpansion)
@@ -792,58 +826,6 @@ export function planeBevelFacePerimeter(
   segments: number,
 ) {
   return roundedRectPoints(face.rect, face.radiusX, face.radiusY, segments)
-}
-
-/** Builds one UV-mapped rounded side shell from the physical front to back face. */
-export function planeVolumeProfileGeometry(
-  plane: PlaneDefinition,
-  basis: PlaneBasis,
-  thickness: number,
-  bevelRadius: number,
-  bevelSegments: number,
-): MeshGeometryInput {
-  if (!Number.isFinite(thickness) || thickness <= 0) {
-    throw new RangeError("profiled plane volume thickness must be positive")
-  }
-  const face = createPlaneBevelFaceProfile(plane, basis, bevelRadius)
-  const horizontalLength = Math.hypot(...basis.horizontal)
-  const verticalLength = Math.hypot(...basis.vertical)
-  const backRadiusX = bevelRadius / horizontalLength * plane.width
-  const backRadiusY = bevelRadius / verticalLength * plane.height
-  const front = roundedRectPoints(
-    face.rect,
-    face.radiusX,
-    face.radiusY,
-    bevelSegments,
-  ).map((point) => planeWorldPoint(plane, basis, point, thickness / 2))
-  const back = roundedRectPoints(
-    { x: 0, y: 0, width: plane.width, height: plane.height },
-    backRadiusX,
-    backRadiusY,
-    bevelSegments,
-  ).map((point) => planeWorldPoint(plane, basis, point, -thickness / 2))
-  const positions: number[] = []
-  const uvs: number[] = []
-  const indices: number[] = []
-  for (let index = 0; index <= front.length; index += 1) {
-    const sourceIndex = index % front.length
-    positions.push(...front[sourceIndex], ...back[sourceIndex])
-    const longitudinal = index === front.length
-      ? 1
-      : (index + 0.5) / front.length
-    uvs.push(0, longitudinal, 1, longitudinal)
-    if (index === front.length) continue
-    const next = index + 1
-    indices.push(
-      index * 2,
-      next * 2,
-      next * 2 + 1,
-      index * 2,
-      next * 2 + 1,
-      index * 2 + 1,
-    )
-  }
-  return { positions, uvs, indices }
 }
 
 export function roundedRectMeshGeometry(

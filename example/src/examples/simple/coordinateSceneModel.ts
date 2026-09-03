@@ -247,7 +247,7 @@ export function coordinateConsoleControlRects(
     "zoom-out": hidden,
     pan: hidden,
     "viewport-reset": button(0.933),
-    evidence: hidden,
+    evidence: button(0.787),
   }
 }
 

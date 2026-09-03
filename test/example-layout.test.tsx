@@ -44,7 +44,6 @@ import {
   createPlaneDefinitions,
   createCoordinateSignalPath,
   expandRangeToAspect,
-  gradeCoordinateRoomPixels,
 } from "../example/src/examples/simple/CoordinateStack"
 import {
   COORDINATE_CONSOLE_CONTROL_NAMES,
@@ -399,66 +398,6 @@ describe("Example Canvas workspace", () => {
     expect(geometry.uvs[2]).toBeLessThanOrEqual(1)
     expect(geometry.uvs[5]).toBeLessThanOrEqual(1)
     expect(expectedQuad.every((point) => point[2] === -19)).toBe(true)
-  })
-
-  it("grades the room wall and upper window while preserving the source data", () => {
-    const source = new Uint8ClampedArray([
-      100, 110, 120, 255,
-      100, 110, 120, 255,
-      100, 110, 120, 255,
-    ])
-    const graded = gradeCoordinateRoomPixels(source, 3, 1)
-
-    expect(Array.from(source)).toEqual([
-      100, 110, 120, 255,
-      100, 110, 120, 255,
-      100, 110, 120, 255,
-    ])
-    expect(Array.from(graded.slice(0, 4))).toEqual([68, 79, 92, 255])
-    expect(Array.from(graded.slice(4, 8))).toEqual([68, 79, 92, 255])
-    expect(Array.from(graded.slice(8, 12))).toEqual([80, 97, 113, 255])
-    expect(() => gradeCoordinateRoomPixels(source, 2, 2)).toThrow(RangeError)
-  })
-
-  it("restores room texture detail before applying the spatial grade", () => {
-    const width = 5
-    const height = 5
-    const source = new Uint8ClampedArray(width * height * 4)
-    for (let offset = 0; offset < source.length; offset += 4) {
-      source.set([128, 128, 128, 255], offset)
-    }
-    const centerOffset = (2 * width + 2) * 4
-    source.set([170, 170, 170, 255], centerOffset)
-    const original = Array.from(source)
-
-    const graded = gradeCoordinateRoomPixels(source, width, height)
-    const aboveOffset = (width + 2) * 4
-
-    expect(Array.from(source)).toEqual(original)
-    expect(graded[centerOffset] - graded[aboveOffset]).toBeGreaterThan(60)
-    expect(graded[centerOffset + 3]).toBe(255)
-  })
-
-  it("remaps the window landscape without moving its floor anchor", () => {
-    const width = 2
-    const height = 101
-    const source = new Uint8ClampedArray(width * height * 4)
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const offset = (y * width + x) * 4
-        source[offset] = y * 2
-        source[offset + 1] = y * 2
-        source[offset + 2] = y * 2
-        source[offset + 3] = 255
-      }
-    }
-
-    const graded = gradeCoordinateRoomPixels(source, width, height)
-    const windowPixelAt = (y: number) => graded[(y * width + 1) * 4]
-
-    expect(windowPixelAt(51)).toBe(92)
-    expect(windowPixelAt(60)).toBe(120)
-    expect(graded[(60 * width + 1) * 4 + 3]).toBe(255)
   })
 
   it("places the Output frame front-on at the shared WebGL ground", () => {
@@ -1142,6 +1081,21 @@ describe("Example Canvas workspace", () => {
     expect(source).not.toContain("setConsoleClientFrame")
   })
 
+  it("loads the pre-graded coordinate room without runtime pixel grading", () => {
+    const stackSource = readFileSync(
+      resolve(process.cwd(), "../example/src/examples/simple/CoordinateStack.tsx"),
+      "utf8",
+    )
+    const backdrop = readFileSync(
+      resolve(process.cwd(), "../example/src/assets/coordinate-room-backdrop-graded-v1.webp"),
+    )
+
+    expect(stackSource).toContain("coordinate-room-backdrop-graded-v1.webp")
+    expect(stackSource).not.toContain("gradeCoordinateRoomPixels")
+    expect(stackSource).not.toContain("sharpenCoordinateRoomPixels")
+    expect(backdrop.byteLength).toBeLessThan(400_000)
+  })
+
   it("projects the root View layout directly into the Live Canvas host", () => {
     const frames: FrameRequestCallback[] = []
     window.requestAnimationFrame = (callback) => {
@@ -1665,6 +1619,11 @@ describe("Example Canvas workspace", () => {
 
     expect(evidenceState()).toBe("closed")
     expect(evidence?.hidden).toBe(true)
+    click("evidence")
+    expect(evidenceState()).toBe("open")
+    expect(evidence?.hidden).toBe(false)
+    click("evidence")
+    expect(evidenceState()).toBe("closed")
     restorePointerEvents()
   })
 
@@ -1849,6 +1808,38 @@ describe("Example Canvas workspace", () => {
     }
   })
 
+  it("caps coordinate backing stores on high-density displays", () => {
+    const originalPixelRatio = window.devicePixelRatio
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 })
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    try {
+      act(() => {
+        root?.render(<I18nProvider><CoordinatesExample /></I18nProvider>)
+      })
+
+      const stackLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-stack-canvas canvas")
+      const liveLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")
+      expect([...stackLayers].map((canvas) => [canvas.width, canvas.height])).toEqual([
+        [1150, 600],
+        [1150, 600],
+        [920, 480],
+        [1150, 600],
+      ])
+      expect([...liveLayers].map((canvas) => [canvas.width, canvas.height])).toEqual([
+        [1082, 565],
+        [1353, 706],
+      ])
+    } finally {
+      Object.defineProperty(window, "devicePixelRatio", {
+        configurable: true,
+        value: originalPixelRatio,
+      })
+    }
+  })
+
   it("reports the actual shrunken drawing-buffer area to mounted scenes", () => {
     viewportWidth = 210
     viewportHeight = 81
@@ -1873,6 +1864,45 @@ describe("Example Canvas workspace", () => {
     expect(container.querySelector<HTMLCanvasElement>("canvas")?.width).toBe(210)
     expect(container.querySelector<HTMLCanvasElement>("canvas")?.height).toBe(81)
     expect(sceneCanvasArea(tools!, 240, 120)).toEqual({ x: 0, y: 0, width: 210, height: 81 })
+  })
+
+  it("coalesces plain pointer samples to the latest animation frame", () => {
+    const restorePointerEvents = installPointerEvents()
+    const frames: FrameRequestCallback[] = []
+    window.requestAnimationFrame = (callback) => {
+      frames.push(callback)
+      return frames.length
+    }
+    window.cancelAnimationFrame = (handle) => {
+      if (handle > 0 && handle <= frames.length) frames[handle - 1] = () => {}
+    }
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    try {
+      act(() => {
+        root?.render(<I18nProvider><CoordinatesExample /></I18nProvider>)
+      })
+      act(() => frames.splice(0).forEach((frame) => frame(0)))
+
+      const liveLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")
+      const top = liveLayers[liveLayers.length - 1]
+      const before = container.querySelector(".coordinate-flow-client strong")?.textContent
+
+      act(() => {
+        top.dispatchEvent(pointer("pointermove", 120, 140))
+        top.dispatchEvent(pointer("pointermove", 220, 180))
+      })
+
+      expect(frames.length).toBeGreaterThan(0)
+      expect(container.querySelector(".coordinate-flow-client strong")?.textContent).toBe(before)
+
+      act(() => frames.splice(0).forEach((frame) => frame(16)))
+      expect(container.querySelector(".coordinate-flow-client strong")?.textContent).toBe("220, 180")
+    } finally {
+      restorePointerEvents()
+    }
   })
 
   it("ends a Space pan and restores the cursor even without pointer movement", () => {

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.1
+
+### Added
+
+- Public `ImageTexture`, `ImageMaterial`, and `TransparentImageMaterial` WebGL2 APIs with top-origin UV geometry, deep-owned RGBA8 pixels, History and scene-transfer support, and automatic GPU resource restoration.
+- Straight-alpha image textures with premultiplied-linear upload, mip generation, and back-to-front composition in the existing transparent Mesh queue.
+
+### Changed
+
+- Rebuilt the Coordinates example as a responsive Canvas2D/WebGL2 physical installation that demonstrates real Client, View, and Content mappings through Canvas-routed controls.
+
 ## 1.3.0
 
 ### Added

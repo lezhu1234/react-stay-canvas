@@ -1619,6 +1619,11 @@ describe("Example Canvas workspace", () => {
 
     expect(evidenceState()).toBe("closed")
     expect(evidence?.hidden).toBe(true)
+    click("evidence")
+    expect(evidenceState()).toBe("open")
+    expect(evidence?.hidden).toBe(false)
+    click("evidence")
+    expect(evidenceState()).toBe("closed")
     restorePointerEvents()
   })
 
@@ -1817,10 +1822,16 @@ describe("Example Canvas workspace", () => {
 
       const stackLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-stack-canvas canvas")
       const liveLayers = container.querySelectorAll<HTMLCanvasElement>(".coordinate-canvas canvas")
-      expect([...stackLayers].every((canvas) => canvas.width === 1150 && canvas.height === 600))
-        .toBe(true)
-      expect([...liveLayers].every((canvas) => canvas.width === 1353 && canvas.height === 706))
-        .toBe(true)
+      expect([...stackLayers].map((canvas) => [canvas.width, canvas.height])).toEqual([
+        [1150, 600],
+        [1150, 600],
+        [920, 480],
+        [1150, 600],
+      ])
+      expect([...liveLayers].map((canvas) => [canvas.width, canvas.height])).toEqual([
+        [1082, 565],
+        [1353, 706],
+      ])
     } finally {
       Object.defineProperty(window, "devicePixelRatio", {
         configurable: true,

@@ -91,12 +91,13 @@ export { expandRangeToAspect } from "./coordinateLabModel"
 const STACK_WIDTH = 240
 const STACK_HEIGHT = 120
 const COORDINATE_PIXEL_RATIO_CAP = 1.25
+const COORDINATE_DYNAMIC_PIXEL_RATIO_CAP = 1
 
-function capCoordinateLayerPixelRatio(canvas: HTMLCanvasElement) {
+function capCoordinateLayerPixelRatio(canvas: HTMLCanvasElement, pixelRatioCap: number) {
   const logicalWidth = Number.parseFloat(canvas.style.width)
   const logicalHeight = Number.parseFloat(canvas.style.height)
   if (!Number.isFinite(logicalWidth) || !Number.isFinite(logicalHeight)) return
-  const pixelRatio = Math.min(window.devicePixelRatio || 1, COORDINATE_PIXEL_RATIO_CAP)
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, pixelRatioCap)
   const width = Math.round(logicalWidth * pixelRatio)
   const height = Math.round(logicalHeight * pixelRatio)
   if (canvas.width !== width) canvas.width = width
@@ -104,17 +105,31 @@ function capCoordinateLayerPixelRatio(canvas: HTMLCanvasElement) {
 }
 
 export const coordinateCanvas2DContext = (canvas: HTMLCanvasElement) => {
-  capCoordinateLayerPixelRatio(canvas)
+  capCoordinateLayerPixelRatio(canvas, COORDINATE_PIXEL_RATIO_CAP)
+  return canvas.getContext("2d")
+}
+
+export const coordinateDynamicCanvas2DContext = (canvas: HTMLCanvasElement) => {
+  capCoordinateLayerPixelRatio(canvas, COORDINATE_DYNAMIC_PIXEL_RATIO_CAP)
   return canvas.getContext("2d")
 }
 
 const coordinateWebGL2Context = (canvas: HTMLCanvasElement) => {
-  capCoordinateLayerPixelRatio(canvas)
+  capCoordinateLayerPixelRatio(canvas, COORDINATE_PIXEL_RATIO_CAP)
   return canvas.getContext("webgl2", {
     alpha: true,
     depth: true,
   })
 }
+
+const coordinateDynamicWebGL2Context = (canvas: HTMLCanvasElement) => {
+  capCoordinateLayerPixelRatio(canvas, COORDINATE_DYNAMIC_PIXEL_RATIO_CAP)
+  return canvas.getContext("webgl2", {
+    alpha: true,
+    depth: true,
+  })
+}
+
 const POINT_LABEL_RISE_RATIO: Readonly<Record<PlaneName, number>> = {
   client: 0.17,
   view: 0.19,
@@ -2469,6 +2484,36 @@ function updateOutputPanelOverlay(
   })
 }
 
+const COMPACT_CONSOLE_ACTION_TEXT: Partial<Record<CoordinateConsoleControlName, string>> = {
+  "css-reset": "CSS",
+  "zoom-in": "ZOOM +",
+  "zoom-out": "ZOOM −",
+  "viewport-reset": "RESET",
+  evidence: "PROOF",
+}
+
+function consoleActionPresentation(name: CoordinateConsoleControlName, compact: boolean) {
+  if (compact) {
+    return {
+      yOffset: 5,
+      text: COMPACT_CONSOLE_ACTION_TEXT[name] ?? "",
+      fontSize: 9,
+      fontWeight: 400,
+      label: "",
+    }
+  }
+  if (name === "css-reset") {
+    return { yOffset: 14, text: "□", fontSize: 32, fontWeight: 400, label: "RESET" }
+  }
+  if (name === "viewport-reset") {
+    return { yOffset: 16, text: "", fontSize: 36, fontWeight: 300, label: "FIT TO VIEW" }
+  }
+  if (name === "evidence") {
+    return { yOffset: 8, text: "?", fontSize: 24, fontWeight: 400, label: "PROOF" }
+  }
+  return { yOffset: 8, text: "", fontSize: 24, fontWeight: 400, label: "" }
+}
+
 function updateConsolePanelOverlay(
   overlay: ConsolePanelOverlay,
   frame: Readonly<Rect> | undefined,
@@ -2836,7 +2881,7 @@ function updateConsolePanelOverlay(
   })
   const actionNames = compact
     ? (["css-reset", "zoom-in", "zoom-out", "viewport-reset", "evidence"] as const)
-    : (["css-reset", "viewport-reset", "pan", "pan", "pan"] as const)
+    : (["evidence", "css-reset", "viewport-reset", "pan", "pan"] as const)
   overlay.viewportButtons.forEach((button, index) => {
     const name = actionNames[index]
     const rect = controlRects[name]
@@ -2900,15 +2945,14 @@ function updateConsolePanelOverlay(
   overlay.viewportActions.forEach((action, index) => {
     const name = actionNames[index]
     const rect = controlRects[name]
+    const presentation = consoleActionPresentation(name, compact)
     action.update({
       x: rect.x + rect.width / 2,
-      y: rect.y + rect.height / 2 - (compact ? 5 : index === 0 ? 14 : index === 1 ? 16 : 8),
-      text: compact
-        ? ["CSS", "ZOOM +", "ZOOM −", "RESET", "PROOF"][index]
-        : name === "css-reset" ? "□" : "",
+      y: rect.y + rect.height / 2 - presentation.yOffset,
+      text: presentation.text,
       font: {
-        size: compact ? 9 : index === 0 ? 32 : index === 1 ? 36 : 24,
-        fontWeight: compact ? 400 : index === 1 ? 300 : 400,
+        size: presentation.fontSize,
+        fontWeight: presentation.fontWeight,
       },
       fillConfig: { color: controlColor },
     })
@@ -2952,16 +2996,14 @@ function updateConsolePanelOverlay(
       },
     })
   })
-  const actionLabels = compact
-    ? ["", "", "", "", ""]
-    : ["RESET", "FIT TO VIEW", "", "", ""]
   overlay.viewportActionLabels.forEach((label, index) => {
     const name = actionNames[index]
     const rect = controlRects[name]
+    const presentation = consoleActionPresentation(name, compact)
     label.update({
       x: rect.x + rect.width / 2,
       y: rect.y + rect.height + (compact ? -8 : 13),
-      text: rect.width > 0 && name !== "pan" ? actionLabels[index] : "",
+      text: rect.width > 0 && name !== "pan" ? presentation.label : "",
       font: { size: compact ? 8 : 14, fontWeight: 400 },
       fillConfig: { color: rgba(20, 23, 22, compact ? 0.78 : 1) },
     })
@@ -3989,7 +4031,7 @@ export function CoordinateStack({
     {
       backend: "webgl2",
       camera,
-      context: coordinateWebGL2Context,
+      context: coordinateDynamicWebGL2Context,
       environment,
       lights: lighting,
     },

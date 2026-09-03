@@ -21,6 +21,7 @@ import { hasPointerPosition } from "../actionEventGuards"
 import {
   CoordinateStack,
   coordinateCanvas2DContext,
+  coordinateDynamicCanvas2DContext,
   type CoordinateMappingFocus,
 } from "./CoordinateStack"
 import { createCoordinateSceneLayout } from "./coordinateSceneModel"
@@ -75,7 +76,7 @@ const INITIAL_PROBE: CoordinateProbe = {
 }
 
 const COORDINATE_LIVE_LAYERS = [
-  { backend: "canvas2d", context: coordinateCanvas2DContext },
+  { backend: "canvas2d", context: coordinateDynamicCanvas2DContext },
   { backend: "canvas2d", context: coordinateCanvas2DContext },
 ] satisfies CanvasLayerConfig[]
 

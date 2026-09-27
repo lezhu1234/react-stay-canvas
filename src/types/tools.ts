@@ -25,6 +25,7 @@ import type {
 import type { Area, PointType } from "./geometry"
 import type { ManualTriggerEvents } from "./manualActions"
 import type { StayWebGLTools } from "./webgl"
+import type { SceneTransactions } from "./scene"
 
 export interface StayDrawProps {
   now?: number
@@ -33,6 +34,7 @@ export interface StayDrawProps {
 }
 
 export type StayTools = BasicTools & InstantTools & AnimatedTools & {
+  readonly scene: SceneTransactions
   readonly webgl: StayWebGLTools
 }
 

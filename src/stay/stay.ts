@@ -37,6 +37,7 @@ import {
   type StayHistoryChildSnapshot,
 } from "./historySnapshot"
 import { Renderer } from "./renderer"
+import { CanvasSceneTransactions } from "./scene/sceneTransactions"
 import { stayTools } from "./stayTools"
 import type { SetShapeChildCurrentTime } from "./types"
 import type { StayWebGLChild } from "./webgl2/stayWebGLChild"
@@ -53,9 +54,11 @@ class Stay<EventName extends string, HistorySnapshot = unknown> {
   actionRouter: ActionRouter<EventName>
   eventRuntime: EventRuntime<EventName>
   renderer: Renderer
+  sceneTransactions: CanvasSceneTransactions
   eventDispatcher: EventDispatcher
   history: History<HistorySnapshot>
   height: number
+  currentSample: SetShapeChildCurrentTime = { time: 0 }
   root: Canvas
   state: string
   stateSet: Set<string>
@@ -123,12 +126,23 @@ class Stay<EventName extends string, HistorySnapshot = unknown> {
         select: (selector, sortBy) => this.tools.getChildrenBySelector(selector, sortBy),
       },
     })
-    this.tools = stayTools.call(this)
     this.renderer = new Renderer(
       this.root,
-      () => this.children.values().filter((child) => child.id !== this.rootId),
-      this.coordinates
+      () => [
+        ...this.children.values().filter((child) => child.id !== this.rootId),
+        ...(this.sceneTransactions?.renderingExits() ?? []),
+      ],
+      this.coordinates,
+      (now) => this.sceneTransactions?.advance(now)
     )
+    this.sceneTransactions = new CanvasSceneTransactions(
+      this.root,
+      this.children,
+      this.renderer,
+      () => this.eventDispatcher.cancelPointerSession("scene-replacement"),
+      () => this.currentSample
+    )
+    this.tools = stayTools.call(this)
     this.root.setLayerInvalidationListener((layerIndex) => {
       this.renderer.forceUpdateLayer(layerIndex)
       this.renderer.start()
@@ -209,6 +223,7 @@ class Stay<EventName extends string, HistorySnapshot = unknown> {
 
   destroy() {
     this.eventDispatcher.destroy()
+    this.sceneTransactions.destroy()
     this.renderer.stop()
     this.children.values().filter(isStayWebGLChild).forEach((child) => child.destroy())
     this.root.destroy()

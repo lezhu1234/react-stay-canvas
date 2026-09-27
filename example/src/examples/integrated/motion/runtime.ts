@@ -5,6 +5,7 @@ import {
   type StayAnimatedChild,
   type StayInstantChild,
   type StayTools,
+  type SceneSubmission,
 } from "react-stay-canvas"
 
 import { colors, rgba, sceneArea, scenePoint } from "../../../components/DemoKit"
@@ -134,7 +135,20 @@ function compileMediaFrames(tools: StayTools, layer: MotionLayer, image?: HTMLIm
   })
 }
 
-function compileAnimatedLayer(tools: StayTools, layer: MotionLayer, image?: HTMLImageElement) {
+function appendExit<T extends MotionShape>(frames: T[], durationMs: number, exitDurationMs: number) {
+  if (frames.length === 0) return
+  const elapsedMs = frames.reduce((total, frame) => total + frame.transition.delayMs + frame.transition.durationMs, 0)
+  const last = frames[frames.length - 1]
+  const zero = last._zeroShape(new Map()) as T
+  zero.transition = {
+    ...zero.transition,
+    durationMs: exitDurationMs,
+    delayMs: Math.max(0, durationMs - exitDurationMs - elapsedMs),
+  }
+  frames.push(zero)
+}
+
+function compileAnimatedLayer(tools: StayTools, layer: MotionLayer, project: MotionProject, image?: HTMLImageElement) {
   const bodyFrames: MotionBody[] = []
   const labelFrames: StayText[] = []
   layer.frames.forEach((frame, index) => {
@@ -142,21 +156,21 @@ function compileAnimatedLayer(tools: StayTools, layer: MotionLayer, image?: HTML
     bodyFrames.push(createBody(tools, layer, frame, previous))
     labelFrames.push(createLabel(tools, layer, frame, previous))
   })
-  return { bodyFrames, labelFrames, mediaFrames: compileMediaFrames(tools, layer, image) }
-}
-
-function finishTimeline(child: MotionChild, durationMs: number) {
-  const remainingMs = Math.max(0, durationMs - child.totalDurationMs)
+  const mediaFrames = compileMediaFrames(tools, layer, image)
+  const durations = [bodyFrames, labelFrames, mediaFrames]
+    .filter((frames) => frames.length > 0)
+    .map((frames) => frames.reduce((total, frame) => total + frame.transition.delayMs + frame.transition.durationMs, 0))
+  const remainingMs = Math.max(0, project.durationMs - Math.max(...durations))
   const exitDurationMs = Math.min(EXIT_DURATION_MS, remainingMs)
-  child.disappear({
-    durationMs: exitDurationMs,
-    delayMs: remainingMs - exitDurationMs,
-  }, "afterAll")
+  appendExit(bodyFrames, project.durationMs, exitDurationMs)
+  appendExit(labelFrames, project.durationMs, exitDurationMs)
+  appendExit(mediaFrames, project.durationMs, exitDurationMs)
+  return { bodyFrames, labelFrames, mediaFrames }
 }
 
 function createAnimatedLayer(tools: StayTools, layer: MotionLayer, project: MotionProject, image?: HTMLImageElement) {
   const child = tools.createChild({ id: childId(layer.id), className: "motion-layer" }) as MotionChild
-  const { bodyFrames, labelFrames, mediaFrames } = compileAnimatedLayer(tools, layer, image)
+  const { bodyFrames, labelFrames, mediaFrames } = compileAnimatedLayer(tools, layer, project, image)
   child.appendKeyFrames(new Map<string, MotionShape | MotionShape[]>([
     [bodyKey, bodyFrames],
     [labelKey, labelFrames],
@@ -164,7 +178,6 @@ function createAnimatedLayer(tools: StayTools, layer: MotionLayer, project: Moti
   if (mediaFrames.length > 0) {
     child.appendKeyFrames(new Map<string, MotionShape | MotionShape[]>([[mediaKey, mediaFrames]]), true)
   }
-  finishTimeline(child, project.durationMs)
   return child
 }
 
@@ -172,15 +185,38 @@ function syncAnimatedLayer(tools: StayTools, layer: MotionLayer, project: Motion
   const child = motionLayerById(tools, layer.id)
   if (!child) return createAnimatedLayer(tools, layer, project, image)
 
-  const { bodyFrames, labelFrames, mediaFrames } = compileAnimatedLayer(tools, layer, image)
+  const { bodyFrames, labelFrames, mediaFrames } = compileAnimatedLayer(tools, layer, project, image)
   child.replaceSlice(bodyKey, bodyFrames, false)
   child.replaceSlice(labelKey, labelFrames, false)
   if (mediaFrames.length > 0) {
     if (child.hasSlice(mediaKey)) child.replaceSlice(mediaKey, mediaFrames, true)
     else child.appendKeyFrames(new Map<string, MotionShape | MotionShape[]>([[mediaKey, mediaFrames]]), true)
   }
-  finishTimeline(child, project.durationMs)
   return child
+}
+
+export function compileMotionScene(
+  tools: StayTools,
+  project: MotionProject,
+  revision: string,
+  image?: HTMLImageElement,
+): SceneSubmission {
+  return {
+    revision,
+    resourceRevision: image?.src ?? "motion-no-image",
+    children: project.layers.map((layer) => {
+      const { bodyFrames, labelFrames, mediaFrames } = compileAnimatedLayer(tools, layer, project, image)
+      return {
+        id: childId(layer.id),
+        className: "motion-layer",
+        slices: [
+          { name: bodyKey, frames: bodyFrames },
+          { name: labelKey, frames: labelFrames },
+          ...(mediaFrames.length > 0 ? [{ name: mediaKey, frames: mediaFrames, prependZeroShape: true }] : []),
+        ],
+      }
+    }),
+  }
 }
 
 function matchesCompiledLayers(children: MotionChild[], project: MotionProject, image?: HTMLImageElement) {

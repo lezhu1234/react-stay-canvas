@@ -19,6 +19,11 @@ interface DrawLayer {
   forceUpdate: boolean
 }
 
+interface FrameAction {
+  run: (frame: number, now: number) => void
+  reject: (error: unknown) => void
+}
+
 // Owns the render loop, per-layer dirty tracking, the layer draw pass, and the
 // nextTick queue. Extracted from Stay so "rendering" is one focused concern.
 // Reads the children to paint via an injected provider (the non-root children).
@@ -27,13 +32,16 @@ export class Renderer {
   #layers: DrawLayer[]
   #nextTick: (() => void)[] = []
   #running = false
+  #frameNumber = 0
+  #frameActions: FrameAction[] = []
   #lastRenderedCoordinateRevision = -1
   readonly #childLayers = new ChildLayerScheduler(stayChildLayers)
 
   constructor(
     private readonly root: Canvas,
     private readonly getRenderChildren: () => StayChild[],
-    private readonly coordinates: CoordinateSystem
+    private readonly coordinates: CoordinateSystem,
+    private readonly beforeFrame: (now: number) => void = () => {}
   ) {
     this.#layers = root.layers.map(() => ({ forceUpdate: false }))
   }
@@ -177,24 +185,64 @@ export class Renderer {
       this.#frameId = undefined
     }
     this.#nextTick = []
+    this.#rejectFrameActions(this.#frameActions.splice(0), new Error("Canvas was destroyed"))
   }
 
-  #runFrame() {
+  atNextFrame<T>(action: (frame: number, now: number) => T): Promise<T> {
+    if (!this.#running) return Promise.reject(new Error("Canvas is not running"))
+    return new Promise<T>((resolve, reject) => {
+      this.#frameActions.push({
+        run: (frame, now) => {
+          try {
+            resolve(action(frame, now))
+          } catch (error) {
+            reject(error)
+          }
+        },
+        reject,
+      })
+    })
+  }
+
+  #runFrame(now = performance.now()) {
     if (!this.#running) return
 
     this.#frameId = undefined
+    const frame = ++this.#frameNumber
+    const actions = this.#frameActions.splice(0)
     try {
+      // Retargeting captures the old scene at this frame's time. Commands queued
+      // while sampling belong to the next frame, so the batch is frozen first.
+      this.beforeFrame(now)
+      this.#runFrameActions(actions, frame, now)
+      if (!this.#running) return
       this.draw({ now: Date.now() })
     } catch (error) {
       // A failed frame has no scheduled successor. Keep the lifecycle state
       // honest so an explicit invalidation such as WebGL context restoration
       // can start a fresh loop after the error has propagated.
       this.#running = false
+      this.#rejectFrameActions(actions, error)
+      this.#rejectFrameActions(this.#frameActions.splice(0), error)
       throw error
     }
     if (!this.#running) return
 
-    this.#frameId = window.requestAnimationFrame(() => this.#runFrame())
+    this.#frameId = window.requestAnimationFrame((frameTime) => this.#runFrame(frameTime))
+  }
+
+  #runFrameActions(actions: FrameAction[], frame: number, now: number) {
+    for (const [index, action] of actions.entries()) {
+      if (!this.#running) {
+        this.#rejectFrameActions(actions.slice(index), new Error("Canvas was destroyed"))
+        return
+      }
+      action.run(frame, now)
+    }
+  }
+
+  #rejectFrameActions(actions: FrameAction[], error: unknown) {
+    actions.forEach(({ reject }) => reject(error))
   }
 
   #drainNextTick() {

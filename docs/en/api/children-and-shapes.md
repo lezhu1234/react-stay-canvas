@@ -56,6 +56,7 @@ Children are Canvas-bound runtime entities and do not expose a copy operation. U
 | `appendKeyFrame(name, shape, prependZeroShape?)` | Append one keyframe to a slice |
 | `appendKeyFrames(frameMap, prependZeroShape?)` | Append frames to several slices |
 | `replaceSlice(name, frames, prependZeroShape?)` | Atomically replace one non-empty slice; the current projection changes on the next seek |
+| `replaceTimeline(frameMap, prependZeroShape?)` | Atomically replace every slice, including with an empty map; the current projection changes on the next seek |
 | `update({ className?, placement? })` | Update Child-level state; timeline-owned Shape composition is excluded |
 | `appendDefaultFrame(shape, prependZeroShape?)` | Append to the `default` slice |
 | `getSlice(name)` | Return a slice or an empty array |
@@ -67,7 +68,7 @@ Children are Canvas-bound runtime entities and do not expose a copy operation. U
 
 `disappear(..., "afterEach")` appends a transparent frame at each slice's own end. With the default zero-duration transition, disappearance is immediate; pass a non-zero transition to animate it. `"afterAll"` adds delay so every slice begins its disappearance after the longest timeline has completed.
 
-Animated Shape composition belongs exclusively to `shapeFramesMap`. Replace a timeline slice with `replaceSlice(...)`; `StayAnimatedChild.update(...)` only accepts `className` and `placement`, and rejects a runtime `shape` field.
+Animated Shape composition belongs exclusively to `shapeFramesMap`. Replace one timeline slice with `replaceSlice(...)`, or replace the complete timeline with `replaceTimeline(...)`; `StayAnimatedChild.update(...)` only accepts `className` and `placement`, and rejects a runtime `shape` field.
 
 ## Common ShapeProps
 

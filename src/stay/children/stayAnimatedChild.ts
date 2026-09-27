@@ -330,7 +330,12 @@ export class StayAnimatedChild<
     return shape
   }
 
-  private compileSlice(name: string, frames: T[], prependZeroShape: boolean): T[] {
+  private compileSlice(
+    name: string,
+    frames: T[],
+    prependZeroShape: boolean,
+    sourceFramesMap: Map<string, T[]> = this.shapeFramesMap
+  ): T[] {
     if (frames.length === 0) {
       throw new Error("slice must contain at least one keyframe")
     }
@@ -348,7 +353,7 @@ export class StayAnimatedChild<
     try {
       const compiledFrames = [...frames]
       if (prependZeroShape) {
-        const otherSlices = new Map(this.shapeFramesMap)
+        const otherSlices = new Map(sourceFramesMap)
         otherSlices.delete(name)
         const zeroShape = this.checkShape(frames[0]._zeroShape(otherSlices) as T)
         zeroShape.layer = this.resolveChildShapeLayer(zeroShape.layer, zeroShape)
@@ -360,6 +365,43 @@ export class StayAnimatedChild<
       frames.forEach((frame, index) => {
         frame.layer = previousLayers[index]
         frame.parent = previousParents[index]
+      })
+      throw error
+    }
+  }
+
+  private compileTimeline(
+    frameMap: Map<string, T[]>,
+    prependZeroShape: boolean
+  ): Map<string, T[]> {
+    const previousFrameStates = new Map<
+      T,
+      { layer: number; parent: T["parent"] }
+    >()
+    frameMap.forEach((frames) => {
+      frames.forEach((frame) => {
+        if (!previousFrameStates.has(frame)) {
+          previousFrameStates.set(frame, {
+            layer: frame.layer,
+            parent: frame.parent,
+          })
+        }
+      })
+    })
+
+    try {
+      const compiledTimeline = new Map<string, T[]>()
+      frameMap.forEach((frames, name) => {
+        compiledTimeline.set(
+          name,
+          this.compileSlice(name, frames, prependZeroShape, frameMap)
+        )
+      })
+      return compiledTimeline
+    } catch (error) {
+      previousFrameStates.forEach(({ layer, parent }, frame) => {
+        frame.layer = layer
+        frame.parent = parent
       })
       throw error
     }
@@ -394,6 +436,18 @@ export class StayAnimatedChild<
     }
     this.shapeFramesMap.set(name, compiledFrames)
     this.frameMapInfo.delete(name)
+    this.refreshTotalDurationMs()
+  }
+
+  replaceTimeline(
+    frameMap: Map<string, T[]>,
+    prependZeroShape: boolean = true
+  ) {
+    const compiledTimeline = this.compileTimeline(frameMap, prependZeroShape)
+
+    this.getLayers().forEach((layer) => this.updatedLayers.add(layer))
+    this.shapeFramesMap = compiledTimeline
+    this.frameMapInfo = new Map()
     this.refreshTotalDurationMs()
   }
 

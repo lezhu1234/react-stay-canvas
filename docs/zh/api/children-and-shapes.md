@@ -56,6 +56,7 @@ Child 是绑定 Canvas 的运行时实体，不提供复制操作。需要捕获
 | `appendKeyFrame(name, shape, prependZeroShape?)` | 向 slice 追加关键帧 |
 | `appendKeyFrames(frameMap, prependZeroShape?)` | 批量追加多个 slice |
 | `replaceSlice(name, frames, prependZeroShape?)` | 原子替换一个非空 slice；当前投影会在下一次 seek 时改变 |
+| `replaceTimeline(frameMap, prependZeroShape?)` | 原子替换全部 slice，允许传入空 Map 清空；当前投影会在下一次 seek 时改变 |
 | `update({ className?, placement? })` | 更新 Child 级状态；不包含 timeline 持有的 Shape 组合 |
 | `appendDefaultFrame(shape, prependZeroShape?)` | 向 `default` slice 追加 |
 | `getSlice(name)` | 返回 slice；不存在时返回空数组 |
@@ -67,7 +68,7 @@ Child 是绑定 Canvas 的运行时实体，不提供复制操作。需要捕获
 
 `disappear(..., "afterEach")` 会在每个 slice 自身结尾追加透明帧。默认 transition 的持续时间为 0，因此会立即消失；传入非零 transition 才会形成动画。`"afterAll"` 会补 delay，使所有 slice 等最长时间线结束后再进入各自消失帧。
 
-动画 Shape 组合由 `shapeFramesMap` 独占。替换时间线 slice 应调用 `replaceSlice(...)`；`StayAnimatedChild.update(...)` 只接受 `className` 和 `placement`，若运行时传入 `shape` 字段会直接拒绝。
+动画 Shape 组合由 `shapeFramesMap` 独占。替换单个时间线 slice 应调用 `replaceSlice(...)`，替换完整时间线应调用 `replaceTimeline(...)`；`StayAnimatedChild.update(...)` 只接受 `className` 和 `placement`，若运行时传入 `shape` 字段会直接拒绝。
 
 ## 通用 ShapeProps
 

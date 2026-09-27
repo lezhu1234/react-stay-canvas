@@ -294,6 +294,143 @@ describe("animated: replaceSlice", () => {
   })
 })
 
+describe("animated: replaceTimeline", () => {
+  const frame = (
+    x: number,
+    durationMs: number,
+    layer = 0,
+    visible = true
+  ) => new Rectangle({
+    x,
+    y: 20,
+    width: 40,
+    height: 30,
+    layer,
+    fillConfig: { color: rgba(20, 80, 180, visible ? 1 : 0) },
+    strokeConfig: { color: rgba(1, 2, 3, visible ? 1 : 0), lineWidth: 2 },
+    transition: { durationMs, delayMs: 0, type: "linear" },
+  })
+
+  it("replaces every slice after a cached seek and recomputes the duration", () => {
+    const { stage } = createStage({})
+    const child = stage.tools.createChild({ id: "motion-layer", className: "motion-layer" })
+    child.appendKeyFrames(new Map([
+      ["body", [frame(0, 0), frame(100, 400)]],
+      ["removed", [frame(20, 0), frame(40, 700)]],
+    ]), false)
+    stage.tools.progress({ timeMs: 200, bound: { beforeMs: 100, afterMs: 300 } })
+    stage.tools.progress({ timeMs: 200, bound: { beforeMs: 100, afterMs: 300 } })
+    const cachedProjection = child.shapeMap.get("body")
+
+    child.replaceTimeline(new Map([
+      ["body", [frame(200, 0), frame(400, 200)]],
+      ["added", [frame(30, 0), frame(60, 300)]],
+    ]), false)
+
+    expect(stage.tools.getChildById(child.id)).toBe(child)
+    expect([...child.shapeFramesMap.keys()]).toEqual(["body", "added"])
+    expect(child.totalDurationMs).toBe(300)
+    expect(child.shapeMap.get("body")).toBe(cachedProjection)
+
+    stage.tools.progress({ timeMs: 100, bound: { beforeMs: 50, afterMs: 150 } })
+    expect((child.shapeMap.get("body") as Rectangle).x).toBeCloseTo(300)
+  })
+
+  it("invalidates a removed hidden name before the same name reappears", () => {
+    const { stage } = createStage({ layers: 3 })
+    const child = stage.tools.createChild({ className: "motion-layer" })
+    child.appendKeyFrame("visible", frame(10, 0, 0), false)
+    child.appendKeyFrame("reappearing", frame(20, 0, 2, false), false)
+    stage.tools.progress({ timeMs: 0 })
+    expect([...child.shapeMap.keys()]).toEqual(["visible"])
+    ;[0, 1, 2].forEach((layer) => child.layerDraw(layer))
+
+    child.replaceTimeline(new Map([
+      ["visible", [frame(10, 0, 0)]],
+    ]), false)
+    child.layerDraw(0)
+    child.appendKeyFrame("reappearing", frame(20, 0, 2), false)
+    child.setCurrentTime({ time: 0 })
+
+    expect(child.shapeMap.has("reappearing")).toBe(true)
+    expect(child.getUpdatedLayers().has(2)).toBe(true)
+  })
+
+  it("dirties removed layers immediately and new layers on the next seek", () => {
+    const { stage } = createStage({ layers: 3 })
+    const child = stage.tools.createChild({ className: "motion-layer" })
+    child.appendKeyFrame("old", frame(10, 0, 2), false)
+    stage.tools.progress({ timeMs: 0 })
+    ;[0, 1, 2].forEach((layer) => child.layerDraw(layer))
+
+    child.replaceTimeline(new Map([
+      ["new", [frame(30, 0, 1)]],
+    ]), false)
+
+    expect(child.getUpdatedLayers()).toEqual(new Set([2]))
+    child.setCurrentTime({ time: 0 })
+    expect(child.getUpdatedLayers()).toEqual(new Set([1, 2]))
+  })
+
+  it("leaves all timeline state and input frame ownership unchanged when compilation fails", () => {
+    const { stage } = createStage({ layers: 3 })
+    const child = stage.tools.createChild({ className: "motion-layer" })
+    child.appendKeyFrames(new Map([
+      ["body", [frame(10, 0), frame(70, 300)]],
+      ["label", [frame(20, 0), frame(50, 200)]],
+    ]), false)
+    stage.tools.progress({ timeMs: 150 })
+    ;[0, 1, 2].forEach((layer) => child.layerDraw(layer))
+    const previousTimeline = child.shapeFramesMap
+    const previousProjection = child.shapeMap
+    const previousDuration = child.totalDurationMs
+    const valid = frame(100, 0, -1)
+    const invalid = frame(200, Number.NaN, 1)
+
+    expect(() => child.replaceTimeline(new Map([
+      ["valid", [valid]],
+      ["invalid", [invalid]],
+    ]), false)).toThrow(/NaN/)
+
+    expect(child.shapeFramesMap).toBe(previousTimeline)
+    expect(child.shapeMap).toBe(previousProjection)
+    expect(child.totalDurationMs).toBe(previousDuration)
+    expect(child.getUpdatedLayers()).toEqual(new Set())
+    expect(valid.layer).toBe(-1)
+    expect(valid.parent).toBeUndefined()
+    expect(invalid.layer).toBe(1)
+    expect(invalid.parent).toBeUndefined()
+  })
+
+  it("uses default zero frames and accepts an empty map as a complete clear", () => {
+    const { stage } = createStage({})
+    const child = stage.tools.createChild({ className: "motion-layer" })
+    const body = frame(10, 300)
+    const label = frame(20, 200)
+
+    child.replaceTimeline(new Map([
+      ["body", [body]],
+      ["label", [label]],
+    ]))
+
+    expect(child.getSlice("body")).toHaveLength(2)
+    expect(child.getSlice("label")).toHaveLength(2)
+    expect(child.getSlice("body")[0].transition).toMatchObject({ durationMs: 0, delayMs: 0 })
+    expect(child.getSlice("body")[0].shouldFill()).toBe(false)
+    expect(child.getSlice("body")[1]).toBe(body)
+    child.setCurrentTime({ time: 300 })
+    expect(child.shapeMap.size).toBe(2)
+
+    child.replaceTimeline(new Map())
+
+    expect(child.shapeFramesMap.size).toBe(0)
+    expect(child.totalDurationMs).toBe(0)
+    expect(child.shapeMap.size).toBe(2)
+    child.setCurrentTime({ time: 0 })
+    expect(child.shapeMap.size).toBe(0)
+  })
+})
+
 describe("animated: progress({ bound }) sub-range seek (the seek path the merge keeps)", () => {
   // GAP-3 from strategic review: the bound branch (setCurrentTime L221-234) was
   // otherwise unexecuted. Lock that it runs + paints + normalizes a reversed

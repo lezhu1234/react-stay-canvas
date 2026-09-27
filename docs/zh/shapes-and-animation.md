@@ -227,6 +227,8 @@ tools.progress({ timeMs: playheadMs })
 
 `replaceSlice()` 会先校验并编译完整的非空 slice，再一次性替换。编译失败时，旧 slice、`totalDurationMs` 和当前投影 Shape 都保持不变。它沿用第一次 append 的 `prependZeroShape` 约定，并且不会自动 seek；需要显示新时间线时再调用 `progress()`。
 
+需要在保留同一个 Child 的同时整体替换全部具名 slice 时，使用 `replaceTimeline(frameMap, prependZeroShape?)`。它会先编译所有 slice，再一次性提交；新 Map 中没有的名称会被删除，`totalDurationMs` 会重新计算，也可以传入空 Map 清空时间线。任一 slice 编译失败时，整条旧时间线和当前投影都保持不变。它与 `replaceSlice()` 一样不会自动 seek，并会默认添加透明零帧；传入 `false` 可关闭这一行为。
+
 `durationMs` 和 `delayMs` 属于“到达当前关键帧”的 transition：先保持前一帧 `delayMs`，再用 `durationMs` 插值到当前帧。`totalDurationMs` 是所有 slice 中最长的总时长。
 
 ## 推进、拖动和播放

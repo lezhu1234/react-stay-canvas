@@ -227,6 +227,8 @@ tools.progress({ timeMs: playheadMs })
 
 `replaceSlice()` validates and compiles the complete non-empty slice before swapping it in. A compilation error leaves the previous slice, `totalDurationMs`, and current projected Shapes unchanged. It follows the same `prependZeroShape` convention as the first append and does not seek automatically; call `progress()` when the new timeline should be projected.
 
+Use `replaceTimeline(frameMap, prependZeroShape?)` when every named slice must be replaced together while keeping the same Child. It compiles all slices before committing any of them, removes names omitted from the new map, recomputes `totalDurationMs`, and accepts an empty map to clear the timeline. A compilation error leaves the complete old timeline and current projection unchanged. Like `replaceSlice()`, it does not seek automatically and applies the default transparent zero frame unless `prependZeroShape` is `false`.
+
 `durationMs` and `delayMs` describe the transition arriving at the current keyframe: hold the previous frame for `delayMs`, then interpolate for `durationMs`. `totalDurationMs` is the longest total duration among all slices.
 
 ## Seeking, scrubbing, and playback

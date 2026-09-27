@@ -28,6 +28,35 @@
 | `sortBy` | — | Hit-result ordering |
 | `withRoot` | `true` | Whether root may be returned |
 
+## Timeline scene transactions
+
+`tools.scene` replaces the Canvas2D timeline Children of one Canvas as one scene revision. Static Children and native WebGL2 Children remain in the shared Child store. Preparation copies and validates every supplied Shape without changing the visible scene. `commit` accepts the prepared scene at the next render frame, then changes the Child set and `tools.scene.revision` together. Matching Children and slices blend from the Shape actually visible at acceptance; new Shapes enter from a transparent zero state and removed Shapes exit to the same transparent zero state. The handoff lasts `durationMs` of render time while the new scene keeps its original playback timeline and can still be sampled with `tools.progress({ timeMs })`.
+
+```ts
+const epoch = tools.scene.beginUpdate()
+const controller = new AbortController()
+const prepared = await tools.scene.prepare(epoch, {
+  revision: "display-2",
+  resourceRevision: "fonts-2",
+  children: [{
+    id: "value-1",
+    className: "value",
+    slices: [{ name: "body", frames: [new Rectangle({
+      x: 20, y: 20, width: 80, height: 40,
+    })] }],
+  }],
+}, {
+  transitionId: "shape",
+  control: { kind: "timeline", durationMs: 180 },
+  signal: controller.signal,
+})
+const receipt = await tools.scene.commit(prepared)
+```
+
+`beginUpdate()` invalidates a previous unaccepted update. `cancel(epoch)` and `discard(prepared)` release only that update; repeated calls are harmless. A committed scene stays visible after either call. Concurrent commits of one valid handle return the same result. Handles belong to the Canvas instance that issued them, and copied or forged objects are rejected. If preparation needs external resources, pass a `resourceLease` with the same `resourceRevision`, a current-version check, and a release function; the transaction releases it on cancellation or failure and releases the previous active lease after a successful replacement. `time-domain` control is reserved for a separately installed time capability and is rejected by this timeline implementation.
+
+A slice whose first frame has a nonzero delay or duration must set `prependZeroShape: true`; this creates the invisible starting keyframe before that frame. A first frame that starts immediately can omit it.
+
 ## Native WebGL2 scene
 
 `tools.webgl` manages native Mesh children in the same instance and identity store as Canvas2D Children. A `StayWebGLChild` owns an ordered Mesh list on one WebGL2 layer; its Mesh geometry, model matrix, and material are CPU-authoritative and mutations invalidate that layer.

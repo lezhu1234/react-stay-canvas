@@ -38,6 +38,7 @@ export type PointerSessionCancelReason =
   | "blur"
   | "visibilitychange"
   | "resize"
+  | "scene-replacement"
 
 export interface ActionEvent<EventName extends string = string> {
   state: string

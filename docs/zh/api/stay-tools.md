@@ -28,6 +28,35 @@
 | `sortBy` | — | 命中结果排序 |
 | `withRoot` | `true` | 是否允许返回 root Child |
 
+## 关键帧场景事务
+
+`tools.scene` 一次替换同一 Canvas 中的二维关键帧 Child，静态 Child 和原生 WebGL2 Child 仍留在唯一的 Child 存储中。准备阶段复制并校验全部 Shape，不修改当前画面。`commit` 在下一绘制帧接受准备结果，同时发布新的 Child 集合和 `tools.scene.revision`。同 ID、同 slice 的 Child 从接受时实际可见的 Shape 续接；新增 Shape 从透明零状态进入，移除的 Shape 则退出到零状态。过渡持续 `durationMs` 的绘制时间，新场景仍保持原来的回放时间线，可继续用 `tools.progress({ timeMs })` 采样。
+
+```ts
+const epoch = tools.scene.beginUpdate()
+const controller = new AbortController()
+const prepared = await tools.scene.prepare(epoch, {
+  revision: "display-2",
+  resourceRevision: "fonts-2",
+  children: [{
+    id: "value-1",
+    className: "value",
+    slices: [{ name: "body", frames: [new Rectangle({
+      x: 20, y: 20, width: 80, height: 40,
+    })] }],
+  }],
+}, {
+  transitionId: "shape",
+  control: { kind: "timeline", durationMs: 180 },
+  signal: controller.signal,
+})
+const receipt = await tools.scene.commit(prepared)
+```
+
+`beginUpdate()` 使前一个尚未接受的更新过期。`cancel(epoch)` 和 `discard(prepared)` 只释放本次更新，重复调用没有额外影响；已提交场景不会因此回滚。同一有效句柄的并发提交共享结果。句柄只属于签发它的 Canvas 实例，复制或伪造对象会被拒绝。外部资源可用同一 `resourceRevision` 的 `resourceLease` 提供版本检查和释放方法；取消或失败只释放本次租约，成功替换后才释放旧活场景的租约。`time-domain` 控制需另行安装时间能力，当前关键帧实现会明确拒绝。
+
+如果 slice 首帧有非零延迟或持续时间，须设置 `prependZeroShape: true`，使它从不可见的起始关键帧进入。首帧立即显示时可省略。
+
 ## 原生 WebGL2 场景
 
 `tools.webgl` 在同一实例、同一 identity store 中管理原生 Mesh Child。一个 `StayWebGLChild` 在一个 WebGL2 图层上拥有有序 Mesh 列表；Mesh 几何、模型矩阵与材质以 CPU 状态为准，修改后会标脏对应图层。

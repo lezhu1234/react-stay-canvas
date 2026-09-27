@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import { loadImage } from "canvas"
 import React, { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -9,6 +10,7 @@ import {
   Point,
   Rectangle,
   StayCanvas,
+  StayImage,
   TransparentImageMaterial,
   type MeshGeometryInput,
   type StayTools,
@@ -33,6 +35,8 @@ import {
 import { ExamplePage } from "../example/src/components/ExamplePage"
 import DiagramExample from "../example/src/examples/integrated/DiagramExample"
 import MotionStudioExample from "../example/src/examples/integrated/MotionStudioExample"
+import * as motionRuntime from "../example/src/examples/integrated/motion/runtime"
+import { seedMotionProject } from "../example/src/examples/integrated/motion/model"
 import {
   coverImageSourceRect,
   coordinateOutputGlassMaterial,
@@ -2082,6 +2086,164 @@ describe("Example Canvas workspace", () => {
     const link = anchorClick.mock.contexts[0] as HTMLAnchorElement
     expect(link.download).toBe("motion-frame-0ms.png")
     expect(link.href).toMatch(/^data:image\/png/)
+  })
+
+  it("keeps the current Motion project visible until an imported scene reaches a frame", async () => {
+    const callbacks = new Map<number, FrameRequestCallback>()
+    let nextFrame = 0
+    window.requestAnimationFrame = (callback) => {
+      callbacks.set(++nextFrame, callback)
+      return nextFrame
+    }
+    window.cancelAnimationFrame = (id) => { callbacks.delete(id) }
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() => { root?.render(<I18nProvider><MotionStudioExample /></I18nProvider>) })
+
+    const project = seedMotionProject((en) => en)
+    project.layers = [{ ...project.layers[0], id: "imported-card", name: "Imported card" }]
+    const file = new File([JSON.stringify(project)], "project.json", { type: "application/json" })
+    Object.defineProperty(file, "text", { value: async () => JSON.stringify(project) })
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    Object.defineProperty(input, "files", { configurable: true, value: [file] })
+
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(container.querySelector(".motion-layers")?.textContent).toContain("Product card")
+    expect(container.querySelector(".motion-layers")?.textContent).not.toContain("Imported card")
+
+    await act(async () => {
+      const [id, callback] = [...callbacks].at(-1)!
+      callbacks.delete(id)
+      callback(performance.now())
+      await Promise.resolve()
+    })
+    expect(container.querySelector(".motion-layers")?.textContent).toContain("Imported card")
+    expect(container.querySelector(".motion-layers")?.textContent).not.toContain("Product card")
+    expect(container.querySelector(".motion-event-log")?.textContent).toContain("Project imported")
+  })
+
+  it("reprepares late Motion media before accepting the imported scene and fades it in", async () => {
+    const clock = vi.spyOn(performance, "now").mockReturnValue(1000)
+    const callbacks = new Map<number, FrameRequestCallback>()
+    let nextFrame = 0
+    window.requestAnimationFrame = (callback) => {
+      callbacks.set(++nextFrame, callback)
+      return nextFrame
+    }
+    window.cancelAnimationFrame = (id) => { callbacks.delete(id) }
+    const image = await loadImage(resolve(process.cwd(), "../example/src/assets/annotation-traffic.jpg")) as unknown as HTMLImageElement
+    // Decode actual image pixels up front, then control when the loader reports
+    // readiness without replacing the fixture with the browser-only asset URL.
+    Object.defineProperty(image, "src", { get: () => "motion-test-image", set: () => {} })
+    vi.spyOn(window, "Image").mockImplementation(() => image)
+    const render = vi.spyOn(motionRuntime, "renderMotionProject")
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() => { root?.render(<I18nProvider><MotionStudioExample /></I18nProvider>) })
+    const tools = render.mock.calls[0][0]
+    const workArea = [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Work area")!
+    act(() => { workArea.click() })
+    const project = seedMotionProject((en) => en)
+    project.layers = [{ ...project.layers[0], id: "imported-card", name: "Imported card" }]
+    const file = new File([JSON.stringify(project)], "project.json", { type: "application/json" })
+    Object.defineProperty(file, "text", { value: async () => JSON.stringify(project) })
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    Object.defineProperty(input, "files", { configurable: true, value: [file] })
+
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(container.querySelector(".motion-layers")?.textContent).toContain("Product card")
+    act(() => { image.onload?.call(image, new Event("load")) })
+    expect(motionRuntime.motionLayerById(tools, "hero-card")?.hasSlice("media")).toBe(true)
+
+    await act(async () => {
+      const [id, callback] = [...callbacks].at(-1)!
+      callbacks.delete(id)
+      callback(1000)
+      await Promise.resolve()
+    })
+    expect(container.querySelector(".motion-layers")?.textContent).toContain("Product card")
+    expect(motionRuntime.motionLayerById(tools, "imported-card")).toBeUndefined()
+
+    await act(async () => {
+      const [id, callback] = [...callbacks].at(-1)!
+      callbacks.delete(id)
+      clock.mockReturnValue(1020)
+      callback(1020)
+      // Inspect the actual accepted target before the commit continuation and
+      // React project effect can perform any later synchronization.
+      const imported = motionRuntime.motionLayerById(tools, "imported-card")!
+      expect(imported.hasSlice("media")).toBe(true)
+      expect((imported.shapeMap.get("media") as StayImage)?.opacity).toBe(0)
+      await Promise.resolve()
+    })
+    expect(container.querySelector(".motion-layers")?.textContent).toContain("Imported card")
+    act(() => {
+      const [id, callback] = [...callbacks].at(-1)!
+      callbacks.delete(id)
+      clock.mockReturnValue(1070)
+      callback(1070)
+    })
+    const opacity = (motionRuntime.motionLayerById(tools, "imported-card")?.shapeMap.get("media") as StayImage)?.opacity
+    expect(opacity).toBeGreaterThan(0)
+    expect(opacity).toBeLessThan(0.32)
+  })
+
+  it("uses only the latest Motion import and preserves the scene after an invalid file", async () => {
+    const callbacks = new Map<number, FrameRequestCallback>()
+    let nextFrame = 0
+    window.requestAnimationFrame = (callback) => {
+      callbacks.set(++nextFrame, callback)
+      return nextFrame
+    }
+    window.cancelAnimationFrame = (id) => { callbacks.delete(id) }
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() => { root?.render(<I18nProvider><MotionStudioExample /></I18nProvider>) })
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    const importFile = async (file: File) => {
+      Object.defineProperty(input, "files", { configurable: true, value: [file] })
+      await act(async () => {
+        input.dispatchEvent(new Event("change", { bubbles: true }))
+        await Promise.resolve()
+      })
+    }
+    const project = seedMotionProject((en) => en)
+    project.layers = [{ ...project.layers[0], id: "latest", name: "Latest project" }]
+    let finishFirst!: (value: string) => void
+    const firstText = new Promise<string>((resolve) => { finishFirst = resolve })
+    const first = new File([""], "first.json", { type: "application/json" })
+    Object.defineProperty(first, "text", { value: () => firstText })
+    const latest = new File([JSON.stringify(project)], "latest.json", { type: "application/json" })
+    Object.defineProperty(latest, "text", { value: async () => JSON.stringify(project) })
+
+    await importFile(first)
+    await importFile(latest)
+    await act(async () => { finishFirst("invalid json"); await Promise.resolve() })
+    expect(container.querySelector(".motion-layers")?.textContent).toContain("Product card")
+    await act(async () => {
+      const [id, callback] = [...callbacks].at(-1)!
+      callbacks.delete(id)
+      callback(performance.now())
+      await Promise.resolve()
+    })
+    expect(container.querySelector(".motion-layers")?.textContent).toContain("Latest project")
+
+    const invalid = new File([""], "invalid.json", { type: "application/json" })
+    Object.defineProperty(invalid, "text", { value: async () => "invalid json" })
+    await importFile(invalid)
+    expect(container.querySelector(".motion-layers")?.textContent).toContain("Latest project")
+    expect(container.querySelector(".motion-event-log")?.textContent).toContain("Unexpected token")
   })
 
   it("uses the full stable stage and keeps initial and later scene children aligned", async () => {

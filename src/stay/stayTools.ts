@@ -150,7 +150,9 @@ export function stayTools(this: Stay<any, any>): StayTools {
 
   const animatedTools = {
     progress: ({ timeMs: time, bound, beforeDrawCallback, afterDrawCallback }: ProgressProps) => {
+      this.currentSample = { time, bound }
       this.updateChildrenTime({ time, bound })
+      this.sceneTransactions.advance(performance.now())
       this.forceUpdateAllLayers()
       return this.draw({
         now: Date.now(),
@@ -655,6 +657,7 @@ export function stayTools(this: Stay<any, any>): StayTools {
     ...stayTools,
     ...instantTools,
     ...animatedTools,
+    scene: this.sceneTransactions,
     webgl: webglTools,
   }
 }

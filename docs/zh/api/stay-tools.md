@@ -55,6 +55,8 @@ const receipt = await tools.scene.commit(prepared)
 
 `beginUpdate()` 使前一个尚未接受的更新过期。`cancel(epoch)` 和 `discard(prepared)` 只释放本次更新，重复调用没有额外影响；已提交场景不会因此回滚。同一有效句柄的并发提交共享结果。句柄只属于签发它的 Canvas 实例，复制或伪造对象会被拒绝。外部资源可用同一 `resourceRevision` 的 `resourceLease` 提供版本检查和释放方法；取消或失败只释放本次租约，成功替换后才释放旧活场景的租约。`time-domain` 控制需另行安装时间能力，当前关键帧实现会明确拒绝。
 
+在接受帧通过校验后、替换活 Child 前，`commit` 会取消当前 Pointer Session。对应的 `dragend` 或 `moveend` 携带 `cancelled: true`、`cancelReason: "scene-replacement"` 和会话最后一次指针采样，`originEvent` 为 `Event("scene-replacement")`。这次取消不会产生 click 或普通 mouseup。准备、丢弃或取消尚未接受的更新，本身不会结束指针交互。取消时的清理方式见 [Pointer Session](../interaction-and-events.md#pointer-session-和-canvas-外释放)。
+
 如果 slice 首帧有非零延迟或持续时间，须设置 `prependZeroShape: true`，使它从不可见的起始关键帧进入。首帧立即显示时可省略。
 
 ## 原生 WebGL2 场景

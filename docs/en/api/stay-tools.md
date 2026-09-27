@@ -55,6 +55,8 @@ const receipt = await tools.scene.commit(prepared)
 
 `beginUpdate()` invalidates a previous unaccepted update. `cancel(epoch)` and `discard(prepared)` release only that update; repeated calls are harmless. A committed scene stays visible after either call. Concurrent commits of one valid handle return the same result. Handles belong to the Canvas instance that issued them, and copied or forged objects are rejected. If preparation needs external resources, pass a `resourceLease` with the same `resourceRevision`, a current-version check, and a release function; the transaction releases it on cancellation or failure and releases the previous active lease after a successful replacement. `time-domain` control is reserved for a separately installed time capability and is rejected by this timeline implementation.
 
+At the accepting frame, after validation and before replacing the live Children, `commit` cancels any active Pointer Session. The corresponding `dragend` or `moveend` carries `cancelled: true`, `cancelReason: "scene-replacement"`, and the session's last pointer sample; `originEvent` is `Event("scene-replacement")`. This cancellation does not emit a click or an ordinary mouseup. Preparing, discarding, or cancelling an unaccepted update does not itself end the pointer interaction. See [Pointer Sessions](../interaction-and-events.md#pointer-sessions-and-release-outside-the-canvas) for cancellation cleanup.
+
 A slice whose first frame has a nonzero delay or duration must set `prependZeroShape: true`; this creates the invisible starting keyframe before that frame. A first frame that starts immediately can omit it.
 
 ## Native WebGL2 scene

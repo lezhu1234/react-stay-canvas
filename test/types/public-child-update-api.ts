@@ -30,7 +30,13 @@ child.update({ transition: { durationMs: 200 } })
 
 animatedChild.update({ className: "timeline:selected" })
 animatedChild.update({ placement: { type: "affine", x: 10 } })
+animatedChild.replaceTimeline(new Map([
+  ["body", [replacement]],
+]))
+animatedChild.replaceTimeline(new Map(), false)
 // @ts-expect-error Animated Shape composition is owned by timeline slices.
 animatedChild.update({ shape: replacement })
+// @ts-expect-error Complete timeline replacement requires arrays of keyframes.
+animatedChild.replaceTimeline(new Map([["body", replacement]]))
 
 void returnedChild

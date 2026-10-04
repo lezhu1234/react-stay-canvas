@@ -32,6 +32,12 @@ export interface SceneSubmission {
   readonly children: readonly SceneTimelineChild[]
 }
 
+export interface SceneBatchSubmission {
+  readonly revision: string
+  readonly resourceRevision: string
+  readonly batches: AsyncIterable<readonly SceneTimelineChild[]>
+}
+
 export interface SceneResourceLease {
   readonly revision: string
   isCurrent(): boolean
@@ -56,7 +62,7 @@ export interface SceneCommitReceipt {
 
 export interface SceneTransactions {
   beginUpdate(): SceneEpoch
-  prepare(epoch: SceneEpoch, target: SceneSubmission, options: ScenePrepareOptions): Promise<PreparedScene>
+  prepare(epoch: SceneEpoch, target: SceneSubmission | SceneBatchSubmission, options: ScenePrepareOptions): Promise<PreparedScene>
   commit(prepared: PreparedScene): Promise<SceneCommitReceipt>
   cancel(epoch: SceneEpoch): void
   discard(prepared: PreparedScene): void

@@ -1,5 +1,6 @@
 import {
   Rectangle,
+  type SceneBatchSubmission,
   type SceneCommitReceipt,
   type SceneSubmission,
   type StayTools,
@@ -35,3 +36,14 @@ tools.scene.cancel({})
 tools.scene.discard({ preparationId: "forged" })
 
 void receipt
+
+const batched: SceneBatchSubmission = {
+  revision: "scene-batched",
+  resourceRevision: "font-2",
+  batches: (async function* () { yield target.children })(),
+}
+void tools.scene.prepare(tools.scene.beginUpdate(), batched, {
+  transitionId: "shape",
+  control: { kind: "timeline", durationMs: 150 },
+  signal: new AbortController().signal,
+})

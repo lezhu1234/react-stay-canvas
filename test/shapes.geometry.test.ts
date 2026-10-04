@@ -183,6 +183,39 @@ describe("Rectangle geometry", () => {
 })
 
 describe("Shape config updates", () => {
+  it("keeps deferred local defaults enumerable, independently mutable, and replaceable", () => {
+    const first = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
+    const second = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
+    expect(Object.keys(first)).toEqual(expect.arrayContaining([
+      "shapeStore", "zoomCenter", "zeroPoint", "zeroPointCopy",
+    ]))
+    first.shapeStore.set("selected", true)
+    first.zoomCenter.x = 10
+    first.zeroPoint.x = 20
+    first.zeroPointCopy.y = 30
+    expect(second.shapeStore.size).toBe(0)
+    expect(second.zoomCenter).toEqual({ x: 0, y: 0 })
+    expect(second.zeroPoint).toEqual({ x: 0, y: 0 })
+    expect(second.zeroPointCopy).toEqual({ x: 0, y: 0 })
+
+    const replacementStore = new Map([["custom", 1]])
+    const replacementPoint = { x: 40, y: 50 }
+    const untouched = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
+    untouched.shapeStore = replacementStore
+    untouched.zeroPoint = replacementPoint
+    expect(untouched.shapeStore).toBe(replacementStore)
+    expect(untouched.zeroPoint).toBe(replacementPoint)
+    const supplied = new Line({ x1: 0, y1: 0, x2: 1, y2: 1,
+      shapeStore: replacementStore, zoomCenter: replacementPoint })
+    expect(supplied.shapeStore).toBe(replacementStore)
+    expect(supplied.zoomCenter).toBe(replacementPoint)
+    const copied = supplied.copy()
+    copied.shapeStore.clear()
+    copied.zoomCenter.x = 100
+    expect(supplied.shapeStore.get("custom")).toBe(1)
+    expect(supplied.zoomCenter.x).toBe(40)
+  })
+
   it("owns independent defaults and replaces configs without changing the supplied values", () => {
     const config = { color: { r: 1, g: 2, b: 3, a: 1 }, lineWidth: 0, dashOffset: 0 }
     const first = new Line({ x1: 0, y1: 0, x2: 1, y2: 1, strokeConfig: config })

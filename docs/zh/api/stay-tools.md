@@ -53,6 +53,29 @@ const prepared = await tools.scene.prepare(epoch, {
 const receipt = await tools.scene.commit(prepared)
 ```
 
+较大的场景可使用 `SceneBatchSubmission`，以 `batches` 代替 `children`。异步迭代器每次返回一组具有完整时间线的 Child；准备流程复制并校验当前批次后才请求下一批，生产者因此不必一直保留临时 Shape。Child id 在整个提交中必须唯一。只有全部批次结束后才返回可提交句柄，中途的批次不会显示。
+
+```ts
+const prepared = await tools.scene.prepare(epoch, {
+  revision: "display-3",
+  resourceRevision: "fonts-2",
+  batches: (async function* () {
+    for (const section of sections) {
+      controller.signal.throwIfAborted()
+      yield buildTimelineChildren(section)
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    }
+  })(),
+}, {
+  transitionId: "shape",
+  control: { kind: "timeline", durationMs: 180 },
+  signal: controller.signal,
+})
+await tools.scene.commit(prepared)
+```
+
+生产者决定批次大小以及何时将执行权交还浏览器；仅 `yield` 数组不会结束当前浏览器任务。生产者自身的网络或资源等待应使用同一个取消信号。等待批次期间，当前场景仍可播放和交互。取消、更新替换、生产者失败或 Canvas 销毁会释放候选场景资源，并使它无法提交。停止消费时会关闭迭代器；如果下一批正在等待外部工作，该工作须结束或响应取消后，消费过程才能结束。
+
 `beginUpdate()` 使前一个尚未接受的更新过期。`cancel(epoch)` 和 `discard(prepared)` 只释放本次更新，重复调用没有额外影响；已提交场景不会因此回滚。同一有效句柄的并发提交共享结果。句柄只属于签发它的 Canvas 实例，复制或伪造对象会被拒绝。外部资源可用同一 `resourceRevision` 的 `resourceLease` 提供版本检查和释放方法；取消或失败只释放本次租约，成功替换后才释放旧活场景的租约。`time-domain` 控制需另行安装时间能力，当前关键帧实现会明确拒绝。
 
 在接受帧通过校验后、替换活 Child 前，`commit` 会取消当前 Pointer Session。对应的 `dragend` 或 `moveend` 携带 `cancelled: true`、`cancelReason: "scene-replacement"` 和会话最后一次指针采样，`originEvent` 为 `Event("scene-replacement")`。这次取消不会产生 click 或普通 mouseup。准备、丢弃或取消尚未接受的更新，本身不会结束指针交互。取消时的清理方式见 [Pointer Session](../interaction-and-events.md#pointer-session-和-canvas-外释放)。

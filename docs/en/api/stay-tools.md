@@ -53,6 +53,29 @@ const prepared = await tools.scene.prepare(epoch, {
 const receipt = await tools.scene.commit(prepared)
 ```
 
+For a large scene, pass a `SceneBatchSubmission` with `batches` instead of `children`. Its asynchronous iterable yields arrays of complete timeline Children. Preparation copies and validates each batch before requesting the next one, so the producer can release its temporary Shapes. Child ids must be unique across the entire submission. The prepared handle is returned only after the iterable finishes; no intermediate batch becomes visible.
+
+```ts
+const prepared = await tools.scene.prepare(epoch, {
+  revision: "display-3",
+  resourceRevision: "fonts-2",
+  batches: (async function* () {
+    for (const section of sections) {
+      controller.signal.throwIfAborted()
+      yield buildTimelineChildren(section)
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    }
+  })(),
+}, {
+  transitionId: "shape",
+  control: { kind: "timeline", durationMs: 180 },
+  signal: controller.signal,
+})
+await tools.scene.commit(prepared)
+```
+
+The producer controls batch size and when to yield execution to the browser; merely yielding an array does not yield a browser task. Any producer I/O should use the same abort signal. While batches are pending, the live scene remains available for playback and interaction. Cancellation, a newer update, producer failure, or Canvas destruction releases the pending scene's resources and prevents its commit. The iterable is closed when consumption stops; if its next batch is awaiting external work, that work must settle or observe cancellation before consumption can finish.
+
 `beginUpdate()` invalidates a previous unaccepted update. `cancel(epoch)` and `discard(prepared)` release only that update; repeated calls are harmless. A committed scene stays visible after either call. Concurrent commits of one valid handle return the same result. Handles belong to the Canvas instance that issued them, and copied or forged objects are rejected. If preparation needs external resources, pass a `resourceLease` with the same `resourceRevision`, a current-version check, and a release function; the transaction releases it on cancellation or failure and releases the previous active lease after a successful replacement. `time-domain` control is reserved for a separately installed time capability and is rejected by this timeline implementation.
 
 At the accepting frame, after validation and before replacing the live Children, `commit` cancels any active Pointer Session. The corresponding `dragend` or `moveend` carries `cancelled: true`, `cancelReason: "scene-replacement"`, and the session's last pointer sample; `originEvent` is `Event("scene-replacement")`. This cancellation does not emit a click or an ordinary mouseup. Preparing, discarding, or cancelling an unaccepted update does not itself end the pointer interaction. See [Pointer Sessions](../interaction-and-events.md#pointer-sessions-and-release-outside-the-canvas) for cancellation cleanup.

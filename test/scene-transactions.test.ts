@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest"
-import { Rectangle, StayAnimatedChild, type SceneSubmission } from "react-stay-canvas"
+import { Rectangle, StayAnimatedChild, type SceneBatchSubmission, type SceneSubmission } from "react-stay-canvas"
 import { createStage } from "./helpers/stage"
 
 const stroke = { color: { r: 1, g: 2, b: 3, a: 1 }, lineWidth: 2 }
@@ -47,7 +47,133 @@ function options(revision: string, signal = new AbortController().signal) {
   }
 }
 
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
 describe("scene transactions through the public tools surface", () => {
+  it("copies batches independently while the live scene keeps its playback position", async () => {
+    const { stage, nextFrame } = stageWithFrames()
+    const live: SceneSubmission = {
+      revision: "live", resourceRevision: "resources-live",
+      children: [{ id: "a", className: "scene", slices: [{ name: "body", frames: [frame(0), frame(100, 100)] }] }],
+    }
+    const initial = await stage.tools.scene.prepare(stage.tools.scene.beginUpdate(), live, {
+      ...options("live"), control: { kind: "timeline", durationMs: 0 },
+    })
+    const initialCommit = stage.tools.scene.commit(initial)
+    nextFrame()
+    await initialCommit
+    const liveChild = stage.tools.getChildById("a") as StayAnimatedChild<Rectangle>
+
+    const firstCopied = deferred()
+    const continueBatches = deferred()
+    const firstFrame = frame(200)
+    const target: SceneBatchSubmission = {
+      revision: "batched", resourceRevision: "resources-batched",
+      batches: (async function* () {
+        yield [{ id: "a", className: "scene", slices: [{ name: "body", frames: [firstFrame, frame(300, 100)] }] }]
+        firstCopied.resolve()
+        await continueBatches.promise
+        yield scene("batched", [["b", 400]]).children
+      })(),
+    }
+    const pending = stage.tools.scene.prepare(stage.tools.scene.beginUpdate(), target, {
+      ...options("batched"), control: { kind: "timeline", durationMs: 0 },
+    })
+    await firstCopied.promise
+    expect(stage.tools.getChildById("a")).toBe(liveChild)
+    expect(stage.tools.hasChild("b")).toBe(false)
+    stage.tools.progress({ timeMs: 75 })
+    expect(liveChild.shapeMap.get("body")!.x).toBeCloseTo(75)
+    firstFrame.move(500, 0)
+    continueBatches.resolve()
+    const prepared = await pending
+    expect(stage.tools.scene.revision).toBe("live")
+    const commit = stage.tools.scene.commit(prepared)
+    nextFrame(16)
+    await commit
+    const nextChild = stage.tools.getChildById("a") as StayAnimatedChild<Rectangle>
+    expect(nextChild.getSlice("body").map(({ x }) => x)).toEqual([200, 300])
+    expect(nextChild.shapeMap.get("body")!.x).toBeCloseTo(275)
+    expect(stage.tools.hasChild("b")).toBe(true)
+    expect(firstFrame.parent).toBeUndefined()
+    stage.destroy()
+  })
+
+  it.each(["abort", "cancel", "supersede", "destroy"] as const)(
+    "releases an unfinished batch preparation once on %s and closes its iterator",
+    async (termination) => {
+      const { stage } = stageWithFrames()
+      const firstCopied = deferred()
+      const continueBatches = deferred()
+      const closed = vi.fn()
+      const release = vi.fn()
+      const controller = new AbortController()
+      const epoch = stage.tools.scene.beginUpdate()
+      const pending = stage.tools.scene.prepare(epoch, {
+        revision: "batched", resourceRevision: "resources-batched",
+        batches: (async function* () {
+          try {
+            yield scene("batched", [["a", 0]]).children
+            firstCopied.resolve()
+            await continueBatches.promise
+            yield scene("batched", [["b", 10]]).children
+          } finally { closed() }
+        })(),
+      }, {
+        ...options("batched", controller.signal),
+        resourceLease: { revision: "resources-batched", isCurrent: () => true, release },
+      })
+      await firstCopied.promise
+      if (termination === "abort") controller.abort()
+      if (termination === "cancel") stage.tools.scene.cancel(epoch)
+      if (termination === "supersede") stage.tools.scene.beginUpdate()
+      if (termination === "destroy") stage.destroy()
+      expect(release).toHaveBeenCalledOnce()
+      continueBatches.resolve()
+      await expect(pending).rejects.toThrow(/cancelled|stale/)
+      expect(closed).toHaveBeenCalledOnce()
+      expect(stage.tools.hasChild("a")).toBe(false)
+      expect(stage.tools.hasChild("b")).toBe(false)
+      stage.destroy()
+      expect(release).toHaveBeenCalledOnce()
+    },
+  )
+
+  it.each(["duplicate", "producer-error"])(
+    "keeps the visible scene when a later batch has a %s",
+    async (failure) => {
+      const { stage, nextFrame } = stageWithFrames()
+      const first = await stage.tools.scene.prepare(
+        stage.tools.scene.beginUpdate(), scene("live", [["live", 20]]), options("live"),
+      )
+      const committed = stage.tools.scene.commit(first)
+      nextFrame()
+      await committed
+      const liveChild = stage.tools.getChildById("live")
+      const release = vi.fn()
+      await expect(stage.tools.scene.prepare(stage.tools.scene.beginUpdate(), {
+        revision: "batched", resourceRevision: "resources-batched",
+        batches: (async function* () {
+          yield scene("batched", [["a", 0]]).children
+          if (failure === "producer-error") throw new Error("producer stopped")
+          yield scene("batched", [["a", 10]]).children
+        })(),
+      }, {
+        ...options("batched"),
+        resourceLease: { revision: "resources-batched", isCurrent: () => true, release },
+      })).rejects.toThrow(failure === "duplicate" ? /Duplicate/ : /producer stopped/)
+      expect(stage.tools.scene.revision).toBe("live")
+      expect(stage.tools.getChildById("live")).toBe(liveChild)
+      expect(stage.tools.hasChild("a")).toBe(false)
+      expect(release).toHaveBeenCalledOnce()
+      stage.destroy()
+    },
+  )
+
   it("prepares complete independent slices with their frame order, layers, and durations", async () => {
     const { stage, nextFrame } = stageWithFrames()
     const body = [frame(0), frame(20, 20), frame(60, 40), frame(100, 40)]

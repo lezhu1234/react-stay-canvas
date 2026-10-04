@@ -1,6 +1,7 @@
 import { AnimatedShape } from "../../shapes/animatedShape"
 import type {
   PreparedScene,
+  SceneBatchSubmission,
   SceneCommitReceipt,
   SceneEpoch,
   ScenePrepareOptions,
@@ -82,7 +83,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
 
   async prepare(
     epoch: SceneEpoch,
-    target: SceneSubmission,
+    target: SceneSubmission | SceneBatchSubmission,
     options: ScenePrepareOptions
   ): Promise<PreparedScene> {
     const update = this.#ownedEpoch(epoch)
@@ -102,13 +103,12 @@ export class CanvasSceneTransactions implements SceneTransactions {
       await Promise.resolve()
       if (options.signal.aborted) this.#finish(update, "cancelled")
       this.#assertPreparing(update)
-      const children = this.#prepareChildren(target.children)
+      await this.#prepareChildren(update, target)
       this.#assertPreparing(update)
       const prepared = Object.freeze({ preparationId: uuid4() }) as PreparedScene
       update.revision = target.revision
       update.resourceRevision = target.resourceRevision
       update.durationMs = durationMs
-      update.children = children
       update.prepared = prepared
       update.state = "prepared"
       this.#preparations.set(prepared, update)
@@ -301,42 +301,53 @@ export class CanvasSceneTransactions implements SceneTransactions {
     )
   }
 
-  #prepareChildren(specs: readonly SceneTimelineChild[]): StayAnimatedChild[] {
+  async #prepareChildren(update: Update, target: SceneSubmission | SceneBatchSubmission): Promise<void> {
     const ids = new Set<string>()
-    return specs.map((spec) => {
-      if (!spec.id || ids.has(spec.id)) throw new Error(`Duplicate or empty scene Child id ${spec.id}`)
-      ids.add(spec.id)
-      const child = new StayAnimatedChild({
-        id: spec.id,
-        className: spec.className,
-        placement: spec.placement,
-        canvas: this.canvas,
-      })
-      const names = new Set<string>()
-      spec.slices.forEach(({ name, frames, prependZeroShape = false }) => {
-        if (!name || names.has(name) || frames.length === 0) {
-          throw new Error(`Invalid scene slice ${spec.id}/${name}`)
-        }
-        names.add(name)
-        const copies = frames.map((frame, index) => {
-          if (!(frame instanceof AnimatedShape)) throw new Error("Scene frame must be an AnimatedShape")
-          if (frame.constructor !== frames[0].constructor) {
-            throw new Error(`Scene slice ${spec.id}/${name} changes Shape type`)
-          }
-          const copy = frame.copy() as AnimatedShape
-          if (index === 0 && !prependZeroShape &&
-              copy.transition.delayMs + copy.transition.durationMs > 0) {
-            throw new Error(`Scene slice ${spec.id}/${name} needs a zero Shape before a delayed first frame`)
-          }
-          return copy
-        })
-        child.replaceSlice(name, copies, prependZeroShape)
-      })
-      return child
-    })
+    update.children = []
+    const batches = "batches" in target ? target.batches : [target.children]
+    for await (const batch of batches) {
+      this.#assertPreparing(update)
+      for (const spec of batch) {
+        const child = this.#prepareChild(spec, ids)
+        this.#assertPreparing(update)
+        update.children!.push(child)
+      }
+    }
   }
 
-  #validateOptions(target: SceneSubmission, options: ScenePrepareOptions): number {
+  #prepareChild(spec: SceneTimelineChild, ids: Set<string>): StayAnimatedChild {
+    if (!spec.id || ids.has(spec.id)) throw new Error(`Duplicate or empty scene Child id ${spec.id}`)
+    ids.add(spec.id)
+    const child = new StayAnimatedChild({
+      id: spec.id,
+      className: spec.className,
+      placement: spec.placement,
+      canvas: this.canvas,
+    })
+    const names = new Set<string>()
+    spec.slices.forEach(({ name, frames, prependZeroShape = false }) => {
+      if (!name || names.has(name) || frames.length === 0) {
+        throw new Error(`Invalid scene slice ${spec.id}/${name}`)
+      }
+      names.add(name)
+      const copies = frames.map((frame, index) => {
+        if (!(frame instanceof AnimatedShape)) throw new Error("Scene frame must be an AnimatedShape")
+        if (frame.constructor !== frames[0].constructor) {
+          throw new Error(`Scene slice ${spec.id}/${name} changes Shape type`)
+        }
+        const copy = frame.copy() as AnimatedShape
+        if (index === 0 && !prependZeroShape &&
+            copy.transition.delayMs + copy.transition.durationMs > 0) {
+          throw new Error(`Scene slice ${spec.id}/${name} needs a zero Shape before a delayed first frame`)
+        }
+        return copy
+      })
+      child.replaceSlice(name, copies, prependZeroShape)
+    })
+    return child
+  }
+
+  #validateOptions(target: SceneSubmission | SceneBatchSubmission, options: ScenePrepareOptions): number {
     if (!target.revision || !target.resourceRevision || options.transitionId !== "shape") {
       throw new Error("Invalid scene revision or transition")
     }

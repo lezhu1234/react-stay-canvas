@@ -5,7 +5,7 @@ import {
   type StayAnimatedChild,
   type StayInstantChild,
   type StayTools,
-  type SceneSubmission,
+  type SceneBatchSubmission,
 } from "react-stay-canvas"
 
 import { colors, rgba, sceneArea, scenePoint } from "../../../components/DemoKit"
@@ -200,22 +200,24 @@ export function compileMotionScene(
   project: MotionProject,
   revision: string,
   image?: HTMLImageElement,
-): SceneSubmission {
+): SceneBatchSubmission {
   return {
     revision,
     resourceRevision: image?.src ?? "motion-no-image",
-    children: project.layers.map((layer) => {
-      const { bodyFrames, labelFrames, mediaFrames } = compileAnimatedLayer(tools, layer, project, image)
-      return {
-        id: childId(layer.id),
-        className: "motion-layer",
-        slices: [
-          { name: bodyKey, frames: bodyFrames },
-          { name: labelKey, frames: labelFrames },
-          ...(mediaFrames.length > 0 ? [{ name: mediaKey, frames: mediaFrames, prependZeroShape: true }] : []),
-        ],
+    batches: (async function* () {
+      for (const layer of project.layers) {
+        const { bodyFrames, labelFrames, mediaFrames } = compileAnimatedLayer(tools, layer, project, image)
+        yield [{
+          id: childId(layer.id),
+          className: "motion-layer",
+          slices: [
+            { name: bodyKey, frames: bodyFrames },
+            { name: labelKey, frames: labelFrames },
+            ...(mediaFrames.length > 0 ? [{ name: mediaKey, frames: mediaFrames, prependZeroShape: true }] : []),
+          ],
+        }]
       }
-    }),
+    })(),
   }
 }
 

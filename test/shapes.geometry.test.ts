@@ -183,6 +183,74 @@ describe("Rectangle geometry", () => {
 })
 
 describe("Shape config updates", () => {
+  it("defers omitted paint defaults while keeping independent enumerable values", () => {
+    const first = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
+    const second = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
+
+    expect(Object.keys(first)).toEqual(expect.arrayContaining(["strokeConfig", "fillConfig"]))
+    expect(Object.getOwnPropertyDescriptor(first, "strokeConfig")).toMatchObject({
+      enumerable: true,
+      get: expect.any(Function),
+    })
+    expect(Object.getOwnPropertyDescriptor(first, "fillConfig")).toMatchObject({
+      enumerable: true,
+      get: expect.any(Function),
+    })
+
+    first.update({ x2: 2 })
+    expect(Object.getOwnPropertyDescriptor(first, "strokeConfig")?.get).toEqual(expect.any(Function))
+    expect(Object.getOwnPropertyDescriptor(first, "fillConfig")?.get).toEqual(expect.any(Function))
+
+    first.strokeConfig.dash.push(4)
+    first.strokeConfig.color.a = 1
+    first.fillConfig.color.a = 0.5
+    expect(second.strokeConfig.dash).toEqual([])
+    expect(second.strokeConfig.color.a).toBe(0)
+    expect(second.fillConfig.color.a).toBe(0)
+    expect(Object.getOwnPropertyDescriptor(first, "strokeConfig")).toMatchObject({
+      enumerable: true,
+      value: first.strokeConfig,
+      writable: true,
+    })
+  })
+
+  it("materializes paint defaults through copy, paint updates, comparison, and drawing", () => {
+    const source = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
+    const copied = source.copy()
+    copied.strokeConfig.dash.push(3)
+    copied.fillConfig.color.a = 1
+    expect(source.strokeConfig.dash).toEqual([])
+    expect(source.fillConfig.color.a).toBe(0)
+
+    const updated = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
+    updated.update({ strokeConfig: { lineWidth: 4 }, fillConfig: { color: { r: 1, g: 2, b: 3, a: 1 } } })
+    expect(updated.strokeConfig).toMatchObject({ lineWidth: 4, dash: [], color: { a: 0 } })
+    expect(updated.fillConfig.color).toEqual({ r: 1, g: 2, b: 3, a: 1 })
+    expect(updated.sameAs(new Line({ x1: 0, y1: 0, x2: 1, y2: 1 }))).toBe(false)
+
+    const drawn = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
+    const context = {
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      fill: vi.fn(),
+      setLineDash: vi.fn(),
+      globalCompositeOperation: "source-over",
+    }
+    drawn.draw({ context: context as any, now: 0, width: 10, height: 10, forchDraw: true })
+    expect(context.stroke).not.toHaveBeenCalled()
+    expect(context.fill).not.toHaveBeenCalled()
+    expect(Object.getOwnPropertyDescriptor(drawn, "strokeConfig")?.value).toMatchObject({
+      lineWidth: 1,
+      dash: [],
+      color: { a: 0 },
+    })
+    expect(Object.getOwnPropertyDescriptor(drawn, "fillConfig")?.value).toMatchObject({
+      color: { a: 0 },
+    })
+  })
+
   it("keeps deferred local defaults enumerable, independently mutable, and replaceable", () => {
     const first = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
     const second = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })

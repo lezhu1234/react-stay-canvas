@@ -318,7 +318,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
           throw new Error(`Invalid scene slice ${spec.id}/${name}`)
         }
         names.add(name)
-        frames.forEach((frame, index) => {
+        const copies = frames.map((frame, index) => {
           if (!(frame instanceof AnimatedShape)) throw new Error("Scene frame must be an AnimatedShape")
           if (frame.constructor !== frames[0].constructor) {
             throw new Error(`Scene slice ${spec.id}/${name} changes Shape type`)
@@ -328,8 +328,9 @@ export class CanvasSceneTransactions implements SceneTransactions {
               copy.transition.delayMs + copy.transition.durationMs > 0) {
             throw new Error(`Scene slice ${spec.id}/${name} needs a zero Shape before a delayed first frame`)
           }
-          child.appendKeyFrame(name, copy, index === 0 && prependZeroShape)
+          return copy
         })
+        child.replaceSlice(name, copies, prependZeroShape)
       })
       return child
     })

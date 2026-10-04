@@ -4,6 +4,41 @@ import { createTextMeasureContext } from "./helpers/textMetrics"
 
 // Dimension 1 (Shapes): pure geometry — no canvas needed.
 
+const expectLineGeometry = (line: Line) => {
+  expect(line.startPoint).toEqual({ x: line.x1, y: line.y1 })
+  expect(line.endPoint).toEqual({ x: line.x2, y: line.y2 })
+  expect(line.vector).toEqual({ x: line.x2 - line.x1, y: line.y2 - line.y1 })
+  expect(line.len()).toBeCloseTo(Math.hypot(line.x2 - line.x1, line.y2 - line.y1))
+}
+
+const expectRectangleGeometry = (rectangle: Rectangle) => {
+  expect(rectangle.leftTop).toEqual({ x: rectangle.x, y: rectangle.y })
+  expect(rectangle.rightTop).toEqual({ x: rectangle.x + rectangle.width, y: rectangle.y })
+  expect(rectangle.rightBottom).toEqual({
+    x: rectangle.x + rectangle.width,
+    y: rectangle.y + rectangle.height,
+  })
+  expect(rectangle.leftBottom).toEqual({ x: rectangle.x, y: rectangle.y + rectangle.height })
+  expect(rectangle.center).toEqual({
+    x: rectangle.x + rectangle.width / 2,
+    y: rectangle.y + rectangle.height / 2,
+  })
+  expect(rectangle.area).toBe(rectangle.width * rectangle.height)
+  const { x, y, width, height } = rectangle
+  expect([
+    rectangle.leftBorder, rectangle.rightBorder, rectangle.topBorder, rectangle.bottomBorder,
+  ].map(({ x1, y1, x2, y2 }) => [x1, y1, x2, y2])).toEqual([
+    [x, y, x, y + height],
+    [x + width, y, x + width, y + height],
+    [x, y, x + width, y],
+    [x, y + height, x + width, y + height],
+  ])
+  expectLineGeometry(rectangle.leftBorder)
+  expectLineGeometry(rectangle.rightBorder)
+  expectLineGeometry(rectangle.topBorder)
+  expectLineGeometry(rectangle.bottomBorder)
+}
+
 describe("Rectangle geometry", () => {
   const rect = () => new Rectangle({ x: 10, y: 20, width: 100, height: 50 })
 
@@ -24,6 +59,66 @@ describe("Rectangle geometry", () => {
     expect(r.rightBottom).toMatchObject({ x: 110, y: 70 })
   })
 
+  it("keeps derived geometry in sync through updates and zoom", () => {
+    const r = rect()
+    expectRectangleGeometry(r)
+
+    r.move(5, -10)
+    r.update({ width: 80, height: 30 })
+    expectRectangleGeometry(r)
+
+    r.zoom(2)
+    expectRectangleGeometry(r)
+  })
+
+  it("provides current border geometry on first access after updates", () => {
+    const r = rect()
+    r.move(5, -10)
+    r.update({ width: 80, height: 30 })
+    r.zoom(2)
+
+    expect(Object.keys(r)).toEqual(expect.arrayContaining([
+      "leftBorder", "rightBorder", "topBorder", "bottomBorder",
+    ]))
+    expectRectangleGeometry(r)
+    expect(r.leftBorder).toBeInstanceOf(Line)
+    expect(r.topBorder.nearPoint(new Point({ x: 40, y: 20 }), 1)).toBe(true)
+  })
+
+  it("retains accessed and replaced border identities through later geometry updates", () => {
+    const r = rect()
+    const left = r.leftBorder
+    left.update({ strokeConfig: { lineWidth: 7 } })
+    left.shapeStore.set("edge", "left")
+    const top = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
+    r.topBorder = top
+
+    r.update({ x: 5, y: 6, width: 7, height: 8 })
+    expect(r.leftBorder).toBe(left)
+    expect(r.topBorder).toBe(top)
+    expect(left.strokeConfig.lineWidth).toBe(7)
+    expect(left.shapeStore.get("edge")).toBe("left")
+    expectRectangleGeometry(r)
+    const copied = r.copy()
+    expect(copied.leftBorder).not.toBe(left)
+    expect(copied.topBorder).not.toBe(top)
+    expectRectangleGeometry(copied)
+  })
+
+  it("initializes geometry independently for copies and intermediate states", () => {
+    const before = new Rectangle({ x: 0, y: 10, width: 20, height: 30 })
+    const after = new Rectangle({ x: 20, y: 30, width: 40, height: 10 })
+    const copy = after.copy()
+    const middle = after.intermediateState(before, after, 0.5, "linear")
+
+    expect(middle.getBound()).toEqual({ x: 10, y: 20, width: 30, height: 20 })
+    expectRectangleGeometry(copy)
+    expectRectangleGeometry(middle)
+    copy.move(100, 100)
+    expect(after.leftTop).toEqual({ x: 20, y: 30 })
+    expectRectangleGeometry(after)
+  })
+
   it("computeFitInfo scales content to fit inside the rect", () => {
     // fit a 50x50 into 100x50 -> limited by height -> ratio 1
     const { rectangle, scaleRatio, offsetX, offsetY } = rect().computeFitInfo(50, 50)
@@ -34,6 +129,8 @@ describe("Rectangle geometry", () => {
 
   it("copy() is independent of the original", () => {
     const storeValue = { selected: true }
+    const stroke = vi.fn()
+    const selectedFill = vi.fn()
     const r = new Rectangle({
       x: 10,
       y: 20,
@@ -51,6 +148,10 @@ describe("Rectangle geometry", () => {
       globalConfig: { gco: "destination-over" },
       transition: { type: "linear", durationMs: 20, delayMs: 10 },
       shapeStore: new Map([["selection", storeValue]]),
+      stateDrawFuncMap: {
+        default: { stroke },
+        selected: { fill: selectedFill },
+      },
     })
     const c = r.copy()
 
@@ -60,6 +161,10 @@ describe("Rectangle geometry", () => {
     c.fillConfig.color.g = 255
     c.transition.durationMs = 100
     c.shapeStore.set("copy-only", true)
+    expect(c.stateDrawFuncMap.default).toEqual({ stroke })
+    expect(c.stateDrawFuncMap.selected).toEqual({ fill: selectedFill })
+    c.stateDrawFuncMap.default.stroke = vi.fn()
+    c.stateDrawFuncMap.selected.fill = vi.fn()
 
     expect(r.x).toBe(10)
     expect(c.x).toBe(999)
@@ -72,10 +177,33 @@ describe("Rectangle geometry", () => {
     expect(r.transition.durationMs).toBe(20)
     expect(r.shapeStore.has("copy-only")).toBe(false)
     expect(c.shapeStore.get("selection")).toBe(storeValue)
+    expect(r.stateDrawFuncMap.default).toEqual({ stroke })
+    expect(r.stateDrawFuncMap.selected).toEqual({ fill: selectedFill })
   })
 })
 
 describe("Shape config updates", () => {
+  it("owns independent defaults and replaces configs without changing the supplied values", () => {
+    const config = { color: { r: 1, g: 2, b: 3, a: 1 }, lineWidth: 0, dashOffset: 0 }
+    const first = new Line({ x1: 0, y1: 0, x2: 1, y2: 1, strokeConfig: config })
+    const second = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
+    const previous = first.strokeConfig
+
+    expect(first.strokeConfig).not.toBe(config)
+    expect(first.strokeConfig.color).toBe(config.color)
+    expect(first.strokeConfig.lineWidth).toBe(0)
+    first.strokeConfig.dash.push(2)
+    expect(second.strokeConfig.dash).toEqual([])
+    expect(first.fillConfig).not.toBe(second.fillConfig)
+    expect(first.globalConfig).not.toBe(second.globalConfig)
+
+    first.update({ strokeConfig: { lineWidth: 3, color: undefined } })
+    expect(first.strokeConfig).not.toBe(previous)
+    expect(previous.lineWidth).toBe(0)
+    expect(first.strokeConfig.color).toBe(config.color)
+    expect(config).toEqual({ color: { r: 1, g: 2, b: 3, a: 1 }, lineWidth: 0, dashOffset: 0 })
+  })
+
   it("keeps required Canvas defaults when optional config fields are undefined", () => {
     const line = new Line({
       x1: 0,
@@ -265,6 +393,16 @@ describe("Line geometry", () => {
 
   it("length", () => {
     expect(line().len()).toBeCloseTo(10)
+  })
+
+  it("keeps endpoints, vector, and length synchronized after updates and zoom", () => {
+    const l = new Line({ x1: 2, y1: 3, x2: 12, y2: 8, zoomCenter: { x: 0, y: 0 } })
+    expectLineGeometry(l)
+
+    l.update({ x1: -4, y2: 20 })
+    expectLineGeometry(l)
+    l.zoom(2)
+    expectLineGeometry(l)
   })
 
   it("segment distance uses the nearer endpoint beyond the segment", () => {

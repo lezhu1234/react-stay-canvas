@@ -1,7 +1,7 @@
-import W3Color, { type RGB, type RGBA } from "../vendor/w3color"
+import { rgbaFromString, type RGB, type RGBA } from "../vendor/w3color"
 
 export function stringToRgba(color: string): RGBA {
-  return new W3Color(color).toRgba()
+  return rgbaFromString(color)
 }
 
 export function isRGB(value: unknown): value is RGB {

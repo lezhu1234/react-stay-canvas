@@ -325,7 +325,46 @@ class W3Color {
   }
 }
 
+function namedColorRgb(color: string): RGB | undefined {
+  if (color.startsWith("#")) return undefined
+  const names = getColorArr("names")
+  const index = names.findIndex((name) => name.toLowerCase() === color)
+  if (index < 0) return undefined
+  const hex = getColorArr("hexs")[index]
+  return {
+    r: parseInt(hex.substr(0, 2), 16),
+    g: parseInt(hex.substr(2, 2), 16),
+    b: parseInt(hex.substr(4, 2), 16),
+  }
+}
+
 function toColorObject(c: string): ColorObject {
+  return parseColor(c, colorObject, emptyObject)
+}
+
+function rgbaObject(rgb: RGB, opacity: number): RGBA {
+  return {
+    r: Number(rgb.r.toFixed(0)),
+    g: Number(rgb.g.toFixed(0)),
+    b: Number(rgb.b.toFixed(0)),
+    a: Number(opacity.toFixed(2)),
+  }
+}
+
+function emptyRgba(): RGBA {
+  return { r: 0, g: 0, b: 0, a: 1 }
+}
+
+/** @internal */
+export function rgbaFromString(color: string): RGBA {
+  return parseColor(color, rgbaObject, emptyRgba)
+}
+
+function parseColor<T>(
+  c: string,
+  createColor: (rgb: RGB, opacity: number, hue?: number, saturation?: number) => T,
+  invalidColor: () => T,
+): T {
   let x: string
   let y: string
   let typ: string = ""
@@ -333,7 +372,6 @@ function toColorObject(c: string): ColorObject {
   let arrlength: number
   let i: number
   let opacity: boolean
-  let match: boolean
   let a: number,
     hue: number | undefined = undefined,
     sat: number | undefined = undefined
@@ -396,7 +434,7 @@ function toColorObject(c: string): ColorObject {
     arr = c.split(",")
     if (typ == "rgb") {
       if (arr.length != arrlength) {
-        return emptyObject()
+        return invalidColor()
       }
       for (i = 0; i < arrlength; i++) {
         if (arr[i] == "" || arr[i] == " ") {
@@ -410,7 +448,7 @@ function toColorObject(c: string): ColorObject {
           }
         }
         if (isNaN(Number(arr[i]))) {
-          return emptyObject()
+          return invalidColor()
         }
         if (parseInt(arr[i] as string) > 255) {
           arr[i] = 255
@@ -491,21 +529,10 @@ function toColorObject(c: string): ColorObject {
   } else if (c.substr(0, 3) == "ncs") {
     rgb = ncsToRgb(c) as RGB
   } else {
-    match = false
-    const colornames = getColorArr("names")
-    for (i = 0; i < colornames.length; i++) {
-      if (c.toLowerCase() == colornames[i].toLowerCase()) {
-        const colorhexs = getColorArr("hexs")
-        match = true
-        rgb = {
-          r: parseInt(colorhexs[i].substr(0, 2), 16),
-          g: parseInt(colorhexs[i].substr(2, 2), 16),
-          b: parseInt(colorhexs[i].substr(4, 2), 16),
-        }
-        break
-      }
-    }
-    if (match == false) {
+    const named = namedColorRgb(c)
+    if (named) {
+      rgb = named
+    } else {
       c = c.replace("#", "")
       if (c.length == 3) {
         c =
@@ -518,7 +545,7 @@ function toColorObject(c: string): ColorObject {
       }
       for (i = 0; i < c.length; i++) {
         if (!isHex(c.substr(i, 1))) {
-          return emptyObject()
+          return invalidColor()
         }
       }
       arr[0] = parseInt(c.substr(0, 2), 16)
@@ -526,7 +553,7 @@ function toColorObject(c: string): ColorObject {
       arr[2] = parseInt(c.substr(4, 2), 16)
       for (i = 0; i < 3; i++) {
         if (isNaN(arr[i] as number)) {
-          return emptyObject()
+          return invalidColor()
         }
       }
       rgb = {
@@ -536,7 +563,7 @@ function toColorObject(c: string): ColorObject {
       }
     }
   }
-  return colorObject(rgb, a, hue, sat)
+  return createColor(rgb, a, hue, sat)
 }
 
 function colorObject(rgb: RGB, a: number, h?: number, s?: number): ColorObject {

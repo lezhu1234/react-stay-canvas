@@ -21,11 +21,14 @@ import W3Color, { RGB, RGBA, rgbaToString } from "../vendor/w3color"
 export const ZeroColor: RGBA = { a: 0, r: 0, g: 0, b: 0 }
 export const BlackColor: RGBA = { a: 1, r: 0, g: 0, b: 0 }
 
-function definedConfig<T extends object>(config?: T): Partial<T> {
-  if (!config) return {}
-  return Object.fromEntries(
-    Object.entries(config).filter(([, value]) => value !== undefined),
-  ) as Partial<T>
+function mergeDefinedConfig<T extends object>(target: T, config?: Partial<T>): T {
+  if (!config) return target
+  for (const key in config) {
+    if (!Object.prototype.hasOwnProperty.call(config, key)) continue
+    const value = config[key]
+    if (value !== undefined) target[key] = value
+  }
+  return target
 }
 
 export interface GetCurrentArgumentsProps {
@@ -81,7 +84,7 @@ export abstract class InstantShape {
     this.zIndex = zIndex ?? 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
 
-    this.strokeConfig = {
+    this.strokeConfig = mergeDefinedConfig<Required<CanvasStrokeProps>>({
       color: ZeroColor,
       lineWidth: 1,
       dash: [],
@@ -89,16 +92,13 @@ export abstract class InstantShape {
       lineCap: "butt",
       lineJoin: "miter",
       miterLimit: 10,
-      ...definedConfig(strokeConfig),
-    }
-    this.fillConfig = {
+    }, strokeConfig)
+    this.fillConfig = mergeDefinedConfig<Required<CanvasFillProps>>({
       color: ZeroColor,
-      ...definedConfig(fillConfig),
-    }
-    this.globalConfig = {
+    }, fillConfig)
+    this.globalConfig = mergeDefinedConfig<Required<CanvasGlobalProps>>({
       gco: "source-over",
-      ...definedConfig(globalConfig),
-    }
+    }, globalConfig)
 
     this.zoomY = zoomY ?? 1
     this.zoomCenter = zoomCenter ?? { x: 0, y: 0 }
@@ -235,14 +235,8 @@ export abstract class InstantShape {
     this.zoomCenter = zoomCenter ?? this.zoomCenter
 
     this.stateDrawFuncMap = stateDrawFuncMap ?? this.stateDrawFuncMap
-    this.strokeConfig = {
-      ...this.strokeConfig,
-      ...definedConfig(strokeConfig),
-    }
-    this.fillConfig = {
-      ...this.fillConfig,
-      ...definedConfig(fillConfig),
-    }
+    this.strokeConfig = mergeDefinedConfig({ ...this.strokeConfig }, strokeConfig)
+    this.fillConfig = mergeDefinedConfig({ ...this.fillConfig }, fillConfig)
 
     if (state) {
       this.switchState(state)

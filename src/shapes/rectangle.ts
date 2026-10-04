@@ -11,7 +11,7 @@ import { fitRect } from "../utils/geometry"
 import { RGBA } from "../vendor/w3color"
 import { AnimatedShape } from "./animatedShape"
 import { InstantShape, ZeroColor } from "./instantShape"
-import { Line } from "./line"
+import { Line, type LineProps } from "./line"
 import { Point } from "./point"
 
 export interface RectangleAttr extends AnimatedShapeProps {
@@ -22,18 +22,58 @@ export interface RectangleAttr extends AnimatedShapeProps {
   filter?: string
 }
 
+const borderNames = ["leftBorder", "rightBorder", "topBorder", "bottomBorder"] as const
+type BorderName = typeof borderNames[number]
+
+function borderCoordinates({ x, y, width, height }: Rectangle, name: BorderName): LineProps {
+  switch (name) {
+    case "leftBorder": return { x1: x, y1: y, x2: x, y2: y + height }
+    case "rightBorder": return { x1: x + width, y1: y, x2: x + width, y2: y + height }
+    case "topBorder": return { x1: x, y1: y, x2: x + width, y2: y }
+    case "bottomBorder": return { x1: x, y1: y + height, x2: x + width, y2: y + height }
+  }
+}
+
+function assignBorder(rectangle: Rectangle, name: BorderName, border: Line) {
+  Object.defineProperty(rectangle, name, {
+    value: border,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  })
+  return border
+}
+
+const borderProperties = Object.fromEntries(borderNames.map((name) => [name, {
+  enumerable: true,
+  configurable: true,
+  get(this: Rectangle) {
+    return assignBorder(this, name, new Line(borderCoordinates(this, name)))
+  },
+  set(this: Rectangle, border: Line) {
+    assignBorder(this, name, border)
+  },
+}]))
+
+function updateMaterializedBorders(rectangle: Rectangle) {
+  for (const name of borderNames) {
+    const border = Object.getOwnPropertyDescriptor(rectangle, name)?.value as Line | undefined
+    if (border) border.update(borderCoordinates(rectangle, name))
+  }
+}
+
 export class Rectangle extends AnimatedShape {
   area: number
-  bottomBorder: Line
+  bottomBorder!: Line
   height: number
-  leftBorder: Line
+  leftBorder!: Line
   leftBottom: Coordinate
   leftTop: Coordinate
-  rightBorder: Line
+  rightBorder!: Line
   rightBottom: Coordinate
   rightTop: Coordinate
   stepZoomY: number
-  topBorder: Line
+  topBorder!: Line
   width: number
   x: number
   y: number
@@ -54,33 +94,9 @@ export class Rectangle extends AnimatedShape {
     this.rightBottom = { x: this.x + this.width, y: this.y + this.height }
     this.leftBottom = { x: this.x, y: this.y + this.height }
     this.center = { x: this.x + this.width / 2, y: this.y + this.height / 2 }
-    this.leftBorder = new Line({
-      x1: this.x,
-      y1: this.y,
-      x2: this.x,
-      y2: this.y + this.height,
-    })
-    this.rightBorder = new Line({
-      x1: this.x + this.width,
-      y1: this.y,
-      x2: this.x + this.width,
-      y2: this.y + this.height,
-    })
-    this.topBorder = new Line({
-      x1: this.x,
-      y1: this.y,
-      x2: this.x + this.width,
-      y2: this.y,
-    })
-    this.bottomBorder = new Line({
-      x1: this.x,
-      y1: this.y + this.height,
-      x2: this.x + this.width,
-      y2: this.y + this.height,
-    })
+    // Keep enumerable, writable border properties without allocating unused animated Lines.
+    Object.defineProperties(this, borderProperties)
     this.area = this.width * this.height
-
-    this.updateRelatedValue()
   }
 
   commonDraw(props: ShapeDrawProps): void {
@@ -224,21 +240,7 @@ export class Rectangle extends AnimatedShape {
     this.leftBottom.x = this.x
     this.leftBottom.y = this.y + this.height
 
-    this.leftBorder.update({ x1: this.x, y1: this.y, x2: this.x, y2: this.y + this.height })
-
-    this.rightBorder.update({
-      x1: this.x + this.width,
-      y1: this.y,
-      x2: this.x + this.width,
-      y2: this.y + this.height,
-    })
-    this.topBorder.update({ x1: this.x, y1: this.y, x2: this.x + this.width, y2: this.y })
-    this.bottomBorder.update({
-      x1: this.x,
-      y1: this.y + this.height,
-      x2: this.x + this.width,
-      y2: this.y + this.height,
-    })
+    updateMaterializedBorders(this)
 
     this.center.x = this.x + this.width / 2
     this.center.y = this.y + this.height / 2

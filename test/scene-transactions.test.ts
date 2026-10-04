@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest"
-import { Rectangle, type SceneSubmission } from "react-stay-canvas"
+import { Rectangle, StayAnimatedChild, type SceneSubmission } from "react-stay-canvas"
 import { createStage } from "./helpers/stage"
 
 const stroke = { color: { r: 1, g: 2, b: 3, a: 1 }, lineWidth: 2 }
@@ -48,6 +48,50 @@ function options(revision: string, signal = new AbortController().signal) {
 }
 
 describe("scene transactions through the public tools surface", () => {
+  it("prepares complete independent slices with their frame order, layers, and durations", async () => {
+    const { stage, nextFrame } = stageWithFrames()
+    const body = [frame(0), frame(20, 20), frame(60, 40), frame(100, 40)]
+    const label = [frame(200, 20), frame(240, 40)]
+    label.forEach((shape) => { shape.layer = 1 })
+    const target: SceneSubmission = {
+      revision: "complete-slices",
+      resourceRevision: "resources-complete-slices",
+      children: [{
+        id: "card", className: "scene",
+        slices: [
+          { name: "body", frames: body },
+          { name: "label", frames: label, prependZeroShape: true },
+        ],
+      }],
+    }
+    const prepared = await stage.tools.scene.prepare(
+      stage.tools.scene.beginUpdate(), target,
+      { ...options(target.revision), control: { kind: "timeline", durationMs: 0 } }
+    )
+    body[2].move(500, 0)
+    const commit = stage.tools.scene.commit(prepared)
+    nextFrame()
+    await commit
+
+    const child = stage.tools.getChildById("card") as StayAnimatedChild<Rectangle>
+    expect(child.getSlice("body").map((shape) => shape.x)).toEqual([0, 20, 60, 100])
+    expect(child.getSlice("label")).toHaveLength(3)
+    expect(child.getSlice("label").map((shape) => shape.layer)).toEqual([1, 1, 1])
+    expect(child.totalDurationMs).toBe(100)
+    expect(child.getSliceTotalDurationMs("label")).toBe(60)
+    for (const shape of [...body, ...label]) expect(shape.parent).toBeUndefined()
+    for (const name of ["body", "label"]) {
+      for (const shape of child.getSlice(name)) expect(shape.parent).toBe(child)
+    }
+    stage.tools.progress({ timeMs: 40 })
+    expect(child.shapeMap.get("body")!.x).toBeCloseTo(40)
+    expect(child.shapeMap.get("label")!.x).toBeCloseTo(220)
+    stage.tools.progress({ timeMs: 100 })
+    expect(child.shapeMap.get("body")!.x).toBeCloseTo(100)
+    expect(child.shapeMap.get("label")!.x).toBeCloseTo(240)
+    stage.destroy()
+  })
+
   it("keeps the live scene until the frame boundary and continues matching shapes from the visible pose", async () => {
     const { stage, nextFrame } = stageWithFrames()
     const existing = stage.tools.createChild({ id: "a", className: "old" })

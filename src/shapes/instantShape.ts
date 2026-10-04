@@ -31,7 +31,32 @@ function mergeDefinedConfig<T extends object>(target: T, config?: Partial<T>): T
   return target
 }
 
-type DeferredDefault = "shapeStore" | "zoomCenter" | "zeroPoint" | "zeroPointCopy"
+function defaultStrokeConfig(): Required<CanvasStrokeProps> {
+  return {
+    color: { ...ZeroColor },
+    lineWidth: 1,
+    dash: [],
+    dashOffset: 0,
+    lineCap: "butt",
+    lineJoin: "miter",
+    miterLimit: 10,
+  }
+}
+
+function defaultFillConfig(): Required<CanvasFillProps> {
+  return { color: { ...ZeroColor } }
+}
+
+const defaultPropertyFactories = {
+  shapeStore: () => new Map<string, any>(),
+  zoomCenter: () => ({ x: 0, y: 0 }),
+  zeroPoint: () => ({ x: 0, y: 0 }),
+  zeroPointCopy: () => ({ x: 0, y: 0 }),
+  strokeConfig: defaultStrokeConfig,
+  fillConfig: defaultFillConfig,
+}
+
+type DeferredDefault = keyof typeof defaultPropertyFactories
 
 function setDefaultProperty<K extends DeferredDefault>(
   shape: InstantShape,
@@ -48,11 +73,11 @@ function setDefaultProperty<K extends DeferredDefault>(
 }
 
 const defaultProperties = Object.fromEntries(
-  (["shapeStore", "zoomCenter", "zeroPoint", "zeroPointCopy"] as const).map((name) => [name, {
+  (Object.keys(defaultPropertyFactories) as DeferredDefault[]).map((name) => [name, {
     enumerable: true,
     configurable: true,
     get(this: InstantShape) {
-      return setDefaultProperty(this, name, name === "shapeStore" ? new Map() : { x: 0, y: 0 })
+      return setDefaultProperty(this, name, defaultPropertyFactories[name]())
     },
     set(this: InstantShape, value: InstantShape[typeof name]) {
       setDefaultProperty(this, name, value)
@@ -92,8 +117,8 @@ export abstract class InstantShape {
   layer: number
   zIndex: number
   parent?: StayInstantChild<InstantShape>
-  strokeConfig: Required<CanvasStrokeProps>
-  fillConfig: Required<CanvasFillProps>
+  strokeConfig!: Required<CanvasStrokeProps>
+  fillConfig!: Required<CanvasFillProps>
   globalConfig: Required<CanvasGlobalProps>
   shapeStore!: Map<string, any>
 
@@ -113,18 +138,12 @@ export abstract class InstantShape {
     this.zIndex = zIndex ?? 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
 
-    this.strokeConfig = mergeDefinedConfig<Required<CanvasStrokeProps>>({
-      color: ZeroColor,
-      lineWidth: 1,
-      dash: [],
-      dashOffset: 0,
-      lineCap: "butt",
-      lineJoin: "miter",
-      miterLimit: 10,
-    }, strokeConfig)
-    this.fillConfig = mergeDefinedConfig<Required<CanvasFillProps>>({
-      color: ZeroColor,
-    }, fillConfig)
+    if (strokeConfig === undefined)
+      Object.defineProperty(this, "strokeConfig", defaultProperties.strokeConfig)
+    else this.strokeConfig = mergeDefinedConfig(defaultStrokeConfig(), strokeConfig)
+    if (fillConfig === undefined)
+      Object.defineProperty(this, "fillConfig", defaultProperties.fillConfig)
+    else this.fillConfig = mergeDefinedConfig(defaultFillConfig(), fillConfig)
     this.globalConfig = mergeDefinedConfig<Required<CanvasGlobalProps>>({
       gco: "source-over",
     }, globalConfig)
@@ -266,8 +285,10 @@ export abstract class InstantShape {
     this.zoomCenter = zoomCenter ?? this.zoomCenter
 
     this.stateDrawFuncMap = stateDrawFuncMap ?? this.stateDrawFuncMap
-    this.strokeConfig = mergeDefinedConfig({ ...this.strokeConfig }, strokeConfig)
-    this.fillConfig = mergeDefinedConfig({ ...this.fillConfig }, fillConfig)
+    if (strokeConfig !== undefined)
+      this.strokeConfig = mergeDefinedConfig({ ...this.strokeConfig }, strokeConfig)
+    if (fillConfig !== undefined)
+      this.fillConfig = mergeDefinedConfig({ ...this.fillConfig }, fillConfig)
 
     if (state) {
       this.switchState(state)

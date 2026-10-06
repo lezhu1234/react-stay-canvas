@@ -1,7 +1,7 @@
 import type { EasingFunction, StayShapeTransitionConfig } from "../types/animation"
 import type { AnimatedShapeProps, Border } from "../types/shapes"
 import { applyEasing } from "../utils/easing"
-import { fillSame, isBasicType, strokeSame } from "../utils/equality"
+import { fillSame, isBasicType, mapSame, recordSame, strokeSame } from "../utils/equality"
 import { RGBA } from "../vendor/w3color"
 import { InstantShape, ZeroColor } from "./instantShape"
 
@@ -150,11 +150,19 @@ export abstract class AnimatedShape extends InstantShape {
   propsSameAs(shape: AnimatedShape): boolean {
     return (
       strokeSame(this.strokeConfig, shape.strokeConfig) &&
-      fillSame(this.fillConfig, shape.fillConfig)
+      fillSame(this.fillConfig, shape.fillConfig) &&
+      this.layer === shape.layer && this.zIndex === shape.zIndex &&
+      this.globalConfig.gco === shape.globalConfig.gco &&
+      this.zoomY === shape.zoomY &&
+      this.zoomCenter.x === shape.zoomCenter.x && this.zoomCenter.y === shape.zoomCenter.y &&
+      this.state === shape.state &&
+      recordSame(this.stateDrawFuncMap, shape.stateDrawFuncMap, recordSame) &&
+      this.shapeStoreValueEquals === shape.shapeStoreValueEquals &&
+      mapSame(this.shapeStore, shape.shapeStore, this.shapeStoreValueEquals)
     )
   }
   sameAs(shape: AnimatedShape): boolean {
-    return this.childSameAs(shape) && this.propsSameAs(shape)
+    return this.constructor === shape.constructor && this.childSameAs(shape) && this.propsSameAs(shape)
   }
 
   colorSame(c1?: RGBA, c2?: RGBA) {

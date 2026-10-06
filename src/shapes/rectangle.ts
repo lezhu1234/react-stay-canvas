@@ -138,8 +138,11 @@ export class Rectangle extends AnimatedShape {
       this.x === shape.x &&
       this.y === shape.y &&
       this.width === shape.width &&
-      this.height === shape.height
+      this.height === shape.height && this.filter === shape.filter
     )
+  }
+  override getNonTransitionState() {
+    return { ...super.getNonTransitionState(), filter: this.filter }
   }
   getBound(): Rect {
     return {

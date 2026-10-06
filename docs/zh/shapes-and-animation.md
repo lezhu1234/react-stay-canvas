@@ -231,6 +231,33 @@ tools.progress({ timeMs: playheadMs })
 
 `durationMs` 和 `delayMs` 属于“到达当前关键帧”的 transition：先保持前一帧 `delayMs`，再用 `durationMs` 插值到当前帧。`totalDurationMs` 是所有 slice 中最长的总时长。
 
+### 比较端点中的应用元数据
+
+`shapeStore` 可以保存跟随 Shape 的应用元数据。默认情况下，端点复用会用严格引用相等（`===`）比较每个值，因此两个分别创建的对象即使字段相同，也会被视为不同端点。
+
+如果存储的是不可变值对象，请为所有需要互相比较的 Shape 传入同一个稳定的 `shapeStoreValueEquals` 函数：
+
+```ts
+type Binding = { visualId: string; selected: boolean }
+
+const bindingEquals = (before: unknown, after: unknown) => {
+  const first = before as Binding | undefined
+  const second = after as Binding | undefined
+  return first?.visualId === second?.visualId && first?.selected === second?.selected
+}
+
+const body = new Rectangle({
+  x: 40,
+  y: 80,
+  width: 100,
+  height: 72,
+  shapeStore: new Map([["binding", { visualId: "card", selected: true }]]),
+  shapeStoreValueEquals: bindingEquals,
+})
+```
+
+两个端点必须使用同一个函数引用。复制 Shape、插值 Shape 和零 Shape 都会保留这个函数。值相等时，时间线可以复用端点；元数据真正变化时仍会生成新端点，采样得到的 Shape 会使用目标元数据。除非应用显式选择，库不会深度比较任意的 store 值。
+
 ## 推进、拖动和播放
 
 库不持有一个自动播放时钟。时间来自你的 UI、媒体时钟或 `requestAnimationFrame`：

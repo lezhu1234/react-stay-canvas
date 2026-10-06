@@ -231,6 +231,33 @@ Use `replaceTimeline(frameMap, prependZeroShape?)` when every named slice must b
 
 `durationMs` and `delayMs` describe the transition arriving at the current keyframe: hold the previous frame for `delayMs`, then interpolate for `durationMs`. `totalDurationMs` is the longest total duration among all slices.
 
+### Comparing application metadata between endpoints
+
+`shapeStore` can carry application-owned metadata with a Shape. By default, endpoint reuse compares each stored value with strict reference equality (`===`). Two separately created objects therefore describe different endpoints even when their fields match.
+
+For immutable value objects, pass a stable `shapeStoreValueEquals` function to every comparable Shape:
+
+```ts
+type Binding = { visualId: string; selected: boolean }
+
+const bindingEquals = (before: unknown, after: unknown) => {
+  const first = before as Binding | undefined
+  const second = after as Binding | undefined
+  return first?.visualId === second?.visualId && first?.selected === second?.selected
+}
+
+const body = new Rectangle({
+  x: 40,
+  y: 80,
+  width: 100,
+  height: 72,
+  shapeStore: new Map([["binding", { visualId: "card", selected: true }]]),
+  shapeStoreValueEquals: bindingEquals,
+})
+```
+
+The same function reference must be used on both endpoints. Copies, interpolated Shapes, and zero Shapes retain it. Equal values allow the timeline to reuse an endpoint; a real metadata change still creates a new endpoint, and sampled Shapes use the target metadata. The library does not deep-compare arbitrary store values unless the application opts in.
+
 ## Seeking, scrubbing, and playback
 
 The library does not own an autoplay clock. Time comes from your controls, media clock, or `requestAnimationFrame` loop:

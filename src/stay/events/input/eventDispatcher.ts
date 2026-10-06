@@ -4,6 +4,18 @@ import type { EventInputPort } from "../contracts"
 import { DomInputAdapter } from "./domInputAdapter"
 import { PressedInputState } from "./pressedInputState"
 
+export interface InputDispatcher {
+  initEvents(): void
+  destroy(): void
+  cancelPointerSession(reason: PointerSessionCancelReason): void
+}
+
+export type InputDispatcherFactory<Origin = Event> = (
+  root: Canvas,
+  passive: boolean,
+  runtime: EventInputPort<Origin>
+) => InputDispatcher
+
 export class EventDispatcher {
   private readonly inputAdapter: DomInputAdapter
   private readonly pressedState = new PressedInputState()
@@ -11,7 +23,7 @@ export class EventDispatcher {
   constructor(
     root: Canvas,
     passive: boolean,
-    runtime: EventInputPort
+    runtime: EventInputPort<Event>
   ) {
     const topLayer = root.layers[root.layers.length - 1]
     this.inputAdapter = new DomInputAdapter(

@@ -12,6 +12,7 @@ import type {
   PointerCoordinates,
   PointerSamples,
 } from "../coordinates/coordinateSystem"
+import type { CanvasInputSource } from "./input/forwardedInput"
 
 export type PointerSample = {
   clientX: number
@@ -32,8 +33,9 @@ export type PointerSessionTransition = {
   cancelReason?: PointerSessionCancelReason
 }
 
-export type EventInput = {
-  originEvent: Event
+export type EventInput<Origin = Event> = {
+  originEvent: Origin
+  source?: CanvasInputSource
   pressedKeys: ReadonlySet<string>
   pointerSample?: PointerSample
   pointerSamples?: PointerSamples
@@ -42,10 +44,10 @@ export type EventInput = {
   sessionTransition?: PointerSessionTransition
 }
 
-export type EventInputSink = (input: EventInput) => void
+export type EventInputSink<Origin = Event> = (input: EventInput<Origin>) => void
 
-export type EventInputPort = {
-  handleInput(input: EventInput): void
+export type EventInputPort<Origin = Event> = {
+  handleInput(input: EventInput<Origin>): void
 }
 
 export type EventDefinitionLookup = {
@@ -63,22 +65,22 @@ export type NormalizedActionEvent<EventName extends string> = Omit<
   "target"
 >
 
-export type EvaluatedActions<EventName extends string> = Partial<
+export type EvaluatedActions<EventName extends string, Origin = Event> = Partial<
   Record<EventName, {
     info: NormalizedActionEvent<EventName>
     coordinates?: PointerCoordinates
     coordinateFrame?: CoordinateFrame
-    event: EventProps<EventName>
+    event: EventProps<EventName, never, never, Origin>
     role: EventDefinitionRole
     scope: EventDefinitionScope
     sessionId?: number
   }>
 >
 
-export type ActionRoutePort<EventName extends string> = {
+export type ActionRoutePort<EventName extends string, Origin = Event> = {
   dispatch(
-    originEvent: Event,
-    triggerEvents: EvaluatedActions<EventName>,
+    originEvent: Origin,
+    triggerEvents: EvaluatedActions<EventName, Origin>,
     payload: Record<string, any>,
     eventDefinitions: EventDefinitionLookup
   ): void

@@ -1,10 +1,11 @@
 import type { StayAnimatedChild } from "../stay/children/stayAnimatedChild"
 
-export function parseLayer(layers: any[], layer: number | undefined) {
-  const resolvedLayer = layer ?? layers.length - 1
-  const normalizedLayer = resolvedLayer < 0 ? layers.length + resolvedLayer : resolvedLayer
+export function parseLayer(layers: any[] | number, layer: number | undefined) {
+  const count = typeof layers === "number" ? layers : layers.length
+  const resolvedLayer = layer ?? count - 1
+  const normalizedLayer = resolvedLayer < 0 ? count + resolvedLayer : resolvedLayer
 
-  if (normalizedLayer < 0 || normalizedLayer >= layers.length) {
+  if (normalizedLayer < 0 || normalizedLayer >= count) {
     throw new Error("layer is out of range")
   }
   return normalizedLayer

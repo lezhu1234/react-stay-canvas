@@ -6,6 +6,10 @@ import type {
   SceneEpoch,
   ScenePrepareOptions,
   SceneResourceLease,
+  SceneStepChild,
+  SceneStepReceipt,
+  SceneStepSubmission,
+  SceneStepSequenceSubmission,
   SceneSubmission,
   SceneTimelineChild,
   SceneTransactions,
@@ -17,6 +21,7 @@ import type { StayChild } from "../children/stayChild"
 import { Renderer } from "../renderer"
 import type { SetShapeChildCurrentTime } from "../types"
 import type Canvas from "../../canvas"
+import { childPlacementEquals, resolveChildPlacement } from "../placements/childPlacement"
 
 type UpdateState = "new" | "preparing" | "prepared" | "queued" | "committed" |
   "cancelled" | "discarded" | "stale" | "failed"
@@ -27,6 +32,7 @@ interface Update {
   revision?: string
   resourceRevision?: string
   durationMs?: number
+  timelineEndTimeMs?: number
   prepared?: PreparedScene
   children?: StayAnimatedChild[]
   receipt?: SceneCommitReceipt
@@ -49,6 +55,8 @@ export class CanvasSceneTransactions implements SceneTransactions {
   #current?: Update
   #generation = 0
   #revision?: string
+  #resourceRevision?: string
+  #timelineEndTimeMs = 0
   #activeLease?: SceneResourceLease
   #handoff?: SceneHandoff
   #destroyed = false
@@ -63,6 +71,89 @@ export class CanvasSceneTransactions implements SceneTransactions {
 
   get revision() {
     return this.#revision
+  }
+
+  appendStep(target: SceneStepSubmission, options: { readonly signal: AbortSignal }): SceneStepReceipt {
+    this.#assertAlive()
+    this.#assertStepResources(target, options.signal)
+    const epoch = this.beginUpdate()
+    const update = this.#ownedEpoch(epoch)
+    const rollback: (() => void)[] = []
+    try {
+      const timelines = this.children.values().filter((child): child is StayAnimatedChild =>
+        child instanceof StayAnimatedChild)
+      const startTimeMs = timelines.reduce((end, child) => Math.max(end, child.totalDurationMs), this.#timelineEndTimeMs)
+      const plans = this.#prepareStep(target, timelines, startTimeMs)
+      this.#assertStepResources(target, options.signal)
+      this.#assertCurrentStep(update)
+      const sample = this.currentSample()
+      plans.forEach(({ apply }) => rollback.push(apply(sample)))
+      this.#assertStepResources(target, options.signal)
+      this.#assertCurrentStep(update)
+      plans.forEach(({ child }) => this.children.add(child))
+      this.#revision = target.revision
+      this.#resourceRevision = target.resourceRevision
+      this.#timelineEndTimeMs = startTimeMs + target.durationMs
+      update.state = "committed"
+      this.renderer.forceUpdateAllLayers()
+      return Object.freeze({
+        revision: target.revision,
+        resourceRevision: target.resourceRevision,
+        endTimeMs: this.#timelineEndTimeMs,
+      })
+    } catch (error) {
+      rollback.reverse().forEach((restore) => restore())
+      this.#finish(update, "failed")
+      throw error
+    }
+  }
+
+  #prepareStep(
+    target: SceneStepSubmission,
+    timelines: StayAnimatedChild[],
+    startTimeMs: number,
+    findChild: (id: string) => StayChild | undefined = (id) => this.children.get(id)
+  ) {
+    const specs = new Map<string, SceneStepChild>()
+    target.children.forEach((spec) => {
+      if (!spec.id || specs.has(spec.id)) throw new Error(`Duplicate or empty scene Child id ${spec.id}`)
+      specs.set(spec.id, spec)
+    })
+    const children = new Map(timelines.map((child) => [child.id, child]))
+    specs.forEach((spec) => {
+      const live = findChild(spec.id)
+      if (live && !(live instanceof StayAnimatedChild)) {
+        throw new Error(`Child id ${spec.id} belongs to a non-timeline Child`)
+      }
+      const child = live ?? new StayAnimatedChild({
+        id: spec.id, className: spec.className, placement: spec.placement, canvas: this.canvas,
+      })
+      if (child.className !== spec.className || (spec.placement &&
+          !childPlacementEquals(child.placement, resolveChildPlacement(spec.placement).snapshot))) {
+        throw new Error(`Scene step cannot change static Child metadata ${spec.id}`)
+      }
+      children.set(spec.id, child)
+    })
+    return [...children.values()].map((child) => ({
+      child,
+      apply: child.prepareStepAppend(specs.get(child.id)?.shapes ?? new Map(), startTimeMs, target.durationMs),
+    }))
+  }
+
+  #assertStepResources(target: SceneStepSubmission, signal: AbortSignal): void {
+    if (signal.aborted) throw new Error("Scene step was cancelled")
+    if (!target.revision || !target.resourceRevision || !Number.isFinite(target.durationMs) || target.durationMs < 0) {
+      throw new Error("Invalid scene step revision or duration")
+    }
+    if ((this.#resourceRevision && target.resourceRevision !== this.#resourceRevision) ||
+        (this.#activeLease && !this.#activeLease.isCurrent())) {
+      throw new Error("Scene step resources are stale; prepare a replacement scene")
+    }
+  }
+
+  #assertCurrentStep(update: Update): void {
+    this.#assertAlive()
+    if (update !== this.#current || update.state !== "new") throw new Error("Scene step is stale")
   }
 
   renderingExits(): StayAnimatedChild[] {
@@ -83,7 +174,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
 
   async prepare(
     epoch: SceneEpoch,
-    target: SceneSubmission | SceneBatchSubmission,
+    target: SceneSubmission | SceneBatchSubmission | SceneStepSequenceSubmission,
     options: ScenePrepareOptions
   ): Promise<PreparedScene> {
     const update = this.#ownedEpoch(epoch)
@@ -103,7 +194,8 @@ export class CanvasSceneTransactions implements SceneTransactions {
       await Promise.resolve()
       if (options.signal.aborted) this.#finish(update, "cancelled")
       this.#assertPreparing(update)
-      await this.#prepareChildren(update, target)
+      if ("steps" in target) await this.#prepareSteps(update, target)
+      else await this.#prepareChildren(update, target)
       this.#assertPreparing(update)
       const prepared = Object.freeze({ preparationId: uuid4() }) as PreparedScene
       update.revision = target.revision
@@ -217,6 +309,9 @@ export class CanvasSceneTransactions implements SceneTransactions {
         exitingLeases,
       } : undefined
       this.#revision = update.revision
+      this.#resourceRevision = update.resourceRevision
+      this.#timelineEndTimeMs = update.timelineEndTimeMs ??
+        next.children.reduce((end, child) => Math.max(end, child.totalDurationMs), 0)
       update.state = "committed"
       this.#clearPreparation(update)
       const receipt = Object.freeze({
@@ -228,6 +323,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
       update.receipt = receipt
       update.children = undefined
       update.durationMs = undefined
+      update.timelineEndTimeMs = undefined
       update.revision = undefined
       update.resourceRevision = undefined
       if (durationMs === 0) exitingLeases.forEach((lease) => this.#releaseLease(lease))
@@ -315,6 +411,30 @@ export class CanvasSceneTransactions implements SceneTransactions {
     }
   }
 
+  async #prepareSteps(update: Update, target: SceneStepSequenceSubmission): Promise<void> {
+    const children = new Map<string, StayAnimatedChild>()
+    update.children = []
+    let endTimeMs = 0
+    for await (const step of target.steps) {
+      this.#assertPreparing(update)
+      if (!step.revision || step.resourceRevision !== target.resourceRevision ||
+          !Number.isFinite(step.durationMs) || step.durationMs < 0) {
+        throw new Error("Invalid replacement scene step revision, resources or duration")
+      }
+      const plans = this.#prepareStep(step, [...children.values()], endTimeMs, (id) => children.get(id))
+      for (const { child, apply } of plans) {
+        apply({ time: 0 })
+        if (!children.has(child.id)) {
+          children.set(child.id, child)
+          update.children!.push(child)
+        }
+      }
+      this.#assertPreparing(update)
+      endTimeMs += step.durationMs
+    }
+    update.timelineEndTimeMs = endTimeMs
+  }
+
   #prepareChild(spec: SceneTimelineChild, ids: Set<string>): StayAnimatedChild {
     if (!spec.id || ids.has(spec.id)) throw new Error(`Duplicate or empty scene Child id ${spec.id}`)
     ids.add(spec.id)
@@ -347,7 +467,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
     return child
   }
 
-  #validateOptions(target: SceneSubmission | SceneBatchSubmission, options: ScenePrepareOptions): number {
+  #validateOptions(target: SceneSubmission | SceneBatchSubmission | SceneStepSequenceSubmission, options: ScenePrepareOptions): number {
     if (!target.revision || !target.resourceRevision || options.transitionId !== "shape") {
       throw new Error("Invalid scene revision or transition")
     }
@@ -397,6 +517,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
     update.revision = undefined
     update.resourceRevision = undefined
     update.durationMs = undefined
+    update.timelineEndTimeMs = undefined
     this.#releaseLease(lease)
   }
 

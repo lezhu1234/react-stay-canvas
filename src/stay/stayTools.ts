@@ -26,7 +26,7 @@ import type { ManualTriggerEvents } from "../types/manualActions"
 import type { Area, PointType } from "../types/geometry"
 import type { Cursor, StayCoordinates, StayTools } from "../types/tools"
 import { assert } from "../utils/assertions"
-import { fitRect, numberAlmostEqual } from "../utils/geometry"
+import { numberAlmostEqual } from "../utils/geometry"
 import { infixExpressionParser } from "../utils/selectors"
 import { StayAnimatedChild } from "./children/stayAnimatedChild"
 import { isStayInstantChild, isStayWebGLChild } from "./children/stayChild"
@@ -41,9 +41,7 @@ import {
 } from "./historySnapshot"
 import { captureScene, materializeSceneChild } from "./sceneTransfer"
 import { normalizeManualActions } from "./events/input/manualActionAdapter"
-import { executeCanvas2DRenderPlan } from "./rendering/canvas2DExecutor"
-import { resolveCanvas2DProjectiveQuality } from "./rendering/canvas2DProjectiveQuality"
-import { createLayerRenderPlan } from "./rendering/renderPlan"
+import { renderRegionToSurface } from "./rendering/regionCapture"
 import {
   areaPlacementMatrix,
   invertMatrix2D,
@@ -70,46 +68,9 @@ function placeImportedGeometry(
   })
 }
 
-function withChildrenAtTime<R>(
-  children: StayInstantChild[],
-  progress: number | undefined,
-  callback: () => R
-): R {
-  if (progress === undefined) return callback()
-
-  const restoreProjections: Array<() => void> = []
-  try {
-    children.forEach((child) => {
-      restoreProjections.push(child.beginCurrentTimeProjection({ time: progress }))
-    })
-    return callback()
-  } finally {
-    restoreProjections.reverse().forEach((restore) => restore())
-  }
-}
-
-function prepareRegionContext(
-  context: CanvasRenderingContext2D,
-  area: Area,
-  targetSize: { width: number; height: number }
-) {
-  const { rect, scale } = fitRect(area, {
-    x: 0,
-    y: 0,
-    ...targetSize,
-  })
-
-  context.beginPath()
-  context.rect(rect.x, rect.y, rect.width, rect.height)
-  context.clip()
-  context.translate(rect.x, rect.y)
-  context.scale(scale, scale)
-  context.translate(-area.x, -area.y)
-}
-
 // One factory, one unified tool surface. Every stage gets all tools.
-export function stayTools(this: Stay<any, any>): StayTools {
-  const webglTools = createStayWebGLTools.call(this)
+export function stayTools<Origin>(this: Stay<any, any, Origin>): StayTools<Origin> {
+  const webglTools = createStayWebGLTools.call(this as Stay<any, any, any>)
 
   const appendHistoryChild = (snapshot: StayHistoryChildSnapshot) => {
     if (snapshot.kind === "canvas2d") {
@@ -150,8 +111,7 @@ export function stayTools(this: Stay<any, any>): StayTools {
 
   const animatedTools = {
     progress: ({ timeMs: time, bound, beforeDrawCallback, afterDrawCallback }: ProgressProps) => {
-      this.currentSample = { time, bound }
-      this.updateChildrenTime({ time, bound })
+      this.setCurrentSample({ time, bound })
       this.sceneTransactions.advance(performance.now())
       this.forceUpdateAllLayers()
       return this.draw({
@@ -228,9 +188,7 @@ export function stayTools(this: Stay<any, any>): StayTools {
         return
       }
       const externalState = this.history.restoreExternal(stepItem, "redo")
-      this.root.layers.forEach((_, i) => {
-        this.forceUpdateLayer(i)
-      })
+      this.forceUpdateAllLayers()
 
       stepItem.steps.forEach((step) => {
         if (step.action === "append") {
@@ -257,9 +215,7 @@ export function stayTools(this: Stay<any, any>): StayTools {
         return
       }
       const externalState = this.history.restoreExternal(stepItem, "undo")
-      this.root.layers.forEach((_, i) => {
-        this.forceUpdateLayer(i)
-      })
+      this.forceUpdateAllLayers()
 
       stepItem.steps.forEach((step) => {
         if (step.action === "append") {
@@ -469,7 +425,7 @@ export function stayTools(this: Stay<any, any>): StayTools {
       ) as StayInstantChild<T>[]
     },
     changeCursor: (cursor: Cursor) => {
-      this.root.layers[this.root.layers.length - 1].style.cursor = cursor
+      this.root.setCursor(cursor)
     },
     switchState: (state: string) => {
       this.checkName(state, [ALLSTATE])
@@ -495,9 +451,7 @@ export function stayTools(this: Stay<any, any>): StayTools {
         }
         child.move(offsetX, offsetY)
       })
-      this.root.layers.forEach((_, i) => {
-        this.forceUpdateLayer(i)
-      })
+      this.forceUpdateAllLayers()
       return new Promise<void>((resolve) => {
         this.nextTick(resolve)
       })
@@ -513,9 +467,7 @@ export function stayTools(this: Stay<any, any>): StayTools {
         }
         child.zoom(deltaY, center)
       })
-      this.root.layers.forEach((_, i) => {
-        this.forceUpdateLayer(i)
-      })
+      this.forceUpdateAllLayers()
       return new Promise<void>((resolve) => {
         this.nextTick(resolve)
       })
@@ -529,9 +481,7 @@ export function stayTools(this: Stay<any, any>): StayTools {
         child.move(offsetX, offsetY)
         child.zoom((scale - 1) * -1000, { x: 0, y: 0 })
       })
-      this.root.layers.forEach((_, i) => {
-        this.forceUpdateLayer(i)
-      })
+      this.forceUpdateAllLayers()
       return new Promise<void>((resolve) => {
         this.nextTick(resolve)
       })
@@ -582,64 +532,12 @@ export function stayTools(this: Stay<any, any>): StayTools {
         })
       })
     },
-    regionToTargetCanvas: async ({
-      area,
-      targetSize,
-      children,
-      progress,
-    }: RegionToTargetCanvasProps): Promise<HTMLCanvasElement> => {
-      targetSize = targetSize ?? {
-        width: area.width,
-        height: area.height,
-      }
-
-      const tempCanvas = document.createElement("canvas")
-      tempCanvas.width = targetSize.width
-      tempCanvas.height = targetSize.height
-      const tempCtx = tempCanvas.getContext("2d")
-      if (!tempCtx) {
-        throw new Error("Unable to get 2D context")
-      }
-
-      const layerNumber = this.root.layers.length
-      return withChildrenAtTime(children, progress, () => {
-        const items = Array.from(
-          { length: layerNumber },
-          (_, layerIndex) => createLayerRenderPlan(children, layerIndex).items
-        ).flat()
-
-        tempCtx.save()
-        try {
-          prepareRegionContext(tempCtx, area, targetSize)
-          executeCanvas2DRenderPlan({
-            context: tempCtx,
-            items,
-            getNow: Date.now,
-            width: this.width,
-            height: this.height,
-            forceDraw: true,
-            getProjectiveQuality: ({ projection }) => {
-              if (!projection) {
-                throw new Error("projective quality requires a projective RenderItem")
-              }
-              return resolveCanvas2DProjectiveQuality({
-                mapping: projection.mapping,
-                outputWidth: tempCanvas.width,
-                outputHeight: tempCanvas.height,
-                contentScaleX: targetSize.width / area.width,
-                contentScaleY: targetSize.height / area.height,
-              })
-            },
-          })
-        } finally {
-          tempCtx.restore()
-        }
-
-        return tempCanvas
-      })
-    },
+    regionToTargetCanvas: async (props: RegionToTargetCanvasProps): Promise<HTMLCanvasElement> =>
+      renderRegionToSurface(document.createElement("canvas"), props, {
+        width: this.width, height: this.height, layerCount: this.root.layerCount,
+      }),
     triggerAction: <T extends string>(
-      originEvent: Event,
+      originEvent: Origin,
       triggerEvents: ManualTriggerEvents<T>,
       payload: Dict
     ): void =>

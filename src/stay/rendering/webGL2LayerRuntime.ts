@@ -1,5 +1,5 @@
 import type {
-  WebGL2ContextLayerSetFunction,
+  OffscreenWebGL2LayerConfig,
   WebGL2LayerConfig,
 } from "../../types/canvas"
 import type { Mesh } from "../webgl2/mesh"
@@ -10,10 +10,13 @@ import {
   type WebGLLight,
 } from "../webgl2/light"
 import { WebGL2SceneRuntime } from "../webgl2/sceneRuntime"
-import { resizeLayerSurface } from "./layerSurface"
+import {
+  resizeLayerSurface,
+  type CanvasLayerSurface,
+  type LayerSurfaceResize,
+} from "./layerSurface"
 
-const defaultWebGL2Context: WebGL2ContextLayerSetFunction = (canvas) =>
-  canvas.getContext("webgl2", { alpha: true, depth: true })
+type WebGL2RuntimeConfig = WebGL2LayerConfig | OffscreenWebGL2LayerConfig
 
 /** @internal Owns one WebGL2 layer's context, camera, GPU cache, and lifecycle. */
 export class WebGL2LayerRuntime {
@@ -28,8 +31,11 @@ export class WebGL2LayerRuntime {
   readonly #unsubscribeEnvironmentChanges?: () => void
 
   constructor(
-    readonly element: HTMLCanvasElement,
-    private readonly config: WebGL2LayerConfig,
+    readonly surface: CanvasLayerSurface,
+    private readonly config: WebGL2RuntimeConfig,
+    private readonly resolveConfiguredContext: (
+      surface: CanvasLayerSurface
+    ) => WebGL2RenderingContext | null,
     private readonly index: number,
     private readonly invalidate: () => void
   ) {
@@ -62,20 +68,21 @@ export class WebGL2LayerRuntime {
         `WebGL2 layer ${this.index} supports at most one shadow-casting directional light`
       )
     }
-    this.element.addEventListener("webglcontextlost", this.#handleContextLost)
-    this.element.addEventListener("webglcontextrestored", this.#handleContextRestored)
+    const eventTarget = this.surface as EventTarget
+    eventTarget.addEventListener("webglcontextlost", this.#handleContextLost)
+    eventTarget.addEventListener("webglcontextrestored", this.#handleContextRestored)
     this.#unsubscribeCameraChanges = this.config.camera.subscribeChanges(this.invalidate)
     this.#unsubscribeLightChanges = this.#lights.map((light) =>
       light.subscribeChanges(this.invalidate))
     this.#unsubscribeEnvironmentChanges = this.#environment?.subscribeChanges(this.invalidate)
   }
 
-  resizeBackingStore(width: number, height: number) {
-    resizeLayerSurface(this.element, width, height)
+  resizeBackingStore(resize: LayerSurfaceResize) {
+    resizeLayerSurface(this.surface, resize)
   }
 
   resolveContext() {
-    const context = (this.config.context ?? defaultWebGL2Context)(this.element)
+    const context = this.resolveConfiguredContext(this.surface)
     if (!context) {
       throw new Error(`Unable to get WebGL2 context for layer ${this.index}`)
     }
@@ -103,8 +110,9 @@ export class WebGL2LayerRuntime {
     this.#unsubscribeCameraChanges()
     this.#unsubscribeLightChanges.forEach((unsubscribe) => unsubscribe())
     this.#unsubscribeEnvironmentChanges?.()
-    this.element.removeEventListener("webglcontextlost", this.#handleContextLost)
-    this.element.removeEventListener("webglcontextrestored", this.#handleContextRestored)
+    const eventTarget = this.surface as EventTarget
+    eventTarget.removeEventListener("webglcontextlost", this.#handleContextLost)
+    eventTarget.removeEventListener("webglcontextrestored", this.#handleContextRestored)
     this.#scene?.dispose()
     this.#scene = undefined
   }
@@ -116,7 +124,7 @@ export class WebGL2LayerRuntime {
   }
 
   readonly #handleContextRestored = (event: Event) => {
-    const context = (this.config.context ?? defaultWebGL2Context)(this.element)
+    const context = this.resolveConfiguredContext(this.surface)
     if (!context) {
       throw new Error(`Unable to get WebGL2 context for layer ${this.index}`)
     }

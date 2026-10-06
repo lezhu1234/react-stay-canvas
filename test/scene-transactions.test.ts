@@ -54,6 +54,120 @@ function deferred() {
 }
 
 describe("scene transactions through the public tools surface", () => {
+  it("prepares complete replacement steps in the native timeline and commits at the existing cursor", async () => {
+    const { stage, nextFrame } = stageWithFrames()
+    stage.tools.scene.appendStep({
+      revision: "old", resourceRevision: "old-font", durationMs: 0,
+      children: [{ id: "a", className: "scene", shapes: new Map([["body", frame(10)]]) }],
+    }, { signal: new AbortController().signal })
+    const old = stage.tools.getChildById("a")
+    const firstPrepared = deferred()
+    const continueSteps = deferred()
+    const first = frame(200)
+    const pending = stage.tools.scene.prepare(stage.tools.scene.beginUpdate(), {
+      revision: "replacement", resourceRevision: "new-font",
+      steps: (async function* () {
+        yield { revision: "step-0", resourceRevision: "new-font", durationMs: 0,
+          children: [{ id: "a", className: "scene", shapes: new Map([["body", first]]) }] }
+        firstPrepared.resolve()
+        await continueSteps.promise
+        yield { revision: "step-1", resourceRevision: "new-font", durationMs: 100,
+          children: [{ id: "a", className: "scene", shapes: new Map([["body", frame(300)]]) }] }
+        yield { revision: "step-2", resourceRevision: "new-font", durationMs: 100,
+          children: [{ id: "a", className: "scene", shapes: new Map([["body", frame(300)]]) }] }
+      })(),
+    }, { ...options("replacement"), control: { kind: "timeline", durationMs: 0 } })
+    await firstPrepared.promise
+    expect(stage.tools.getChildById("a")).toBe(old)
+    expect(stage.tools.scene.revision).toBe("old")
+    first.move(500, 0)
+    stage.tools.progress({ timeMs: 75 })
+    continueSteps.resolve()
+    const prepared = await pending
+    expect(stage.tools.getChildById("a")).toBe(old)
+    const accepted = stage.tools.scene.commit(prepared)
+    nextFrame(16)
+    await accepted
+    const replacement = stage.tools.getChildById("a") as StayAnimatedChild<Rectangle>
+    expect(replacement.getSlice("body").map(({ x }) => x)).toEqual([200, 200, 300])
+    expect(replacement.totalDurationMs).toBe(200)
+    expect(replacement.shapeMap.get("body")!.x).toBeCloseTo(275)
+    const appended = stage.tools.scene.appendStep({
+      revision: "step-3", resourceRevision: "new-font", durationMs: 100,
+      children: [{ id: "a", className: "scene", shapes: new Map([["body", frame(400)]]) }],
+    }, { signal: new AbortController().signal })
+    expect(appended.endTimeMs).toBe(300)
+    stage.tools.progress({ timeMs: 250 })
+    expect(replacement.shapeMap.get("body")!.x).toBeCloseTo(350)
+    stage.destroy()
+  })
+
+  it("keeps the accepted native end after replacing with empty steps", async () => {
+    const { stage, nextFrame } = stageWithFrames()
+    stage.tools.scene.appendStep({
+      revision: "old-0", resourceRevision: "old-font", durationMs: 0,
+      children: [{ id: "old", className: "scene", shapes: new Map([["body", frame(10)]]) }],
+    }, { signal: new AbortController().signal })
+    stage.tools.scene.appendStep({
+      revision: "old-1", resourceRevision: "old-font", durationMs: 1000,
+      children: [{ id: "old", className: "scene", shapes: new Map([["body", frame(100)]]) }],
+    }, { signal: new AbortController().signal })
+
+    const prepared = await stage.tools.scene.prepare(stage.tools.scene.beginUpdate(), {
+      revision: "empty-replacement", resourceRevision: "new-font",
+      steps: (async function* () {
+        yield { revision: "empty-0", resourceRevision: "new-font", durationMs: 0, children: [] }
+        yield { revision: "empty-1", resourceRevision: "new-font", durationMs: 100, children: [] }
+        yield { revision: "empty-2", resourceRevision: "new-font", durationMs: 200, children: [] }
+      })(),
+    }, { ...options("empty-replacement"), control: { kind: "timeline", durationMs: 0 } })
+    const commit = stage.tools.scene.commit(prepared)
+    nextFrame()
+    await commit
+
+    expect(stage.tools.hasChild("old")).toBe(false)
+    const appended = stage.tools.scene.appendStep({
+      revision: "empty-3", resourceRevision: "new-font", durationMs: 100,
+      children: [{ id: "new", className: "scene", shapes: new Map([["body", frame(400)]]) }],
+    }, { signal: new AbortController().signal })
+    const child = stage.tools.getChildById("new") as StayAnimatedChild<Rectangle>
+
+    expect(appended.endTimeMs).toBe(400)
+    expect(child.totalDurationMs).toBe(400)
+    expect(child.getSliceTotalDurationMs("body")).toBe(400)
+    stage.tools.progress({ timeMs: 350 })
+    expect(child.shapeMap.get("body")!.x).toBe(400)
+    stage.destroy()
+  })
+
+  it.each(["abort", "invalid"] as const)("keeps the accepted scene when replacement steps %s", async (termination) => {
+    const { stage } = stageWithFrames()
+    stage.tools.scene.appendStep({
+      revision: "old", resourceRevision: "old-font", durationMs: 0,
+      children: [{ id: "a", className: "scene", shapes: new Map([["body", frame(10)]]) }],
+    }, { signal: new AbortController().signal })
+    const old = stage.tools.getChildById("a")
+    const controller = new AbortController()
+    const closed = vi.fn()
+    const pending = stage.tools.scene.prepare(stage.tools.scene.beginUpdate(), {
+      revision: "replacement", resourceRevision: "new-font",
+      steps: (async function* () {
+        try {
+          yield { revision: "first", resourceRevision: "new-font", durationMs: 0,
+            children: [{ id: "a", className: "scene", shapes: new Map([["body", frame(200)]]) }] }
+          if (termination === "abort") controller.abort()
+          yield { revision: "second", resourceRevision: "wrong-font", durationMs: 100, children: [] }
+        } finally { closed() }
+      })(),
+    }, options("replacement", controller.signal))
+    await expect(pending).rejects.toThrow(termination === "abort" ? "cancelled" : "resources")
+    expect(closed).toHaveBeenCalledOnce()
+    expect(stage.tools.getChildById("a")).toBe(old)
+    expect(stage.tools.scene.revision).toBe("old")
+    expect((old as StayAnimatedChild<Rectangle>).shapeMap.get("body")!.x).toBe(10)
+    stage.destroy()
+  })
+
   it("copies batches independently while the live scene keeps its playback position", async () => {
     const { stage, nextFrame } = stageWithFrames()
     const live: SceneSubmission = {

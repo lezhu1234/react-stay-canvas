@@ -23,26 +23,33 @@ import type {
 
 type Store = Map<string, any>
 
-type ListenerRegistration<EventName extends string> = {
+type ListenerRegistration<EventName extends string, Origin> = {
   id: symbol
   name: string
   state: string
   selector: string
   sortBy?: ChildSortFunction
   eventNames: EventName[]
-  callback: ListenerProps<ListenerNamePayloadPair, EventName>["callback"]
+  callback: ListenerProps<
+    ListenerNamePayloadPair,
+    EventName,
+    Record<string, any>,
+    never,
+    never,
+    Origin
+  >["callback"]
 }
 
-type ListenerRuntime<EventName extends string> = {
-  registration: ListenerRegistration<EventName>
+type ListenerRuntime<EventName extends string, Origin> = {
+  registration: ListenerRegistration<EventName, Origin>
   composeStore: Record<string, any>
 }
 
-type ActionRouterContext = {
+type ActionRouterContext<Origin> = {
   canvas: Canvas
   store: Store
   stateStore: Store
-  getTools: () => StayTools
+  getTools: () => StayTools<Origin>
   isStateAvailable: (selector: string) => boolean
   targetResolver: TargetResolverContext
 }
@@ -51,12 +58,12 @@ const EMPTY_EVENT_DEFINITIONS: EventDefinitionLookup = {
   get: () => undefined,
 }
 
-export class ActionRouter<EventName extends string> {
-  private readonly listeners = new Map<string, ListenerRuntime<EventName>>()
-  private readonly targetResolver: ActionTargetResolver
+export class ActionRouter<EventName extends string, Origin = Event> {
+  private readonly listeners = new Map<string, ListenerRuntime<EventName, Origin>>()
+  private readonly targetResolver: ActionTargetResolver<Origin>
 
-  constructor(private readonly context: ActionRouterContext) {
-    this.targetResolver = new ActionTargetResolver(context.targetResolver)
+  constructor(private readonly context: ActionRouterContext<Origin>) {
+    this.targetResolver = new ActionTargetResolver<Origin>(context.targetResolver)
   }
 
   addListener({
@@ -66,7 +73,7 @@ export class ActionRouter<EventName extends string> {
     state = DEFAULTSTATE,
     selector = `.${ROOTNAME}`,
     sortBy,
-  }: ListenerProps<ListenerNamePayloadPair, EventName>) {
+  }: ListenerProps<ListenerNamePayloadPair, EventName, Record<string, any>, never, never, Origin>) {
     const listenerName = name as string
     const previous = this.listeners.get(listenerName)
     if (previous) {
@@ -74,7 +81,7 @@ export class ActionRouter<EventName extends string> {
       this.listeners.delete(listenerName)
     }
 
-    const registration: ListenerRegistration<EventName> = {
+    const registration: ListenerRegistration<EventName, Origin> = {
       id: Symbol(listenerName),
       name: listenerName,
       state,
@@ -107,8 +114,8 @@ export class ActionRouter<EventName extends string> {
   }
 
   dispatch(
-    originEvent: Event,
-    triggerEvents: EvaluatedActions<EventName>,
+    originEvent: Origin,
+    triggerEvents: EvaluatedActions<EventName, Origin>,
     payload: Dict,
     eventDefinitions: EventDefinitionLookup = EMPTY_EVENT_DEFINITIONS
   ): void {
@@ -124,7 +131,7 @@ export class ActionRouter<EventName extends string> {
   }
 
   dispatchManual(
-    originEvent: Event,
+    originEvent: Origin,
     actions: ReadonlyMap<EventName, NormalizedActionEvent<EventName>>,
     payload: Dict
   ): void {
@@ -147,9 +154,9 @@ export class ActionRouter<EventName extends string> {
   }
 
   private dispatchListener(
-    runtime: ListenerRuntime<EventName>,
-    originEvent: Event,
-    triggerEvents: EvaluatedActions<EventName>,
+    runtime: ListenerRuntime<EventName, Origin>,
+    originEvent: Origin,
+    triggerEvents: EvaluatedActions<EventName, Origin>,
     payload: Dict,
     eventDefinitions: EventDefinitionLookup
   ) {
@@ -201,11 +208,11 @@ export class ActionRouter<EventName extends string> {
   }
 
   private invoke(
-    runtime: ListenerRuntime<EventName>,
+    runtime: ListenerRuntime<EventName, Origin>,
     eventName: EventName,
     sourceEvent: NormalizedActionEvent<EventName>,
     target: Exclude<TargetDecision, { kind: "skip" }>,
-    originEvent: Event,
+    originEvent: Origin,
     payload: Dict
   ) {
     const routedEvent = createActionEventEnvelope(sourceEvent, eventName)
@@ -240,7 +247,7 @@ export class ActionRouter<EventName extends string> {
   }
 
   private mergeComposeStore(
-    runtime: ListenerRuntime<EventName>,
+    runtime: ListenerRuntime<EventName, Origin>,
     eventName: EventName,
     eventFunctions: any
   ) {

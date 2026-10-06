@@ -24,6 +24,20 @@ interface FrameAction {
   reject: (error: unknown) => void
 }
 
+export interface RendererFrameClock {
+  now(): number
+  requestFrame(callback: (frameTime: number) => void): number
+  cancelFrame(frameId: number): void
+}
+
+function globalRendererFrameClock(): RendererFrameClock {
+  return {
+    now: () => globalThis.performance.now(),
+    requestFrame: (callback) => globalThis.requestAnimationFrame(callback),
+    cancelFrame: (frameId) => globalThis.cancelAnimationFrame(frameId),
+  }
+}
+
 // Owns the render loop, per-layer dirty tracking, the layer draw pass, and the
 // nextTick queue. Extracted from Stay so "rendering" is one focused concern.
 // Reads the children to paint via an injected provider (the non-root children).
@@ -41,9 +55,13 @@ export class Renderer {
     private readonly root: Canvas,
     private readonly getRenderChildren: () => StayChild[],
     private readonly coordinates: CoordinateSystem,
-    private readonly beforeFrame: (now: number) => void = () => {}
+    private readonly beforeFrame: (now: number) => void = () => {},
+    private readonly frameClock: RendererFrameClock = globalRendererFrameClock()
   ) {
-    this.#layers = root.layers.map(() => ({ forceUpdate: false }))
+    this.#layers = Array.from(
+      { length: root.layerCount },
+      () => ({ forceUpdate: false })
+    )
   }
 
   forceUpdateLayer(layerIndex: number) {
@@ -53,7 +71,9 @@ export class Renderer {
   // Force every layer to repaint on the next draw — the honest replacement for
   // the old dead `draw({ forceDraw })` flag. Used by refresh()/progress().
   forceUpdateAllLayers() {
-    this.root.layers.forEach((_, i) => this.forceUpdateLayer(i))
+    for (let layerIndex = 0; layerIndex < this.root.layerCount; layerIndex++) {
+      this.forceUpdateLayer(layerIndex)
+    }
   }
 
   nextTick(fn: () => void) {
@@ -140,7 +160,7 @@ export class Renderer {
     now: number
   ) {
     const quality = (mapping: Parameters<typeof resolveCanvas2DProjectiveQuality>[0]["mapping"]) => {
-      const layer = this.root.layers[layerIndex]
+      const layer = this.root.getLayerSurfaceSize(layerIndex)
       return resolveCanvas2DProjectiveQuality({
         mapping,
         outputWidth: layer.width,
@@ -181,7 +201,7 @@ export class Renderer {
   stop() {
     this.#running = false
     if (this.#frameId !== undefined) {
-      window.cancelAnimationFrame(this.#frameId)
+      this.frameClock.cancelFrame(this.#frameId)
       this.#frameId = undefined
     }
     this.#nextTick = []
@@ -204,7 +224,7 @@ export class Renderer {
     })
   }
 
-  #runFrame(now = performance.now()) {
+  #runFrame(now = this.frameClock.now()) {
     if (!this.#running) return
 
     this.#frameId = undefined
@@ -228,7 +248,7 @@ export class Renderer {
     }
     if (!this.#running) return
 
-    this.#frameId = window.requestAnimationFrame((frameTime) => this.#runFrame(frameTime))
+    this.#frameId = this.frameClock.requestFrame((frameTime) => this.#runFrame(frameTime))
   }
 
   #runFrameActions(actions: FrameAction[], frame: number, now: number) {

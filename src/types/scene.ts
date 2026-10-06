@@ -38,6 +38,35 @@ export interface SceneBatchSubmission {
   readonly batches: AsyncIterable<readonly SceneTimelineChild[]>
 }
 
+export interface SceneStepChild {
+  readonly id: string
+  readonly className: string
+  /** Static placement, established when this Child first appears. */
+  readonly placement?: ChildPlacement
+  readonly shapes: ReadonlyMap<string, AnimatedShape>
+}
+
+export interface SceneStepSubmission {
+  readonly revision: string
+  readonly resourceRevision: string
+  /** Length of this interval; each target retains its native easing. */
+  readonly durationMs: number
+  readonly children: readonly SceneStepChild[]
+}
+
+export interface SceneStepReceipt {
+  readonly revision: string
+  readonly resourceRevision: string
+  readonly endTimeMs: number
+}
+
+/** Prepares a replacement timeline from complete steps without an application-owned history. */
+export interface SceneStepSequenceSubmission {
+  readonly revision: string
+  readonly resourceRevision: string
+  readonly steps: AsyncIterable<SceneStepSubmission>
+}
+
 export interface SceneResourceLease {
   readonly revision: string
   isCurrent(): boolean
@@ -61,8 +90,10 @@ export interface SceneCommitReceipt {
 }
 
 export interface SceneTransactions {
+  /** Accepts a complete step offline, without waiting for a display frame. */
+  appendStep(target: SceneStepSubmission, options: { readonly signal: AbortSignal }): SceneStepReceipt
   beginUpdate(): SceneEpoch
-  prepare(epoch: SceneEpoch, target: SceneSubmission | SceneBatchSubmission, options: ScenePrepareOptions): Promise<PreparedScene>
+  prepare(epoch: SceneEpoch, target: SceneSubmission | SceneBatchSubmission | SceneStepSequenceSubmission, options: ScenePrepareOptions): Promise<PreparedScene>
   commit(prepared: PreparedScene): Promise<SceneCommitReceipt>
   cancel(epoch: SceneEpoch): void
   discard(prepared: PreparedScene): void

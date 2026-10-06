@@ -6,8 +6,16 @@ import type { AnimatedShapeProps, ShapeDrawProps, ShapeProps } from "../types/sh
 import { isRGBA } from "../utils/color"
 import { RGBA } from "../vendor/w3color"
 
-export interface ImageProps extends AnimatedShapeProps {
-  image: HTMLImageElement
+export type StayImageSource = HTMLImageElement | ImageBitmap
+
+function imageSize(source: StayImageSource) {
+  return "naturalWidth" in source
+    ? { width: source.naturalWidth, height: source.naturalHeight }
+    : { width: source.width, height: source.height }
+}
+
+export interface ImageProps<Source extends StayImageSource = HTMLImageElement> extends AnimatedShapeProps {
+  image: Source
   x: number
   y: number
   width: number
@@ -16,19 +24,19 @@ export interface ImageProps extends AnimatedShapeProps {
   sy?: number
   swidth?: number
   sheight?: number
-  imageLoaded?: (image: StayImage) => void
+  imageLoaded?: (image: StayImage<Source>) => void
   opacity: number
 }
 type ImageLoadState = "wait" | "loading" | "loaded"
 
-export class StayImage extends Rectangle {
+export class StayImage<Source extends StayImageSource = HTMLImageElement> extends Rectangle {
   ctx: null | DrawCanvasContext
-  imageLoaded?: (image: StayImage) => void
+  imageLoaded?: (image: StayImage<Source>) => void
   loadState: ImageLoadState
   naturalHeight: number
   naturalWidth: number
   sheight?: number
-  image: HTMLImageElement
+  image: Source
   swidth?: number
   sx: number
   sy: number
@@ -38,7 +46,7 @@ export class StayImage extends Rectangle {
     return this.opacity > 0
   }
 
-  constructor(props: ImageProps) {
+  constructor(props: ImageProps<Source>) {
     super(props)
     const {
       image,
@@ -59,8 +67,8 @@ export class StayImage extends Rectangle {
     this.sheight = sheight
     this.image = image
     this.loadState = "loaded"
-    this.swidth = swidth ?? this.image.naturalWidth
-    this.sheight = sheight ?? this.image.naturalHeight
+    this.swidth = swidth ?? imageSize(this.image).width
+    this.sheight = sheight ?? imageSize(this.image).height
 
     this.ctx = null
     this.imageLoaded = imageLoaded
@@ -68,7 +76,7 @@ export class StayImage extends Rectangle {
     this.naturalHeight = 0
     this.opacity = opacity
   }
-  copy(): StayImage {
+  copy(): StayImage<Source> {
     return new StayImage({
       image: this.image,
       x: this.x,
@@ -127,11 +135,11 @@ export class StayImage extends Rectangle {
   stroke({ context }: ShapeDrawProps): void {}
 
   intermediateState(
-    before: StayImage,
-    after: StayImage,
+    before: StayImage<Source>,
+    after: StayImage<Source>,
     ratio: number,
     transitionType: EasingFunction
-  ): StayImage {
+  ): StayImage<Source> {
     const obj = this.getIntermediateObj(before, after, ratio, transitionType)
     return new StayImage({
       ...obj,
@@ -143,7 +151,12 @@ export class StayImage extends Rectangle {
     return ["x", "y", "width", "height", "opacity"]
   }
 
-  update(props: Partial<ImageProps>) {
+  override getNonTransitionState() {
+    return { ...super.getNonTransitionState(), sx: this.sx, sy: this.sy,
+      swidth: this.swidth, sheight: this.sheight, imageLoaded: this.imageLoaded }
+  }
+
+  update(props: Partial<ImageProps<Source>>) {
     const { image: src, x, y, width, sx, sy, swidth, sheight, height, imageLoaded } = props
     this.image = src ?? this.image
     this.sx = sx ?? this.sx
@@ -153,32 +166,29 @@ export class StayImage extends Rectangle {
     this.imageLoaded = imageLoaded ?? this.imageLoaded
     super.update({ x, y, width, height })
 
-    if (src === undefined) {
-      // do nothing
-    } else if (typeof src === "string") {
-      this.loadState = "loading"
-      this.image.src = src
-    } else {
-      this.image = src
+    if (src !== undefined) {
       this.loadState = "loaded"
-      this.swidth = swidth ?? this.image.naturalWidth
-      this.sheight = sheight ?? this.image.naturalHeight
+      this.swidth = swidth ?? imageSize(src).width
+      this.sheight = sheight ?? imageSize(src).height
     }
     return this
   }
 
-  childSameAs(shape: StayImage): boolean {
+  childSameAs(shape: StayImage<Source>): boolean {
     return (
       this.x === shape.x &&
       this.y === shape.y &&
       this.width === shape.width &&
       this.height === shape.height &&
       this.image === shape.image &&
-      this.opacity === shape.opacity
+      this.opacity === shape.opacity &&
+      this.sx === shape.sx && this.sy === shape.sy &&
+      this.swidth === shape.swidth && this.sheight === shape.sheight &&
+      this.imageLoaded === shape.imageLoaded
     )
   }
 
-  zeroShape(): StayImage {
+  zeroShape(): StayImage<Source> {
     return new StayImage({
       image: this.image,
       x: this.x,

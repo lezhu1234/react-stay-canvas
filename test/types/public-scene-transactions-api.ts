@@ -2,6 +2,9 @@ import {
   Rectangle,
   type SceneBatchSubmission,
   type SceneCommitReceipt,
+  type SceneStepReceipt,
+  type SceneStepSubmission,
+  type SceneStepSequenceSubmission,
   type SceneSubmission,
   type StayTools,
 } from "react-stay-canvas"
@@ -47,3 +50,43 @@ void tools.scene.prepare(tools.scene.beginUpdate(), batched, {
   control: { kind: "timeline", durationMs: 150 },
   signal: new AbortController().signal,
 })
+
+const completeStep: SceneStepSubmission = {
+  revision: "step-1",
+  resourceRevision: "font-2",
+  durationMs: 150,
+  children: [{
+    id: "value",
+    className: "value",
+    shapes: new Map([
+      ["body", new Rectangle({ x: 20, y: 0, width: 10, height: 10 })],
+    ]),
+  }],
+}
+const stepReceipt: SceneStepReceipt = tools.scene.appendStep(completeStep, {
+  signal: new AbortController().signal,
+})
+const acceptedTimelineEnd: number = stepReceipt.endTimeMs
+void acceptedTimelineEnd
+
+const replacementSteps: SceneStepSequenceSubmission = {
+  revision: "replacement",
+  resourceRevision: "font-2",
+  steps: (async function* () { yield completeStep })(),
+}
+void tools.scene.prepare(tools.scene.beginUpdate(), replacementSteps, {
+  transitionId: "shape",
+  control: { kind: "timeline", durationMs: 150 },
+  signal: new AbortController().signal,
+})
+
+// @ts-expect-error Complete-step append is synchronous, not a display-frame promise.
+const promisedStep: Promise<SceneStepReceipt> = tools.scene.appendStep(completeStep, {
+  signal: new AbortController().signal,
+})
+void promisedStep
+
+// @ts-expect-error Whole-scene submissions contain slices rather than one complete Shape map.
+tools.scene.appendStep(target, { signal: new AbortController().signal })
+// @ts-expect-error A step receipt records accepted timeline time, not a rendered frame number.
+stepReceipt.acceptedAtFrame

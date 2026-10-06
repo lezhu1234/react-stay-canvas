@@ -98,6 +98,54 @@ projective domain 必须有限、宽高为正，并始终位于齐次地平线�
 
 静态 placement 变更会进入下一次 `log()` 事务。Animated Child 可以使用一份静态 placement，但当前不包含 placement 关键帧或插值。
 
+## 追加完整时间步骤
+
+当计算过程每次产出一个完整目标步骤时，使用 `tools.scene.appendStep()`。每次提交都描述该步骤存在的全部 Child 及其具名 Shape：
+
+```ts
+const controller = new AbortController()
+
+tools.scene.appendStep({
+  revision: "step-0",
+  resourceRevision: "fonts-4",
+  durationMs: 0,
+  children: [{
+    id: "value-1",
+    className: "value",
+    shapes: new Map([["body", new Rectangle({
+      x: 20, y: 20, width: 80, height: 40,
+      transition: { type: "easeInOutSine" },
+    })]]),
+  }],
+}, { signal: controller.signal })
+
+const accepted = tools.scene.appendStep({
+  revision: "step-1",
+  resourceRevision: "fonts-4",
+  durationMs: 180,
+  children: [{
+    id: "value-1",
+    className: "value",
+    shapes: new Map([["body", new Rectangle({
+      x: 180, y: 20, width: 80, height: 40,
+      transition: { type: "easeInOutSine" },
+    })]]),
+  }],
+}, { signal: controller.signal })
+
+tools.progress({ timeMs: accepted.endTimeMs - 90 })
+```
+
+第一步通常使用 `durationMs: 0`。后续 `durationMs` 控制本次新增的完整时间区间，每个目标 Shape 保留自己的 easing 类型；输入 Shape 的 delay 和 duration 不会形成第二套时钟。完整步骤中缺少的 Shape 会退出到其原生透明零 Shape，后来再次出现时从零状态进入。省略整个 Child 会对它的所有轨道应用同一规则，同时保留其时间线供较早位置回看。
+
+相同的原生终点只保存一次。重复步骤经过的时间会成为下一次真实变化前的 hold，因此整数和小数采样继续使用同一条原生时间线，不复制既有历史前缀。`appendStep()` 不移动当前播放位置。如果当前采样已经落入新接受的区间，Canvas 会在同一位置刷新投影；追加更晚的区间不会改变当前画面。
+
+接受过程同步完成，不等待 `requestAnimationFrame`。返回的 `SceneStepReceipt` 包含 `revision`、`resourceRevision` 和已经接受的 `endTimeMs`，不表示某一显示帧已经绘出。发布前会先准备全部 Child，因此取消或靠后的无效 Child 都不会改变已接受时间线和当前投影。
+
+`className` 与 `placement` 仍是 Child 的静态元数据。后续步骤必须保持原 class；placement 可以省略或重复原值，但不能通过步骤改变或插值。后续步骤还必须保持当前 `resourceRevision`。资源、静态 Child 元数据或作者编排的完整时间线需要替换时，使用整场景 `prepare()` 与 `commit()` 事务；该既有事务仍在显示帧边界提交。
+
+替换场景也可用 `SceneStepSequenceSubmission`，以 `{ revision, resourceRevision, steps }` 传入完整步骤的异步迭代器。库沿同一个原生追加机制准备待提交时间线，每次消费后释放输入步骤；应用无需保存一套完整画面历史。迭代期间旧场景、播放位置和视口仍可使用，全部步骤准备完后由 `commit()` 一次接受。准备或取消失败不会改变旧场景。每个步骤的 `resourceRevision` 必须与本次替换一致。
+
 ## selector 查询
 
 工具查询使用下面的 selector 表达式。Listener 的 `selector` 接受相同的字符串表达式，但不接受字符串数组或 selector 函数：
@@ -258,6 +306,46 @@ const png = snapshotCanvas.toDataURL("image/png")
 `regionToTargetCanvas()` 返回一个未挂载到 DOM 的 `HTMLCanvasElement`。它会裁剪到 `area`，再把该区域等比缩放并居中放入 `targetSize`；宽高比不同时，剩余区域保持透明。绘制顺序仍按 Shape 的 layer 和 `zIndex` 决定，调用过程不会移动或缩放源 Child。
 
 传入 `progress` 时，动画 Child 会临时投影到对应毫秒时间，包括 `progress: 0`；静态 Child 保持不变。输出完成后会恢复动画 Child 原有的当前投影，因此截帧不会改变现场播放位置。
+
+`progress({ timeMs, bound: { beforeMs, afterMs } })` 会把两个 bound 时间作为 `timeMs` 样本的插值端点。调用方需要控制更小的播放区间时可以使用它：端点 Shape 和 easing 仍由原生时间线提供，bound 样本只改变本次插值窗口。
+
+## 在后台线程持有画布
+
+`StayCanvas` 默认保持原有主线程工具。创建时传入 `runtime={{ mode: "worker", createWorker }}`，则由库把网页 Canvas 的绘制面交给后台线程；`mounted` 收到的是异步 `CanvasWorkerHandle`，页面通过它跳转、播放、调整视口和截图。完整 Child、Shape 和动画留在后台，页面只收到通知、播放状态和输出 Blob。
+
+应用的静态线程文件使用不加载 React 的入口，注册自己的处理函数：
+
+```ts
+import { installCanvasWorker, Rectangle } from "react-stay-canvas/worker"
+
+installCanvasWorker<{ positions: readonly number[] }, number>({
+  async run(input, context) {
+    for (const [index, x] of input.positions.entries()) {
+      const receipt = context.canvas.scene.appendStep({
+        revision: `step-${index}`,
+        resourceRevision: "geometry-v1",
+        durationMs: index === 0 ? 0 : 100,
+        children: [{
+          id: "value", className: "value",
+          shapes: new Map([["body", new Rectangle({
+            x, y: 20, width: 40, height: 30,
+            transition: { type: "linear" },
+          })]]),
+        }],
+      }, { signal: context.signal })
+      if (index === 0) context.canvas.progress({ timeMs: 0 })
+      context.emit(receipt.endTimeMs)
+      await context.yield()
+    }
+  },
+})
+```
+
+`run` 的输入和通知由应用定义。库不解释执行结果、变量、主题或布局，也不序列化函数；`setup` 中的事件监听、图层配置以及 `onState` 均在应用静态线程文件内注册。图形、事件路由、坐标和绘制使用与主线程相同的实现。后台事件保留普通输入数据；网页的 `preventDefault()` 等同步操作通过页面侧 `onInput` 完成。
+
+线程创建函数由应用构建器识别，例如 `() => new Worker(new URL("./canvas.worker.ts", import.meta.url), { type: "module" })`。该函数在组件创建时选定；改变函数或运行方式需要创建新实例，不迁移正在播放的数据。正常尺寸变化只修改网页层尺寸并发送测量值，不再次转移绘制面。
+
+`handle.run(input, { signal, transfer })` 支持应用输入及可转移资源。新任务取消并等待旧任务退出，任务中的 `context.yield()` 让出一次消息处理机会并检查取消。准备失败不会先清空已接受画面。新场景或资源的第一步使用 `scene.prepare()`/`scene.commit()` 原子替换，后续完整目标使用 `appendStep()`；追加回执表示数据已接受，不表示浏览器已经显示。`handle.seek({ timeMs, bound })` 和 `handle.play({ toTimeMs, speed, bound })` 使用同一套 bound 端点插值，`bound` 可省略。`handle.viewport({ kind: "zoomBy", factor, viewAnchor })` 接受 View 坐标中的点，并在原生 viewport 缩放前把它转换成对应的 Content anchor；如果调用方已有 Content 坐标，可直接传 `anchor`。`handle.trigger(name, payload)` 只用动作名称和普通 payload 数据派发应用自定义的手动动作，不要求库定义的业务事件类型。异步 `handle.capture()` 返回 PNG Blob，并保留当前采样位置；销毁结束后，线程、网页输入和未完成请求均被释放。
 
 ## 其他工具
 

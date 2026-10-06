@@ -47,44 +47,6 @@ function defaultFillConfig(): Required<CanvasFillProps> {
   return { color: { ...ZeroColor } }
 }
 
-const defaultPropertyFactories = {
-  shapeStore: () => new Map<string, any>(),
-  zoomCenter: () => ({ x: 0, y: 0 }),
-  zeroPoint: () => ({ x: 0, y: 0 }),
-  zeroPointCopy: () => ({ x: 0, y: 0 }),
-  strokeConfig: defaultStrokeConfig,
-  fillConfig: defaultFillConfig,
-}
-
-type DeferredDefault = keyof typeof defaultPropertyFactories
-
-function setDefaultProperty<K extends DeferredDefault>(
-  shape: InstantShape,
-  name: K,
-  value: InstantShape[K]
-): InstantShape[K] {
-  Object.defineProperty(shape, name, {
-    value,
-    enumerable: true,
-    configurable: true,
-    writable: true,
-  })
-  return value
-}
-
-const defaultProperties = Object.fromEntries(
-  (Object.keys(defaultPropertyFactories) as DeferredDefault[]).map((name) => [name, {
-    enumerable: true,
-    configurable: true,
-    get(this: InstantShape) {
-      return setDefaultProperty(this, name, defaultPropertyFactories[name]())
-    },
-    set(this: InstantShape, value: InstantShape[typeof name]) {
-      setDefaultProperty(this, name, value)
-    },
-  }])
-)
-
 export interface GetCurrentArgumentsProps {
   startArguments: Dict
   endArguments: Dict
@@ -108,19 +70,20 @@ export abstract class InstantShape {
     afterDraw?: (props: ShapeDrawProps) => void | boolean
   }>
 
-  zeroPoint!: PointType
-  zeroPointCopy!: PointType
-  zoomCenter!: PointType
+  zeroPoint: PointType
+  zeroPointCopy: PointType
+  zoomCenter: PointType
   zoomY: number
   updateNextFrame: boolean
 
   layer: number
   zIndex: number
   parent?: StayInstantChild<InstantShape>
-  strokeConfig!: Required<CanvasStrokeProps>
-  fillConfig!: Required<CanvasFillProps>
+  strokeConfig: Required<CanvasStrokeProps>
+  fillConfig: Required<CanvasFillProps>
   globalConfig: Required<CanvasGlobalProps>
-  shapeStore!: Map<string, any>
+  shapeStore: Map<string, any>
+  shapeStoreValueEquals?: ShapeProps["shapeStoreValueEquals"]
 
   constructor({
     zoomCenter,
@@ -132,30 +95,26 @@ export abstract class InstantShape {
     layer,
     zIndex,
     shapeStore,
+    shapeStoreValueEquals,
     globalConfig,
   }: ShapeProps) {
     this.layer = layer ?? 0
     this.zIndex = zIndex ?? 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
 
-    if (strokeConfig === undefined)
-      Object.defineProperty(this, "strokeConfig", defaultProperties.strokeConfig)
-    else this.strokeConfig = mergeDefinedConfig(defaultStrokeConfig(), strokeConfig)
-    if (fillConfig === undefined)
-      Object.defineProperty(this, "fillConfig", defaultProperties.fillConfig)
-    else this.fillConfig = mergeDefinedConfig(defaultFillConfig(), fillConfig)
+    this.strokeConfig = mergeDefinedConfig(defaultStrokeConfig(), strokeConfig)
+    this.fillConfig = mergeDefinedConfig(defaultFillConfig(), fillConfig)
     this.globalConfig = mergeDefinedConfig<Required<CanvasGlobalProps>>({
       gco: "source-over",
     }, globalConfig)
 
     this.zoomY = zoomY ?? 1
-    if (zoomCenter) this.zoomCenter = zoomCenter
-    else Object.defineProperty(this, "zoomCenter", defaultProperties.zoomCenter)
+    this.zoomCenter = zoomCenter ?? { x: 0, y: 0 }
 
     this.offsetX = 0
     this.offsetY = 0
-    Object.defineProperty(this, "zeroPoint", defaultProperties.zeroPoint)
-    Object.defineProperty(this, "zeroPointCopy", defaultProperties.zeroPointCopy)
+    this.zeroPoint = { x: 0, y: 0 }
+    this.zeroPointCopy = { x: 0, y: 0 }
     this.state = state
     this.stateDrawFuncMap = {
       default: {
@@ -168,8 +127,8 @@ export abstract class InstantShape {
     }
     this.startTime = 0
     this.updateNextFrame = true
-    if (shapeStore) this.shapeStore = shapeStore
-    else Object.defineProperty(this, "shapeStore", defaultProperties.shapeStore)
+    this.shapeStore = shapeStore ?? new Map()
+    this.shapeStoreValueEquals = shapeStoreValueEquals
   }
 
   isTransparent(color: RGBA) {
@@ -220,6 +179,7 @@ export abstract class InstantShape {
       },
       globalConfig: { ...this.globalConfig },
       shapeStore: new Map(this.shapeStore),
+      shapeStoreValueEquals: this.shapeStoreValueEquals,
     }
   }
 
@@ -392,6 +352,12 @@ export abstract class InstantShape {
 
   getNonTransitionState() {
     return {
+      zoomY: this.zoomY,
+      zoomCenter: this.zoomCenter,
+      state: this.state,
+      stateDrawFuncMap: this.stateDrawFuncMap,
+      shapeStore: this.shapeStore,
+      shapeStoreValueEquals: this.shapeStoreValueEquals,
       layer: this.layer,
       zIndex: this.zIndex,
       globalConfig: this.globalConfig,

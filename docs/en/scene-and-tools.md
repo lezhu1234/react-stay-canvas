@@ -98,6 +98,54 @@ The projective domain must be finite, positive, and remain on one side of the ho
 
 Static placement changes participate in the next `log()` transaction. Animated Children may use one static placement, but placement keyframes and interpolation are not part of the current contract.
 
+## Append complete timeline steps
+
+Use `tools.scene.appendStep()` when work produces one complete target step at a time. Every submission describes all Children and named Shapes that exist at that step:
+
+```ts
+const controller = new AbortController()
+
+tools.scene.appendStep({
+  revision: "step-0",
+  resourceRevision: "fonts-4",
+  durationMs: 0,
+  children: [{
+    id: "value-1",
+    className: "value",
+    shapes: new Map([["body", new Rectangle({
+      x: 20, y: 20, width: 80, height: 40,
+      transition: { type: "easeInOutSine" },
+    })]]),
+  }],
+}, { signal: controller.signal })
+
+const accepted = tools.scene.appendStep({
+  revision: "step-1",
+  resourceRevision: "fonts-4",
+  durationMs: 180,
+  children: [{
+    id: "value-1",
+    className: "value",
+    shapes: new Map([["body", new Rectangle({
+      x: 180, y: 20, width: 80, height: 40,
+      transition: { type: "easeInOutSine" },
+    })]]),
+  }],
+}, { signal: controller.signal })
+
+tools.progress({ timeMs: accepted.endTimeMs - 90 })
+```
+
+The first step normally has `durationMs: 0`. Later `durationMs` values define the entire added interval; each target Shape keeps its easing type. Input Shape delay and duration do not create a second clock. A Shape omitted from a complete step exits to its native transparent zero Shape, and a later reappearance enters from zero. Omitting a Child applies that rule to all of its tracks, while keeping its timeline available for earlier seeks.
+
+Equal native endpoints are stored once. Their elapsed intervals become a hold before the next changed endpoint, so integer and fractional sampling stay on the same native timeline without copied history prefixes. `appendStep()` does not move the current playback time. When the current sample already falls inside the newly accepted interval, the Canvas refreshes that same sample; appending a later interval leaves the current projection unchanged.
+
+Acceptance is synchronous and does not wait for `requestAnimationFrame`. The returned `SceneStepReceipt` reports `revision`, `resourceRevision`, and the accepted `endTimeMs`; it does not claim that a display frame has painted. All Children are prepared before publication, so cancellation or an invalid later Child leaves the accepted timeline and visible projection unchanged.
+
+`className` and `placement` remain static Child metadata. A later step must keep the original class; it may omit placement or repeat the same placement, but it cannot animate or replace it. Steps must also keep the current `resourceRevision`. Use the whole-scene `prepare()` and `commit()` transaction when resources, static Child metadata, or an authored complete timeline must be replaced. That existing transaction still commits at a display-frame boundary.
+
+Replacement preparation also accepts a `SceneStepSequenceSubmission` with `{ revision, resourceRevision, steps }`, where `steps` is an async iterator of complete steps. The library prepares the pending timeline through the same native append mechanism and releases each input step after consumption; the application need not retain a complete graphical history. The accepted scene, playback position and viewport remain available while the iterator runs. After all steps are prepared, `commit()` accepts the replacement once. Failed or cancelled preparation preserves the accepted scene. Each step must use the replacement's `resourceRevision`.
+
 ## Selector queries
 
 Tool queries use the selector expression language below. Listener `selector` accepts the same string expressions, but not string arrays or selector functions:
@@ -258,6 +306,46 @@ const png = snapshotCanvas.toDataURL("image/png")
 `regionToTargetCanvas()` returns an `HTMLCanvasElement` that is not mounted in the DOM. It clips to `area`, then scales that region uniformly and centers it inside `targetSize`; any space left by a different aspect ratio stays transparent. Shapes still draw in layer and `zIndex` order, and the call does not move or zoom the source Children.
 
 When `progress` is supplied, animated Children temporarily project the requested millisecond time, including `progress: 0`, while static Children remain unchanged. Their previous live projections are restored after drawing, so capturing a frame does not move the playback position.
+
+`progress({ timeMs, bound: { beforeMs, afterMs } })` uses the two bound times as the interpolation endpoints for the sample at `timeMs`. This is useful when a caller owns a smaller playback interval: the native timeline still supplies the endpoint Shapes and their easing, while the bound sample controls the interpolation window.
+
+## Own the canvas in a background thread
+
+`StayCanvas` preserves its main-thread tools by default. Selecting `runtime={{ mode: "worker", createWorker }}` at creation transfers the DOM Canvas drawing surfaces to a library-owned worker. `mounted` receives an asynchronous `CanvasWorkerHandle` for seeking, playback, viewport commands and capture. Complete Children, Shapes and animation remain in the worker; the page receives notices, playback state and output Blobs.
+
+The application registers its own program in a static worker entry, using an entry that does not load React:
+
+```ts
+import { installCanvasWorker, Rectangle } from "react-stay-canvas/worker"
+
+installCanvasWorker<{ positions: readonly number[] }, number>({
+  async run(input, context) {
+    for (const [index, x] of input.positions.entries()) {
+      const receipt = context.canvas.scene.appendStep({
+        revision: `step-${index}`,
+        resourceRevision: "geometry-v1",
+        durationMs: index === 0 ? 0 : 100,
+        children: [{
+          id: "value", className: "value",
+          shapes: new Map([["body", new Rectangle({
+            x, y: 20, width: 40, height: 30,
+            transition: { type: "linear" },
+          })]]),
+        }],
+      }, { signal: context.signal })
+      if (index === 0) context.canvas.progress({ timeMs: 0 })
+      context.emit(receipt.endTimeMs)
+      await context.yield()
+    }
+  },
+})
+```
+
+The application defines the input and notices. The library does not interpret execution results, variables, themes or layout and does not serialize functions. Event listeners in `setup`, layer configuration and `onState` are registered locally in the static worker entry. Shapes, event routing, coordinates and drawing share the main-thread implementation. Worker events carry plain input data; synchronous DOM operations such as `preventDefault()` belong in the page-side `onInput` callback.
+
+The application bundler discovers the worker factory, for example `() => new Worker(new URL("./canvas.worker.ts", import.meta.url), { type: "module" })`. The factory is selected when the component is created. Changing the factory or execution mode requires a new instance; active playback data is not migrated. Resizing only changes DOM dimensions and sends current measurements, without transferring a drawing surface again.
+
+`handle.run(input, { signal, transfer })` accepts application input and transferable resources. A new task cancels and waits for the previous task to exit. `context.yield()` yields a message turn and checks cancellation. Failed preparation does not clear the accepted picture first. Use `scene.prepare()`/`scene.commit()` to atomically replace the first step of a new scene or resource set, then `appendStep()` for later complete targets. An append receipt means the data was accepted, not that the browser has displayed it. `handle.seek({ timeMs, bound })` and `handle.play({ toTimeMs, speed, bound })` expose the same bounded endpoint interpolation; `bound` is optional. `handle.viewport({ kind: "zoomBy", factor, viewAnchor })` accepts a point in View coordinates and converts it to the corresponding Content anchor before applying the native viewport zoom; pass `anchor` directly when it is already in Content coordinates. `handle.trigger(name, payload)` dispatches an application-defined manual action using only its name and plain payload data; it does not require a library-specific business event type. Asynchronous `handle.capture()` returns a PNG Blob without moving the live sample. Destruction releases the worker, DOM input and pending requests.
 
 ## Other tools
 

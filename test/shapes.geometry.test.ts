@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { Rectangle, Circle, Line, Path, Point, StayText } from "react-stay-canvas"
+import { Rectangle, Circle, Line, Path, Point, StayText, StayImage } from "react-stay-canvas"
 import { createTextMeasureContext } from "./helpers/textMetrics"
 
 // Dimension 1 (Shapes): pure geometry — no canvas needed.
@@ -10,6 +10,73 @@ const expectLineGeometry = (line: Line) => {
   expect(line.vector).toEqual({ x: line.x2 - line.x1, y: line.y2 - line.y1 })
   expect(line.len()).toBeCloseTo(Math.hypot(line.x2 - line.x1, line.y2 - line.y1))
 }
+
+describe("native endpoint equality and non-interpolated drawing properties", () => {
+  it("keeps reference equality by default for Shape store values", () => {
+    const sharedValue = { selected: true }
+    const first = new Rectangle({ x: 0, y: 0, width: 10, height: 10,
+      shapeStore: new Map([["selection", sharedValue]]) })
+    const sameReference = new Rectangle({ x: 0, y: 0, width: 10, height: 10,
+      shapeStore: new Map([["selection", sharedValue]]) })
+    const equalContent = new Rectangle({ x: 0, y: 0, width: 10, height: 10,
+      shapeStore: new Map([["selection", { selected: true }]]) })
+
+    expect(first.sameAs(sameReference)).toBe(true)
+    expect(first.sameAs(equalContent)).toBe(false)
+  })
+
+  it("uses one explicit store-value policy through copy, interpolation, and zero Shapes", () => {
+    const valueEquals = (before: unknown, after: unknown) =>
+      JSON.stringify(before) === JSON.stringify(after)
+    const create = (selected: boolean) => new Rectangle({
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      shapeStore: new Map([["selection", { selected }]]),
+      shapeStoreValueEquals: valueEquals,
+    })
+    const before = create(true)
+    const equalContent = create(true)
+    const changedContent = create(false)
+
+    expect(before.sameAs(equalContent)).toBe(true)
+    expect(before.sameAs(changedContent)).toBe(false)
+
+    const copied = equalContent.copy()
+    const intermediate = equalContent.intermediateState(before, equalContent, 0.5, "linear")
+    const zero = equalContent.zeroShape()
+    expect(copied.shapeStoreValueEquals).toBe(valueEquals)
+    expect(intermediate.shapeStoreValueEquals).toBe(valueEquals)
+    expect(zero.shapeStoreValueEquals).toBe(valueEquals)
+    expect(equalContent.sameAs(copied)).toBe(true)
+  })
+
+  it("preserves filters and interaction data when sampling a changed Rectangle", () => {
+    const before = new Rectangle({ x: 0, y: 0, width: 10, height: 10, filter: "none" })
+    const after = new Rectangle({ x: 20, y: 0, width: 10, height: 10,
+      filter: "blur(2px)", state: "selected", shapeStore: new Map([["selection", "target"]]) })
+    expect(before.sameAs(after)).toBe(false)
+    const sampled = after.intermediateState(before, after, 0.5, "linear")
+    expect(sampled.x).toBe(10)
+    expect(sampled.filter).toBe("blur(2px)")
+    expect(sampled.state).toBe("selected")
+    expect(sampled.shapeStore.get("selection")).toBe("target")
+    expect(after.sameAs(after.copy())).toBe(true)
+  })
+
+  it("treats image cropping as target state rather than an equal endpoint", () => {
+    const image = { naturalWidth: 80, naturalHeight: 60 } as HTMLImageElement
+    const before = new StayImage({ image, x: 0, y: 0, width: 40, height: 30,
+      sx: 0, sy: 0, swidth: 40, sheight: 30, opacity: 1 })
+    const after = new StayImage({ image, x: 20, y: 0, width: 40, height: 30,
+      sx: 40, sy: 30, swidth: 20, sheight: 15, opacity: 1 })
+    expect(before.sameAs(after)).toBe(false)
+    const sampled = after.intermediateState(before, after, 0.5, "linear")
+    expect(sampled).toMatchObject({ x: 10, sx: 40, sy: 30, swidth: 20, sheight: 15 })
+    expect(after.sameAs(after.copy())).toBe(true)
+  })
+})
 
 const expectRectangleGeometry = (rectangle: Rectangle) => {
   expect(rectangle.leftTop).toEqual({ x: rectangle.x, y: rectangle.y })
@@ -183,23 +250,25 @@ describe("Rectangle geometry", () => {
 })
 
 describe("Shape config updates", () => {
-  it("defers omitted paint defaults while keeping independent enumerable values", () => {
+  it("owns omitted paint defaults as independent enumerable values", () => {
     const first = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
     const second = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
 
     expect(Object.keys(first)).toEqual(expect.arrayContaining(["strokeConfig", "fillConfig"]))
     expect(Object.getOwnPropertyDescriptor(first, "strokeConfig")).toMatchObject({
       enumerable: true,
-      get: expect.any(Function),
+      value: first.strokeConfig,
+      writable: true,
     })
     expect(Object.getOwnPropertyDescriptor(first, "fillConfig")).toMatchObject({
       enumerable: true,
-      get: expect.any(Function),
+      value: first.fillConfig,
+      writable: true,
     })
 
     first.update({ x2: 2 })
-    expect(Object.getOwnPropertyDescriptor(first, "strokeConfig")?.get).toEqual(expect.any(Function))
-    expect(Object.getOwnPropertyDescriptor(first, "fillConfig")?.get).toEqual(expect.any(Function))
+    expect(first.strokeConfig).toMatchObject({ lineWidth: 1, color: { a: 0 } })
+    expect(first.fillConfig.color.a).toBe(0)
 
     first.strokeConfig.dash.push(4)
     first.strokeConfig.color.a = 1
@@ -214,7 +283,7 @@ describe("Shape config updates", () => {
     })
   })
 
-  it("materializes paint defaults through copy, paint updates, comparison, and drawing", () => {
+  it("preserves paint defaults through copy, paint updates, comparison, and drawing", () => {
     const source = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
     const copied = source.copy()
     copied.strokeConfig.dash.push(3)
@@ -251,7 +320,7 @@ describe("Shape config updates", () => {
     })
   })
 
-  it("keeps deferred local defaults enumerable, independently mutable, and replaceable", () => {
+  it("keeps local defaults enumerable, independently mutable, and replaceable", () => {
     const first = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
     const second = new Line({ x1: 0, y1: 0, x2: 1, y2: 1 })
     expect(Object.keys(first)).toEqual(expect.arrayContaining([

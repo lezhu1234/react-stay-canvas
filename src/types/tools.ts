@@ -33,7 +33,7 @@ export interface StayDrawProps {
   afterDrawCallback?: (canvas: Canvas) => void
 }
 
-export type StayTools = BasicTools & InstantTools & AnimatedTools & {
+export type StayTools<Origin = Event> = BasicTools<Origin> & InstantTools & AnimatedTools & {
   readonly scene: SceneTransactions
   readonly webgl: StayWebGLTools
 }
@@ -78,7 +78,7 @@ export interface StayCoordinates {
   contentVectorToView: (vector: ContentVector) => ViewVector
 }
 
-export interface BasicTools {
+export interface BasicTools<Origin = Event> {
   readonly coordinates: StayCoordinates
   readonly viewport: StayViewport
   appendChild: <T extends InstantShape>(props: AppendChildProps<T>) => StayInstantChild<T>
@@ -117,7 +117,7 @@ export interface BasicTools {
   regionToTargetCanvas: (props: RegionToTargetCanvasProps) => Promise<HTMLCanvasElement>
   refresh: () => void
   triggerAction: <EventName extends string>(
-    originEvent: Event,
+    originEvent: Origin,
     triggerEvents: ManualTriggerEvents<EventName>,
     payload: Dict
   ) => void

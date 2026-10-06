@@ -92,14 +92,15 @@ export interface ActionCallbackProps<
   CS = Record<string, any>,
   StoreSchema extends object = never,
   StateStoreSchema extends object = never,
+  Origin = Event,
 > {
-  originEvent: Event
+  originEvent: Origin
   e: ActionEvent<EventName>
   store: StayStoreFor<StoreSchema>
   stateStore: StayStoreFor<StateStoreSchema>
   composeStore: CS
   canvas: Canvas
-  tools: StayTools
+  tools: StayTools<Origin>
   payload: T
 }
 
@@ -109,7 +110,8 @@ export type CallbackFuncMap<
     EventName,
     CS,
     StoreSchema,
-    StateStoreSchema
+    StateStoreSchema,
+    any
   >,
   U,
   EventName extends string,
@@ -126,11 +128,12 @@ export type UserCallback<
   CS = Record<string, any>,
   StoreSchema extends object = never,
   StateStoreSchema extends object = never,
+  Origin = Event,
 > = (
-  p: ActionCallbackProps<T, EventName, CS, StoreSchema, StateStoreSchema>
+  p: ActionCallbackProps<T, EventName, CS, StoreSchema, StateStoreSchema, Origin>
 ) =>
   | CallbackFuncMap<
-      ActionCallbackProps<T, EventName, CS, StoreSchema, StateStoreSchema>,
+      ActionCallbackProps<T, EventName, CS, StoreSchema, StateStoreSchema, Origin>,
       T,
       EventName,
       CS,
@@ -168,6 +171,7 @@ export interface ListenerProps<
   CS = Record<string, any>,
   StoreSchema extends object = never,
   StateStoreSchema extends object = never,
+  Origin = Event,
 > {
   name: T["name"]
   state?: string
@@ -179,7 +183,8 @@ export interface ListenerProps<
     EventName,
     CS,
     StoreSchema,
-    StateStoreSchema
+    StateStoreSchema,
+    Origin
   >
 }
 
@@ -188,13 +193,14 @@ export interface PredefinedEventListenerProps<
   CS = Record<string, any>,
   StoreSchema extends object = never,
   StateStoreSchema extends object = never,
+  Origin = Event,
 > {
   name: string
   state?: string
   selector?: string
   event: EventName | EventName[]
   sortBy?: ChildSortFunction
-  callback: UserCallback<Dict, EventName, CS, StoreSchema, StateStoreSchema>
+  callback: UserCallback<Dict, EventName, CS, StoreSchema, StateStoreSchema, Origin>
 }
 
 export interface FireEvent {
@@ -238,8 +244,9 @@ export type StayEventMap<
   EventName extends string,
   StoreSchema extends object = never,
   StateStoreSchema extends object = never,
+  Origin = Event,
 > = {
-  [key in EventName]: StayEventProps<EventName, StoreSchema, StateStoreSchema>
+  [key in EventName]: StayEventProps<EventName, StoreSchema, StateStoreSchema, Origin>
 }
 
 export interface StayEventRequiredProps<EventName extends string> {
@@ -254,6 +261,7 @@ export interface StayEventChooseProps<
   EventName extends string,
   StoreSchema extends object = never,
   StateStoreSchema extends object = never,
+  Origin = Event,
 > {
   conditionCallback: UserConditionCallbackFunction<
     EventName,
@@ -264,18 +272,19 @@ export interface StayEventChooseProps<
     props: UserSuccessCallbackProps<EventName, StoreSchema, StateStoreSchema>
   ) =>
     | void
-    | EventProps<EventName, StoreSchema, StateStoreSchema>
-    | EventProps<EventName, StoreSchema, StateStoreSchema>[]
+    | EventProps<EventName, StoreSchema, StateStoreSchema, Origin>
+    | EventProps<EventName, StoreSchema, StateStoreSchema, Origin>[]
 }
 
 export type StayEventProps<
   EventName extends string,
   StoreSchema extends object = never,
   StateStoreSchema extends object = never,
+  Origin = Event,
 > = StayEventRequiredProps<EventName> &
-  StayEventChooseProps<EventName, StoreSchema, StateStoreSchema> & {
+  StayEventChooseProps<EventName, StoreSchema, StateStoreSchema, Origin> & {
     withTargetConditionCallback?: (props: {
-      originEvent: Event
+      originEvent: Origin
       e: ActionEvent<EventName>
       store: StayStoreFor<StoreSchema>
       stateStore: StayStoreFor<StateStoreSchema>
@@ -287,10 +296,11 @@ export type EventProps<
   EventName extends string,
   StoreSchema extends object = never,
   StateStoreSchema extends object = never,
+  Origin = Event,
 > = StayEventRequiredProps<EventName> &
-  Partial<StayEventChooseProps<EventName, StoreSchema, StateStoreSchema>> & {
+  Partial<StayEventChooseProps<EventName, StoreSchema, StateStoreSchema, Origin>> & {
     withTargetConditionCallback?: (props: {
-      originEvent: Event
+      originEvent: Origin
       e: ActionEvent<EventName>
       store: StayStoreFor<StoreSchema>
       stateStore: StayStoreFor<StateStoreSchema>
@@ -331,13 +341,15 @@ export type UnionListenerProps<
   EventName extends string = string,
   StoreSchema extends object = never,
   StateStoreSchema extends object = never,
+  Origin = Event,
 > = {
   [key in keyof T]: ListenerProps<
     T[key],
     EventName,
     Record<string, any>,
     StoreSchema,
-    StateStoreSchema
+    StateStoreSchema,
+    Origin
   >
 }
 
@@ -346,11 +358,13 @@ export type ListenerArrayProps<
   EventName extends string = string,
   StoreSchema extends object = never,
   StateStoreSchema extends object = never,
+  Origin = Event,
 > = UnionListenerProps<
   ConvertListenerNamePayloadPairOrNameToListenerNamePayloadPair<T>,
   EventName,
   StoreSchema,
-  StateStoreSchema
+  StateStoreSchema,
+  Origin
 >
 
 export type Tuple2Union<T extends unknown[]> = T extends [infer F, ...infer L]

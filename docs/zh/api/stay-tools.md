@@ -82,6 +82,20 @@ await tools.scene.commit(prepared)
 
 如果 slice 首帧有非零延迟或持续时间，须设置 `prependZeroShape: true`，使它从不可见的起始关键帧进入。首帧立即显示时可省略。
 
+### 读取尚未显示的动画画面
+
+`tools.scene.sample(prepared, timeMs)` 返回准备目标自身时间线在指定时刻的独立 `SceneStepChild` 图形。它使用与播放相同的原生插值，随后恢复准备对象的投影；不会提交目标或改变当前画面、指针交互、视口、历史和播放时钟。
+
+```ts
+const sample = tools.scene.sample(prepared, 0)
+// 用返回的图形生成离线画面，用完释放准备对象。
+tools.scene.discard(prepared)
+```
+
+句柄必须仍是本 Canvas 当前且资源有效的准备对象，并且尚未提交。时间必须有限且位于目标自己的区间内。取消、替换、丢弃、提交和销毁都会结束采样能力。采样不延长对象寿命，用完沿原接口提交或丢弃。
+
+采样沿已有 Shape 的 `copy()` 契约：几何、库拥有的可变绘制状态以及外层 `shapeStore` Map 独立；Map 内任意应用数据仍保留共享身份。自定义 Shape 须按自身数据模型复制它拥有的可变内容，见[copy 的独立性](../advanced/custom-shapes.md#copy-的独立性)。
+
 ## 原生 WebGL2 场景
 
 `tools.webgl` 在同一实例、同一 identity store 中管理原生 Mesh Child。一个 `StayWebGLChild` 在一个 WebGL2 图层上拥有有序 Mesh 列表；Mesh 几何、模型矩阵与材质以 CPU 状态为准，修改后会标脏对应图层。

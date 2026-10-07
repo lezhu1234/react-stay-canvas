@@ -82,6 +82,20 @@ At the accepting frame, after validation and before replacing the live Children,
 
 A slice whose first frame has a nonzero delay or duration must set `prependZeroShape: true`; this creates the invisible starting keyframe before that frame. A first frame that starts immediately can omit it.
 
+### Read an offline animation sample
+
+`tools.scene.sample(prepared, timeMs)` returns independent `SceneStepChild` geometry at a time in the prepared target's own timeline. It uses the same native interpolation as playback, restores the offline projection afterward, and does not publish the target or change the visible scene, pointer interaction, viewport, history, or playback clock.
+
+```ts
+const sample = tools.scene.sample(prepared, 0)
+// Use sample geometry for an offline picture, then release the preparation.
+tools.scene.discard(prepared)
+```
+
+The handle must still be the current, resource-valid preparation of this Canvas, before `commit`. Time must be finite and inside the target's interval. Cancellation, replacement, discard, commit, and destruction end this sampling capability. Sampling does not extend the preparation's lifetime: call the existing `commit` or `discard` when finished.
+
+Sampling uses the existing Shape `copy()` contract: geometry, library-owned mutable drawing state, and the outer `shapeStore` Map are independent. Arbitrary application-owned values inside that Map retain shared identity. Custom Shapes must copy their own mutable data according to their data model; see [Independent copies](../advanced/custom-shapes.md#independent-copies).
+
 ## Native WebGL2 scene
 
 `tools.webgl` manages native Mesh children in the same instance and identity store as Canvas2D Children. A `StayWebGLChild` owns an ordered Mesh list on one WebGL2 layer; its Mesh geometry, model matrix, and material are CPU-authoritative and mutations invalidate that layer.

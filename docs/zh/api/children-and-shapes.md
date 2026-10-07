@@ -82,6 +82,7 @@ Child 是绑定 Canvas 的运行时实体，不提供复制操作。需要捕获
 | `state` | `string` | `default` | Shape 自身绘制 state |
 | `stateDrawFuncMap` | `ShapeProps["stateDrawFuncMap"]` | 内置 default | 每个 Shape state 的绘制阶段覆盖 |
 | `shapeStore` | `Map<string, any>` | 新 Map | Shape 私有存储 |
+| `shapeStoreValueEquals` | `(left: unknown, right: unknown) => boolean` | undefined | 原生终点比较时可选的存储值相等判断；两图形须使用同一判断函数，未指定时按值身份比较。 |
 | `zoomY` | `number` | `1` | 当前缩放累计值 |
 | `zoomCenter` | `PointType` | `{ x: 0, y: 0 }` | 当前缩放中心 |
 

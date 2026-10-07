@@ -3,6 +3,7 @@ import {
   type SceneBatchSubmission,
   type SceneCommitReceipt,
   type SceneStepReceipt,
+  type SceneStepChild,
   type SceneStepSubmission,
   type SceneStepSequenceSubmission,
   type SceneSubmission,
@@ -29,6 +30,10 @@ const prepared = tools.scene.prepare(epoch, target, {
   transitionId: "shape",
   control: { kind: "timeline", durationMs: 150 },
   signal: new AbortController().signal,
+})
+void prepared.then((handle) => {
+  const sampled: readonly SceneStepChild[] = tools.scene.sample(handle, 0)
+  void sampled
 })
 const receipt: Promise<SceneCommitReceipt> = prepared.then((handle) => tools.scene.commit(handle))
 tools.scene.cancel(epoch)

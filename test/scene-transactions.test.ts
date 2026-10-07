@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest"
-import { Rectangle, StayAnimatedChild, type SceneBatchSubmission, type SceneSubmission } from "react-stay-canvas"
+import {
+  Rectangle,
+  StayAnimatedChild,
+  StayText,
+  type SceneBatchSubmission,
+  type SceneStepSequenceSubmission,
+  type SceneSubmission,
+} from "react-stay-canvas"
 import { createStage } from "./helpers/stage"
 
 const stroke = { color: { r: 1, g: 2, b: 3, a: 1 }, lineWidth: 2 }
@@ -10,6 +17,38 @@ function frame(x: number, durationMs = 0) {
     x, y: 20, width: 40, height: 30,
     strokeConfig: stroke,
     transition: { durationMs, delayMs: 0, type: "linear" },
+  })
+}
+
+function label(x: number) {
+  return new StayText({
+    x,
+    y: 70,
+    text: "value",
+    fillConfig: { color: { r: 4, g: 5, b: 6, a: 1 } },
+    transition: { durationMs: 0, delayMs: 0, type: "linear" },
+  })
+}
+
+function installTextMeasurement() {
+  vi.stubGlobal("OffscreenCanvas", class {
+    constructor(
+      public width: number,
+      public height: number,
+    ) {}
+
+    getContext() {
+      return {
+        font: "",
+        textAlign: "start",
+        textBaseline: "alphabetic",
+        measureText: () => ({
+          width: 40,
+          fontBoundingBoxAscent: 12,
+          fontBoundingBoxDescent: 4,
+        }),
+      }
+    }
   })
 }
 
@@ -54,6 +93,168 @@ function deferred() {
 }
 
 describe("scene transactions through the public tools surface", () => {
+  it("samples independent native shapes without changing live state or the later commit", async () => {
+    installTextMeasurement()
+    const { stage, nextFrame } = stageWithFrames()
+    const live = stage.tools.scene.appendStep({
+      revision: "live", resourceRevision: "resources-live", durationMs: 0,
+      children: [{ id: "live", className: "live", shapes: new Map([["body", frame(10)]]) }],
+    }, { signal: new AbortController().signal })
+    expect(live.endTimeMs).toBe(0)
+    stage.tools.progress({ timeMs: 25 })
+    const liveChild = stage.tools.getChildById("live") as StayAnimatedChild<Rectangle>
+    const liveShapeMap = liveChild.shapeMap
+    const viewport = stage.tools.viewport.get()
+    const history = [...stage.stack]
+    const historyIndex = stage.stackIndex
+    const cancelPointer = vi.spyOn(stage.eventDispatcher, "cancelPointerSession")
+
+    const replacement: SceneStepSequenceSubmission = {
+      revision: "sampled",
+      resourceRevision: "resources-sampled",
+      steps: (async function* () {
+        yield {
+          revision: "start", resourceRevision: "resources-sampled", durationMs: 0,
+          children: [
+            { id: "card", className: "card", placement: { type: "affine", x: 10, y: 20 },
+              shapes: new Map([["body", frame(0)], ["label", label(0)]]) },
+            { id: "leaving", className: "temporary", shapes: new Map([["body", frame(20)]]) },
+          ],
+        }
+        yield {
+          revision: "end", resourceRevision: "resources-sampled", durationMs: 100,
+          children: [
+            { id: "card", className: "card",
+              shapes: new Map([["body", frame(100)], ["label", label(200)]]) },
+            { id: "entering", className: "temporary", shapes: new Map([["body", frame(80)]]) },
+          ],
+        }
+      })(),
+    }
+    const epoch = stage.tools.scene.beginUpdate()
+    const prepared = await stage.tools.scene.prepare(epoch, replacement, {
+      ...options("sampled"),
+      control: { kind: "timeline", durationMs: 0 },
+    })
+
+    const sampled = stage.tools.scene.sample(prepared, 50)
+    const card = sampled.find(({ id }) => id === "card")!
+    const leaving = sampled.find(({ id }) => id === "leaving")!
+    const entering = sampled.find(({ id }) => id === "entering")!
+    expect((card.shapes.get("body") as Rectangle).x).toBeCloseTo(50)
+    expect((card.shapes.get("label") as StayText).x).toBeCloseTo(100)
+    expect((leaving.shapes.get("body") as Rectangle).strokeConfig.color.a).toBeCloseTo(0.5)
+    expect((entering.shapes.get("body") as Rectangle).strokeConfig.color.a).toBeCloseTo(0.5)
+    expect([...card.shapes.values()].every(({ parent }) => parent === undefined)).toBe(true)
+    expect(card).toMatchObject({
+      id: "card",
+      className: "card",
+      placement: { type: "affine", matrix: { e: 10, f: 20 } },
+    })
+
+    ;(card.shapes.get("body") as Rectangle).move(500, 0)
+    ;(card.placement as any).matrix.e = 500
+    const resampled = stage.tools.scene.sample(prepared, 50)
+    const resampledCard = resampled.find(({ id }) => id === "card")!
+    expect(resampledCard).not.toBe(card)
+    expect(resampledCard.shapes).not.toBe(card.shapes)
+    expect((resampledCard.shapes.get("body") as Rectangle).x).toBeCloseTo(50)
+    expect((resampledCard.placement as any).matrix.e).toBe(10)
+    expect(stage.tools.scene.sample(prepared, 100)
+      .find(({ id }) => id === "leaving")!.shapes.size).toBe(0)
+    expect((stage.tools.scene.sample(prepared, 100)
+      .find(({ id }) => id === "entering")!.shapes.get("body") as Rectangle).x).toBe(80)
+
+    expect(stage.tools.getChildById("live")).toBe(liveChild)
+    expect(liveChild.shapeMap).toBe(liveShapeMap)
+    expect(liveChild.shapeMap.get("body")!.x).toBe(10)
+    expect(stage.tools.scene.revision).toBe("live")
+    expect(stage.tools.viewport.get()).toEqual(viewport)
+    expect(stage.stack).toEqual(history)
+    expect(stage.stackIndex).toBe(historyIndex)
+    expect(cancelPointer).not.toHaveBeenCalled()
+
+    const commit = stage.tools.scene.commit(prepared)
+    nextFrame()
+    await commit
+    expect(cancelPointer).toHaveBeenCalledOnce()
+    const committed = stage.tools.getChildById("card") as StayAnimatedChild
+    expect((committed.shapeMap.get("body") as Rectangle).x).toBeCloseTo(25)
+    expect((committed.shapeMap.get("label") as StayText).x).toBeCloseTo(50)
+    stage.destroy()
+    vi.unstubAllGlobals()
+  })
+
+  it("samples only the current owned preparation with valid resources and time", async () => {
+    const first = stageWithFrames()
+    const second = stageWithFrames()
+    const target: SceneSubmission = {
+      revision: "bounded",
+      resourceRevision: "resources-bounded",
+      children: [{
+        id: "card", className: "scene",
+        slices: [{ name: "body", frames: [frame(0), frame(100, 100)] }],
+      }],
+    }
+    const epoch = first.stage.tools.scene.beginUpdate()
+    const prepared = await first.stage.tools.scene.prepare(epoch, target, {
+      ...options("bounded"), control: { kind: "timeline", durationMs: 0 },
+    })
+
+    expect(() => second.stage.tools.scene.sample(prepared, 0)).toThrow(/another Canvas or is forged/)
+    expect(() => first.stage.tools.scene.sample({ ...prepared }, 0)).toThrow(/another Canvas or is forged/)
+    for (const time of [-1, 101, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => first.stage.tools.scene.sample(prepared, time)).toThrow(/outside 0\.\.100/)
+    }
+    first.stage.tools.scene.cancel(epoch)
+    expect(() => first.stage.tools.scene.sample(prepared, 0)).toThrow(/cancelled/)
+
+    const discarded = await first.stage.tools.scene.prepare(
+      first.stage.tools.scene.beginUpdate(), target, {
+        ...options("bounded"), control: { kind: "timeline", durationMs: 0 },
+      },
+    )
+    first.stage.tools.scene.discard(discarded)
+    expect(() => first.stage.tools.scene.sample(discarded, 0)).toThrow(/discarded/)
+
+    const stale = await first.stage.tools.scene.prepare(
+      first.stage.tools.scene.beginUpdate(), target, {
+        ...options("bounded"), control: { kind: "timeline", durationMs: 0 },
+      },
+    )
+    first.stage.tools.scene.beginUpdate()
+    expect(() => first.stage.tools.scene.sample(stale, 0)).toThrow(/stale/)
+
+    let resourcesCurrent = true
+    const staleResources = await first.stage.tools.scene.prepare(
+      first.stage.tools.scene.beginUpdate(), target, {
+        ...options("bounded"),
+        control: { kind: "timeline", durationMs: 0 },
+        resourceLease: {
+          revision: "resources-bounded",
+          isCurrent: () => resourcesCurrent,
+          release: vi.fn(),
+        },
+      },
+    )
+    resourcesCurrent = false
+    expect(() => first.stage.tools.scene.sample(staleResources, 0)).toThrow(/resources are stale/)
+    first.stage.tools.scene.discard(staleResources)
+
+    const committed = await first.stage.tools.scene.prepare(
+      first.stage.tools.scene.beginUpdate(), target, {
+        ...options("bounded"), control: { kind: "timeline", durationMs: 0 },
+      },
+    )
+    const accepted = first.stage.tools.scene.commit(committed)
+    expect(() => first.stage.tools.scene.sample(committed, 0)).toThrow(/queued/)
+    first.nextFrame()
+    await accepted
+    expect(() => first.stage.tools.scene.sample(committed, 0)).toThrow(/committed/)
+    first.stage.destroy()
+    second.stage.destroy()
+  })
+
   it("prepares complete replacement steps in the native timeline and commits at the existing cursor", async () => {
     const { stage, nextFrame } = stageWithFrames()
     stage.tools.scene.appendStep({

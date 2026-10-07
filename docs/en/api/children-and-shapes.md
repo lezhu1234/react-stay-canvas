@@ -82,6 +82,7 @@ Animated Shape composition belongs exclusively to `shapeFramesMap`. Replace one 
 | `state` | `string` | `default` | Shape-local drawing state |
 | `stateDrawFuncMap` | `ShapeProps["stateDrawFuncMap"]` | built-in default | Drawing-stage overrides per Shape state |
 | `shapeStore` | `Map<string, any>` | new Map | Shape-local storage |
+| `shapeStoreValueEquals` | `(left: unknown, right: unknown) => boolean` | undefined | Optional equality for stored values during native endpoint comparison; matching comparator identity is required. Without it values use identity equality. |
 | `zoomY` | `number` | `1` | Accumulated zoom |
 | `zoomCenter` | `PointType` | `{ x: 0, y: 0 }` | Current zoom center |
 

@@ -19,6 +19,7 @@ import { ChildrenStore } from "../children/childrenStore"
 import { StayAnimatedChild } from "../children/stayAnimatedChild"
 import type { StayChild } from "../children/stayChild"
 import { Renderer } from "../renderer"
+import { captureSceneChild } from "../sceneTransfer"
 import type { SetShapeChildCurrentTime } from "../types"
 import type Canvas from "../../canvas"
 import { childPlacementEquals, resolveChildPlacement } from "../placements/childPlacement"
@@ -47,6 +48,16 @@ interface SceneHandoff {
   sources: Map<string, Map<string, AnimatedShape>>
   exiting: Map<string, StayAnimatedChild>
   exitingLeases: SceneResourceLease[]
+}
+
+function capturePreparedChild(child: StayAnimatedChild): SceneStepChild {
+  const captured = captureSceneChild(child)
+  return {
+    id: captured.sourceId,
+    className: captured.className,
+    placement: captured.placement,
+    shapes: captured.shapes,
+  }
 }
 
 export class CanvasSceneTransactions implements SceneTransactions {
@@ -208,6 +219,19 @@ export class CanvasSceneTransactions implements SceneTransactions {
     } catch (error) {
       if (update.state === "preparing") this.#finish(update, "failed")
       throw error
+    }
+  }
+
+  sample(prepared: PreparedScene, timeMs: number): readonly SceneStepChild[] {
+    const update = this.#sampleableUpdate(prepared, timeMs)
+    const restoreProjections: (() => void)[] = []
+    try {
+      update.children!.forEach((child) => {
+        restoreProjections.push(child.beginCurrentTimeProjection({ time: timeMs }))
+      })
+      return update.children!.map(capturePreparedChild)
+    } finally {
+      restoreProjections.reverse().forEach((restore) => restore())
     }
   }
 
@@ -496,6 +520,24 @@ export class CanvasSceneTransactions implements SceneTransactions {
     if (update.generation !== this.#generation || !update.prepared) return false
     if (!update.lease) return true
     return update.lease.revision === update.resourceRevision && update.lease.isCurrent()
+  }
+
+  #sampleableUpdate(prepared: PreparedScene, timeMs: number): Update {
+    const update = this.#ownedPreparation(prepared)
+    if (update !== this.#current || update.state !== "prepared") {
+      throw new Error(`Scene preparation is ${update.state}`)
+    }
+    if (!this.#resourcesAreCurrent(update)) {
+      throw new Error("Scene preparation resources are stale")
+    }
+    const endTimeMs = update.timelineEndTimeMs ?? update.children!.reduce(
+      (end, child) => Math.max(end, child.totalDurationMs),
+      0
+    )
+    if (!Number.isFinite(timeMs) || timeMs < 0 || timeMs > endTimeMs) {
+      throw new Error(`Scene sample time is outside 0..${endTimeMs}`)
+    }
+    return update
   }
 
   #leaseIsLive(lease: SceneResourceLease): boolean {

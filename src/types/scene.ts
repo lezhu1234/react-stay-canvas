@@ -94,6 +94,8 @@ export interface SceneTransactions {
   appendStep(target: SceneStepSubmission, options: { readonly signal: AbortSignal }): SceneStepReceipt
   beginUpdate(): SceneEpoch
   prepare(epoch: SceneEpoch, target: SceneSubmission | SceneBatchSubmission | SceneStepSequenceSubmission, options: ScenePrepareOptions): Promise<PreparedScene>
+  /** Samples an owned offline preparation without publishing it to the Canvas. */
+  sample(prepared: PreparedScene, timeMs: number): readonly SceneStepChild[]
   commit(prepared: PreparedScene): Promise<SceneCommitReceipt>
   cancel(epoch: SceneEpoch): void
   discard(prepared: PreparedScene): void

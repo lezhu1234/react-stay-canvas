@@ -341,7 +341,7 @@ installCanvasWorker<{ positions: readonly number[] }, number>({
 })
 ```
 
-The application defines the input and notices. The library does not interpret execution results, variables, themes or layout and does not serialize functions. Event listeners in `setup`, layer configuration and `onState` are registered locally in the static worker entry. Shapes, event routing, coordinates and drawing share the main-thread implementation. Worker events carry plain input data; synchronous DOM operations such as `preventDefault()` belong in the page-side `onInput` callback.
+The application defines the input and notices. The library does not interpret execution results, variables, themes or layout and does not serialize functions. Event listeners in `setup`, layer configuration and `onState` are registered locally in the static worker entry. `setup` may call its own `yield()` while doing instance-owned background work; cancelling or replacing a `run` does not cancel that work, so the cleanup returned by `setup` must stop it. Destroying the worker rejects later or pending setup yields. Shapes, event routing, coordinates and drawing share the main-thread implementation. Worker events carry plain input data; synchronous DOM operations such as `preventDefault()` belong in the page-side `onInput` callback.
 
 The application bundler discovers the worker factory, for example `() => new Worker(new URL("./canvas.worker.ts", import.meta.url), { type: "module" })`. The factory is selected when the component is created. Changing the factory or execution mode requires a new instance; active playback data is not migrated. Resizing only changes DOM dimensions and sends current measurements, without transferring a drawing surface again.
 

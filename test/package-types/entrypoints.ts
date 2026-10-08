@@ -17,6 +17,9 @@ const replacement: SceneSubmission = {
   children: [{ id: "value", className: "value", slices: [{ name: "body", frames: [shape] }] }],
 }
 const installation: CanvasWorkerInstallation<void, number> = {
+  setup: ({ yield: yieldTurn }) => {
+    void yieldTurn()
+  },
   run: async (_input, context) => {
     const epoch = context.canvas.scene.beginUpdate()
     const prepared = await context.canvas.scene.prepare(epoch, replacement, {

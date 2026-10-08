@@ -58,6 +58,8 @@ export interface CanvasWorkerInstallation<Input, Notice> {
   readonly setup?: (context: {
     readonly canvas: CanvasRuntimeTools
     emit(notice: Notice): void
+    /** Yields a worker turn for instance-owned work. */
+    yield(): Promise<void>
   }) => void | (() => void)
   readonly onState?: (state: CanvasWorkerState, context: {
     readonly canvas: CanvasRuntimeTools

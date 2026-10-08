@@ -58,9 +58,12 @@ export class WorkerPlayback {
     return this.#publish()
   }
 
-  advance(now: number) {
+  advance() {
     const interval = this.#interval
     if (!interval) return
+    // A frame timestamp can predate the message task that started playback.
+    // Read the same monotonic clock here so elapsed time keeps that ordering.
+    const now = performance.now()
     const distance = interval.targetTimeMs - interval.startTimeMs
     const travelled = Math.min(Math.abs(distance), (now - interval.startedAt) * interval.speed)
     const time = interval.startTimeMs + Math.sign(distance) * travelled

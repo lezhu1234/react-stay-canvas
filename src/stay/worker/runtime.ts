@@ -131,7 +131,7 @@ export class CanvasWorkerRuntime<Input, Notice> {
               this.scope.postMessage({ type: "cancel-pointer", reason }))
             return this.#input
           },
-          beforeFrame: (now) => this.#playback?.advance(now),
+          beforeFrame: () => this.#playback?.advance(),
         }
       )
       this.#stay = stay
@@ -140,7 +140,11 @@ export class CanvasWorkerRuntime<Input, Notice> {
       // Built-ins consume normalized actions, not the DOM origin event.
       Object.values(PredefinedEventList).forEach((definition) =>
         stay.registerEvent(definition as CanvasWorkerEventProps))
-      this.#setupCleanup = this.installation.setup?.({ canvas: this.#canvas, emit: this.#emit }) || undefined
+      this.#setupCleanup = this.installation.setup?.({
+        canvas: this.#canvas,
+        emit: this.#emit,
+        yield: () => this.#taskYield.next(),
+      }) || undefined
       this.#publishState(this.#playback.state())
     } catch (error) {
       this.#stay?.destroy()

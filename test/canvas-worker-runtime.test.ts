@@ -67,6 +67,7 @@ afterEach(async () => {
 
 async function runtime<Input, Notice>(installation: CanvasWorkerInstallation<Input, Notice>) {
   const frames: FrameRequestCallback[] = []
+  vi.spyOn(performance, "now")
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
     frames.push(callback)
     return frames.length
@@ -79,16 +80,23 @@ async function runtime<Input, Notice>(installation: CanvasWorkerInstallation<Inp
     type: "init", id: 0, layers: [surface as unknown as OffscreenCanvas], metrics,
   })
   expect(response).toEqual({ type: "result", id: 0, value: undefined })
-  cleanups.push(async () => {
+  let disposed = false
+  const dispose = async () => {
+    if (disposed) return
     await scope.request({ type: "dispose", id: 999 })
+    disposed = true
     expect(scope.close).toHaveBeenCalledOnce()
+  }
+  cleanups.push(async () => {
+    await dispose()
   })
   return {
-    instance, scope, surface,
-    frame(now: number) {
+    instance, scope, surface, dispose,
+    frame(timestamp: number, now = timestamp) {
       const callback = frames.shift()
       if (!callback) throw new Error("No native render frame was scheduled")
-      callback(now)
+      vi.mocked(performance.now).mockReturnValue(now)
+      callback(timestamp)
     },
   }
 }
@@ -150,6 +158,38 @@ describe("the library-owned background canvas", () => {
     expect(scope.messages.at(-1)).toMatchObject({ type: "state", state: { timeMs: 200, playing: false } })
   })
 
+  it("uses one monotonic clock when a frame carries an older animation timestamp", async () => {
+    const { scope, frame } = await runtime<void, never>({ run: async () => {} })
+    await scope.request({ type: "seek", id: 1, props: { timeMs: 0 } })
+    vi.spyOn(performance, "now").mockReturnValue(1000)
+    await scope.request({ type: "play", id: 2, options: { toTimeMs: 200 } })
+
+    frame(999.8, 1000.2)
+    expect(scope.messages.at(-1)).toMatchObject({
+      type: "state", state: { timeMs: expect.closeTo(0.2), playing: true },
+    })
+
+    await scope.request({ type: "play", id: 3, options: { toTimeMs: 200, speed: 2 } })
+    frame(1010, 1010.2)
+    expect(scope.messages.at(-1)).toMatchObject({
+      type: "state", state: { timeMs: expect.closeTo(20.2), playing: true },
+    })
+    frame(1100, 1100.2)
+    expect(scope.messages.at(-1)).toMatchObject({
+      type: "state", state: { timeMs: 200, playing: false },
+    })
+
+    await scope.request({ type: "play", id: 4, options: { toTimeMs: 0, speed: 2 } })
+    frame(1099.8, 1100.7)
+    expect(scope.messages.at(-1)).toMatchObject({
+      type: "state", state: { timeMs: 199, playing: true },
+    })
+    frame(1200, 1200.7)
+    expect(scope.messages.at(-1)).toMatchObject({
+      type: "state", state: { timeMs: 0, playing: false },
+    })
+  })
+
   it("dispatches existing manual actions while an independent preparation remains active", async () => {
     const started = deferred()
     const finish = deferred()
@@ -176,6 +216,45 @@ describe("the library-owned background canvas", () => {
     finish.resolve()
     expect(await running).toMatchObject({ type: "result", id: 1 })
     expect(aborted).toBe(false)
+  })
+
+  it("keeps setup-owned yielding independent from run cancellation and closes it with the instance", async () => {
+    let yieldSetupTurn!: () => Promise<void>
+    const cancelStarted = deferred()
+    const cancelRelease = deferred()
+    const replaceStarted = deferred()
+    const replaceRelease = deferred()
+    const { scope, dispose } = await runtime<number, never>({
+      setup: ({ yield: yieldTurn }) => { yieldSetupTurn = yieldTurn },
+      run: async (input) => {
+        if (input === 1) {
+          cancelStarted.resolve()
+          await cancelRelease.promise
+        }
+        if (input === 2) {
+          replaceStarted.resolve()
+          await replaceRelease.promise
+        }
+      },
+    })
+
+    const cancelled = scope.request({ type: "run", id: 1, input: 1 })
+    await cancelStarted.promise
+    scope.send({ type: "cancel", id: 1 })
+    await expect(yieldSetupTurn()).resolves.toBeUndefined()
+    cancelRelease.resolve()
+    expect(await cancelled).toMatchObject({ type: "error", error: { name: "AbortError" } })
+
+    const replaced = scope.request({ type: "run", id: 2, input: 2 })
+    await replaceStarted.promise
+    const replacement = scope.request({ type: "run", id: 3, input: 3 })
+    await expect(yieldSetupTurn()).resolves.toBeUndefined()
+    replaceRelease.resolve()
+    expect(await replaced).toMatchObject({ type: "error", error: { name: "AbortError" } })
+    expect(await replacement).toMatchObject({ type: "result", id: 3 })
+
+    await dispose()
+    await expect(yieldSetupTurn()).rejects.toMatchObject({ name: "AbortError" })
   })
 
   it("appends and samples the existing native timeline without a DOM global or returning graphs", async () => {

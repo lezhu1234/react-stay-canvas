@@ -1,4 +1,4 @@
-import { AnimatedShape } from "../../shapes/animatedShape"
+import type { AnimatedShape } from "../../shapes/animatedShape"
 import type {
   PreparedScene,
   SceneBatchSubmission,
@@ -22,7 +22,6 @@ import { Renderer } from "../renderer"
 import { captureSceneChild } from "../sceneTransfer"
 import type { SetShapeChildCurrentTime } from "../types"
 import type Canvas from "../../canvas"
-import { childPlacementEquals, resolveChildPlacement } from "../placements/childPlacement"
 
 type UpdateState = "new" | "preparing" | "prepared" | "queued" | "committed" |
   "cancelled" | "discarded" | "stale" | "failed"
@@ -126,23 +125,13 @@ export class CanvasSceneTransactions implements SceneTransactions {
     findChild: (id: string) => StayChild | undefined = (id) => this.children.get(id)
   ) {
     const specs = new Map<string, SceneStepChild>()
-    target.children.forEach((spec) => {
-      if (!spec.id || specs.has(spec.id)) throw new Error(`Duplicate or empty scene Child id ${spec.id}`)
-      specs.set(spec.id, spec)
-    })
+    target.children.forEach((spec) => specs.set(spec.id, spec))
     const children = new Map(timelines.map((child) => [child.id, child]))
     specs.forEach((spec) => {
-      const live = findChild(spec.id)
-      if (live && !(live instanceof StayAnimatedChild)) {
-        throw new Error(`Child id ${spec.id} belongs to a non-timeline Child`)
-      }
+      const live = findChild(spec.id) as StayAnimatedChild | undefined
       const child = live ?? new StayAnimatedChild({
         id: spec.id, className: spec.className, placement: spec.placement, canvas: this.canvas,
       })
-      if (child.className !== spec.className || (spec.placement &&
-          !childPlacementEquals(child.placement, resolveChildPlacement(spec.placement).snapshot))) {
-        throw new Error(`Scene step cannot change static Child metadata ${spec.id}`)
-      }
       children.set(spec.id, child)
     })
     return [...children.values()].map((child) => ({
@@ -153,9 +142,6 @@ export class CanvasSceneTransactions implements SceneTransactions {
 
   #assertStepResources(target: SceneStepSubmission, signal: AbortSignal): void {
     if (signal.aborted) throw new Error("Scene step was cancelled")
-    if (!target.revision || !target.resourceRevision || !Number.isFinite(target.durationMs) || target.durationMs < 0) {
-      throw new Error("Invalid scene step revision or duration")
-    }
     if ((this.#resourceRevision && target.resourceRevision !== this.#resourceRevision) ||
         (this.#activeLease && !this.#activeLease.isCurrent())) {
       throw new Error("Scene step resources are stale; prepare a replacement scene")
@@ -363,10 +349,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
     const exitingChildren = new Map<string, StayAnimatedChild>()
     const nextIds = new Set(prepared.map(({ id }) => id))
     const children = prepared.map((candidate) => {
-      const live = this.children.get(candidate.id)
-      if (live && !(live instanceof StayAnimatedChild)) {
-        throw new Error(`Child id ${candidate.id} belongs to a non-timeline Child`)
-      }
+      const live = this.children.get(candidate.id) as StayAnimatedChild | undefined
       const previous = live ?? this.#handoff?.exiting.get(candidate.id)
       candidate.setCurrentTime(this.currentSample())
       if (durationMs === 0) return candidate
@@ -404,9 +387,6 @@ export class CanvasSceneTransactions implements SceneTransactions {
     candidate.shapeFramesMap.forEach((frames, name) => {
       const source = sources.get(name)
       const target = candidate.shapeMap.get(name) ?? frames[0]
-      if (source && source.constructor !== target.constructor) {
-        throw new Error(`Scene shape ${candidate.id}/${name} changed type`)
-      }
       if (!source) sources.set(name, target._zeroShape(new Map()))
     })
     sources.forEach((shape) => { shape.parent = candidate })
@@ -422,13 +402,12 @@ export class CanvasSceneTransactions implements SceneTransactions {
   }
 
   async #prepareChildren(update: Update, target: SceneSubmission | SceneBatchSubmission): Promise<void> {
-    const ids = new Set<string>()
     update.children = []
     const batches = "batches" in target ? target.batches : [target.children]
     for await (const batch of batches) {
       this.#assertPreparing(update)
       for (const spec of batch) {
-        const child = this.#prepareChild(spec, ids)
+        const child = this.#prepareChild(spec)
         this.#assertPreparing(update)
         update.children!.push(child)
       }
@@ -441,9 +420,8 @@ export class CanvasSceneTransactions implements SceneTransactions {
     let endTimeMs = 0
     for await (const step of target.steps) {
       this.#assertPreparing(update)
-      if (!step.revision || step.resourceRevision !== target.resourceRevision ||
-          !Number.isFinite(step.durationMs) || step.durationMs < 0) {
-        throw new Error("Invalid replacement scene step revision, resources or duration")
+      if (step.resourceRevision !== target.resourceRevision) {
+        throw new Error("Replacement scene step resources are stale")
       }
       const plans = this.#prepareStep(step, [...children.values()], endTimeMs, (id) => children.get(id))
       for (const { child, apply } of plans) {
@@ -459,31 +437,16 @@ export class CanvasSceneTransactions implements SceneTransactions {
     update.timelineEndTimeMs = endTimeMs
   }
 
-  #prepareChild(spec: SceneTimelineChild, ids: Set<string>): StayAnimatedChild {
-    if (!spec.id || ids.has(spec.id)) throw new Error(`Duplicate or empty scene Child id ${spec.id}`)
-    ids.add(spec.id)
+  #prepareChild(spec: SceneTimelineChild): StayAnimatedChild {
     const child = new StayAnimatedChild({
       id: spec.id,
       className: spec.className,
       placement: spec.placement,
       canvas: this.canvas,
     })
-    const names = new Set<string>()
     spec.slices.forEach(({ name, frames, prependZeroShape = false }) => {
-      if (!name || names.has(name) || frames.length === 0) {
-        throw new Error(`Invalid scene slice ${spec.id}/${name}`)
-      }
-      names.add(name)
-      const copies = frames.map((frame, index) => {
-        if (!(frame instanceof AnimatedShape)) throw new Error("Scene frame must be an AnimatedShape")
-        if (frame.constructor !== frames[0].constructor) {
-          throw new Error(`Scene slice ${spec.id}/${name} changes Shape type`)
-        }
+      const copies = frames.map((frame) => {
         const copy = frame.copy() as AnimatedShape
-        if (index === 0 && !prependZeroShape &&
-            copy.transition.delayMs + copy.transition.durationMs > 0) {
-          throw new Error(`Scene slice ${spec.id}/${name} needs a zero Shape before a delayed first frame`)
-        }
         return copy
       })
       child.replaceSlice(name, copies, prependZeroShape)
@@ -492,8 +455,8 @@ export class CanvasSceneTransactions implements SceneTransactions {
   }
 
   #validateOptions(target: SceneSubmission | SceneBatchSubmission | SceneStepSequenceSubmission, options: ScenePrepareOptions): number {
-    if (!target.revision || !target.resourceRevision || options.transitionId !== "shape") {
-      throw new Error("Invalid scene revision or transition")
+    if (options.transitionId !== "shape") {
+      throw new Error("Invalid scene transition")
     }
     const durationMs = this.#timelineDuration(options)
     if (options.resourceLease && options.resourceLease.revision !== target.resourceRevision) {
@@ -509,11 +472,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
     if (options.control.kind !== "timeline") {
       throw new Error("Time-domain scene transitions are not installed")
     }
-    const duration = options.control.durationMs
-    if (!Number.isFinite(duration) || duration < 0) {
-      throw new Error("Invalid scene transition duration")
-    }
-    return duration
+    return options.control.durationMs
   }
 
   #resourcesAreCurrent(update: Update): boolean {

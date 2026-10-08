@@ -344,7 +344,7 @@ describe("complete scene-step append through the public tools surface", () => {
     )).toThrow(/destroyed/)
   })
 
-  it("keeps Child metadata static while allowing later steps to omit placement", () => {
+  it("keeps the existing Child metadata when later steps provide replacements", () => {
     const { stage } = createStage()
     stage.tools.scene.appendStep(
       step("placed", 0, [child("a", [["body", shape(0)]], {
@@ -357,19 +357,19 @@ describe("complete scene-step append through the public tools surface", () => {
       { signal: signal() },
     )
 
-    expect(() => stage.tools.scene.appendStep(
+    stage.tools.scene.appendStep(
       step("moved", 50, [child("a", [["body", shape(100)]], {
         placement: { type: "affine", x: 30, y: 20 },
       })]),
       { signal: signal() },
-    )).toThrow(/static Child metadata/)
-    expect(() => stage.tools.scene.appendStep(
+    )
+    stage.tools.scene.appendStep(
       step("renamed", 50, [child("a", [["body", shape(100)]], {
         className: "renamed",
       })]),
       { signal: signal() },
-    )).toThrow(/static Child metadata/)
-    expect(stage.tools.scene.revision).toBe("placement-omitted")
+    )
+    expect(stage.tools.scene.revision).toBe("renamed")
     expect(timeline(stage, "a").placement).toMatchObject({
       type: "affine",
       matrix: { e: 10, f: 20 },

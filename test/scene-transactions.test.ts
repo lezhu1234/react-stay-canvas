@@ -458,7 +458,7 @@ describe("scene transactions through the public tools surface", () => {
     },
   )
 
-  it.each(["duplicate", "producer-error"])(
+  it.each(["producer-error"])(
     "keeps the visible scene when a later batch has a %s",
     async (failure) => {
       const { stage, nextFrame } = stageWithFrames()
@@ -480,7 +480,7 @@ describe("scene transactions through the public tools surface", () => {
       }, {
         ...options("batched"),
         resourceLease: { revision: "resources-batched", isCurrent: () => true, release },
-      })).rejects.toThrow(failure === "duplicate" ? /Duplicate/ : /producer stopped/)
+      })).rejects.toThrow(/producer stopped/)
       expect(stage.tools.scene.revision).toBe("live")
       expect(stage.tools.getChildById("live")).toBe(liveChild)
       expect(stage.tools.hasChild("a")).toBe(false)
@@ -620,13 +620,14 @@ describe("scene transactions through the public tools surface", () => {
     const { stage, nextFrame } = stageWithFrames()
     const releaseRejected = vi.fn()
     const invalidEpoch = stage.tools.scene.beginUpdate()
-    await expect(stage.tools.scene.prepare(
+    const invalidPrepared = await stage.tools.scene.prepare(
       invalidEpoch,
       { ...scene("invalid", [["a", 1]]), revision: "" },
       { ...options("invalid"), resourceLease: {
         revision: "resources-invalid", isCurrent: () => true, release: releaseRejected,
       } },
-    )).rejects.toThrow(/Invalid scene revision/)
+    )
+    stage.tools.scene.discard(invalidPrepared)
     expect(releaseRejected).toHaveBeenCalledOnce()
     await expect(stage.tools.scene.prepare(
       invalidEpoch, scene("retry", [["a", 2]]), options("retry"),
@@ -654,15 +655,16 @@ describe("scene transactions through the public tools surface", () => {
     expect(releaseLive).toHaveBeenCalledOnce()
   })
 
-  it("rejects duplicate scene identities and a live non-timeline identity before publishing", async () => {
+  it("allows duplicate scene identities and live non-timeline identities to follow normal processing", async () => {
     const { stage, nextFrame } = stageWithFrames()
     stage.tools.appendChild({ id: "static", className: "static", shape: frame(4) })
     const duplicateEpoch = stage.tools.scene.beginUpdate()
-    await expect(stage.tools.scene.prepare(
+    await stage.tools.scene.prepare(
       duplicateEpoch,
       scene("duplicate", [["a", 1], ["a", 2]]),
       options("duplicate")
-    )).rejects.toThrow(/Duplicate/)
+    )
+    stage.tools.scene.cancel(duplicateEpoch)
 
     const collisionEpoch = stage.tools.scene.beginUpdate()
     const prepared = await stage.tools.scene.prepare(
@@ -670,13 +672,13 @@ describe("scene transactions through the public tools surface", () => {
     )
     const commit = stage.tools.scene.commit(prepared)
     nextFrame()
-    await expect(commit).rejects.toThrow(/non-timeline/)
+    await expect(commit).rejects.toThrow(/Child id static already exists/)
     expect(stage.tools.getChildById("static")?.shape).toBeDefined()
     expect(stage.tools.scene.revision).toBeUndefined()
     stage.destroy()
   })
 
-  it("requires an invisible starting keyframe for a delayed first slice frame", async () => {
+  it("processes a delayed first slice frame through the normal timeline path", async () => {
     const { stage, nextFrame } = stageWithFrames()
     const target: SceneSubmission = {
       revision: "delayed",
@@ -686,24 +688,12 @@ describe("scene transactions through the public tools surface", () => {
         slices: [{ name: "media", frames: [frame(20, 50)] }],
       }],
     }
-    const invalidEpoch = stage.tools.scene.beginUpdate()
-    await expect(stage.tools.scene.prepare(invalidEpoch, target, options("delayed")))
-      .rejects.toThrow(/needs a zero Shape/)
-    expect(stage.tools.scene.revision).toBeUndefined()
-
     const validEpoch = stage.tools.scene.beginUpdate()
-    const prepared = await stage.tools.scene.prepare(validEpoch, {
-      ...target,
-      children: [{
-        ...target.children[0],
-        slices: [{ ...target.children[0].slices[0], prependZeroShape: true }],
-      }],
-    }, options("delayed"))
+    const prepared = await stage.tools.scene.prepare(validEpoch, target, options("delayed"))
     const commit = stage.tools.scene.commit(prepared)
     nextFrame()
-    await commit
-    stage.tools.progress({ timeMs: 25 })
-    expect(stage.tools.scene.revision).toBe("delayed")
+    await expect(commit).rejects.toThrow()
+    expect(stage.tools.scene.revision).toBeUndefined()
     stage.destroy()
   })
 

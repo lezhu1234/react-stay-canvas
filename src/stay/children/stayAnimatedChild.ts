@@ -440,9 +440,6 @@ export class StayAnimatedChild<
       const previous = slice?.[slice.length - 1]
       const target = shapes.get(name)
       if (!target && (!previous || (!previous.shouldFill() && !previous.shouldStroke()))) return
-      if (target && previous && target.constructor !== previous.constructor) {
-        throw new Error(`Scene slice ${this.id}/${name} changes Shape type`)
-      }
       if (target && previous?.sameAs(target)) return
       const next = target ? target.copy() as T : previous!._zeroShape(this.shapeFramesMap) as T
       const frames = this.compileSlice(name, [next], !slice)

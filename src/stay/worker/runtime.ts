@@ -132,6 +132,7 @@ export class CanvasWorkerRuntime<Input, Notice> {
             return this.#input
           },
           beforeFrame: () => this.#playback?.advance(),
+          resetPlayback: () => this.#playback?.reset(),
         }
       )
       this.#stay = stay

@@ -56,6 +56,7 @@ export type StayRuntimeOptions<Origin = Event> = {
   readonly createInputDispatcher: InputDispatcherFactory<Origin>
   readonly frameClock?: RendererFrameClock
   readonly beforeFrame?: (now: number) => void
+  readonly resetPlayback?: () => void
 }
 
 class Stay<EventName extends string, HistorySnapshot = unknown, Origin = Event> {
@@ -155,7 +156,11 @@ class Stay<EventName extends string, HistorySnapshot = unknown, Origin = Event> 
       this.children,
       this.renderer,
       () => this.eventDispatcher.cancelPointerSession("scene-replacement"),
-      () => this.currentSample
+      () => this.currentSample,
+      () => {
+        this.currentSample = { time: 0 }
+        runtimeOptions.resetPlayback?.()
+      }
     )
     this.tools = (stayTools<Origin>).call(this)
     this.root.setLayerInvalidationListener((layerIndex) => {

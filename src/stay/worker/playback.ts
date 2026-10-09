@@ -33,7 +33,7 @@ export class WorkerPlayback {
   }
 
   sample(props: Pick<ProgressProps, "timeMs" | "bound">) {
-    this.#interval = undefined
+    this.reset()
     const drawn = this.stay.tools.progress(props)
     this.#publish()
     return drawn
@@ -54,8 +54,12 @@ export class WorkerPlayback {
   }
 
   pause() {
-    this.#interval = undefined
+    this.reset()
     return this.#publish()
+  }
+
+  reset(): void {
+    this.#interval = undefined
   }
 
   advance() {

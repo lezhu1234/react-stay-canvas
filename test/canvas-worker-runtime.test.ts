@@ -122,6 +122,57 @@ function pointer(clientX: number, clientY: number): ForwardedCanvasInput {
 }
 
 describe("the library-owned background canvas", () => {
+  it("controls one prepared target with the worker clock and settles without reconstructing the scene", async () => {
+    let canvas!: CanvasRuntimeTools
+    const prepared = deferred()
+    const { scope, frame } = await runtime<"transition" | "settle", never>({
+      setup: (context) => {
+        canvas = context.canvas
+        append(canvas, "initial", 0, 0, new AbortController().signal)
+      },
+      run: async (input, context) => {
+        if (input === "settle") {
+          context.canvas.scene.settleTransition()
+          context.canvas.progress({ timeMs: 0 })
+          return
+        }
+        const candidate = await context.canvas.scene.prepareTransition(context.canvas.scene.beginUpdate(), {
+          revision: "target", resourceRevision: "resources", durationMs: 100,
+          children: [{ id: "value", className: "value", shapes: new Map([["body", new Rectangle({
+            x: 100, y: 20, width: 40, height: 30,
+            fillConfig: { color: { r: 255, g: 0, b: 0, a: 1 } }, transition: { type: "linear" },
+          })]]) }],
+        }, { signal: context.signal })
+        prepared.resolve()
+        await context.canvas.scene.commit(candidate)
+      },
+    })
+    await scope.request({ type: "seek", id: 1, props: { timeMs: 800 } })
+    vi.mocked(performance.now).mockReturnValue(1000)
+    await scope.request({ type: "play", id: 2, options: { toTimeMs: 900 } })
+    const committed = scope.request({ type: "run", id: 3, input: "transition" })
+    await prepared.promise
+    frame(1000)
+    expect(await committed).toMatchObject({ type: "result" })
+    frame(5000)
+    expect(canvas.getChildById("value")!.shapeMap.get("body")!.x).toBe(0)
+    expect(await scope.request({ type: "pause", id: 4 }))
+      .toMatchObject({ type: "result", value: { timeMs: 0, playing: false } })
+    vi.mocked(performance.now).mockReturnValue(5000)
+    await scope.request({ type: "play", id: 5, options: { toTimeMs: 100, speed: 2 } })
+    frame(5020)
+    expect(canvas.getChildById("value")!.shapeMap.get("body")!.x).toBeCloseTo(40)
+    expect(await scope.request({ type: "pause", id: 6 }))
+      .toMatchObject({ type: "result", value: { timeMs: 40, playing: false } })
+    await scope.request({ type: "run", id: 7, input: "settle" })
+    const frozen = canvas.getChildById("value") as StayAnimatedChild<Rectangle>
+    expect(frozen.getSlice("body")).toHaveLength(1)
+    expect(frozen.shapeMap.get("body")!.x).toBeCloseTo(40)
+    expect(scope.messages.at(-1)).toMatchObject({ type: "result", id: 7 })
+    expect(scope.messages.filter((message) => message.type === "state").at(-1))
+      .toMatchObject({ type: "state", state: { timeMs: 0, playing: false } })
+  })
+
   it("keeps a DOM view anchor in place through the existing coordinate conversion", async () => {
     let canvas!: CanvasRuntimeTools
     const { scope } = await runtime<void, never>({

@@ -82,6 +82,11 @@ export interface ScenePrepareOptions {
   readonly resourceLease?: SceneResourceLease
 }
 
+export interface SceneTransitionPrepareOptions {
+  readonly signal: AbortSignal
+  readonly resourceLease?: SceneResourceLease
+}
+
 export interface SceneCommitReceipt {
   readonly preparationId: string
   readonly revision: string
@@ -94,6 +99,10 @@ export interface SceneTransactions {
   appendStep(target: SceneStepSubmission, options: { readonly signal: AbortSignal }): SceneStepReceipt
   beginUpdate(): SceneEpoch
   prepare(epoch: SceneEpoch, target: SceneSubmission | SceneBatchSubmission | SceneStepSequenceSubmission, options: ScenePrepareOptions): Promise<PreparedScene>
+  /** Prepares one controlled interval from the displayed native shapes to a complete target. */
+  prepareTransition(epoch: SceneEpoch, target: SceneStepSubmission, options: SceneTransitionPrepareOptions): Promise<PreparedScene>
+  /** Retains the target at the endpoint, or the displayed pose mid-interval, as a zero-time scene. */
+  settleTransition(): void
   /** Samples an owned offline preparation without publishing it to the Canvas. */
   sample(prepared: PreparedScene, timeMs: number): readonly SceneStepChild[]
   commit(prepared: PreparedScene): Promise<SceneCommitReceipt>

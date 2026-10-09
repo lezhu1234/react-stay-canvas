@@ -82,6 +82,38 @@ At the accepting frame, after validation and before replacing the live Children,
 
 A slice whose first frame has a nonzero delay or duration must set `prependZeroShape: true`; this creates the invisible starting keyframe before that frame. A first frame that starts immediately can omit it.
 
+### Control one current-to-target interval
+
+`tools.scene.prepareTransition(epoch, target, options)` prepares one complete `SceneStepSubmission` from the currently displayed animated Shapes. It copies each matching current Shape and each supplied target Shape into an offline native timeline; the application does not export the current scene or submit a source step. Preparation does not change the displayed Shapes or their ownership. The source pose is captured during preparation, so pause playback first when the source must stay fixed until acceptance.
+
+```ts
+const prepared = await tools.scene.prepareTransition(tools.scene.beginUpdate(), {
+  revision: "display-4",
+  resourceRevision: "fonts-2",
+  durationMs: 180,
+  children: [{
+    id: "value-1",
+    className: "value",
+    shapes: new Map([["body", new Rectangle({
+      x: 120, y: 20, width: 80, height: 40,
+    })]]),
+  }],
+}, { signal: controller.signal })
+await tools.scene.commit(prepared)
+tools.progress({ timeMs: 90 }) // midpoint; the existing worker seek/play/pause controls also apply
+tools.progress({ timeMs: 180 })
+tools.scene.settleTransition()
+tools.progress({ timeMs: 0 }) // publish/redraw the retained zero-time scene
+```
+
+Acceptance starts this interval at time zero, independently of the previous timeline's sample, and stops any previous worker playback interval. The finite, non-negative `target.durationMs` replaces target Shape delays and durations while preserving native easing, drawing state, layer, stacking order, equality behavior, and `shapeStore` bindings. Child ids and Shape names match tracks; missing tracks enter or exit through their native transparent zero state. A supplied placement is static for the whole new interval; omitted placement preserves the matching current Child placement. Static and WebGL Children remain present. Custom Shapes use their existing `copy()`, zero-state, and interpolation implementations; copies must isolate their mutable drawing state.
+
+`settleTransition()` collapses the active interval to one zero-time frame. At or beyond its endpoint it retains the exact prepared target Shapes and removes exiting tracks and Children. Before the endpoint it retains the displayed native projection without exporting, copying, or rebuilding it. Both paths stop worker playback and reset the native sample to zero; the caller uses the usual progress or worker sampling command to publish that state. No earlier frames or application history are retained. Calling it without an active interval has no effect.
+
+Preparation, cancellation, stale-update rejection, commit-frame validation, and resource leases follow the same transaction rules as `prepare`. Source leases are released at endpoint settlement. A pose retained mid-interval may still refer to source resources, so its leases remain owned until that pose is replaced or the Canvas is destroyed, without retaining the old timeline or unused targets. Only the current target lease determines resource validity for subsequent `appendStep` calls. `cancel` and `discard` affect an unaccepted preparation; they do not undo a committed interval. To stop a committed interval at its displayed pose, pause and settle it. An independent offline `prepare`/`sample`/`discard` does not replace or forget the active controlled interval. Existing full-timeline `prepare`, render-time handoff, and history-preserving `appendStep` keep their behavior.
+
+This interface serves a scene that keeps one current pose and one temporary target. Motion Studio owns an editable history of keyframes, so its seek and import flows continue to use the full-timeline interfaces. Controlled single-target integration coverage belongs to the Stay application; the existing library examples do not yet contain a matching complete user flow.
+
 ### Read an offline animation sample
 
 `tools.scene.sample(prepared, timeMs)` returns independent `SceneStepChild` geometry at a time in the prepared target's own timeline. It uses the same native interpolation as playback, restores the offline projection afterward, and does not publish the target or change the visible scene, pointer interaction, viewport, history, or playback clock.

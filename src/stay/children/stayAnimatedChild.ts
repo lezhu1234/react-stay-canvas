@@ -539,6 +539,22 @@ export class StayAnimatedChild<
     this.refreshTotalDurationMs()
   }
 
+  /** @internal Retains already-owned native shapes without copying or recompiling them. */
+  retainTimelineShapes(shapes: ReadonlyMap<string, T>): void {
+    const frames = new Map<string, T[]>()
+    const visible = new Map<string, T>()
+    shapes.forEach((shape, name) => {
+      shape.transition = { ...shape.transition, durationMs: 0, delayMs: 0 }
+      frames.set(name, [shape])
+      if (shape.shouldFill() || shape.shouldStroke()) visible.set(name, shape)
+      this.updatedLayers.add(shape.layer)
+    })
+    this.shapeFramesMap = frames
+    this.shapeMap = visible
+    this.frameMapInfo = new Map()
+    this.totalDurationMs = 0
+  }
+
   getSliceTotalDurationMs(name: string) {
     const slice = this.shapeFramesMap.get(name) ?? []
     return slice.reduce((acc, cur) => {

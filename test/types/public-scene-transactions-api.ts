@@ -7,6 +7,7 @@ import {
   type SceneStepSubmission,
   type SceneStepSequenceSubmission,
   type SceneSubmission,
+  type SceneTransitionPrepareOptions,
   type StayTools,
 } from "react-stay-canvas"
 
@@ -73,6 +74,16 @@ const stepReceipt: SceneStepReceipt = tools.scene.appendStep(completeStep, {
 })
 const acceptedTimelineEnd: number = stepReceipt.endTimeMs
 void acceptedTimelineEnd
+
+const transitionOptions: SceneTransitionPrepareOptions = { signal: new AbortController().signal }
+const controlled: Promise<SceneCommitReceipt> = tools.scene.prepareTransition(
+  tools.scene.beginUpdate(), completeStep, transitionOptions
+).then((handle) => tools.scene.commit(handle))
+tools.scene.settleTransition()
+void controlled
+
+// @ts-expect-error Controlled transitions take one complete step, not a full timeline submission.
+tools.scene.prepareTransition(tools.scene.beginUpdate(), target, transitionOptions)
 
 const replacementSteps: SceneStepSequenceSubmission = {
   revision: "replacement",

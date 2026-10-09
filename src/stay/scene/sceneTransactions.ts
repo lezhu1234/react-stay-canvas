@@ -12,6 +12,7 @@ import type {
   SceneStepSequenceSubmission,
   SceneSubmission,
   SceneTimelineChild,
+  SceneTransitionPrepareOptions,
   SceneTransactions,
 } from "../../types/scene"
 import { uuid4 } from "../../utils/identifiers"
@@ -39,6 +40,21 @@ interface Update {
   commitPromise?: Promise<SceneCommitReceipt>
   abortListener?: () => void
   lease?: SceneResourceLease
+  transition?: PreparedTransition
+}
+
+interface PreparedTransition {
+  durationMs: number
+  targets: Map<string, Map<string, AnimatedShape>>
+}
+
+interface ActiveTransition extends PreparedTransition {
+  exitingLeases: SceneResourceLease[]
+}
+
+interface ActiveResources {
+  lease?: SceneResourceLease
+  retainedSources: SceneResourceLease[]
 }
 
 interface SceneHandoff {
@@ -67,8 +83,9 @@ export class CanvasSceneTransactions implements SceneTransactions {
   #revision?: string
   #resourceRevision?: string
   #timelineEndTimeMs = 0
-  #activeLease?: SceneResourceLease
+  #activeResources: ActiveResources = { retainedSources: [] }
   #handoff?: SceneHandoff
+  #transition?: ActiveTransition
   #destroyed = false
 
   constructor(
@@ -76,7 +93,8 @@ export class CanvasSceneTransactions implements SceneTransactions {
     private readonly children: ChildrenStore<StayChild>,
     private readonly renderer: Renderer,
     private readonly cancelPointerSession: () => void,
-    private readonly currentSample: () => SetShapeChildCurrentTime
+    private readonly currentSample: () => SetShapeChildCurrentTime,
+    private readonly resetCurrentSample: () => void
   ) {}
 
   get revision() {
@@ -143,7 +161,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
   #assertStepResources(target: SceneStepSubmission, signal: AbortSignal): void {
     if (signal.aborted) throw new Error("Scene step was cancelled")
     if ((this.#resourceRevision && target.resourceRevision !== this.#resourceRevision) ||
-        (this.#activeLease && !this.#activeLease.isCurrent())) {
+        (this.#activeResources.lease && !this.#activeResources.lease.isCurrent())) {
       throw new Error("Scene step resources are stale; prepare a replacement scene")
     }
   }
@@ -174,6 +192,52 @@ export class CanvasSceneTransactions implements SceneTransactions {
     target: SceneSubmission | SceneBatchSubmission | SceneStepSequenceSubmission,
     options: ScenePrepareOptions
   ): Promise<PreparedScene> {
+    return this.#prepareUpdate(epoch, target, options, async (update) => {
+      if ("steps" in target) await this.#prepareSteps(update, target)
+      else await this.#prepareChildren(update, target)
+    })
+  }
+
+  async prepareTransition(
+    epoch: SceneEpoch,
+    target: SceneStepSubmission,
+    options: SceneTransitionPrepareOptions
+  ): Promise<PreparedScene> {
+    return this.#prepareUpdate(epoch, target, {
+      ...options,
+      transitionId: "shape",
+      control: { kind: "timeline", durationMs: 0 },
+    }, (update) => this.#prepareTransitionChildren(update, target))
+  }
+
+  settleTransition(): void {
+    this.#assertAlive()
+    const transition = this.#transition
+    if (!transition) return
+    const atTarget = this.currentSample().time >= transition.durationMs
+    const retained: StayAnimatedChild[] = []
+    for (const child of this.children.map.values()) {
+      if (!(child instanceof StayAnimatedChild)) continue
+      const shapes = atTarget ? transition.targets.get(child.id) : child.shapeMap
+      if (!shapes || (!atTarget && shapes.size === 0)) continue
+      child.retainTimelineShapes(shapes)
+      retained.push(child)
+    }
+    this.children.replaceWhere((child) => child instanceof StayAnimatedChild, retained)
+    this.#timelineEndTimeMs = 0
+    this.resetCurrentSample()
+    this.#transition = undefined
+    if (atTarget) transition.exitingLeases.forEach((lease) => this.#releaseLease(lease))
+    else this.#activeResources.retainedSources.push(...transition.exitingLeases)
+    this.renderer.forceUpdateAllLayers()
+  }
+
+  async #prepareUpdate(
+    epoch: SceneEpoch,
+    target: Pick<SceneSubmission, "revision" | "resourceRevision">,
+    options: ScenePrepareOptions,
+    prepareChildren: (update: Update) => void | Promise<void>
+  ): Promise<PreparedScene> {
     const update = this.#ownedEpoch(epoch)
     if (update !== this.#current || update.state !== "new") {
       throw new Error("Scene epoch cannot be prepared")
@@ -191,8 +255,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
       await Promise.resolve()
       if (options.signal.aborted) this.#finish(update, "cancelled")
       this.#assertPreparing(update)
-      if ("steps" in target) await this.#prepareSteps(update, target)
-      else await this.#prepareChildren(update, target)
+      await prepareChildren(update)
       this.#assertPreparing(update)
       const prepared = Object.freeze({ preparationId: uuid4() }) as PreparedScene
       update.revision = target.revision
@@ -254,10 +317,13 @@ export class CanvasSceneTransactions implements SceneTransactions {
     if (this.#current && this.#current.state !== "committed") {
       this.#finish(this.#current, "cancelled")
     }
-    this.#releaseLease(this.#activeLease)
-    this.#activeLease = undefined
+    this.#releaseLease(this.#activeResources.lease)
+    this.#activeResources.retainedSources.forEach((lease) => this.#releaseLease(lease))
+    this.#activeResources = { retainedSources: [] }
     this.#handoff?.exitingLeases.forEach((lease) => this.#releaseLease(lease))
     this.#handoff = undefined
+    this.#transition?.exitingLeases.forEach((lease) => this.#releaseLease(lease))
+    this.#transition = undefined
   }
 
   advance(now: number): void {
@@ -296,7 +362,9 @@ export class CanvasSceneTransactions implements SceneTransactions {
     }
     try {
       const durationMs = update.durationMs!
-      const next = this.#buildScene(update.children!, durationMs)
+      const next = update.transition
+        ? { children: update.children!, sources: new Map(), exiting: new Map() }
+        : this.#buildScene(update.children!, durationMs)
       if (update.state !== "queued" || update !== this.#current || !this.#resourcesAreCurrent(update)) {
         if (update.state === "queued") this.#finish(update, "stale")
         throw new Error("Scene preparation or resources are stale")
@@ -307,9 +375,13 @@ export class CanvasSceneTransactions implements SceneTransactions {
       }
       this.children.replaceWhere((child) => child instanceof StayAnimatedChild, next.children)
       this.renderer.forceUpdateAllLayers()
-      const exitingLeases = [...(this.#handoff?.exitingLeases ?? [])]
-      if (this.#activeLease) exitingLeases.push(this.#activeLease)
-      this.#activeLease = update.lease
+      const exitingLeases = [
+        ...(this.#handoff?.exitingLeases ?? []),
+        ...(this.#transition?.exitingLeases ?? []),
+        ...this.#activeResources.retainedSources,
+      ]
+      if (this.#activeResources.lease) exitingLeases.push(this.#activeResources.lease)
+      this.#activeResources = { lease: update.lease, retainedSources: [] }
       update.lease = undefined
       this.#handoff = durationMs > 0 ? {
         startedAt: now,
@@ -318,6 +390,8 @@ export class CanvasSceneTransactions implements SceneTransactions {
         exiting: next.exiting,
         exitingLeases,
       } : undefined
+      this.#transition = update.transition ? { ...update.transition, exitingLeases } : undefined
+      if (update.transition) this.resetCurrentSample()
       this.#revision = update.revision
       this.#resourceRevision = update.resourceRevision
       this.#timelineEndTimeMs = update.timelineEndTimeMs ??
@@ -336,7 +410,10 @@ export class CanvasSceneTransactions implements SceneTransactions {
       update.timelineEndTimeMs = undefined
       update.revision = undefined
       update.resourceRevision = undefined
-      if (durationMs === 0) exitingLeases.forEach((lease) => this.#releaseLease(lease))
+      update.transition = undefined
+      if (durationMs === 0 && !this.#transition) {
+        exitingLeases.forEach((lease) => this.#releaseLease(lease))
+      }
       return receipt
     } catch (error) {
       if (update.state === "queued") this.#finish(update, "failed")
@@ -401,6 +478,90 @@ export class CanvasSceneTransactions implements SceneTransactions {
     )
   }
 
+  #prepareTransitionChildren(update: Update, target: SceneStepSubmission): void {
+    if (!Number.isFinite(target.durationMs) || target.durationMs < 0) {
+      throw new Error("Scene transition duration must be finite and non-negative")
+    }
+    const targets = new Map<string, Map<string, AnimatedShape>>()
+    const remaining = new Map<string, StayAnimatedChild>()
+    for (const child of this.children.map.values()) {
+      if (child instanceof StayAnimatedChild) remaining.set(child.id, child)
+    }
+    for (const child of this.renderingExits()) {
+      if (!remaining.has(child.id)) remaining.set(child.id, child)
+    }
+    update.children = []
+    for (const spec of target.children) {
+      const endpoint = this.#prepareTransitionChild(update, remaining.get(spec.id), spec, target.durationMs)
+      targets.set(spec.id, endpoint)
+      remaining.delete(spec.id)
+    }
+    for (const live of remaining.values()) {
+      this.#prepareTransitionChild(update, live, undefined, target.durationMs)
+    }
+    update.transition = { durationMs: target.durationMs, targets }
+    update.timelineEndTimeMs = target.durationMs
+  }
+
+  #prepareTransitionChild(
+    update: Update,
+    live: StayAnimatedChild | undefined,
+    target: SceneStepChild | undefined,
+    durationMs: number
+  ): Map<string, AnimatedShape> {
+    this.#assertPreparing(update)
+    const child = new StayAnimatedChild({
+      id: target?.id ?? live!.id,
+      className: target?.className ?? live!.className,
+      placement: target?.placement ?? live?.placement,
+      canvas: this.canvas,
+    })
+    const endpoint = this.#prepareTransitionTimeline(child, live, target, durationMs)
+    this.#assertPreparing(update)
+    update.children!.push(child)
+    return endpoint
+  }
+
+  #prepareTransitionTimeline(
+    child: StayAnimatedChild,
+    live: StayAnimatedChild | undefined,
+    target: SceneStepChild | undefined,
+    durationMs: number
+  ): Map<string, AnimatedShape> {
+    const endpoints = new Map<string, AnimatedShape>()
+    const frames = new Map<string, AnimatedShape[]>()
+    for (const [name, submitted] of target?.shapes ?? []) {
+      const slice = this.#transitionSlice(child, live?.shapeMap.get(name), submitted, live?.shapeMap, durationMs)
+      frames.set(name, slice)
+      endpoints.set(name, slice[1])
+    }
+    for (const [name, source] of live?.shapeMap ?? []) {
+      if (target?.shapes.has(name)) continue
+      frames.set(name, this.#transitionSlice(child, source, undefined, live!.shapeMap, durationMs))
+    }
+    child.replaceTimeline(frames, false)
+    child.setCurrentTime({ time: 0 })
+    return endpoints
+  }
+
+  #transitionSlice(
+    child: StayAnimatedChild,
+    source: AnimatedShape | undefined,
+    submitted: AnimatedShape | undefined,
+    sourceShapes: Map<string, AnimatedShape> | undefined,
+    durationMs: number
+  ): [AnimatedShape, AnimatedShape] {
+    const copiedSource = source?.copy() as AnimatedShape | undefined
+    const endpoint = submitted
+      ? submitted.copy() as AnimatedShape
+      : copiedSource!._zeroShape(sourceShapes ?? new Map())
+    child.checkShape(endpoint)
+    const start = copiedSource ?? endpoint._zeroShape(new Map())
+    start.transition = { ...start.transition, durationMs: 0, delayMs: 0 }
+    endpoint.transition = { ...endpoint.transition, durationMs, delayMs: 0 }
+    return [start, endpoint]
+  }
+
   async #prepareChildren(update: Update, target: SceneSubmission | SceneBatchSubmission): Promise<void> {
     update.children = []
     const batches = "batches" in target ? target.batches : [target.children]
@@ -454,7 +615,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
     return child
   }
 
-  #validateOptions(target: SceneSubmission | SceneBatchSubmission | SceneStepSequenceSubmission, options: ScenePrepareOptions): number {
+  #validateOptions(target: Pick<SceneSubmission, "resourceRevision">, options: ScenePrepareOptions): number {
     if (options.transitionId !== "shape") {
       throw new Error("Invalid scene transition")
     }
@@ -500,7 +661,9 @@ export class CanvasSceneTransactions implements SceneTransactions {
   }
 
   #leaseIsLive(lease: SceneResourceLease): boolean {
-    return lease === this.#activeLease || Boolean(this.#handoff?.exitingLeases.includes(lease))
+    return lease === this.#activeResources.lease || this.#activeResources.retainedSources.includes(lease) || Boolean(
+      this.#handoff?.exitingLeases.includes(lease) || this.#transition?.exitingLeases.includes(lease)
+    )
   }
 
   #assertPreparing(update: Update): void {
@@ -519,6 +682,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
     update.resourceRevision = undefined
     update.durationMs = undefined
     update.timelineEndTimeMs = undefined
+    update.transition = undefined
     this.#releaseLease(lease)
   }
 

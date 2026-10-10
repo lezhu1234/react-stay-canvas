@@ -2,7 +2,7 @@
 import { loadImage } from "canvas"
 import { resolve } from "node:path"
 import { describe, expect, it, vi } from "vitest"
-import { Rectangle, StayImage, StayText } from "react-stay-canvas"
+import { Rectangle, SceneTransitionShape, StayImage, StayText } from "react-stay-canvas"
 
 import { MotionCapsule } from "../example/src/examples/integrated/motion/capsule"
 
@@ -91,7 +91,8 @@ describe("integrated motion studio example", () => {
     expect(layerBody(layers[0])).toBeInstanceOf(Rectangle)
     expect(layerBody(layers[1])).toBeInstanceOf(Rectangle)
     expect(layerBody(layers[2])).toBeInstanceOf(MotionCapsule)
-    expect(layers.every((child) => layerLabel(child) instanceof StayText)).toBe(true)
+    expect(layers.every((child) => layerLabel(child) instanceof SceneTransitionShape)).toBe(true)
+    expect(layers.every((child) => layerLabel(child)?.components[0].shape instanceof StayText)).toBe(true)
     expect(layers[0].getSlice("label")[1].transition.durationMs)
       .toBeLessThan(layers[0].getSlice("body")[1].transition.durationMs)
     expect(layers[0].getSlice("label")[1].transition.delayMs)

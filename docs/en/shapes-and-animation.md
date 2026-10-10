@@ -29,6 +29,21 @@ A Shape owns geometry, drawing, hit testing, and its own visual state. A Child g
 
 `StayText` follows Canvas coordinate semantics: the default `start + alphabetic` uses `(x, y)` as the start-side alphabetic-baseline anchor. To center text on a visual point, pass that point as `x` and `y` together with `textAlign: "center"` and `textBaseline: "middle"`. Drawing, bounds, movement, zoom, and keyframe interpolation use the same anchor. `offsetXRatio` and `offsetYRatio` apply an additional width- and height-relative shift to it.
 
+## Registered shape transitions
+
+`wrapSceneShape(nativeShape, effect, registry?)` returns an `AnimatedShape` for existing keyframes and scene transactions. The default immutable registry matches independent `crossfadeTransition`, `textGlyphTransition` and `morphTransition` modules. Changed text, font family/weight/style or alignment draws both old and new glyphs while native sampling moves, sizes and recolors them. Ordinary text and other shapes delegate to native `intermediateState`, including custom shapes. Exact endpoints, copied metadata/comparators, layers, paint order and every interrupted drawable component are preserved, with no composition-count cap.
+
+```ts
+const target = wrapSceneShape(new StayText({
+  x: 160, y: 80, text: "Ready", fillConfig: { color: { r: 20, g: 80, b: 140, a: 1 } },
+  transition: { durationMs: 300, type: "linear" },
+}), "morph")
+```
+
+The wrapper adopts geometry without copying; scene preparation owns copies. Its interaction store starts empty: assign `wrapper.shapeStore = new Map(nativeShape.shapeStore)` when that metadata belongs on the wrapper. `wrapSceneSubmission` wraps all timeline frames. Extend with `createShapeTransitionRegistry([customModule, ...defaultShapeTransitionRegistry.modules])`: each `ShapeTransitionModule` has a unique `id`, `contractVersion: 1`, `matches(pair)` and `sample(sample)`. Descriptor snapshots are frozen, first match wins, and duplicate IDs, unsupported contracts or unmatched pairs fail explicitly. Effect identifiers accept strings: a third effect needs no sampler or known-constructor list change.
+
+`ViewportBackground` paints the actual Canvas2D backing surface, including resized and clipped capture surfaces, through the same wrapper/registry. Place it in a dedicated affine background Child below content. It has zero-size content bounds and no pointer hits; exclude that Child from content-fit and saveability bounds. A mixed background/content Child uses ordinary bounds union, including the background origin. `shouldCullByBounds()` defaults to `true`; background paint opts out and the wrapper preserves this capability during camera panning. The motion-studio integration exercises wrapped text through editing, seeking and frame capture.
+
 ## Styling and paint order
 
 Every Shape accepts common drawing properties:

@@ -29,6 +29,21 @@ Shape 负责几何、绘制、命中和自身状态；Child 负责把一个或�
 
 `StayText` 的坐标语义与 Canvas 一致：默认 `start + alphabetic` 把 `(x, y)` 作为左侧字母基线锚点；需要把文字放在某个视觉中心时，传入相同中心坐标并设置 `textAlign: "center"`、`textBaseline: "middle"`。文字绘制、包围盒、移动、缩放和关键帧插值使用同一个锚点。`offsetXRatio` 和 `offsetYRatio` 会在该锚点基础上按文字宽高继续偏移。
 
+## 注册形状过渡模块
+
+`wrapSceneShape(nativeShape, effect, registry?)` 返回供现有关键帧和场景事务使用的 `AnimatedShape`。默认只读注册表独立匹配 `crossfadeTransition`（交叉淡化）、`textGlyphTransition`（文字与字体转换）、`morphTransition`（原生插值）模块。文字内容、字体族、字重、样式或对齐变化时同时绘制旧、新字形，并使用原生采样连续改变位置、字号和颜色；其他文字和形状直接复用自身的 `intermediateState`，包括自定义形状。端点、复制的元数据与比较函数、图层和绘制顺序保持原有语义，中途打断保留全部绘制组成部分，没有固定数量上限。
+
+```ts
+const target = wrapSceneShape(new StayText({
+  x: 160, y: 80, text: "就绪", fillConfig: { color: { r: 20, g: 80, b: 140, a: 1 } },
+  transition: { durationMs: 300, type: "linear" },
+}), "morph")
+```
+
+包装时直接接管几何，场景准备负责独立复制；包装形状的交互存储初始为空，需要时可赋值 `wrapper.shapeStore = new Map(nativeShape.shapeStore)`。`wrapSceneSubmission` 包装整组时间线帧。使用 `createShapeTransitionRegistry([customModule, ...defaultShapeTransitionRegistry.modules])` 添加模块；每个 `ShapeTransitionModule` 提供唯一 `id`、`contractVersion: 1`、`matches(pair)` 和 `sample(sample)`。注册时复制并冻结模块描述，优先选择首个匹配；重复标识、不支持的契约版本和无法匹配的状态对明确报错。效果标识接受字符串，添加第三种效果无需修改采样入口或已知形状构造函数列表。
+
+`ViewportBackground` 在同一包装与注册流程中绘制实际二维画布表面，支持尺寸调整和裁剪区域截图。请放在内容下方的独立仿射背景 Child 中；它没有可命中的区域，内容边界宽高均为零，计算内容适配和是否可保存时应排除它。若与内容放在同一个 Child，普通边界合并仍会包含背景原点。`shouldCullByBounds()` 默认返回 `true`，背景关闭边界筛选，包装形状传递该能力，避免相机平移后背景消失。动效工作室集成通过编辑、拖动时间轴和帧截图验证包装文字。
+
 ## 样式与绘制顺序
 
 所有 Shape 都接受一组通用属性：

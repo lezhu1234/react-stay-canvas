@@ -332,6 +332,9 @@ export abstract class InstantShape {
 
   abstract getBound(): Rect
 
+  /** Viewport paint can opt out while retaining empty content bounds. */
+  shouldCullByBounds(): boolean { return true }
+
   contains(point: PointType): boolean {
     const bound = this.getBound()
     return (

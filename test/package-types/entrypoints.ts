@@ -1,10 +1,27 @@
 import type { SceneStepSubmission, SceneSubmission } from "../../dist/index"
 import { Rectangle, StayAnimatedChild } from "../../dist/index"
 import {
+  ViewportBackground, wrapSceneShape, createShapeTransitionRegistry,
+  defaultShapeTransitionRegistry, type ShapeTransitionModule,
+} from "../../dist/index"
+import {
   Rectangle as WorkerRectangle,
   StayAnimatedChild as WorkerAnimatedChild,
   type CanvasWorkerInstallation,
+  SceneTransitionShape as WorkerTransitionShape,
+  ViewportBackground as WorkerViewportBackground,
 } from "../../dist/worker"
+
+const hold: ShapeTransitionModule = {
+  id: "hold", contractVersion: 1,
+  matches: ({ after }) => after.mode === "hold",
+  sample: ({ before }) => before.components,
+}
+const registry = createShapeTransitionRegistry([hold, ...defaultShapeTransitionRegistry.modules])
+const wrapped: WorkerTransitionShape = wrapSceneShape(new ViewportBackground({ fillConfig: { color: { r: 20, g: 30, b: 40, a: 1 } } }), "hold", registry)
+const workerBackground: ViewportBackground = new WorkerViewportBackground()
+void wrapped
+void workerBackground
 
 const shape: Rectangle = new WorkerRectangle({ x: 0, y: 0, width: 20, height: 20 })
 const workerShape: WorkerRectangle = new Rectangle({ x: 0, y: 0, width: 20, height: 20 })

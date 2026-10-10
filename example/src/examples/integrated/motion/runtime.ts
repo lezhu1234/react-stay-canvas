@@ -2,6 +2,8 @@ import {
   Rectangle,
   StayImage,
   StayText,
+  SceneTransitionShape,
+  wrapSceneShape,
   type StayAnimatedChild,
   type StayInstantChild,
   type StayTools,
@@ -20,7 +22,7 @@ import {
 import { MotionCapsule } from "./capsule"
 
 type MotionBody = Rectangle | MotionCapsule
-type MotionShape = MotionBody | StayImage | StayText
+type MotionShape = MotionBody | StayImage | SceneTransitionShape
 type MotionChild = StayAnimatedChild<MotionShape>
 type SelectionChild = StayInstantChild<Rectangle>
 export type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w"
@@ -44,7 +46,7 @@ export const motionLayers = (tools: StayTools) =>
   tools.getChildrenBySelector<MotionShape>(".motion-layer") as MotionChild[]
 
 export const layerBody = (child: MotionChild) => child.shapeMap.get(bodyKey) as MotionBody
-export const layerLabel = (child: MotionChild) => child.shapeMap.get(labelKey) as StayText | undefined
+export const layerLabel = (child: MotionChild) => child.shapeMap.get(labelKey) as SceneTransitionShape | undefined
 export const layerMedia = (child: MotionChild) => child.shapeMap.get(mediaKey) as StayImage | undefined
 const layerIdOf = (child: MotionChild) => child.id.slice(childPrefix.length)
 
@@ -84,7 +86,7 @@ function createLabel(tools: StayTools, layer: MotionLayer, frame: MotionFrame, p
   const fontSize = layer.kind === "title"
     ? Math.max(20, Math.min(42, frame.height * 0.48))
     : layer.kind === "accent" ? 11 : 16
-  return new StayText({
+  return wrapSceneShape(new StayText({
     ...point,
     text: layer.name,
     textAlign: "center",
@@ -94,7 +96,7 @@ function createLabel(tools: StayTools, layer: MotionLayer, frame: MotionFrame, p
     zIndex: 3,
     fillConfig: { color: layer.kind === "accent" ? style.stroke : colors.ink },
     transition: frameTransition(frame, previous, 0.65),
-  })
+  }), "morph")
 }
 
 function compileMediaFrames(tools: StayTools, layer: MotionLayer, image?: HTMLImageElement) {
@@ -150,7 +152,7 @@ function appendExit<T extends MotionShape>(frames: T[], durationMs: number, exit
 
 function compileAnimatedLayer(tools: StayTools, layer: MotionLayer, project: MotionProject, image?: HTMLImageElement) {
   const bodyFrames: MotionBody[] = []
-  const labelFrames: StayText[] = []
+  const labelFrames: SceneTransitionShape[] = []
   layer.frames.forEach((frame, index) => {
     const previous = layer.frames[index - 1]
     bodyFrames.push(createBody(tools, layer, frame, previous))

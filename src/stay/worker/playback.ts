@@ -72,7 +72,6 @@ export class WorkerPlayback {
     const travelled = Math.min(Math.abs(distance), (now - interval.startedAt) * interval.speed)
     const time = interval.startTimeMs + Math.sign(distance) * travelled
     this.stay.setCurrentSample({ time, bound: interval.bound })
-    this.stay.forceUpdateAllLayers()
     if (travelled === Math.abs(distance)) this.#interval = undefined
     this.#publish()
   }

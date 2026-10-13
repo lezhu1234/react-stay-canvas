@@ -113,7 +113,8 @@ export function stayTools<Origin>(this: Stay<any, any, Origin>): StayTools<Origi
     progress: ({ timeMs: time, bound, beforeDrawCallback, afterDrawCallback }: ProgressProps) => {
       this.setCurrentSample({ time, bound })
       this.sceneTransactions.advance(performance.now())
-      this.forceUpdateAllLayers()
+      // Drawing callbacks can paint directly without marking a Child dirty.
+      if (beforeDrawCallback || afterDrawCallback) this.forceUpdateAllLayers()
       return this.draw({
         now: Date.now(),
         beforeDrawCallback,

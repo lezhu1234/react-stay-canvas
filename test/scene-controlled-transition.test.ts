@@ -74,10 +74,14 @@ describe("single-target controlled scene transitions", () => {
     await commit
     expect(f.stage.currentSample).toEqual({ time: 0 })
     expect(f.live().shapeMap.get("body")!.x).toBe(0)
+    const sourceContext = f.stage.root.contexts[0]!
+    expect(sourceContext.getImageData(10, 20, 1, 1).data[3]).toBeGreaterThan(0)
     expect(f.stage.tools.getChildById("overlay")).toBe(overlay)
     expect(supplied.parent).toBeUndefined()
     supplied.move(1000, 0)
-    f.stage.tools.progress({ timeMs: 50 })
+    const drawn = f.stage.tools.progress({ timeMs: 50 })
+    expect(sourceContext.getImageData(10, 20, 1, 1).data[3]).toBe(0)
+    expect(drawn.updatedLayers).toEqual([0, 1])
     expect(f.live().shapeMap.get("body")!.x).toBeCloseTo(50)
     const endpoint = f.live().getSlice("body").at(-1)!
     const endpointCopy = vi.spyOn(endpoint, "copy")

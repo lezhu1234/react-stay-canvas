@@ -226,8 +226,11 @@ export class StayAnimatedChild<
       }
 
       const lastFrameBoundInfo = this.frameMapInfo.get(name)
+      const previousLayer = lastFrameBoundInfo?.shape.layer
+      const layerChanged = previousLayer !== undefined && previousLayer !== shape.layer
 
-      if (hasFrameBoundInfoChanged(frameBoundInfo, lastFrameBoundInfo)) {
+      if (hasFrameBoundInfoChanged(frameBoundInfo, lastFrameBoundInfo) || layerChanged) {
+        if (layerChanged) this.updatedLayers.add(previousLayer)
         this.updatedLayers.add(shape.layer)
       }
       this.frameMapInfo.set(name, frameBoundInfo)
@@ -428,6 +431,9 @@ export class StayAnimatedChild<
       shapeFrames.push(shape)
     }
     this.totalDurationMs = Math.max(this.totalDurationMs, this.getSliceTotalDurationMs(name))
+    const currentShape = this.shapeMap.get(name)
+    if (currentShape) this.updatedLayers.add(currentShape.layer)
+    this.frameMapInfo.delete(name)
   }
 
   /** @internal Prepares only new keyframes; no existing timeline is copied or changed. */

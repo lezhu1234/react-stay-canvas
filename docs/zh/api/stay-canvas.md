@@ -24,6 +24,7 @@ import {
 
 | 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
+| `runtime` | `{ mode: "worker", createWorker: () => Worker }` | — | 创建时选择后台实例；省略时保留主线程实例 |
 | `width` | `number` | `500` | CSS 尺寸和 View 逻辑宽度，必须大于 0 |
 | `height` | `number` | `500` | CSS 尺寸和 View 逻辑高度，必须大于 0 |
 | `layers` | `number \| CanvasLayerConfig[]` | `2` | Canvas 层数，或逐层指定 Canvas2D/WebGL2 配置 |
@@ -36,6 +37,16 @@ import {
 | `focusOnInit` | `boolean` | `true` | 初始化后是否聚焦顶层 Canvas |
 | `viewport` | `{ minScale?, maxScale? }` | `{ minScale: 0.1, maxScale: 10 }` | 非破坏性视口缩放范围；创建运行时后固定 |
 | `historyAdapter` | `HistoryAdapter<TSnapshot>` | — | 让应用持有的状态与 Canvas 场景进入同一组 undo/redo 事务 |
+
+### 后台实例
+
+设置 `runtime={{ mode: "worker", createWorker }}` 后，组件把原生画布交给这个专用后台线程。图形、动画和绘制保存在后台实例，主线程保留元素、尺寸和原生输入监听。程序及后台图层配置在独立入口中通过 `installCanvasWorker` 注册；参见[后台画布](../scene-and-tools.md#在后台线程持有画布)。
+
+后台方式的 `mounted` 接收 `CanvasWorkerHandle<Input>`，提供 `run`、`cancel`、`trigger`、`seek`、`play`、`pause`、`viewport`、`capture` 和 `destroy`；这些方法不把完整图形传回主线程。`run` 的 `signal` 取消本次程序，`transfer` 显式移交其输入中可转移的资源。`trigger(name, payload)` 调用已有的自定义动作，不取消正在执行的程序。后台程序失败会报告错误并保留已接受的场景；线程本身失效会关闭实例。
+
+`onNotice` 接收注册程序发送的应用消息；`onState` 接收播放时间、播放状态、视口和场景修订；`onError` 接收运行错误。`onInput` 在主线程同步收到原生事件，适用于阻止页面默认滚动等必须由元素所有者完成的操作。后台事件、监听及图层 context 回调在后台入口注册，不能通过主线程的 `eventList`、`listenerList`、`historyAdapter` 或图层函数传入。组件的 `layers` 在后台方式中是图层数量。
+
+创建实例后更换 `createWorker` 函数不会替换正在运行的实例。需要更换程序或运行方式时，销毁旧实例并创建新实例；不会迁移其完整画布。后台组件的 ref 提供 `focus()`，运行控制使用 `mounted` 得到的句柄。
 
 ### layers
 

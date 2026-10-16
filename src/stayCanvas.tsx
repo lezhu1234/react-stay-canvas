@@ -13,8 +13,14 @@ import React, {
 import * as PredefinedEventList from "./predefinedEvents"
 import Stay, { createStay } from "./stay/stay"
 import type { CanvasLayerConfig, ContextLayerSetFunction } from "./types/canvas"
-import type { StayCanvasProps, StayCanvasRefType } from "./types/component"
+import type {
+  StayCanvasComponent,
+  StayCanvasProps,
+  StayCanvasRefType,
+} from "./types/component"
 import type { PredefinedEventName } from "./types/events"
+import type { WorkerStayCanvasProps, WorkerStayCanvasRef } from "./types/worker"
+import WorkerStayCanvas from "./workerStayCanvas"
 
 const defaultContextLayerSetFunction: ContextLayerSetFunction = (canvas) =>
   canvas.getContext("2d")
@@ -34,7 +40,7 @@ function resolveLayerConfigs(
   return configs
 }
 
-const StayCanvas = forwardRef(
+const MainStayCanvas = forwardRef(
   <
     EventName extends string,
     HistorySnapshot,
@@ -240,5 +246,33 @@ const StayCanvas = forwardRef(
     StateStoreSchema
   > & React.RefAttributes<StayCanvasRefType>
 ) => React.ReactElement | null
+
+type StayCanvasWrapperProps =
+  | StayCanvasProps
+  | WorkerStayCanvasProps<unknown, unknown>
+type StayCanvasWrapperRef = StayCanvasRefType | WorkerStayCanvasRef
+
+function isWorkerCanvas(props: StayCanvasWrapperProps): props is WorkerStayCanvasProps<unknown, unknown> {
+  return props.runtime?.mode === "worker"
+}
+
+const StayCanvas = forwardRef<StayCanvasWrapperRef, StayCanvasWrapperProps>(
+  (props, ref) => {
+    if (isWorkerCanvas(props)) {
+      return (
+        <WorkerStayCanvas
+          {...props}
+          ref={ref as Ref<WorkerStayCanvasRef>}
+        />
+      )
+    }
+    return (
+      <MainStayCanvas
+        {...props}
+        ref={ref as Ref<StayCanvasRefType>}
+      />
+    )
+  }
+) as StayCanvasComponent
 
 export default StayCanvas

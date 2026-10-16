@@ -4,20 +4,23 @@ import typescript from "@rollup/plugin-typescript"
 import dts from "rollup-plugin-dts"
 import peerDepsExternal from "rollup-plugin-peer-deps-external"
 
-import packageJson from "./package.json" with { type: "json" }
 import terser from "@rollup/plugin-terser"
 
 export default [
   {
-    input: "src/index.ts",
+    input: { index: "src/index.ts", worker: "src/worker.ts" },
     output: [
       {
-        file: packageJson.main,
+        dir: "dist",
+        entryFileNames: "cjs/[name].js",
+        chunkFileNames: "cjs/shared/[name]-[hash].js",
         format: "cjs",
         sourcemap: true,
       },
       {
-        file: packageJson.module,
+        dir: "dist",
+        entryFileNames: "esm/[name].js",
+        chunkFileNames: "esm/shared/[name]-[hash].js",
         format: "esm",
         sourcemap: true,
       },
@@ -27,12 +30,12 @@ export default [
       peerDepsExternal(),
       resolve(),
       commonjs(),
-      typescript({ tsconfig: "./tsconfig.json" }),
+      typescript({ tsconfig: "./tsconfig.json", declarationDir: "dist/types" }),
     ],
   },
   {
-    input: "dist/esm/types/index.d.ts",
-    output: [{ file: "dist/index.d.ts", format: "esm" }],
+    input: { index: "dist/types/index.d.ts", worker: "dist/types/worker.d.ts" },
+    output: [{ dir: "dist", entryFileNames: "[name].d.ts", chunkFileNames: "shared-types/[name]-[hash].d.ts", format: "esm" }],
     plugins: [dts()],
   },
 ]

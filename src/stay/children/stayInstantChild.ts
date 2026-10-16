@@ -227,7 +227,7 @@ export class StayInstantChild<T extends InstantShape = InstantShape> {
 
   /** @internal Validates and normalizes a Shape layer before state is committed. */
   resolveChildShapeLayer(layer: number | undefined, _shape?: InstantShape) {
-    const normalized = parseLayer(this.canvas.layers, layer)
+    const normalized = parseLayer(this.canvas.layerCount, layer)
     if (this.canvas.getLayerBackend(normalized) !== "canvas2d") {
       throw new Error(`Canvas2D Child ${this.id} cannot target layer ${normalized}`)
     }

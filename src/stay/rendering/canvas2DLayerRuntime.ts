@@ -1,8 +1,11 @@
 import type {
-  ContextLayerSetFunction,
   DrawCanvasContext,
 } from "../../types/canvas"
-import { resizeLayerSurface } from "./layerSurface"
+import {
+  resizeLayerSurface,
+  type CanvasLayerSurface,
+  type LayerSurfaceResize,
+} from "./layerSurface"
 
 interface ContentToViewFrame {
   readonly offsetX: number
@@ -24,19 +27,21 @@ function clearContext(
   }
 }
 
-/** @internal Owns the Canvas2D lifecycle of one existing HTML canvas layer. */
+/** @internal Owns the Canvas2D lifecycle of one existing canvas surface. */
 export class Canvas2DLayerRuntime {
   readonly backend = "canvas2d"
   context!: DrawCanvasContext
 
   constructor(
-    readonly element: HTMLCanvasElement,
-    private readonly resolveConfiguredContext: ContextLayerSetFunction,
+    readonly surface: CanvasLayerSurface,
+    private readonly resolveConfiguredContext: (
+      surface: CanvasLayerSurface
+    ) => DrawCanvasContext | null,
     private readonly index: number
   ) {}
 
-  resizeBackingStore(width: number, height: number) {
-    resizeLayerSurface(this.element, width, height)
+  resizeBackingStore(resize: LayerSurfaceResize) {
+    resizeLayerSurface(this.surface, resize)
   }
 
   isDrawable() {
@@ -46,7 +51,7 @@ export class Canvas2DLayerRuntime {
   destroy() {}
 
   resolveContext() {
-    const context = this.resolveConfiguredContext(this.element)
+    const context = this.resolveConfiguredContext(this.surface)
     if (!context) {
       throw new Error(`Unable to get drawing context for layer ${this.index}`)
     }
@@ -58,8 +63,8 @@ export class Canvas2DLayerRuntime {
     this.context = context
     clearContext(
       context,
-      this.element.width,
-      this.element.height
+      this.surface.width,
+      this.surface.height
     )
   }
 
@@ -71,13 +76,13 @@ export class Canvas2DLayerRuntime {
     draw: (context: DrawCanvasContext) => void
   ) {
     this.context = context
-    const backingScaleX = this.element.width / logicalWidth
-    const backingScaleY = this.element.height / logicalHeight
+    const backingScaleX = this.surface.width / logicalWidth
+    const backingScaleY = this.surface.height / logicalHeight
 
     context.save()
     try {
       context.setTransform(1, 0, 0, 1, 0, 0)
-      context.clearRect(0, 0, this.element.width, this.element.height)
+      context.clearRect(0, 0, this.surface.width, this.surface.height)
       context.setTransform(
         backingScaleX * transform.scale,
         0,

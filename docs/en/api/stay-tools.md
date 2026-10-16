@@ -28,6 +28,106 @@
 | `sortBy` | — | Hit-result ordering |
 | `withRoot` | `true` | Whether root may be returned |
 
+## Timeline scene transactions
+
+`tools.scene` replaces the Canvas2D timeline Children of one Canvas as one scene revision. Static Children and native WebGL2 Children remain in the shared Child store. Preparation copies and validates every supplied Shape without changing the visible scene. `commit` accepts the prepared scene at the next render frame, then changes the Child set and `tools.scene.revision` together. Matching Children and slices blend from the Shape actually visible at acceptance; new Shapes enter from a transparent zero state and removed Shapes exit to the same transparent zero state. The handoff lasts `durationMs` of render time while the new scene keeps its original playback timeline and can still be sampled with `tools.progress({ timeMs })`.
+
+```ts
+const epoch = tools.scene.beginUpdate()
+const controller = new AbortController()
+const prepared = await tools.scene.prepare(epoch, {
+  revision: "display-2",
+  resourceRevision: "fonts-2",
+  children: [{
+    id: "value-1",
+    className: "value",
+    slices: [{ name: "body", frames: [new Rectangle({
+      x: 20, y: 20, width: 80, height: 40,
+    })] }],
+  }],
+}, {
+  transitionId: "shape",
+  control: { kind: "timeline", durationMs: 180 },
+  signal: controller.signal,
+})
+const receipt = await tools.scene.commit(prepared)
+```
+
+For a large scene, pass a `SceneBatchSubmission` with `batches` instead of `children`. Its asynchronous iterable yields arrays of complete timeline Children. Preparation copies and validates each batch before requesting the next one, so the producer can release its temporary Shapes. Child ids must be unique across the entire submission. The prepared handle is returned only after the iterable finishes; no intermediate batch becomes visible.
+
+```ts
+const prepared = await tools.scene.prepare(epoch, {
+  revision: "display-3",
+  resourceRevision: "fonts-2",
+  batches: (async function* () {
+    for (const section of sections) {
+      controller.signal.throwIfAborted()
+      yield buildTimelineChildren(section)
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    }
+  })(),
+}, {
+  transitionId: "shape",
+  control: { kind: "timeline", durationMs: 180 },
+  signal: controller.signal,
+})
+await tools.scene.commit(prepared)
+```
+
+The producer controls batch size and when to yield execution to the browser; merely yielding an array does not yield a browser task. Any producer I/O should use the same abort signal. While batches are pending, the live scene remains available for playback and interaction. Cancellation, a newer update, producer failure, or Canvas destruction releases the pending scene's resources and prevents its commit. The iterable is closed when consumption stops; if its next batch is awaiting external work, that work must settle or observe cancellation before consumption can finish.
+
+`beginUpdate()` invalidates a previous unaccepted update. `cancel(epoch)` and `discard(prepared)` release only that update; repeated calls are harmless. A committed scene stays visible after either call. Concurrent commits of one valid handle return the same result. Handles belong to the Canvas instance that issued them, and copied or forged objects are rejected. If preparation needs external resources, pass a `resourceLease` with the same `resourceRevision`, a current-version check, and a release function; the transaction releases it on cancellation or failure and releases the previous active lease after a successful replacement. `time-domain` control is reserved for a separately installed time capability and is rejected by this timeline implementation.
+
+At the accepting frame, after validation and before replacing the live Children, `commit` cancels any active Pointer Session. The corresponding `dragend` or `moveend` carries `cancelled: true`, `cancelReason: "scene-replacement"`, and the session's last pointer sample; `originEvent` is `Event("scene-replacement")`. This cancellation does not emit a click or an ordinary mouseup. Preparing, discarding, or cancelling an unaccepted update does not itself end the pointer interaction. See [Pointer Sessions](../interaction-and-events.md#pointer-sessions-and-release-outside-the-canvas) for cancellation cleanup.
+
+A slice whose first frame has a nonzero delay or duration must set `prependZeroShape: true`; this creates the invisible starting keyframe before that frame. A first frame that starts immediately can omit it.
+
+### Control one current-to-target interval
+
+`tools.scene.prepareTransition(epoch, target, options)` prepares one complete `SceneStepSubmission` from the currently displayed animated Shapes. It copies each matching current Shape and each supplied target Shape into an offline native timeline; the application does not export the current scene or submit a source step. Preparation does not change the displayed Shapes or their ownership. The source pose is captured during preparation, so pause playback first when the source must stay fixed until acceptance.
+
+```ts
+const prepared = await tools.scene.prepareTransition(tools.scene.beginUpdate(), {
+  revision: "display-4",
+  resourceRevision: "fonts-2",
+  durationMs: 180,
+  children: [{
+    id: "value-1",
+    className: "value",
+    shapes: new Map([["body", new Rectangle({
+      x: 120, y: 20, width: 80, height: 40,
+    })]]),
+  }],
+}, { signal: controller.signal })
+await tools.scene.commit(prepared)
+tools.progress({ timeMs: 90 }) // midpoint; the existing worker seek/play/pause controls also apply
+tools.progress({ timeMs: 180 })
+tools.scene.settleTransition()
+tools.progress({ timeMs: 0 }) // publish/redraw the retained zero-time scene
+```
+
+Acceptance starts this interval at time zero, independently of the previous timeline's sample, and stops any previous worker playback interval. The finite, non-negative `target.durationMs` replaces target Shape delays and durations while preserving native easing, drawing state, layer, stacking order, equality behavior, and `shapeStore` bindings. Child ids and Shape names match tracks; missing tracks enter or exit through their native transparent zero state. A supplied placement is static for the whole new interval; omitted placement preserves the matching current Child placement. Static and WebGL Children remain present. Custom Shapes use their existing `copy()`, zero-state, and interpolation implementations; copies must isolate their mutable drawing state.
+
+`settleTransition()` collapses the active interval to one zero-time frame. At or beyond its endpoint it retains the exact prepared target Shapes and removes exiting tracks and Children. Before the endpoint it retains the displayed native projection without exporting, copying, or rebuilding it. Both paths stop worker playback and reset the native sample to zero; the caller uses the usual progress or worker sampling command to publish that state. No earlier frames or application history are retained. Calling it without an active interval has no effect.
+
+Preparation, cancellation, stale-update rejection, commit-frame validation, and resource leases follow the same transaction rules as `prepare`. Source leases are released at endpoint settlement. A pose retained mid-interval may still refer to source resources, so its leases remain owned until that pose is replaced or the Canvas is destroyed, without retaining the old timeline or unused targets. Only the current target lease determines resource validity for subsequent `appendStep` calls. `cancel` and `discard` affect an unaccepted preparation; they do not undo a committed interval. To stop a committed interval at its displayed pose, pause and settle it. An independent offline `prepare`/`sample`/`discard` does not replace or forget the active controlled interval. Existing full-timeline `prepare`, render-time handoff, and history-preserving `appendStep` keep their behavior.
+
+This interface serves a scene that keeps one current pose and one temporary target. Motion Studio owns an editable history of keyframes, so its seek and import flows continue to use the full-timeline interfaces. Controlled single-target integration coverage belongs to the Stay application; the existing library examples do not yet contain a matching complete user flow.
+
+### Read an offline animation sample
+
+`tools.scene.sample(prepared, timeMs)` returns independent `SceneStepChild` geometry at a time in the prepared target's own timeline. It uses the same native interpolation as playback, restores the offline projection afterward, and does not publish the target or change the visible scene, pointer interaction, viewport, history, or playback clock.
+
+```ts
+const sample = tools.scene.sample(prepared, 0)
+// Use sample geometry for an offline picture, then release the preparation.
+tools.scene.discard(prepared)
+```
+
+The handle must still be the current, resource-valid preparation of this Canvas, before `commit`. Time must be finite and inside the target's interval. Cancellation, replacement, discard, commit, and destruction end this sampling capability. Sampling does not extend the preparation's lifetime: call the existing `commit` or `discard` when finished.
+
+Sampling uses the existing Shape `copy()` contract: geometry, library-owned mutable drawing state, and the outer `shapeStore` Map are independent. Arbitrary application-owned values inside that Map retain shared identity. Custom Shapes must copy their own mutable data according to their data model; see [Independent copies](../advanced/custom-shapes.md#independent-copies).
+
 ## Native WebGL2 scene
 
 `tools.webgl` manages native Mesh children in the same instance and identity store as Canvas2D Children. A `StayWebGLChild` owns an ordered Mesh list on one WebGL2 layer; its Mesh geometry, model matrix, and material are CPU-authoritative and mutations invalidate that layer.

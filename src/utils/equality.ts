@@ -50,3 +50,19 @@ export function isBasicType(
     value === undefined
   )
 }
+
+export function recordSame<T>(first: Record<string, T>, second: Record<string, T>,
+  equal: (first: T, second: T) => boolean = (first, second) => first === second) {
+  const keys = Object.keys(first)
+  return keys.length === Object.keys(second).length &&
+    keys.every((key) => Object.prototype.hasOwnProperty.call(second, key) && equal(first[key], second[key]))
+}
+
+export function mapSame(first: Map<string, unknown>, second: Map<string, unknown>,
+  equal: (first: unknown, second: unknown) => boolean = (first, second) => first === second) {
+  if (first.size !== second.size) return false
+  for (const [key, value] of first) {
+    if (!second.has(key) || !equal(value, second.get(key))) return false
+  }
+  return true
+}

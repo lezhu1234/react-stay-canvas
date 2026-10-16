@@ -38,6 +38,18 @@ export class ChildrenStore<TChild extends ChildIdentity> {
     return child
   }
 
+  replaceWhere(predicate: ChildSelector<TChild>, replacements: readonly TChild[]): void {
+    const next = new Map<string, TChild>()
+    this.#children.forEach((child, id) => {
+      if (!predicate(child)) next.set(id, child)
+    })
+    replacements.forEach((child) => {
+      if (next.has(child.id)) throw new Error(`Child id ${child.id} already exists`)
+      next.set(child.id, child)
+    })
+    this.#children = next
+  }
+
   filter(predicate: ChildSelector<TChild>): TChild[] {
     return this.values().filter(predicate)
   }

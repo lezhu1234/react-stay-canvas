@@ -29,6 +29,21 @@ A Shape owns geometry, drawing, hit testing, and its own visual state. A Child g
 
 `StayText` follows Canvas coordinate semantics: the default `start + alphabetic` uses `(x, y)` as the start-side alphabetic-baseline anchor. To center text on a visual point, pass that point as `x` and `y` together with `textAlign: "center"` and `textBaseline: "middle"`. Drawing, bounds, movement, zoom, and keyframe interpolation use the same anchor. `offsetXRatio` and `offsetYRatio` apply an additional width- and height-relative shift to it.
 
+## Registered shape transitions
+
+`wrapSceneShape(nativeShape, effect, registry?)` returns an `AnimatedShape` for existing keyframes and scene transactions. The default immutable registry matches independent `crossfadeTransition`, `textGlyphTransition` and `morphTransition` modules. Changed text, font family/weight/style or alignment draws both old and new glyphs while native sampling moves, sizes and recolors them. Ordinary text and other shapes delegate to native `intermediateState`, including custom shapes. Exact endpoints, copied metadata/comparators, layers, paint order and every interrupted drawable component are preserved, with no composition-count cap.
+
+```ts
+const target = wrapSceneShape(new StayText({
+  x: 160, y: 80, text: "Ready", fillConfig: { color: { r: 20, g: 80, b: 140, a: 1 } },
+  transition: { durationMs: 300, type: "linear" },
+}), "morph")
+```
+
+The wrapper adopts geometry without copying; scene preparation owns copies. Its interaction store starts empty: assign `wrapper.shapeStore = new Map(nativeShape.shapeStore)` when that metadata belongs on the wrapper. `wrapSceneSubmission` wraps all timeline frames. Extend with `createShapeTransitionRegistry([customModule, ...defaultShapeTransitionRegistry.modules])`: each `ShapeTransitionModule` has a unique `id`, `contractVersion: 1`, `matches(pair)` and `sample(sample)`. Descriptor snapshots are frozen, first match wins, and duplicate IDs, unsupported contracts or unmatched pairs fail explicitly. Effect identifiers accept strings: a third effect needs no sampler or known-constructor list change.
+
+`ViewportBackground` paints the actual Canvas2D backing surface, including resized and clipped capture surfaces, through the same wrapper/registry. Place it in a dedicated affine background Child below content. It has zero-size content bounds and no pointer hits; exclude that Child from content-fit and saveability bounds. A mixed background/content Child uses ordinary bounds union, including the background origin. `shouldCullByBounds()` defaults to `true`; background paint opts out and the wrapper preserves this capability during camera panning. The motion-studio integration exercises wrapped text through editing, seeking and frame capture.
+
 ## Styling and paint order
 
 Every Shape accepts common drawing properties:
@@ -227,7 +242,36 @@ tools.progress({ timeMs: playheadMs })
 
 `replaceSlice()` validates and compiles the complete non-empty slice before swapping it in. A compilation error leaves the previous slice, `totalDurationMs`, and current projected Shapes unchanged. It follows the same `prependZeroShape` convention as the first append and does not seek automatically; call `progress()` when the new timeline should be projected.
 
+Use `replaceTimeline(frameMap, prependZeroShape?)` when every named slice must be replaced together while keeping the same Child. It compiles all slices before committing any of them, removes names omitted from the new map, recomputes `totalDurationMs`, and accepts an empty map to clear the timeline. A compilation error leaves the complete old timeline and current projection unchanged. Like `replaceSlice()`, it does not seek automatically and applies the default transparent zero frame unless `prependZeroShape` is `false`.
+
 `durationMs` and `delayMs` describe the transition arriving at the current keyframe: hold the previous frame for `delayMs`, then interpolate for `durationMs`. `totalDurationMs` is the longest total duration among all slices.
+
+### Comparing application metadata between endpoints
+
+`shapeStore` can carry application-owned metadata with a Shape. By default, endpoint reuse compares each stored value with strict reference equality (`===`). Two separately created objects therefore describe different endpoints even when their fields match.
+
+For immutable value objects, pass a stable `shapeStoreValueEquals` function to every comparable Shape:
+
+```ts
+type Binding = { visualId: string; selected: boolean }
+
+const bindingEquals = (before: unknown, after: unknown) => {
+  const first = before as Binding | undefined
+  const second = after as Binding | undefined
+  return first?.visualId === second?.visualId && first?.selected === second?.selected
+}
+
+const body = new Rectangle({
+  x: 40,
+  y: 80,
+  width: 100,
+  height: 72,
+  shapeStore: new Map([["binding", { visualId: "card", selected: true }]]),
+  shapeStoreValueEquals: bindingEquals,
+})
+```
+
+The same function reference must be used on both endpoints. Copies, interpolated Shapes, and zero Shapes retain it. Equal values allow the timeline to reuse an endpoint; a real metadata change still creates a new endpoint, and sampled Shapes use the target metadata. The library does not deep-compare arbitrary store values unless the application opts in.
 
 ## Seeking, scrubbing, and playback
 

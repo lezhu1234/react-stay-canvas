@@ -5,19 +5,19 @@ import {
   type EventDefinitionScope,
 } from "../gesturePhases"
 
-export type RegisteredEvent<EventName extends string> = {
-  definition: StayEventProps<EventName>
+export type RegisteredEvent<EventName extends string, Origin = Event> = {
+  definition: StayEventProps<EventName, never, never, Origin>
   role: EventDefinitionRole
   scope: EventDefinitionScope
 }
 
-type RegisteredEventSlots<EventName extends string> = {
-  persistent?: RegisteredEvent<EventName>
-  pointerSession?: RegisteredEvent<EventName>
+type RegisteredEventSlots<EventName extends string, Origin> = {
+  persistent?: RegisteredEvent<EventName, Origin>
+  pointerSession?: RegisteredEvent<EventName, Origin>
 }
 
-export class EventRegistry<EventName extends string> {
-  private readonly events = new Map<EventName, RegisteredEventSlots<EventName>>()
+export class EventRegistry<EventName extends string, Origin = Event> {
+  private readonly events = new Map<EventName, RegisteredEventSlots<EventName, Origin>>()
 
   register({
     name,
@@ -25,8 +25,8 @@ export class EventRegistry<EventName extends string> {
     conditionCallback,
     successCallback,
     withTargetConditionCallback,
-  }: EventProps<EventName>, scope: EventDefinitionScope = { kind: "persistent" }) {
-    const registered: RegisteredEvent<EventName> = {
+  }: EventProps<EventName, never, never, Origin>, scope: EventDefinitionScope = { kind: "persistent" }) {
+    const registered: RegisteredEvent<EventName, Origin> = {
       definition: {
         name,
         trigger,
@@ -50,7 +50,7 @@ export class EventRegistry<EventName extends string> {
   getRegistered(
     name: string,
     pointerSessionId?: number
-  ): RegisteredEvent<EventName> | undefined {
+  ): RegisteredEvent<EventName, Origin> | undefined {
     const slots = this.events.get(name as EventName)
     if (!slots) return undefined
     if (
@@ -118,7 +118,7 @@ export class EventRegistry<EventName extends string> {
 
   private deleteEmptySlots(
     name: EventName,
-    slots: RegisteredEventSlots<EventName>
+    slots: RegisteredEventSlots<EventName, Origin>
   ) {
     if (!slots.persistent && !slots.pointerSession) {
       this.events.delete(name)

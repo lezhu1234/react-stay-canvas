@@ -65,7 +65,7 @@ Optional by input source:
 | `key` | Keyboard input or an explicit manual key exists |
 | `deltaX`, `deltaY`, `deltaZ` | Wheel input or explicit manual deltas exist |
 | `pointerId`, `pointerType` | Input came from Pointer Events |
-| `cancelled`, `cancelReason` | A Pointer Session produced a cancelled terminal action; reasons include DOM cancellation and logical `resize` |
+| `cancelled`, `cancelReason` | A Pointer Session produced a cancelled terminal action; reasons are `pointercancel`, `lostpointercapture`, `blur`, `visibilitychange`, `resize`, or `scene-replacement` (before replacing the live scene) |
 
 An action name does not guarantee these fields. Narrow before use:
 

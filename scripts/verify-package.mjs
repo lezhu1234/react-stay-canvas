@@ -2,6 +2,7 @@ import { execSync } from "node:child_process"
 import { readdirSync, readFileSync } from "node:fs"
 import { dirname, posix, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { createRequire } from "node:module"
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const packageJson = JSON.parse(readFileSync(resolve(repositoryRoot, "package.json"), "utf8"))
@@ -55,6 +56,10 @@ function packedLinkTarget(source, destination, files) {
 }
 
 function verifyRequiredFiles(files) {
+  const exportFiles = Object.entries(packageJson.exports ?? {})
+    .filter(([name]) => !name.includes("*"))
+    .flatMap(([_name, target]) => typeof target === "string" ? [target] : Object.values(target))
+    .map((path) => path.replace(/^\.\//, ""))
   const required = [
     "LICENSE",
     "README.md",
@@ -62,6 +67,7 @@ function verifyRequiredFiles(files) {
     packageJson.main,
     packageJson.module,
     packageJson.types,
+    ...exportFiles,
     ...markdownFiles("docs/en"),
     ...markdownFiles("docs/zh"),
   ]
@@ -87,9 +93,24 @@ function verifyPublishedLinks(files) {
   })
 }
 
+function verifySharedWorkerRuntime() {
+  const require = createRequire(import.meta.url)
+  const worker = require(resolve(repositoryRoot, packageJson.exports["./worker"].require))
+  const loadedReact = Object.keys(require.cache).some((path) =>
+    /\/node_modules\/(?:react|react-dom)\//.test(path))
+  if (loadedReact) errors.push("The worker entry loads React at runtime")
+  const main = require(resolve(repositoryRoot, packageJson.main))
+  for (const name of ["Rectangle", "StayAnimatedChild", "Mesh", "ImageTexture"]) {
+    if (main[name] !== worker[name]) {
+      errors.push(`Root and worker entries contain separate ${name} constructors`)
+    }
+  }
+}
+
 const files = packedFiles()
 verifyRequiredFiles(files)
 verifyPublishedLinks(files)
+verifySharedWorkerRuntime()
 
 if (errors.length) {
   console.error("Package verification failed:\n")

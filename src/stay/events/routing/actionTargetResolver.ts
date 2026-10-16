@@ -54,7 +54,7 @@ export type TargetResolverContext = {
   ) => StayInstantChild[]
 }
 
-export class ActionTargetResolver {
+export class ActionTargetResolver<Origin = Event> {
   private readonly gestureOwners = new Map<
     symbol,
     Map<GestureFamily, GestureOwner>
@@ -66,8 +66,8 @@ export class ActionTargetResolver {
     registration: TargetRegistration,
     eventName: string,
     available: boolean,
-    originEvent: Event,
-    triggerEvents: EvaluatedActions<T>,
+    originEvent: Origin,
+    triggerEvents: EvaluatedActions<T, Origin>,
     eventDefinitions: EventDefinitionLookup
   ): GestureFamily | undefined {
     const triggered = triggerEvents[eventName as T]
@@ -101,8 +101,8 @@ export class ActionTargetResolver {
     registration: TargetRegistration,
     capturedFamilies: ReadonlySet<GestureFamily>,
     available: boolean,
-    originEvent: Event,
-    triggerEvents: EvaluatedActions<T>,
+    originEvent: Origin,
+    triggerEvents: EvaluatedActions<T, Origin>,
     eventDefinitions: EventDefinitionLookup
   ) {
     GESTURES.forEach((gesture) => {
@@ -131,10 +131,10 @@ export class ActionTargetResolver {
     registration: TargetRegistration,
     eventName: T,
     sourceEvent: NormalizedActionEvent<T>,
-    eventDefinition: EventProps<T>,
+    eventDefinition: EventProps<T, never, never, Origin>,
     role: EventDefinitionRole,
     sessionId: number | undefined,
-    originEvent: Event,
+    originEvent: Origin,
     coordinates: PointerCoordinates | undefined,
     coordinateFrame: CoordinateFrame | undefined
   ): TargetDecision {
@@ -161,7 +161,7 @@ export class ActionTargetResolver {
       )
     }
 
-    if (originEvent instanceof MouseEvent) {
+    if (sourceEvent.isMouseEvent) {
       const target = this.findPointerTarget(
         registration,
         eventName,
@@ -208,8 +208,8 @@ export class ActionTargetResolver {
     sessionId: number,
     eventName: T,
     sourceEvent: NormalizedActionEvent<T>,
-    eventDefinition: EventProps<T>,
-    originEvent: Event
+    eventDefinition: EventProps<T, never, never, Origin>,
+    originEvent: Origin
   ): TargetDecision {
     const owner = this.gestureOwners.get(listenerId)?.get(family)
     if (
@@ -240,8 +240,8 @@ export class ActionTargetResolver {
     registration: TargetRegistration,
     eventName: T,
     sourceEvent: NormalizedActionEvent<T>,
-    eventDefinition: EventProps<T>,
-    originEvent: Event,
+    eventDefinition: EventProps<T, never, never, Origin>,
+    originEvent: Origin,
     coordinates: PointerCoordinates | undefined,
     coordinateFrame: CoordinateFrame | undefined
   ): StayInstantChild | undefined {
@@ -289,8 +289,8 @@ export class ActionTargetResolver {
     target: StayInstantChild,
     eventName: T,
     sourceEvent: NormalizedActionEvent<T>,
-    eventDefinition: EventProps<T>,
-    originEvent: Event
+    eventDefinition: EventProps<T, never, never, Origin>,
+    originEvent: Origin
   ): TargetDecision {
     return this.acceptsTarget(target, eventName, sourceEvent, eventDefinition, originEvent)
       ? { kind: "target", target }
@@ -301,8 +301,8 @@ export class ActionTargetResolver {
     target: StayInstantChild,
     eventName: T,
     sourceEvent: NormalizedActionEvent<T>,
-    eventDefinition: EventProps<T>,
-    originEvent: Event
+    eventDefinition: EventProps<T, never, never, Origin>,
+    originEvent: Origin
   ) {
     const predicate = eventDefinition.withTargetConditionCallback
     if (!predicate) return true
@@ -349,8 +349,8 @@ export class ActionTargetResolver {
     gesture: GestureDefinition,
     sessionId: number,
     available: boolean,
-    originEvent: Event,
-    triggerEvents: EvaluatedActions<T>
+    originEvent: Origin,
+    triggerEvents: EvaluatedActions<T, Origin>
   ) {
     if (!available) {
       this.setGestureOwner(

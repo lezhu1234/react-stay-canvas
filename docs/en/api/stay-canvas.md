@@ -24,6 +24,7 @@ import {
 
 | Prop | Type | Default | Meaning |
 | --- | --- | --- | --- |
+| `runtime` | `{ mode: "worker", createWorker: () => Worker }` | — | Select a worker instance at creation; omission preserves the main-thread instance |
 | `width` | `number` | `500` | CSS and logical View width; must be greater than zero |
 | `height` | `number` | `500` | CSS and logical View height; must be greater than zero |
 | `layers` | `number \| CanvasLayerConfig[]` | `2` | Canvas layer count or explicit Canvas2D/WebGL2 configuration per layer |
@@ -36,6 +37,16 @@ import {
 | `focusOnInit` | `boolean` | `true` | Whether to focus the top Canvas after initialization |
 | `viewport` | `{ minScale?, maxScale? }` | `{ minScale: 0.1, maxScale: 10 }` | Non-destructive viewport scale limits; fixed after runtime creation |
 | `historyAdapter` | `HistoryAdapter<TSnapshot>` | — | Include application-owned state in the same undo/redo transactions as the Canvas scene |
+
+### Worker instance
+
+With `runtime={{ mode: "worker", createWorker }}`, the component transfers its native canvases to that dedicated worker. Shapes, animation and drawing belong to the worker instance; elements, dimensions and native input listeners remain on the main thread. Register the program and worker-local layers through `installCanvasWorker` in a separate entry point; see [Worker canvas](../scene-and-tools.md#own-the-canvas-in-a-background-thread).
+
+In this mode, `mounted` receives a `CanvasWorkerHandle<Input>` with `run`, `cancel`, `trigger`, `seek`, `play`, `pause`, `viewport`, `capture` and `destroy`. These operations do not return the complete graphical data to the main thread. A run's `signal` cancels that program, and `transfer` explicitly transfers resources contained in its input. `trigger(name, payload)` dispatches an existing manually registered action without cancelling an active program. A program failure reports an error and preserves the accepted scene; a worker failure closes the instance.
+
+`onNotice` receives application messages emitted by the registered program. `onState` receives playback time, playing status, viewport and scene revision. `onError` receives runtime errors. `onInput` synchronously receives native events on the main thread for operations owned by the element, such as preventing page scrolling. Register worker events, listeners and layer context callbacks in the worker entry; main-thread `eventList`, `listenerList`, `historyAdapter` and layer functions are not worker props. The component's worker `layers` prop is a layer count.
+
+Replacing `createWorker` after creation does not replace a running instance. To select another program or execution mode, destroy the old instance and create a new one; complete canvas state is not migrated. The worker component's ref supplies `focus()`; use the handle supplied to `mounted` for runtime controls.
 
 ### layers
 

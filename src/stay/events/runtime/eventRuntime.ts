@@ -19,16 +19,17 @@ import {
   type EventDefinitionScope,
 } from "../gesturePhases"
 import { EventRegistry, type RegisteredEvent } from "./eventRegistry"
+import { inputSourceOf } from "../input/forwardedInput"
 
 type Store = Map<string, any>
 
-type EventRuntimeContext<EventName extends string> = {
+type EventRuntimeContext<EventName extends string, Origin> = {
   canvas: Canvas
   coordinates: CoordinateSystem
   store: Store
   stateStore: Store
   getState: () => string
-  actionRouter: ActionRoutePort<EventName>
+  actionRouter: ActionRoutePort<EventName, Origin>
 }
 
 type PointerMappingContext = {
@@ -36,14 +37,14 @@ type PointerMappingContext = {
   metrics: SurfaceMetrics
 }
 
-export class EventRuntime<EventName extends string> {
-  private readonly registry = new EventRegistry<EventName>()
+export class EventRuntime<EventName extends string, Origin = Event> {
+  private readonly registry = new EventRegistry<EventName, Origin>()
   private readonly activatedDragSessions = new Set<number>()
   private readonly pointerMappingContexts = new Map<number, PointerMappingContext>()
 
-  constructor(private readonly context: EventRuntimeContext<EventName>) {}
+  constructor(private readonly context: EventRuntimeContext<EventName, Origin>) {}
 
-  registerEvent(definition: EventProps<EventName>) {
+  registerEvent(definition: EventProps<EventName, never, never, Origin>) {
     this.registry.register(definition)
   }
 
@@ -57,7 +58,7 @@ export class EventRuntime<EventName extends string> {
     this.context.actionRouter.clearGestureOwners()
   }
 
-  handleInput(input: EventInput) {
+  handleInput(input: EventInput<Origin>) {
     const mapped = this.pointerCoordinates(input)
     const terminalSessionId = this.terminalSessionId(input)
 
@@ -80,11 +81,11 @@ export class EventRuntime<EventName extends string> {
   }
 
   private evaluate(
-    input: EventInput,
+    input: EventInput<Origin>,
     coordinates?: PointerCoordinates,
     coordinateFrame?: CoordinateFrame
-  ): EvaluatedActions<EventName> {
-    const triggerEvents: EvaluatedActions<EventName> = {}
+  ): EvaluatedActions<EventName, Origin> {
+    const triggerEvents: EvaluatedActions<EventName, Origin> = {}
     const namesAtStart = this.registry.names()
 
     namesAtStart.forEach((eventName) => {
@@ -118,8 +119,8 @@ export class EventRuntime<EventName extends string> {
   }
 
   private shouldEvaluate(
-    registered: RegisteredEvent<EventName>,
-    input: EventInput,
+    registered: RegisteredEvent<EventName, Origin>,
+    input: EventInput<Origin>,
     coordinates?: PointerCoordinates
   ) {
     const { definition, role, scope } = registered
@@ -179,20 +180,19 @@ export class EventRuntime<EventName extends string> {
 
   private createActionEvent(
     eventName: EventName,
-    event: StayEventProps<EventName>,
-    input: EventInput,
+    event: StayEventProps<EventName, never, never, Origin>,
+    input: EventInput<Origin>,
     coordinates?: PointerCoordinates
   ): NormalizedActionEvent<EventName> {
+    const source = input.source ?? inputSourceOf(input.originEvent)
     const actionEvent: NormalizedActionEvent<EventName> = {
       state: this.context.getState(),
       name: eventName,
       pressedKeys: new Set(input.pressedKeys),
-      isMouseEvent: Boolean(coordinates) || input.originEvent instanceof MouseEvent,
+      isMouseEvent: Boolean(coordinates) || source.kind === "pointer" || source.kind === "wheel",
     }
 
-    if (input.originEvent instanceof KeyboardEvent) {
-      actionEvent.key = input.originEvent.key
-    }
+    if (source.kind === "keyboard") actionEvent.key = source.key
 
     if (coordinates) {
       actionEvent.x = coordinates.content.x
@@ -213,20 +213,24 @@ export class EventRuntime<EventName extends string> {
       actionEvent.cancelled = false
     }
 
-    if (event.trigger === "wheel" && input.originEvent instanceof WheelEvent) {
-      actionEvent.deltaX = input.originEvent.deltaX
-      actionEvent.deltaY = input.originEvent.deltaY
-      actionEvent.deltaZ = input.originEvent.deltaZ
+    if (event.trigger === "wheel" && source.kind === "wheel") {
+      actionEvent.deltaX = source.deltaX
+      actionEvent.deltaY = source.deltaY
+      actionEvent.deltaZ = source.deltaZ
     }
 
     return actionEvent
   }
 
-  private pointerCoordinates(input: EventInput): {
+  private pointerCoordinates(input: EventInput<Origin>): {
     coordinates: PointerCoordinates
     frame: CoordinateFrame
   } | undefined {
-    const current = input.pointerSample ?? this.sampleFromMouseEvent(input.originEvent)
+    const source = input.source ?? inputSourceOf(input.originEvent)
+    const current = input.pointerSample ?? (
+      source.clientX !== undefined && source.clientY !== undefined
+        ? { clientX: source.clientX, clientY: source.clientY } : undefined
+    )
     if (!current) return undefined
     const samples: PointerSamples = input.pointerSamples ?? {
       start: current,
@@ -245,7 +249,7 @@ export class EventRuntime<EventName extends string> {
     }
   }
 
-  private pointerMappingContext(input: EventInput): PointerMappingContext {
+  private pointerMappingContext(input: EventInput<Origin>): PointerMappingContext {
     const sessionId = input.pointerSession?.id
     if (
       sessionId !== undefined &&
@@ -264,7 +268,7 @@ export class EventRuntime<EventName extends string> {
   }
 
   private rememberPointerMappingContext(
-    input: EventInput,
+    input: EventInput<Origin>,
     mappingContext: PointerMappingContext
   ) {
     const sessionId = input.pointerSession?.id
@@ -274,13 +278,8 @@ export class EventRuntime<EventName extends string> {
     }
   }
 
-  private sampleFromMouseEvent(originEvent: Event) {
-    if (!(originEvent instanceof MouseEvent)) return undefined
-    return { clientX: originEvent.clientX, clientY: originEvent.clientY }
-  }
-
   private conditionPasses(
-    event: StayEventProps<EventName>,
+    event: StayEventProps<EventName, never, never, Origin>,
     actionEvent: NormalizedActionEvent<EventName>
   ) {
     return event.conditionCallback({
@@ -291,9 +290,9 @@ export class EventRuntime<EventName extends string> {
   }
 
   private runSuccess(
-    registered: RegisteredEvent<EventName>,
+    registered: RegisteredEvent<EventName, Origin>,
     actionEvent: NormalizedActionEvent<EventName>,
-    input: EventInput
+    input: EventInput<Origin>
   ) {
     const linked = registered.definition.successCallback({
       e: actionEvent,
@@ -316,9 +315,9 @@ export class EventRuntime<EventName extends string> {
   }
 
   private linkedScope(
-    parent: RegisteredEvent<EventName>,
-    child: EventProps<EventName>,
-    input: EventInput
+    parent: RegisteredEvent<EventName, Origin>,
+    child: EventProps<EventName, never, never, Origin>,
+    input: EventInput<Origin>
   ): EventDefinitionScope {
     const childRole = describeEventDefinition(child.name, child.trigger)
     const parentRole = parent.role
@@ -337,7 +336,7 @@ export class EventRuntime<EventName extends string> {
     return { kind: "persistent" }
   }
 
-  private terminalSessionId(input: EventInput) {
+  private terminalSessionId(input: EventInput<Origin>) {
     const phase = input.sessionTransition?.phase
     if (phase !== "end" && phase !== "cancel") return undefined
     return input.pointerSession?.id

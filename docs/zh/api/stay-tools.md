@@ -28,6 +28,106 @@
 | `sortBy` | — | 命中结果排序 |
 | `withRoot` | `true` | 是否允许返回 root Child |
 
+## 关键帧场景事务
+
+`tools.scene` 一次替换同一 Canvas 中的二维关键帧 Child，静态 Child 和原生 WebGL2 Child 仍留在唯一的 Child 存储中。准备阶段复制并校验全部 Shape，不修改当前画面。`commit` 在下一绘制帧接受准备结果，同时发布新的 Child 集合和 `tools.scene.revision`。同 ID、同 slice 的 Child 从接受时实际可见的 Shape 续接；新增 Shape 从透明零状态进入，移除的 Shape 则退出到零状态。过渡持续 `durationMs` 的绘制时间，新场景仍保持原来的回放时间线，可继续用 `tools.progress({ timeMs })` 采样。
+
+```ts
+const epoch = tools.scene.beginUpdate()
+const controller = new AbortController()
+const prepared = await tools.scene.prepare(epoch, {
+  revision: "display-2",
+  resourceRevision: "fonts-2",
+  children: [{
+    id: "value-1",
+    className: "value",
+    slices: [{ name: "body", frames: [new Rectangle({
+      x: 20, y: 20, width: 80, height: 40,
+    })] }],
+  }],
+}, {
+  transitionId: "shape",
+  control: { kind: "timeline", durationMs: 180 },
+  signal: controller.signal,
+})
+const receipt = await tools.scene.commit(prepared)
+```
+
+较大的场景可使用 `SceneBatchSubmission`，以 `batches` 代替 `children`。异步迭代器每次返回一组具有完整时间线的 Child；准备流程复制并校验当前批次后才请求下一批，生产者因此不必一直保留临时 Shape。Child id 在整个提交中必须唯一。只有全部批次结束后才返回可提交句柄，中途的批次不会显示。
+
+```ts
+const prepared = await tools.scene.prepare(epoch, {
+  revision: "display-3",
+  resourceRevision: "fonts-2",
+  batches: (async function* () {
+    for (const section of sections) {
+      controller.signal.throwIfAborted()
+      yield buildTimelineChildren(section)
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    }
+  })(),
+}, {
+  transitionId: "shape",
+  control: { kind: "timeline", durationMs: 180 },
+  signal: controller.signal,
+})
+await tools.scene.commit(prepared)
+```
+
+生产者决定批次大小以及何时将执行权交还浏览器；仅 `yield` 数组不会结束当前浏览器任务。生产者自身的网络或资源等待应使用同一个取消信号。等待批次期间，当前场景仍可播放和交互。取消、更新替换、生产者失败或 Canvas 销毁会释放候选场景资源，并使它无法提交。停止消费时会关闭迭代器；如果下一批正在等待外部工作，该工作须结束或响应取消后，消费过程才能结束。
+
+`beginUpdate()` 使前一个尚未接受的更新过期。`cancel(epoch)` 和 `discard(prepared)` 只释放本次更新，重复调用没有额外影响；已提交场景不会因此回滚。同一有效句柄的并发提交共享结果。句柄只属于签发它的 Canvas 实例，复制或伪造对象会被拒绝。外部资源可用同一 `resourceRevision` 的 `resourceLease` 提供版本检查和释放方法；取消或失败只释放本次租约，成功替换后才释放旧活场景的租约。`time-domain` 控制需另行安装时间能力，当前关键帧实现会明确拒绝。
+
+在接受帧通过校验后、替换活 Child 前，`commit` 会取消当前 Pointer Session。对应的 `dragend` 或 `moveend` 携带 `cancelled: true`、`cancelReason: "scene-replacement"` 和会话最后一次指针采样，`originEvent` 为 `Event("scene-replacement")`。这次取消不会产生 click 或普通 mouseup。准备、丢弃或取消尚未接受的更新，本身不会结束指针交互。取消时的清理方式见 [Pointer Session](../interaction-and-events.md#pointer-session-和-canvas-外释放)。
+
+如果 slice 首帧有非零延迟或持续时间，须设置 `prependZeroShape: true`，使它从不可见的起始关键帧进入。首帧立即显示时可省略。
+
+### 控制从当前画面到一个目标的过渡
+
+`tools.scene.prepareTransition(epoch, target, options)` 用一份完整的目标图形提交（`SceneStepSubmission`）准备过渡。库把当前实际显示的动画图形与对应目标图形各复制一次，构建尚未显示的原生时间线；应用无需导出当前场景或提交起点步骤。准备不改变当前图形或其归属。起点取自准备时的画面；若接受前起点必须保持不动，应先暂停播放。
+
+```ts
+const prepared = await tools.scene.prepareTransition(tools.scene.beginUpdate(), {
+  revision: "display-4",
+  resourceRevision: "fonts-2",
+  durationMs: 180,
+  children: [{
+    id: "value-1",
+    className: "value",
+    shapes: new Map([["body", new Rectangle({
+      x: 120, y: 20, width: 80, height: 40,
+    })]]),
+  }],
+}, { signal: controller.signal })
+await tools.scene.commit(prepared)
+tools.progress({ timeMs: 90 }) // 中点；现有 worker 定位、播放和暂停控制也适用
+tools.progress({ timeMs: 180 })
+tools.scene.settleTransition()
+tools.progress({ timeMs: 0 }) // 发布并重绘保留的零时刻场景
+```
+
+接受后新过渡从零时刻开始，不受旧时间线采样值影响，并停止之前的 worker 播放区间。`target.durationMs` 必须有限且非负；它统一替换目标图形的延迟与持续时间，保留原生缓动、绘制状态、图层、叠放顺序、相等判断和 `shapeStore` 数据绑定。Child id 和图形名称用于匹配轨道；新增与移除轨道沿各自原生透明零状态进入或退出。提供的 placement 是整个新区间的静态放置；省略时保留同 id 当前 Child 的放置。静态和 WebGL Child 继续存在。自定义图形沿已有复制、零状态和插值实现工作，复制结果必须隔离自身拥有的可变绘制数据。
+
+`settleTransition()` 把活跃过渡收敛为一个零时刻画面。到达或超过终点时，它直接保留已准备的准确目标图形，并移除退场轨道和 Child。中途调用时，直接保留当前原生投影，不导出、复制或重新生成。两条路径都会停止 worker 播放、将原生采样归零；调用方用现有推进或 worker 采样命令发布这个状态。不保留更早的帧或应用历史。没有活跃过渡时调用没有影响。
+
+准备、取消、过期拒绝、提交帧校验和资源租约沿用 `prepare` 的事务规则。终点收敛会释放起点租约；中途保留的画面仍可能引用起点资源，因此持有这些租约直到该画面被替换或 Canvas 销毁，但不保留旧时间线或未使用的目标图形。后续 `appendStep` 的资源有效性只由当前目标租约决定。`cancel` 和 `discard` 只影响尚未接受的准备，不回滚已提交过渡；停止已提交过渡并保留眼前画面时，应暂停后收敛。独立的离线 `prepare`、`sample` 和 `discard` 不会替换或丢失当前受控过渡。原有完整时间线准备、按绘制时间续接以及保留历史的 `appendStep` 行为保持不变。
+
+本接口适用于只保留当前画面和一个临时目标的场景。动效工作室拥有可编辑的完整关键帧历史，因此定位和导入继续使用完整时间线接口。单目标受控过渡由 Stay 应用承担真实组合验证；库内现有示例尚无适合这一完整用户流程的集成。
+
+### 读取尚未显示的动画画面
+
+`tools.scene.sample(prepared, timeMs)` 返回准备目标自身时间线在指定时刻的独立 `SceneStepChild` 图形。它使用与播放相同的原生插值，随后恢复准备对象的投影；不会提交目标或改变当前画面、指针交互、视口、历史和播放时钟。
+
+```ts
+const sample = tools.scene.sample(prepared, 0)
+// 用返回的图形生成离线画面，用完释放准备对象。
+tools.scene.discard(prepared)
+```
+
+句柄必须仍是本 Canvas 当前且资源有效的准备对象，并且尚未提交。时间必须有限且位于目标自己的区间内。取消、替换、丢弃、提交和销毁都会结束采样能力。采样不延长对象寿命，用完沿原接口提交或丢弃。
+
+采样沿已有 Shape 的 `copy()` 契约：几何、库拥有的可变绘制状态以及外层 `shapeStore` Map 独立；Map 内任意应用数据仍保留共享身份。自定义 Shape 须按自身数据模型复制它拥有的可变内容，见[copy 的独立性](../advanced/custom-shapes.md#copy-的独立性)。
+
 ## 原生 WebGL2 场景
 
 `tools.webgl` 在同一实例、同一 identity store 中管理原生 Mesh Child。一个 `StayWebGLChild` 在一个 WebGL2 图层上拥有有序 Mesh 列表；Mesh 几何、模型矩阵与材质以 CPU 状态为准，修改后会标脏对应图层。

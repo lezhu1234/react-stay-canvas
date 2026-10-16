@@ -38,6 +38,8 @@ export interface ShapeProps {
   fillConfig?: CanvasFillProps
   globalConfig?: CanvasGlobalProps
   shapeStore?: Map<string, any>
+  /** Compares store values for native endpoint reuse; defaults to reference equality. */
+  shapeStoreValueEquals?: (before: unknown, after: unknown) => boolean
 }
 
 export interface AnimatedShapeProps extends ShapeProps {

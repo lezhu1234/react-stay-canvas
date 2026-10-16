@@ -77,8 +77,6 @@ export class Line extends AnimatedShape {
     this.vector = new Vector(this.x2 - this.x1, this.y2 - this.y1)
     this.startPoint = { x: this.x1, y: this.y1 }
     this.endPoint = { x: this.x2, y: this.y2 }
-
-    this.updateRelatedValue()
   }
 
   getCenterPoint(): Coordinate {

@@ -21,11 +21,30 @@ import W3Color, { RGB, RGBA, rgbaToString } from "../vendor/w3color"
 export const ZeroColor: RGBA = { a: 0, r: 0, g: 0, b: 0 }
 export const BlackColor: RGBA = { a: 1, r: 0, g: 0, b: 0 }
 
-function definedConfig<T extends object>(config?: T): Partial<T> {
-  if (!config) return {}
-  return Object.fromEntries(
-    Object.entries(config).filter(([, value]) => value !== undefined),
-  ) as Partial<T>
+function mergeDefinedConfig<T extends object>(target: T, config?: Partial<T>): T {
+  if (!config) return target
+  for (const key in config) {
+    if (!Object.prototype.hasOwnProperty.call(config, key)) continue
+    const value = config[key]
+    if (value !== undefined) target[key] = value
+  }
+  return target
+}
+
+function defaultStrokeConfig(): Required<CanvasStrokeProps> {
+  return {
+    color: { ...ZeroColor },
+    lineWidth: 1,
+    dash: [],
+    dashOffset: 0,
+    lineCap: "butt",
+    lineJoin: "miter",
+    miterLimit: 10,
+  }
+}
+
+function defaultFillConfig(): Required<CanvasFillProps> {
+  return { color: { ...ZeroColor } }
 }
 
 export interface GetCurrentArgumentsProps {
@@ -64,6 +83,7 @@ export abstract class InstantShape {
   fillConfig: Required<CanvasFillProps>
   globalConfig: Required<CanvasGlobalProps>
   shapeStore: Map<string, any>
+  shapeStoreValueEquals?: ShapeProps["shapeStoreValueEquals"]
 
   constructor({
     zoomCenter,
@@ -74,31 +94,19 @@ export abstract class InstantShape {
     stateDrawFuncMap = {},
     layer,
     zIndex,
-    shapeStore = new Map(),
+    shapeStore,
+    shapeStoreValueEquals,
     globalConfig,
   }: ShapeProps) {
     this.layer = layer ?? 0
     this.zIndex = zIndex ?? 1
     this.area = 0 // this is a placeholder for the area property that will be implemented in the subclasses
 
-    this.strokeConfig = {
-      color: ZeroColor,
-      lineWidth: 1,
-      dash: [],
-      dashOffset: 0,
-      lineCap: "butt",
-      lineJoin: "miter",
-      miterLimit: 10,
-      ...definedConfig(strokeConfig),
-    }
-    this.fillConfig = {
-      color: ZeroColor,
-      ...definedConfig(fillConfig),
-    }
-    this.globalConfig = {
+    this.strokeConfig = mergeDefinedConfig(defaultStrokeConfig(), strokeConfig)
+    this.fillConfig = mergeDefinedConfig(defaultFillConfig(), fillConfig)
+    this.globalConfig = mergeDefinedConfig<Required<CanvasGlobalProps>>({
       gco: "source-over",
-      ...definedConfig(globalConfig),
-    }
+    }, globalConfig)
 
     this.zoomY = zoomY ?? 1
     this.zoomCenter = zoomCenter ?? { x: 0, y: 0 }
@@ -119,7 +127,8 @@ export abstract class InstantShape {
     }
     this.startTime = 0
     this.updateNextFrame = true
-    this.shapeStore = shapeStore
+    this.shapeStore = shapeStore ?? new Map()
+    this.shapeStoreValueEquals = shapeStoreValueEquals
   }
 
   isTransparent(color: RGBA) {
@@ -170,6 +179,7 @@ export abstract class InstantShape {
       },
       globalConfig: { ...this.globalConfig },
       shapeStore: new Map(this.shapeStore),
+      shapeStoreValueEquals: this.shapeStoreValueEquals,
     }
   }
 
@@ -235,14 +245,10 @@ export abstract class InstantShape {
     this.zoomCenter = zoomCenter ?? this.zoomCenter
 
     this.stateDrawFuncMap = stateDrawFuncMap ?? this.stateDrawFuncMap
-    this.strokeConfig = {
-      ...this.strokeConfig,
-      ...definedConfig(strokeConfig),
-    }
-    this.fillConfig = {
-      ...this.fillConfig,
-      ...definedConfig(fillConfig),
-    }
+    if (strokeConfig !== undefined)
+      this.strokeConfig = mergeDefinedConfig({ ...this.strokeConfig }, strokeConfig)
+    if (fillConfig !== undefined)
+      this.fillConfig = mergeDefinedConfig({ ...this.fillConfig }, fillConfig)
 
     if (state) {
       this.switchState(state)
@@ -326,6 +332,9 @@ export abstract class InstantShape {
 
   abstract getBound(): Rect
 
+  /** Viewport paint can opt out while retaining empty content bounds. */
+  shouldCullByBounds(): boolean { return true }
+
   contains(point: PointType): boolean {
     const bound = this.getBound()
     return (
@@ -346,6 +355,12 @@ export abstract class InstantShape {
 
   getNonTransitionState() {
     return {
+      zoomY: this.zoomY,
+      zoomCenter: this.zoomCenter,
+      state: this.state,
+      stateDrawFuncMap: this.stateDrawFuncMap,
+      shapeStore: this.shapeStore,
+      shapeStoreValueEquals: this.shapeStoreValueEquals,
       layer: this.layer,
       zIndex: this.zIndex,
       globalConfig: this.globalConfig,

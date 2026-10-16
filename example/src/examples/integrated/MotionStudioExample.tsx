@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { StayCanvas, type StayTools } from "react-stay-canvas"
+import { StayCanvas, type SceneEpoch, type StayTools } from "react-stay-canvas"
 
 import { CanvasCard } from "../../components/DemoKit"
 import motionImageUrl from "../../assets/annotation-traffic.jpg"
@@ -24,6 +24,7 @@ import {
 } from "./motion/model"
 import {
   captureMotionFrame,
+  compileMotionScene,
   motionGeometry,
   progressMotionProject,
   renderMotionProject,
@@ -44,6 +45,9 @@ export default function MotionStudioExample() {
   const toolsRef = useRef<StayTools>()
   const mediaImageRef = useRef<HTMLImageElement>()
   const fileRef = useRef<HTMLInputElement>(null)
+  const importRef = useRef<{ tools: StayTools; epoch: SceneEpoch; controller: AbortController }>()
+  const importRevisionRef = useRef(0)
+  const justCommittedProjectRef = useRef<MotionProject>()
   const [history, setHistory] = useState<ProjectHistory>(() => ({
     past: [],
     present: seedMotionProject(text),
@@ -200,7 +204,14 @@ export default function MotionStudioExample() {
       timeRef.current = effectiveTime
       setTimeMs(effectiveTime)
     }
-    if (toolsRef.current) renderMotionProject(toolsRef.current, project, effectiveTime, layerId, boundedRef.current, mediaImageRef.current)
+    if (toolsRef.current) {
+      if (justCommittedProjectRef.current === project) {
+        justCommittedProjectRef.current = undefined
+        progressMotionProject(toolsRef.current, project, effectiveTime, layerId, boundedRef.current)
+      } else {
+        renderMotionProject(toolsRef.current, project, effectiveTime, layerId, boundedRef.current, mediaImageRef.current)
+      }
+    }
   }, [project])
 
   useEffect(() => {
@@ -254,10 +265,61 @@ export default function MotionStudioExample() {
     }
   }
 
+  const isCurrentImport = (pending: NonNullable<typeof importRef.current>) =>
+    importRef.current === pending && !pending.controller.signal.aborted
+
+  const commitImportedScene = async (pending: NonNullable<typeof importRef.current>, next: MotionProject) => {
+    while (isCurrentImport(pending)) {
+      const image = mediaImageRef.current
+      const target = compileMotionScene(pending.tools, next, `motion-import-${++importRevisionRef.current}`, image)
+      try {
+        const prepared = await pending.tools.scene.prepare(pending.epoch, target, {
+          transitionId: "shape",
+          control: { kind: "timeline", durationMs: 180 },
+          signal: pending.controller.signal,
+          resourceLease: {
+            revision: target.resourceRevision,
+            isCurrent: () => mediaImageRef.current === image,
+            // The component owns the shared native image, not an individual scene.
+            release: () => {},
+          },
+        })
+        if (!isCurrentImport(pending)) {
+          pending.tools.scene.discard(prepared)
+          return false
+        }
+        await pending.tools.scene.commit(prepared)
+        return isCurrentImport(pending)
+      } catch (error) {
+        if (!isCurrentImport(pending) || mediaImageRef.current === image) throw error
+        // The fixed image can become ready once per mount. Only that resource
+        // change replaces a stale preparation; other failures remain terminal.
+        pending.epoch = pending.tools.scene.beginUpdate()
+      }
+    }
+    return false
+  }
+
   const importProject = async (file?: File) => {
     if (!file) return
+    const previous = importRef.current
+    previous?.controller.abort()
+    if (previous) previous.tools.scene.cancel(previous.epoch)
+    const tools = toolsRef.current
+    const pending = tools ? {
+      tools,
+      epoch: tools.scene.beginUpdate(),
+      controller: new AbortController(),
+    } : undefined
+    importRef.current = pending
     try {
       const next = readMotionProject(JSON.parse(await file.text()))
+      if (pending && importRef.current !== pending) return
+      setPlaying(false)
+      if (pending) {
+        if (!await commitImportedScene(pending, next)) return
+        justCommittedProjectRef.current = next
+      }
       commitProject(next)
       selectedLayerIdRef.current = next.layers[0].id
       setSelectedLayerId(next.layers[0].id)
@@ -267,9 +329,18 @@ export default function MotionStudioExample() {
       setTimeMs(initialTime)
       say("Project imported", "已导入项目")
     } catch (error) {
+      if (pending && (importRef.current !== pending || pending.controller.signal.aborted)) return
       say(error instanceof Error ? error.message : "Import failed", "导入失败，项目格式无效")
+    } finally {
+      if (pending && importRef.current === pending) importRef.current = undefined
     }
   }
+
+  useEffect(() => () => {
+    const pending = importRef.current
+    pending?.controller.abort()
+    if (pending) pending.tools.scene.cancel(pending.epoch)
+  }, [])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

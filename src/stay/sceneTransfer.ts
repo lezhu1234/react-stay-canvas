@@ -9,7 +9,7 @@ import {
   copyChildPlacementInput,
 } from "./placements/childPlacement"
 
-export function captureSceneChild(child: StayInstantChild): SceneChildFragment {
+export function captureSceneChild<T extends InstantShape>(child: StayInstantChild<T>): SceneChildFragment<T> {
   return {
     sourceId: child.id,
     className: child.className,

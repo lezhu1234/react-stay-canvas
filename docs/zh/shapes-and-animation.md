@@ -29,6 +29,21 @@ Shape 负责几何、绘制、命中和自身状态；Child 负责把一个或�
 
 `StayText` 的坐标语义与 Canvas 一致：默认 `start + alphabetic` 把 `(x, y)` 作为左侧字母基线锚点；需要把文字放在某个视觉中心时，传入相同中心坐标并设置 `textAlign: "center"`、`textBaseline: "middle"`。文字绘制、包围盒、移动、缩放和关键帧插值使用同一个锚点。`offsetXRatio` 和 `offsetYRatio` 会在该锚点基础上按文字宽高继续偏移。
 
+## 注册形状过渡模块
+
+`wrapSceneShape(nativeShape, effect, registry?)` 返回供现有关键帧和场景事务使用的 `AnimatedShape`。默认只读注册表独立匹配 `crossfadeTransition`（交叉淡化）、`textGlyphTransition`（文字与字体转换）、`morphTransition`（原生插值）模块。文字内容、字体族、字重、样式或对齐变化时同时绘制旧、新字形，并使用原生采样连续改变位置、字号和颜色；其他文字和形状直接复用自身的 `intermediateState`，包括自定义形状。端点、复制的元数据与比较函数、图层和绘制顺序保持原有语义，中途打断保留全部绘制组成部分，没有固定数量上限。
+
+```ts
+const target = wrapSceneShape(new StayText({
+  x: 160, y: 80, text: "就绪", fillConfig: { color: { r: 20, g: 80, b: 140, a: 1 } },
+  transition: { durationMs: 300, type: "linear" },
+}), "morph")
+```
+
+包装时直接接管几何，场景准备负责独立复制；包装形状的交互存储初始为空，需要时可赋值 `wrapper.shapeStore = new Map(nativeShape.shapeStore)`。`wrapSceneSubmission` 包装整组时间线帧。使用 `createShapeTransitionRegistry([customModule, ...defaultShapeTransitionRegistry.modules])` 添加模块；每个 `ShapeTransitionModule` 提供唯一 `id`、`contractVersion: 1`、`matches(pair)` 和 `sample(sample)`。注册时复制并冻结模块描述，优先选择首个匹配；重复标识、不支持的契约版本和无法匹配的状态对明确报错。效果标识接受字符串，添加第三种效果无需修改采样入口或已知形状构造函数列表。
+
+`ViewportBackground` 在同一包装与注册流程中绘制实际二维画布表面，支持尺寸调整和裁剪区域截图。请放在内容下方的独立仿射背景 Child 中；它没有可命中的区域，内容边界宽高均为零，计算内容适配和是否可保存时应排除它。若与内容放在同一个 Child，普通边界合并仍会包含背景原点。`shouldCullByBounds()` 默认返回 `true`，背景关闭边界筛选，包装形状传递该能力，避免相机平移后背景消失。动效工作室集成通过编辑、拖动时间轴和帧截图验证包装文字。
+
 ## 样式与绘制顺序
 
 所有 Shape 都接受一组通用属性：
@@ -227,7 +242,36 @@ tools.progress({ timeMs: playheadMs })
 
 `replaceSlice()` 会先校验并编译完整的非空 slice，再一次性替换。编译失败时，旧 slice、`totalDurationMs` 和当前投影 Shape 都保持不变。它沿用第一次 append 的 `prependZeroShape` 约定，并且不会自动 seek；需要显示新时间线时再调用 `progress()`。
 
+需要在保留同一个 Child 的同时整体替换全部具名 slice 时，使用 `replaceTimeline(frameMap, prependZeroShape?)`。它会先编译所有 slice，再一次性提交；新 Map 中没有的名称会被删除，`totalDurationMs` 会重新计算，也可以传入空 Map 清空时间线。任一 slice 编译失败时，整条旧时间线和当前投影都保持不变。它与 `replaceSlice()` 一样不会自动 seek，并会默认添加透明零帧；传入 `false` 可关闭这一行为。
+
 `durationMs` 和 `delayMs` 属于“到达当前关键帧”的 transition：先保持前一帧 `delayMs`，再用 `durationMs` 插值到当前帧。`totalDurationMs` 是所有 slice 中最长的总时长。
+
+### 比较端点中的应用元数据
+
+`shapeStore` 可以保存跟随 Shape 的应用元数据。默认情况下，端点复用会用严格引用相等（`===`）比较每个值，因此两个分别创建的对象即使字段相同，也会被视为不同端点。
+
+如果存储的是不可变值对象，请为所有需要互相比较的 Shape 传入同一个稳定的 `shapeStoreValueEquals` 函数：
+
+```ts
+type Binding = { visualId: string; selected: boolean }
+
+const bindingEquals = (before: unknown, after: unknown) => {
+  const first = before as Binding | undefined
+  const second = after as Binding | undefined
+  return first?.visualId === second?.visualId && first?.selected === second?.selected
+}
+
+const body = new Rectangle({
+  x: 40,
+  y: 80,
+  width: 100,
+  height: 72,
+  shapeStore: new Map([["binding", { visualId: "card", selected: true }]]),
+  shapeStoreValueEquals: bindingEquals,
+})
+```
+
+两个端点必须使用同一个函数引用。复制 Shape、插值 Shape 和零 Shape 都会保留这个函数。值相等时，时间线可以复用端点；元数据真正变化时仍会生成新端点，采样得到的 Shape 会使用目标元数据。除非应用显式选择，库不会深度比较任意的 store 值。
 
 ## 推进、拖动和播放
 

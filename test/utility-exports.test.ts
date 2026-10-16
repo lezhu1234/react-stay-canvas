@@ -65,6 +65,29 @@ const publicUtilityNames = [
 ] as const
 
 describe("public utility exports", () => {
+  it.each([
+    ["#d7f36a", { r: 215, g: 243, b: 106, a: 1 }],
+    ["  #AbC  ", { r: 170, g: 187, b: 204, a: 1 }],
+    ["#000000", { r: 0, g: 0, b: 0, a: 1 }],
+    ["#ffffff", { r: 255, g: 255, b: 255, a: 1 }],
+    ["abc", { r: 170, g: 187, b: 204, a: 1 }],
+    ["RebeccaPurple", { r: 102, g: 51, b: 153, a: 1 }],
+    [" LiMe ", { r: 0, g: 255, b: 0, a: 1 }],
+    ["rgba(1,2,3,0.5)", { r: 1, g: 2, b: 3, a: 0.5 }],
+    ["rgba(1,2,3,0.333)", { r: 1, g: 2, b: 3, a: 0.33 }],
+    ["rgb(12.5%,50%,75%)", { r: 32, g: 128, b: 191, a: 1 }],
+    ["hsl(120,100%,50%)", { r: 0, g: 255, b: 0, a: 1 }],
+    ["hsl(33,51%,47%)", { r: 181, g: 126, b: 59, a: 1 }],
+    ["hwb(120,20%,10%)", { r: 51, g: 230, b: 51, a: 1 }],
+    ["cmyk(0%,100%,100%,0%)", { r: 255, g: 0, b: 0, a: 1 }],
+    ["ncol(R,0%,0%)", { r: 255, g: 0, b: 0, a: 1 }],
+    ["rgb(1,2)", { r: 0, g: 0, b: 0, a: 1 }],
+    ["rgb(a,2,3)", { r: 0, g: 0, b: 0, a: 1 }],
+    ["#invalid", { r: 0, g: 0, b: 0, a: 1 }],
+  ])("parses the existing color form %s", (color, expected) => {
+    expect(StayCanvas.stringToRgba(color)).toEqual(expected)
+  })
+
   it("keeps every package-root utility name available", () => {
     publicUtilityNames.forEach((name) => {
       expect(StayCanvas[name], name).toBeDefined()

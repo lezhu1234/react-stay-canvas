@@ -331,7 +331,7 @@ pointer up
   → normal terminal
 lostpointercapture after the initiating button is released
   → normal implicit-release terminal
-pointercancel / unexpected lostpointercapture / window blur / document hidden / runtime resize
+pointercancel / unexpected lostpointercapture / window blur / document hidden / runtime resize / scene replacement
   → cancelled terminal
 ```
 
@@ -342,10 +342,12 @@ Browsers may emit `lostpointercapture` after the initiating button has already b
 Every normal or cancelled path terminates once. Cancellation has these semantics:
 
 - `dragend` or `moveend` may receive `e.cancelled === true`;
-- `e.cancelReason` is `pointercancel`, `lostpointercapture`, `blur`, `visibilitychange`, or `resize`; `lostpointercapture` appears only for unexpected capture loss while the initiating button remains pressed;
+- `e.cancelReason` is `pointercancel`, `lostpointercapture`, `blur`, `visibilitychange`, `resize`, or `scene-replacement`; `lostpointercapture` appears only for unexpected capture loss while the initiating button remains pressed;
 - coordinates come from the last pointer sample in the session;
-- `originEvent` remains the real native event that caused a DOM cancellation; a logical resize uses an `Event("resize")` terminal cause before changing the coordinate frame;
+- `originEvent` remains the real native event that caused a DOM cancellation; a logical resize uses an `Event("resize")` terminal cause before changing the coordinate frame, and a scene replacement uses `Event("scene-replacement")` before replacing the live scene;
 - cancellation emits no `click` and is not disguised as an ordinary `mouseup`.
+
+When a [`tools.scene.commit`](api/stay-tools.md#timeline-scene-transactions) reaches its accepting frame and passes validation, the runtime cancels any active Pointer Session before replacing the live Children. An active drag or pan ends once with `cancelled: true` and `cancelReason: "scene-replacement"`, using its last pointer sample. Preparing, discarding, or cancelling an unaccepted scene update does not itself cancel the Pointer Session. Listener cleanup that applies to every cancellation should check `e.cancelled`; use `e.cancelReason` when behavior depends on the cause.
 
 The current model tracks only the primary pointer for each Canvas; it does not implement multi-pointer gestures such as pinch zoom. Input state, targets, and sessions are isolated between Canvas instances.
 

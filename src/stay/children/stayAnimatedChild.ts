@@ -30,6 +30,8 @@ export class StayAnimatedChild<
   private intermidateShapeCacheSize = 10
 
   private frameMapInfo: Map<string, FrameBoundInfo<T>> = new Map<string, FrameBoundInfo<T>>()
+  // Only append-owned slices need an end time. Legacy edits invalidate it.
+  private stepSliceEnds = new WeakMap<T[], number>()
   constructor(props: StayAnimatedChildProps<T>) {
     super({
       ...props,
@@ -224,8 +226,11 @@ export class StayAnimatedChild<
       }
 
       const lastFrameBoundInfo = this.frameMapInfo.get(name)
+      const previousLayer = lastFrameBoundInfo?.shape.layer
+      const layerChanged = previousLayer !== undefined && previousLayer !== shape.layer
 
-      if (hasFrameBoundInfoChanged(frameBoundInfo, lastFrameBoundInfo)) {
+      if (hasFrameBoundInfoChanged(frameBoundInfo, lastFrameBoundInfo) || layerChanged) {
+        if (layerChanged) this.updatedLayers.add(previousLayer)
         this.updatedLayers.add(shape.layer)
       }
       this.frameMapInfo.set(name, frameBoundInfo)
@@ -330,7 +335,12 @@ export class StayAnimatedChild<
     return shape
   }
 
-  private compileSlice(name: string, frames: T[], prependZeroShape: boolean): T[] {
+  private compileSlice(
+    name: string,
+    frames: T[],
+    prependZeroShape: boolean,
+    sourceFramesMap: Map<string, T[]> = this.shapeFramesMap
+  ): T[] {
     if (frames.length === 0) {
       throw new Error("slice must contain at least one keyframe")
     }
@@ -348,7 +358,7 @@ export class StayAnimatedChild<
     try {
       const compiledFrames = [...frames]
       if (prependZeroShape) {
-        const otherSlices = new Map(this.shapeFramesMap)
+        const otherSlices = new Map(sourceFramesMap)
         otherSlices.delete(name)
         const zeroShape = this.checkShape(frames[0]._zeroShape(otherSlices) as T)
         zeroShape.layer = this.resolveChildShapeLayer(zeroShape.layer, zeroShape)
@@ -365,6 +375,43 @@ export class StayAnimatedChild<
     }
   }
 
+  private compileTimeline(
+    frameMap: Map<string, T[]>,
+    prependZeroShape: boolean
+  ): Map<string, T[]> {
+    const previousFrameStates = new Map<
+      T,
+      { layer: number; parent: T["parent"] }
+    >()
+    frameMap.forEach((frames) => {
+      frames.forEach((frame) => {
+        if (!previousFrameStates.has(frame)) {
+          previousFrameStates.set(frame, {
+            layer: frame.layer,
+            parent: frame.parent,
+          })
+        }
+      })
+    })
+
+    try {
+      const compiledTimeline = new Map<string, T[]>()
+      frameMap.forEach((frames, name) => {
+        compiledTimeline.set(
+          name,
+          this.compileSlice(name, frames, prependZeroShape, frameMap)
+        )
+      })
+      return compiledTimeline
+    } catch (error) {
+      previousFrameStates.forEach(({ layer, parent }, frame) => {
+        frame.layer = layer
+        frame.parent = parent
+      })
+      throw error
+    }
+  }
+
   private refreshTotalDurationMs() {
     this.totalDurationMs = 0
     this.shapeFramesMap.forEach((_, name) => {
@@ -374,6 +421,7 @@ export class StayAnimatedChild<
 
   appendKeyFrame(name: string, shape: T, prependZeroShape: boolean = true) {
     const shapeFrames = this.shapeFramesMap.get(name)
+    if (shapeFrames) this.stepSliceEnds.delete(shapeFrames)
     if (!shapeFrames) {
       this.shapeFramesMap.set(name, this.compileSlice(name, [shape], prependZeroShape))
     } else {
@@ -383,6 +431,94 @@ export class StayAnimatedChild<
       shapeFrames.push(shape)
     }
     this.totalDurationMs = Math.max(this.totalDurationMs, this.getSliceTotalDurationMs(name))
+    const currentShape = this.shapeMap.get(name)
+    if (currentShape) this.updatedLayers.add(currentShape.layer)
+    this.frameMapInfo.delete(name)
+  }
+
+  /** @internal Prepares only new keyframes; no existing timeline is copied or changed. */
+  prepareStepAppend(shapes: ReadonlyMap<string, T>, startTimeMs: number, durationMs: number):
+    (sample: SetShapeChildCurrentTime) => () => void {
+    const additions = new Map<string, T[]>()
+    const names = new Set([...this.shapeFramesMap.keys(), ...shapes.keys()])
+    names.forEach((name) => {
+      const slice = this.shapeFramesMap.get(name)
+      const previous = slice?.[slice.length - 1]
+      const target = shapes.get(name)
+      if (!target && (!previous || (!previous.shouldFill() && !previous.shouldStroke()))) return
+      if (target && previous?.sameAs(target)) return
+      const next = target ? target.copy() as T : previous!._zeroShape(this.shapeFramesMap) as T
+      const frames = this.compileSlice(name, [next], !slice)
+      if (previous?.sameAs(next)) return
+      const lastEndMs = slice ? this.stepSliceEnds.get(slice) ?? this.getSliceTotalDurationMs(name) : 0
+      next.transition = {
+        ...next.transition,
+        durationMs,
+        delayMs: startTimeMs - lastEndMs,
+      }
+      additions.set(name, frames)
+    })
+    const endTimeMs = startTimeMs + durationMs
+    return (sample) => this.acceptStepAppend(additions, startTimeMs, endTimeMs, sample)
+  }
+
+  private acceptStepAppend(
+    additions: Map<string, T[]>, startTimeMs: number, endTimeMs: number,
+    sample: SetShapeChildCurrentTime
+  ): () => void {
+    const previousDuration = this.totalDurationMs
+    if (additions.size === 0) {
+      this.totalDurationMs = Math.max(previousDuration, endTimeMs)
+      return () => { this.totalDurationMs = previousDuration }
+    }
+    const previousInfo = this.frameMapInfo
+    const previousLayers = this.updatedLayers
+    const previousSlices = new Map([...additions.keys()].map((name) => {
+      const slice = this.shapeFramesMap.get(name)
+      return [name, { slice, length: slice?.length ?? 0, end: slice && this.stepSliceEnds.get(slice) }] as const
+    }))
+    let restoreProjection: (() => void) | undefined
+    const restore = () => {
+      restoreProjection?.()
+      previousSlices.forEach(({ slice, length, end }, name) => {
+        if (!slice) this.shapeFramesMap.delete(name)
+        else {
+          slice.length = length
+          this.intermidateShapeCache.delete(slice)
+          if (end === undefined) this.stepSliceEnds.delete(slice)
+          else this.stepSliceEnds.set(slice, end)
+        }
+      })
+      this.totalDurationMs = previousDuration
+      this.frameMapInfo = previousInfo
+      this.updatedLayers = previousLayers
+    }
+    try {
+      this.frameMapInfo = new Map(previousInfo)
+      this.updatedLayers = new Set(previousLayers)
+      additions.forEach((frames, name) => {
+        const slice = this.shapeFramesMap.get(name)
+        const accepted = slice ?? frames
+        if (slice) slice.push(...frames)
+        else this.shapeFramesMap.set(name, accepted)
+        this.stepSliceEnds.set(accepted, endTimeMs)
+        this.frameMapInfo.delete(name)
+        const current = this.shapeMap.get(name)
+        if (current) this.updatedLayers.add(current.layer)
+        frames.forEach((frame) => this.updatedLayers.add(frame.layer))
+      })
+      this.totalDurationMs = Math.max(this.totalDurationMs, endTimeMs)
+      // A future interval cannot change the current projection. Fractional,
+      // bounded samples touching this interval still use the native sampler.
+      const sampledEnd = Math.max(sample.time, sample.bound?.beforeMs ?? 0, sample.bound?.afterMs ?? 0)
+      if (additions.size > 0 && sampledEnd >= startTimeMs) {
+        restoreProjection = this.beginCurrentTimeProjection(sample)
+      }
+      return restore
+    } catch (error) {
+      restore()
+      throw error
+    }
   }
 
   replaceSlice(name: string, frames: T[], prependZeroShape: boolean = true) {
@@ -395,6 +531,34 @@ export class StayAnimatedChild<
     this.shapeFramesMap.set(name, compiledFrames)
     this.frameMapInfo.delete(name)
     this.refreshTotalDurationMs()
+  }
+
+  replaceTimeline(
+    frameMap: Map<string, T[]>,
+    prependZeroShape: boolean = true
+  ) {
+    const compiledTimeline = this.compileTimeline(frameMap, prependZeroShape)
+
+    this.getLayers().forEach((layer) => this.updatedLayers.add(layer))
+    this.shapeFramesMap = compiledTimeline
+    this.frameMapInfo = new Map()
+    this.refreshTotalDurationMs()
+  }
+
+  /** @internal Retains already-owned native shapes without copying or recompiling them. */
+  retainTimelineShapes(shapes: ReadonlyMap<string, T>): void {
+    const frames = new Map<string, T[]>()
+    const visible = new Map<string, T>()
+    shapes.forEach((shape, name) => {
+      shape.transition = { ...shape.transition, durationMs: 0, delayMs: 0 }
+      frames.set(name, [shape])
+      if (shape.shouldFill() || shape.shouldStroke()) visible.set(name, shape)
+      this.updatedLayers.add(shape.layer)
+    })
+    this.shapeFramesMap = frames
+    this.shapeMap = visible
+    this.frameMapInfo = new Map()
+    this.totalDurationMs = 0
   }
 
   getSliceTotalDurationMs(name: string) {

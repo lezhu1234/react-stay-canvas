@@ -27,7 +27,11 @@ import {
 } from "./children/stayChild"
 import { StayInstantChild } from "./children/stayInstantChild"
 import { CoordinateSystem } from "./coordinates/coordinateSystem"
-import { EventDispatcher } from "./events/input/eventDispatcher"
+import {
+  EventDispatcher,
+  type InputDispatcher,
+  type InputDispatcherFactory,
+} from "./events/input/eventDispatcher"
 import { ActionRouter } from "./events/routing/actionRouter"
 import { createCanvas2DPointerTargetPicker } from "./events/routing/pointerTargetPicker"
 import { EventRuntime } from "./events/runtime/eventRuntime"
@@ -36,26 +40,36 @@ import {
   captureHistoryChildren,
   type StayHistoryChildSnapshot,
 } from "./historySnapshot"
-import { Renderer } from "./renderer"
+import { Renderer, type RendererFrameClock } from "./renderer"
+import { CanvasSceneTransactions } from "./scene/sceneTransactions"
 import { stayTools } from "./stayTools"
 import type { SetShapeChildCurrentTime } from "./types"
 import type { StayWebGLChild } from "./webgl2/stayWebGLChild"
 
 class StayRootChild extends StayInstantChild<Root> {
   override resolveChildShapeLayer(layer: number | undefined) {
-    return parseLayer(this.canvas.layers, layer)
+    return parseLayer(this.canvas.layerCount, layer)
   }
 }
 
-class Stay<EventName extends string, HistorySnapshot = unknown> {
+export type StayRuntimeOptions<Origin = Event> = {
+  readonly createInputDispatcher: InputDispatcherFactory<Origin>
+  readonly frameClock?: RendererFrameClock
+  readonly beforeFrame?: (now: number) => void
+  readonly resetPlayback?: () => void
+}
+
+class Stay<EventName extends string, HistorySnapshot = unknown, Origin = Event> {
   readonly children = new ChildrenStore<StayChild>()
   readonly coordinates: CoordinateSystem
-  actionRouter: ActionRouter<EventName>
-  eventRuntime: EventRuntime<EventName>
+  actionRouter: ActionRouter<EventName, Origin>
+  eventRuntime: EventRuntime<EventName, Origin>
   renderer: Renderer
-  eventDispatcher: EventDispatcher
+  sceneTransactions: CanvasSceneTransactions
+  eventDispatcher: InputDispatcher
   history: History<HistorySnapshot>
   height: number
+  currentSample: SetShapeChildCurrentTime = { time: 0 }
   root: Canvas
   state: string
   stateSet: Set<string>
@@ -68,13 +82,14 @@ class Stay<EventName extends string, HistorySnapshot = unknown> {
   rootChild: StayInstantChild<Root>
   passive: boolean
   rootId: string
-  tools: StayTools
+  tools: StayTools<Origin>
 
   constructor(
     root: Canvas,
     passive: boolean,
-    viewportOptions?: ViewportOptions,
-    historyAdapter?: HistoryAdapter<HistorySnapshot>
+    viewportOptions: ViewportOptions | undefined,
+    historyAdapter: HistoryAdapter<HistorySnapshot> | undefined,
+    runtimeOptions: StayRuntimeOptions<Origin>
   ) {
     this.root = root
     this.coordinates = new CoordinateSystem(viewportOptions)
@@ -107,7 +122,7 @@ class Stay<EventName extends string, HistorySnapshot = unknown> {
       historyAdapter
     )
 
-    this.actionRouter = new ActionRouter<EventName>({
+    this.actionRouter = new ActionRouter<EventName, Origin>({
       canvas: this.root,
       store: this.store,
       stateStore: this.stateStore,
@@ -123,17 +138,36 @@ class Stay<EventName extends string, HistorySnapshot = unknown> {
         select: (selector, sortBy) => this.tools.getChildrenBySelector(selector, sortBy),
       },
     })
-    this.tools = stayTools.call(this)
     this.renderer = new Renderer(
       this.root,
-      () => this.children.values().filter((child) => child.id !== this.rootId),
-      this.coordinates
+      () => [
+        ...this.children.values().filter((child) => child.id !== this.rootId),
+        ...(this.sceneTransactions?.renderingExits() ?? []),
+      ],
+      this.coordinates,
+      (now) => {
+        this.sceneTransactions?.advance(now)
+        runtimeOptions.beforeFrame?.(now)
+      },
+      runtimeOptions.frameClock
     )
+    this.sceneTransactions = new CanvasSceneTransactions(
+      this.root,
+      this.children,
+      this.renderer,
+      () => this.eventDispatcher.cancelPointerSession("scene-replacement"),
+      () => this.currentSample,
+      () => {
+        this.currentSample = { time: 0 }
+        runtimeOptions.resetPlayback?.()
+      }
+    )
+    this.tools = (stayTools<Origin>).call(this)
     this.root.setLayerInvalidationListener((layerIndex) => {
       this.renderer.forceUpdateLayer(layerIndex)
       this.renderer.start()
     })
-    this.eventRuntime = new EventRuntime({
+    this.eventRuntime = new EventRuntime<EventName, Origin>({
       canvas: this.root,
       coordinates: this.coordinates,
       store: this.store,
@@ -141,7 +175,7 @@ class Stay<EventName extends string, HistorySnapshot = unknown> {
       getState: () => this.state,
       actionRouter: this.actionRouter,
     })
-    this.eventDispatcher = new EventDispatcher(
+    this.eventDispatcher = runtimeOptions.createInputDispatcher(
       this.root,
       this.passive,
       this.eventRuntime
@@ -160,7 +194,9 @@ class Stay<EventName extends string, HistorySnapshot = unknown> {
     }
   }
 
-  addEventListener(props: ListenerProps<ListenerNamePayloadPair, EventName>) {
+  addEventListener(
+    props: ListenerProps<ListenerNamePayloadPair, EventName, Record<string, any>, never, never, Origin>
+  ) {
     this.actionRouter.addListener(props)
   }
   checkName(name: string, preserveNames: string[]) {
@@ -209,6 +245,7 @@ class Stay<EventName extends string, HistorySnapshot = unknown> {
 
   destroy() {
     this.eventDispatcher.destroy()
+    this.sceneTransactions.destroy()
     this.renderer.stop()
     this.children.values().filter(isStayWebGLChild).forEach((child) => child.destroy())
     this.root.destroy()
@@ -223,6 +260,11 @@ class Stay<EventName extends string, HistorySnapshot = unknown> {
   updateChildrenTime(props: SetShapeChildCurrentTime) {
     // Polymorphic: static children no-op setCurrentTime, timeline children advance.
     this.getShapeChildren().forEach((child) => child.setCurrentTime(props))
+  }
+
+  setCurrentSample(props: SetShapeChildCurrentTime) {
+    this.currentSample = props
+    this.updateChildrenTime(props)
   }
   draw(props: StayDrawProps): DrawReturn {
     return this.renderer.draw(props)
@@ -301,12 +343,12 @@ class Stay<EventName extends string, HistorySnapshot = unknown> {
   }
 
   assertWebGL2Layer(layer: number) {
-    if (layer >= this.root.layers.length || this.root.getLayerBackend(layer) !== "webgl2") {
+    if (layer >= this.root.layerCount || this.root.getLayerBackend(layer) !== "webgl2") {
       throw new Error(`WebGL Child cannot target layer ${layer}`)
     }
   }
 
-  registerEvent(props: EventProps<EventName>) {
+  registerEvent(props: EventProps<EventName, never, never, Origin>) {
     this.eventRuntime.registerEvent(props)
   }
 
@@ -358,7 +400,11 @@ export function createStay<HistorySnapshot = unknown>(
     new Canvas(canvasLayers, layerConfigs, width, height),
     passive,
     viewportOptions,
-    historyAdapter
+    historyAdapter,
+    {
+      createInputDispatcher: (root, resolvedPassive, runtime) =>
+        new EventDispatcher(root, resolvedPassive, runtime),
+    }
   )
 }
 

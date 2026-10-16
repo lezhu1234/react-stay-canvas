@@ -331,7 +331,7 @@ pointer up
   → normal terminal
 initiating button 已松开后的 lostpointercapture
   → 正常的 implicit-release terminal
-pointercancel / 异常 lostpointercapture / window blur / document hidden / 运行时 resize
+pointercancel / 异常 lostpointercapture / window blur / document hidden / 运行时 resize / 场景替换
   → cancelled terminal
 ```
 
@@ -342,10 +342,12 @@ pointercancel / 异常 lostpointercapture / window blur / document hidden / 运�
 所有正常和取消路径只终止一次。取消终止具有以下行为：
 
 - `dragend` 或 `moveend` 可收到 `e.cancelled === true`；
-- `e.cancelReason` 为 `pointercancel`、`lostpointercapture`、`blur`、`visibilitychange` 或 `resize`；其中 `lostpointercapture` 只表示 initiating button 仍按下时发生的异常 Capture 丢失；
+- `e.cancelReason` 为 `pointercancel`、`lostpointercapture`、`blur`、`visibilitychange`、`resize` 或 `scene-replacement`；其中 `lostpointercapture` 只表示 initiating button 仍按下时发生的异常 Capture 丢失；
 - 坐标使用本次会话最后收到的指针位置；
-- DOM 取消时，`originEvent` 保留真正的原生 Event；逻辑 resize 会在坐标帧改变前使用一个 `Event("resize")` 作为终止原因；
+- DOM 取消时，`originEvent` 保留真正的原生 Event；逻辑 resize 会在坐标帧改变前使用 `Event("resize")` 作为终止原因，场景替换则在替换活场景前使用 `Event("scene-replacement")`；
 - 不产生 `click`，也不把取消伪装成普通 `mouseup`。
+
+当 [`tools.scene.commit`](api/stay-tools.md#关键帧场景事务) 到达接受帧并通过校验时，运行时会在替换活 Child 前取消当前 Pointer Session。正在进行的拖拽或平移只结束一次，事件使用最后一次指针采样，并携带 `cancelled: true` 和 `cancelReason: "scene-replacement"`。准备、丢弃或取消尚未接受的场景更新，本身不会取消 Pointer Session。适用于所有取消情况的 Listener 清理应判断 `e.cancelled`；只有按原因区分行为时才判断 `e.cancelReason`。
 
 当前模型只跟踪每个 Canvas 的主指针，不提供双指缩放等多指针手势。不同 Canvas 的按键状态、目标和 session 相互隔离。
 

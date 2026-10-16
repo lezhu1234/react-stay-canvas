@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest"
 import { Path, Point, Polygon, Rectangle } from "react-stay-canvas"
+import { WorkerPlayback } from "../src/stay/worker/playback"
 import { createStage } from "./helpers/stage"
 
 // Dimension 6 (Layers + real draw): assert the shape actually paints on the
@@ -9,6 +10,62 @@ import { createStage } from "./helpers/stage"
 const rgba = (r: number, g: number, b: number, a = 1) => ({ r, g, b, a })
 
 describe("real drawing (node-canvas ctx spy)", () => {
+  it.each(["progress", "background play"])("%s leaves unchanged layers painted without clearing them", (entrypoint) => {
+    const { stage, layers } = createStage({ layers: 4 })
+    const frame = (x: number, durationMs: number) => new Rectangle({
+      x, y: 10, width: 20, height: 20, layer: 1,
+      fillConfig: { color: rgba(255, 0, 0) },
+      transition: { type: "linear", durationMs, delayMs: 0 },
+    })
+    const child = stage.tools.createChild({ className: "animated" })
+    child.appendKeyFrames(new Map([["body", [frame(10, 0), frame(100, 100)]]]), false)
+    stage.tools.appendChild({ className: "static", shape: new Rectangle({
+      x: 5, y: 5, width: 20, height: 20, layer: 3,
+      fillConfig: { color: rgba(0, 255, 0) },
+    }) })
+    stage.tools.progress({ timeMs: 0 })
+    const contexts = layers.map((layer) => layer.getContext("2d")!)
+    const clears = contexts.map((context) => vi.spyOn(context, "clearRect"))
+    const staticPixel = contexts[3].getImageData(10, 10, 1, 1).data
+    expect([...staticPixel]).toEqual([0, 255, 0, 255])
+    const clock = vi.spyOn(performance, "now").mockReturnValue(0)
+    const playback = new WorkerPlayback(stage as never, () => {})
+    playback.play({ toTimeMs: 100 })
+    const advance = () => {
+      if (entrypoint === "progress") return stage.tools.progress({ timeMs: 50 })
+      clock.mockReturnValue(50)
+      playback.advance()
+      return stage.draw({})
+    }
+    expect(advance().updatedLayers).toEqual([1])
+    expect(contexts[1].getImageData(60, 15, 1, 1).data[3]).toBe(255)
+    expect([...contexts[3].getImageData(10, 10, 1, 1).data]).toEqual([...staticPixel])
+    expect(clears.map((clear) => clear.mock.calls.length)).toEqual([0, 1, 0, 0])
+    expect(advance().updatedLayers).toEqual([])
+    expect(clears.map((clear) => clear.mock.calls.length)).toEqual([0, 1, 0, 0])
+    clock.mockRestore()
+    stage.destroy()
+  })
+
+  it("progress clears previous direct callback paint and still invokes both callbacks", () => {
+    const { stage, layers } = createStage({ layers: 2 })
+    const before = vi.fn()
+    const after = vi.fn((canvas, x: number) => {
+      const context = canvas.contexts[1]!
+      context.fillStyle = "#ff0000"
+      context.fillRect(x, 10, 4, 4)
+    })
+    stage.tools.progress({ timeMs: 0, beforeDrawCallback: before, afterDrawCallback: (canvas) => after(canvas, 10) })
+    const context = layers[1].getContext("2d")!
+    expect(context.getImageData(11, 11, 1, 1).data[3]).toBe(255)
+    stage.tools.progress({ timeMs: 0, beforeDrawCallback: before, afterDrawCallback: (canvas) => after(canvas, 20) })
+    expect(context.getImageData(11, 11, 1, 1).data[3]).toBe(0)
+    expect(context.getImageData(21, 11, 1, 1).data[3]).toBe(255)
+    expect(before).toHaveBeenCalledTimes(2)
+    expect(after).toHaveBeenCalledTimes(2)
+    stage.destroy()
+  })
+
   it("a dirty stroked rect calls strokeRect on its layer context", () => {
     const { stage, layers } = createStage({ layers: 2 })
     const strokeRect = vi.spyOn(layers[0].getContext("2d")!, "strokeRect")

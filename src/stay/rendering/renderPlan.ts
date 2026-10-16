@@ -74,6 +74,7 @@ export function createLayerRenderPlan(
 
   const visibleItems = visibleContentArea
     ? collectedItems.filter((item) => {
+        if (!item.shape.shouldCullByBounds()) return true
         const projection = resolveRenderItemProjection(item)
         return hasIntersection(
           projection?.mapping.contentBounds ?? item.child.getShapeBound(item.shape),

@@ -105,7 +105,7 @@ export interface WorkerStayCanvasProps<Input, Notice> {
   readonly passive?: boolean
   readonly focusOnInit?: boolean
   readonly viewport?: ViewportOptions
-  readonly mounted?: (handle: CanvasWorkerHandle<Input>) => void
+  readonly mounted?: (handle: CanvasWorkerHandle<Input>) => void | (() => void)
   readonly onNotice?: (notice: Notice) => void
   readonly onState?: (state: CanvasWorkerState) => void
   readonly onError?: (error: Error) => void

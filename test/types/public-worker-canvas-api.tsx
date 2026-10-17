@@ -25,6 +25,7 @@ const workerCanvas = (
       typed.cancel()
       void typed.viewport({ kind: "get" })
       void typed.capture({ area: { x: 0, y: 0, width: 100, height: 80 } })
+      return () => typed.cancel()
     }}
     onNotice={(notice) => notice.id.toUpperCase()}
     onInput={(event) => event.preventDefault()}

@@ -57,7 +57,11 @@ describe("worker StayCanvas", () => {
       workers.push(worker)
       return worker as unknown as Worker
     })
-    const mounted = vi.fn()
+    const release = vi.fn(() => {
+      expect(workers[workers.length - 1].messages.at(-1)?.message.type)
+        .not.toBe("dispose")
+    })
+    const mounted = vi.fn(() => release)
     const onInput = vi.fn()
     const host = document.createElement("div")
     document.body.appendChild(host)
@@ -87,6 +91,7 @@ describe("worker StayCanvas", () => {
     expect(host.querySelectorAll("canvas")).toHaveLength(2)
     expect(mounted).toHaveBeenCalledOnce()
     expect(workers[0].terminate).toHaveBeenCalledOnce()
+    expect(release).not.toHaveBeenCalled()
 
     const activeWorker = workers[workers.length - 1]
     const topLayer = host.querySelectorAll("canvas")[1]
@@ -123,6 +128,7 @@ describe("worker StayCanvas", () => {
 
     expect(topLayer.width).toBe(initialBackingWidth)
     expect(createWorker).toHaveBeenCalledTimes(2)
+    expect(release).not.toHaveBeenCalled()
     expect(topLayer.style.width).toBe("320px")
     expect([...activeWorker.messages].reverse()
       .find(({ message }) => message.type === "surface")?.message)
@@ -135,5 +141,79 @@ describe("worker StayCanvas", () => {
       await Promise.resolve()
     })
     expect(activeWorker.terminate).toHaveBeenCalledOnce()
+    expect(release).toHaveBeenCalledOnce()
+  })
+
+  it("releases each published handle before replacing its worker and keeps its cleanup paired", async () => {
+    ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
+    installOffscreenTransfer([])
+    const workers: ResponsiveWorker[] = []
+    const handles: any[] = []
+    const releases: number[] = []
+    let owner: unknown
+    const createWorker = () => {
+      const worker = new ResponsiveWorker()
+      workers.push(worker)
+      return worker as unknown as Worker
+    }
+    const mounted = (handle: unknown) => {
+      const index = handles.push(handle) - 1
+      owner = handle
+      return () => {
+        expect(owner).toBe(handle)
+        expect(workers[index].messages.some(({ message }) => message.type === "dispose"))
+          .toBe(false)
+        owner = undefined
+        releases.push(index)
+      }
+    }
+    const host = document.createElement("div")
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const render = async (height: number, callback = mounted) => act(async () => {
+      root.render(<StayCanvas runtime={{ mode: "worker", createWorker }}
+        width={200} height={height} mounted={callback} focusOnInit={false} />)
+      await Promise.resolve()
+    })
+
+    await render(120)
+    const unrelated = vi.fn()
+    await render(0, unrelated)
+    expect(releases).toEqual([0])
+    expect(owner).toBeUndefined()
+    expect(unrelated).not.toHaveBeenCalled()
+    expect(workers[0].terminate).toHaveBeenCalledOnce()
+
+    await render(120)
+    expect(handles).toHaveLength(2)
+    expect(owner).toBe(handles[1])
+    await act(async () => { root.unmount(); await Promise.resolve() })
+    expect(releases).toEqual([0, 1])
+    expect(owner).toBeUndefined()
+    expect(workers[1].terminate).toHaveBeenCalledOnce()
+  })
+
+  it("still destroys the worker when owner cleanup throws", async () => {
+    ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
+    installOffscreenTransfer([])
+    const worker = new ResponsiveWorker()
+    const failure = new Error("owner cleanup failed")
+    const host = document.createElement("div")
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    await act(async () => {
+      root.render(<StayCanvas runtime={{ mode: "worker", createWorker: () => worker as unknown as Worker }}
+        mounted={() => () => { throw failure }} />)
+      await Promise.resolve()
+    })
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      await expect(act(async () => { root.unmount() })).rejects.toBe(failure)
+      await Promise.resolve()
+      expect(worker.messages.at(-1)?.message.type).toBe("dispose")
+      expect(worker.terminate).toHaveBeenCalledOnce()
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 })

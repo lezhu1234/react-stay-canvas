@@ -142,6 +142,7 @@ const WorkerStayCanvasImpl = forwardRef(
       let worker: Worker | undefined
       let createdLayers: HTMLCanvasElement[] = []
       let current: MountedWorkerCanvas<Input, Notice> | undefined
+      let releaseOwner: void | (() => void)
       try {
         const transferred = createTransferredLayers(
           host,
@@ -178,7 +179,7 @@ const WorkerStayCanvasImpl = forwardRef(
         mountedCanvas.current = current
         void client.ready.then(() => {
           if (!active || mountedCanvas.current !== current) return
-          callbacks.current.mounted?.(client as CanvasWorkerHandle<Input>)
+          releaseOwner = callbacks.current.mounted?.(client as CanvasWorkerHandle<Input>)
           if (focusOnInit) topLayer.focus()
         }).catch(() => {
           // The client reports initialization failures through onError.
@@ -194,12 +195,16 @@ const WorkerStayCanvasImpl = forwardRef(
         active = false
         if (!current) return
         if (mountedCanvas.current === current) mountedCanvas.current = undefined
-        current.layers.forEach((layer) => layer.remove())
-        void current.client.destroy().catch((error) => {
-          callbacks.current.onError?.(
-            error instanceof Error ? error : new Error(String(error))
-          )
-        })
+        try {
+          releaseOwner?.()
+        } finally {
+          current.layers.forEach((layer) => layer.remove())
+          void current.client.destroy().catch((error) => {
+            callbacks.current.onError?.(
+              error instanceof Error ? error : new Error(String(error))
+            )
+          })
+        }
       }
     }, [activeSize, layerCount, passive])
 

@@ -48,6 +48,8 @@ In this mode, `mounted` receives a `CanvasWorkerHandle<Input>` with `run`, `canc
 
 Replacing `createWorker` after creation does not replace a running instance. To select another program or execution mode, destroy the old instance and create a new one; complete canvas state is not migrated. The worker component's ref supplies `focus()`; use the handle supplied to `mounted` for runtime controls.
 
+Worker `mounted` may return a cleanup function for that specific handle. The component calls it before destroying the worker during replacement or unmount, so the owner can cancel its pending operations and release external references. A client that never reaches `mounted` has no owner cleanup. Ordinary surface resizing does not call it; component teardown still destroys the worker if owner cleanup throws. This cleanup belongs to the React component lifecycle, not an explicit call to `handle.destroy()`.
+
 ### layers
 
 A numeric value uses `canvas.getContext("2d")` for every layer:

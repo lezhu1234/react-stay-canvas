@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
   Circle,
+  type CanvasLayerConfig,
   type Coordinate,
   type EventProps,
   Line,
@@ -17,7 +18,12 @@ import {
 import { CanvasSurface, colors, rgba } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
 import { hasPointerPosition } from "../actionEventGuards"
-import { CoordinateStack, type CoordinateMappingFocus } from "./CoordinateStack"
+import {
+  CoordinateStack,
+  coordinateCanvas2DContext,
+  coordinateDynamicCanvas2DContext,
+  type CoordinateMappingFocus,
+} from "./CoordinateStack"
 import { createCoordinateSceneLayout } from "./coordinateSceneModel"
 import {
   containsRect,
@@ -68,6 +74,11 @@ const INITIAL_PROBE: CoordinateProbe = {
   viewSize: { width: 320, height: 440 },
   surface: { left: 0, top: 0, width: 320, height: 440, scaleX: 1, scaleY: 1 },
 }
+
+const COORDINATE_LIVE_LAYERS = [
+  { backend: "canvas2d", context: coordinateDynamicCanvas2DContext },
+  { backend: "canvas2d", context: coordinateCanvas2DContext },
+] satisfies CanvasLayerConfig[]
 
 function fillLiveShape(this: Rectangle, { context }: ShapeDrawProps) {
   const gradient = context.createLinearGradient(this.x, this.y, this.x, this.y + this.height)
@@ -181,6 +192,17 @@ export default function CoordinatesExample() {
   const contentShapeRef = useRef<Rectangle>()
   const markerRef = useRef<{ halo: Circle; dot: Circle; horizontal: Line; vertical: Line; label: StayText }>()
   const markerContentRef = useRef<Readonly<Coordinate>>(INITIAL_CONTENT_POINT)
+  const pendingProbeFrameRef = useRef<number>()
+  const pendingProbeRef = useRef<{
+    canvas: Parameters<ListenerProps["callback"]>[0]["canvas"]
+    client: Coordinate
+    content: Coordinate
+    eventEvidence?: CoordinateEventEvidence
+    surface: CoordinateProbe["surface"]
+    tools: StayTools
+    view: Coordinate
+    viewport: Readonly<ViewportState>
+  }>()
   const [cssDisplay, setCssDisplay] = useState<CssDisplayTransform>({ ...DEFAULT_CSS_DISPLAY })
   const cssDisplayRef = useRef<Readonly<CssDisplayTransform>>(cssDisplay)
   cssDisplayRef.current = cssDisplay
@@ -196,6 +218,12 @@ export default function CoordinatesExample() {
   useLayoutEffect(() => {
     contentBoundsRef.current?.update(coordinateContentBoundsStyle(mappingFocus))
   }, [mappingFocus])
+
+  useLayoutEffect(() => () => {
+    if (pendingProbeFrameRef.current !== undefined) {
+      window.cancelAnimationFrame(pendingProbeFrameRef.current)
+    }
+  }, [])
 
   const captureCoordinateEvidence = (
     tools: StayTools,
@@ -295,9 +323,8 @@ export default function CoordinatesExample() {
   ])
 
   const listeners = useMemo<ListenerProps[]>(() => {
-    const observe = (
+    const readObservation = (
       { e, originEvent, canvas, tools }: Parameters<ListenerProps["callback"]>[0],
-      updateMarker = true,
       nextViewport?: Readonly<ViewportState>,
       recordsEventEvidence = true,
     ) => {
@@ -306,24 +333,72 @@ export default function CoordinatesExample() {
       const view = tools.coordinates.clientToView(client)
       const viewport = nextViewport ?? tools.viewport.get()
       const content = tools.coordinates.viewToContent(view)
+      return {
+        canvas,
+        client,
+        content,
+        eventEvidence: recordsEventEvidence
+          ? {
+              point: e.point,
+              facadeContent: content,
+              matchesFacade: coordinatesMatch(e.point, content),
+            }
+          : undefined,
+        surface: surfaceFrame(canvas.getSurfaceMetrics()),
+        tools,
+        view,
+        viewport,
+      }
+    }
+
+    const commitObservation = (
+      observation: NonNullable<typeof pendingProbeRef.current>,
+      updateMarker = true,
+    ) => {
+      const { canvas, client, content, eventEvidence, surface, tools, view, viewport } = observation
       if (updateMarker) moveMarker(content)
       setProbe({
         client,
         view,
         content,
         viewSize: { width: canvas.width, height: canvas.height },
-        surface: surfaceFrame(canvas.getSurfaceMetrics()),
+        surface,
       })
-      if (recordsEventEvidence) {
-        setEventEvidence({
-          point: e.point,
-          facadeContent: content,
-          matchesFacade: coordinatesMatch(e.point, content),
-        })
-      }
+      if (eventEvidence) setEventEvidence(eventEvidence)
       setViewport(viewport)
       captureCoordinateEvidence(tools, canvas)
+    }
+
+    const observe = (
+      props: Parameters<ListenerProps["callback"]>[0],
+      updateMarker = true,
+      nextViewport?: Readonly<ViewportState>,
+      recordsEventEvidence = true,
+    ) => {
+      const observation = readObservation(props, nextViewport, recordsEventEvidence)
+      if (!observation) return false
+      commitObservation(observation, updateMarker)
       return true
+    }
+
+    const cancelPendingProbe = () => {
+      pendingProbeRef.current = undefined
+      if (pendingProbeFrameRef.current === undefined) return
+      window.cancelAnimationFrame(pendingProbeFrameRef.current)
+      pendingProbeFrameRef.current = undefined
+    }
+
+    const queueProbe = (props: Parameters<ListenerProps["callback"]>[0]) => {
+      const observation = readObservation(props)
+      if (!observation) return
+      pendingProbeRef.current = observation
+      if (pendingProbeFrameRef.current !== undefined) return
+      pendingProbeFrameRef.current = window.requestAnimationFrame(() => {
+        pendingProbeFrameRef.current = undefined
+        const pending = pendingProbeRef.current
+        pendingProbeRef.current = undefined
+        if (pending) commitObservation(pending)
+      })
     }
 
     return [
@@ -332,6 +407,13 @@ export default function CoordinatesExample() {
         selector: ".stay-canvas",
         event: ["mousemove", "mousedown"],
         callback: (props) => {
+          if (props.originEvent.type === "mousemove" || props.originEvent.type === "pointermove") {
+            const isPanning = isSpacePressed(props.e.pressedKeys)
+              && props.e.pressedKeys.has("mouse0")
+            if (!isPanning) queueProbe(props)
+            return
+          }
+          cancelPendingProbe()
           observe(props)
         },
       },
@@ -341,10 +423,12 @@ export default function CoordinatesExample() {
         event: ["startmove", "move", "moveend"],
         callback: (props) => ({
           startmove: () => {
+            cancelPendingProbe()
             props.tools.changeCursor("grabbing")
             return { originViewport: props.tools.viewport.get() }
           },
           move: () => {
+            cancelPendingProbe()
             setMappingFocus("content-view")
             if (hasPointerPosition(props.e) && props.originEvent instanceof MouseEvent) {
               const eventClient = { x: props.originEvent.clientX, y: props.originEvent.clientY }
@@ -381,6 +465,7 @@ export default function CoordinatesExample() {
         event: ["zoomin", "zoomout"],
         callback: ({ e, originEvent, tools, canvas }) => {
           if (!hasPointerPosition(e) || e.deltaY === undefined || !(originEvent instanceof MouseEvent)) return
+          cancelPendingProbe()
           originEvent.preventDefault()
           setMappingFocus("content-view")
           const client = { x: originEvent.clientX, y: originEvent.clientY }
@@ -752,7 +837,7 @@ export default function CoordinatesExample() {
               className="demo-canvas coordinate-canvas"
               eventList={[spaceStartMove]}
               height={360}
-              layers={2}
+              layers={COORDINATE_LIVE_LAYERS}
               listenerList={listeners}
               mounted={mounted}
               passive={false}

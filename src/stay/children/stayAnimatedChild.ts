@@ -191,14 +191,16 @@ export class StayAnimatedChild<
   /** @internal Handoff overrides the displayed projection, including its owner surfaces. */
   applyCurrentProjection(shapes: ReadonlyMap<string, T>): void {
     const visible = new Map<string, T>()
+    const currentFrameMapInfo = new Map<string, FrameBoundInfo<T>>()
     shapes.forEach((shape, name) => {
       shape.parent = this
       if (shape.shouldFill() || shape.shouldStroke()) visible.set(name, shape)
       const info = this.frameMapInfo.get(name)
-      this.frameMapInfo.set(name, info ? { ...info, shape } : {
+      currentFrameMapInfo.set(name, info ? { ...info, shape } : {
         beforeTime: 0, afterTime: 0, beforeShape: shape, afterShape: shape, ratio: 0, shape,
       })
     })
+    this.frameMapInfo = currentFrameMapInfo
     this.shapeMap = visible
   }
 
@@ -210,6 +212,7 @@ export class StayAnimatedChild<
     }
 
     const currentShapeMap = new Map<string, T>()
+    const currentFrameMapInfo = new Map<string, FrameBoundInfo<T>>()
 
     // Helper functions to improve readability
     const hasFrameBoundInfoChanged = (
@@ -253,7 +256,7 @@ export class StayAnimatedChild<
         if (layerChanged) this.updatedLayers.add(previousLayer)
         this.updatedLayers.add(shape.layer)
       }
-      this.frameMapInfo.set(name, frameBoundInfo)
+      currentFrameMapInfo.set(name, frameBoundInfo)
       return shape
     }
 
@@ -323,6 +326,7 @@ export class StayAnimatedChild<
       return updateCurrentShape(name, currentShape, frameBoundInfo)
     })
 
+    this.frameMapInfo = currentFrameMapInfo
     this.shapeMap = currentShapeMap
   }
 

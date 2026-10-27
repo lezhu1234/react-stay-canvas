@@ -355,13 +355,16 @@ export class CanvasSceneTransactions implements SceneTransactions {
       const child = exiting ?? this.children.get(id)
       if (!(child instanceof StayAnimatedChild)) return
       const projected = new Map(targets.get(id))
+      if (progress === 1) {
+        // Only the target timeline owns geometry after this handoff ends.
+        child.applyCurrentProjection(projected)
+        return
+      }
       sourceShapes.forEach((source, name) => {
         const target = projected.get(name) ?? exitShape(source, () => source._zeroShape(new Map()))
         const shape = progress === 0
           ? source
-          : progress === 1
-            ? target
-            : target.intermediateState(source, target, progress, target.transition.type)
+          : target.intermediateState(source, target, progress, target.transition.type)
         shape.parent = child
         projected.set(name, shape)
       })

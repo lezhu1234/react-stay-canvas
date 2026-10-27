@@ -21,6 +21,22 @@ export function sceneExitOwner(shape: InstantShape): SceneShapeReference | undef
 
 export type SceneShapeLookup = (reference: SceneShapeReference) => AnimatedShape | undefined
 export type SceneExitShapeFactory = (source: AnimatedShape, zeroShape: () => AnimatedShape) => AnimatedShape
+export type SceneShapeIndex = Map<string, Map<string, AnimatedShape>>
+
+/** Completes only the explicit enclosing-surface chains needed by this projection. */
+export function includeSceneExitOwners(shapes: SceneShapeIndex, findSource: SceneShapeLookup): void {
+  shapes.forEach((members) => members.forEach((source) => {
+    let reference = sceneExitOwner(source)
+    while (reference) {
+      const owner = findSource(reference)
+      if (!owner) return
+      const ownerShapes = shapes.get(reference.childId) ?? new Map<string, AnimatedShape>()
+      ownerShapes.set(reference.shapeName, owner)
+      shapes.set(reference.childId, ownerShapes)
+      reference = sceneExitOwner(owner)
+    }
+  }))
+}
 
 /** The timeline owns time; this only chooses the native geometric endpoint. */
 export function createSceneExitShape(
@@ -37,6 +53,7 @@ export function createSceneExitShape(
   endpoint.zoom(fit.scale)
   endpoint.move(fit.rect.x - bounds.x * fit.scale, fit.rect.y - bounds.y * fit.scale)
   endpoint.transition = { ...endpoint.transition, type: owner.target.transition.type }
+  setSceneExitOwner(endpoint, owner.reference)
   return exitFitEndpoint(endpoint)
 }
 
@@ -57,7 +74,7 @@ function survivingExitOwner(source: AnimatedShape, findSource: SceneShapeLookup,
     const previous = findSource(reference)
     if (!previous) return
     const target = findTarget(reference)
-    if (target && positiveArea(previous) && positiveArea(target)) return { source: previous, target }
+    if (target && positiveArea(previous) && positiveArea(target)) return { source: previous, target, reference }
     reference = sceneExitOwner(previous)
   }
 }

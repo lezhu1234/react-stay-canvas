@@ -183,6 +183,25 @@ export class StayAnimatedChild<
     console.warn("change property of AnimatedShape may cause unexpected behavior")
   }
 
+  /** @internal Includes unpainted layout surfaces in the current native projection. */
+  currentShape(name: string): T | undefined {
+    return this.shapeMap.get(name) ?? this.frameMapInfo.get(name)?.shape
+  }
+
+  /** @internal Handoff overrides the displayed projection, including its owner surfaces. */
+  applyCurrentProjection(shapes: ReadonlyMap<string, T>): void {
+    const visible = new Map<string, T>()
+    shapes.forEach((shape, name) => {
+      shape.parent = this
+      if (shape.shouldFill() || shape.shouldStroke()) visible.set(name, shape)
+      const info = this.frameMapInfo.get(name)
+      this.frameMapInfo.set(name, info ? { ...info, shape } : {
+        beforeTime: 0, afterTime: 0, beforeShape: shape, afterShape: shape, ratio: 0, shape,
+      })
+    })
+    this.shapeMap = visible
+  }
+
   setCurrentTime({ time, bound }: SetShapeChildCurrentTime) {
     if (bound && bound.afterMs < bound.beforeMs) {
       const temp = bound.afterMs
@@ -552,17 +571,15 @@ export class StayAnimatedChild<
   /** @internal Retains already-owned native shapes without copying or recompiling them. */
   retainTimelineShapes(shapes: ReadonlyMap<string, T>): void {
     const frames = new Map<string, T[]>()
-    const visible = new Map<string, T>()
     shapes.forEach((shape, name) => {
       shape.transition = { ...shape.transition, durationMs: 0, delayMs: 0 }
       frames.set(name, [shape])
-      if (shape.shouldFill() || shape.shouldStroke()) visible.set(name, shape)
       this.updatedLayers.add(shape.layer)
     })
     this.shapeFramesMap = frames
-    this.shapeMap = visible
     this.frameMapInfo = new Map()
     this.totalDurationMs = 0
+    this.setCurrentTime({ time: 0 })
   }
 
   getSliceTotalDurationMs(name: string) {

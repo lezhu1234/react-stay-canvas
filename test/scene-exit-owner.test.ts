@@ -9,6 +9,10 @@ import { createStage } from "./helpers/stage"
 
 const signal = () => new AbortController().signal
 const ref = { childId: "owner", shapeName: "surface" }
+function transparent(shape: Rectangle) {
+  shape.fillConfig.color = { ...shape.fillConfig.color, a: 0 }
+  return shape
+}
 function rect(x: number, width = 20, easing: "linear" | "easeInQuad" = "linear") {
   return new Rectangle({ x, y: 0, width, height: width,
     fillConfig: { color: { r: 255, g: 0, b: 0, a: 1 } },
@@ -39,6 +43,98 @@ function fixture(children: SceneStepChild[]) {
 afterEach(() => vi.restoreAllMocks())
 
 describe("scene exit ownership through public scene entrypoints", () => {
+  it("uses the current transparent owner geometry and keeps it through pause and redirect", async () => {
+    const f = fixture([child("owner", [["surface", transparent(rect(0, 100))]]), child("item", [["body", setSceneExitOwner(rect(20), ref)]])])
+    await f.accept([child("owner", [["surface", transparent(rect(200, 50))]]), child("item", [["body", setSceneExitOwner(rect(210, 10), ref)]])])
+    f.stage.tools.progress({ timeMs: 50 })
+    expect(f.shape("item").getBound().x).toBeCloseTo(115)
+    f.stage.tools.scene.settleTransition()
+    await f.accept([child("owner", [["surface", transparent(rect(300, 25))]])])
+    f.stage.tools.progress({ timeMs: 50 })
+    expect(f.shape("item").getBound().x).toBeCloseTo(210)
+    f.stage.tools.scene.settleTransition()
+    await f.accept([child("owner", [["surface", transparent(rect(400, 25))]])])
+    expect(f.shape("item").getBound().x).toBeCloseTo(210)
+    f.stage.tools.progress({ timeMs: 50 })
+    expect(f.shape("item").getBound().x).toBeCloseTo(307.5)
+    f.stage.tools.progress({ timeMs: 100 })
+    f.stage.tools.scene.settleTransition()
+    expect(f.stage.tools.hasChild("item")).toBe(false)
+    expect((f.stage.tools.getChildById("owner") as StayAnimatedChild).shapeMap.size).toBe(0)
+    f.stage.destroy()
+  })
+
+  it("retargets a nested transparent owner exit to the surviving ancestor before another interruption", async () => {
+    const f = fixture([
+      child("owner", [["surface", transparent(rect(0, 100))]]),
+      child("inner", [["surface", setSceneExitOwner(transparent(rect(10, 60)), ref)]]),
+      child("item", [["body", setSceneExitOwner(rect(20), { childId: "inner", shapeName: "surface" })]]),
+    ])
+    await f.accept([child("owner", [["surface", transparent(rect(200, 50))]])])
+    f.stage.tools.progress({ timeMs: 50 })
+    expect(f.shape("item").getBound().x).toBeCloseTo(115)
+    expect(sceneExitOwner(f.shape("item"))).toEqual(ref)
+    f.stage.tools.scene.settleTransition()
+    await f.accept([child("owner", [["surface", transparent(rect(300, 25))]])])
+    f.stage.tools.progress({ timeMs: 50 })
+    expect(f.shape("item").getBound().x).toBeCloseTo(210)
+    f.stage.destroy()
+  })
+
+  it.each(["append", "sample"])("preserves transparent owner surfaces through %s and subsequent controlled exit", async (path) => {
+    const initial = step([child("owner", [["surface", transparent(rect(0, 100))]]), child("item", [["body", setSceneExitOwner(rect(20), ref)]])], 0)
+    const target = step([child("owner", [["surface", transparent(rect(200, 50))]])])
+    const f = fixture(path === "append" ? [...initial.children] : [])
+    if (path === "append") {
+      f.stage.tools.scene.appendStep(target, { signal: signal() })
+      f.stage.tools.progress({ timeMs: 50 })
+      expect(f.shape("item").getBound().x).toBeCloseTo(115)
+    } else {
+      async function* steps() { yield initial; yield target }
+      const prepared = await f.stage.tools.scene.prepare(f.stage.tools.scene.beginUpdate(), {
+        revision: "transparent-offline", resourceRevision: "resources", steps: steps(),
+      }, { transitionId: "shape", control: { kind: "timeline", durationMs: 0 }, signal: signal() })
+      const sample = f.stage.tools.scene.sample(prepared, 50)
+      const sampledOwner = sample.find(({ id }) => id === "owner")!.shapes.get("surface")!
+      expect(sampledOwner.getBound().x).toBeCloseTo(100)
+      expect(sampledOwner.getBound().width).toBeCloseTo(75)
+      expect(sampledOwner.shouldFill()).toBe(false)
+      const sampledItem = sample.find(({ id }) => id === "item")!.shapes.get("body")!
+      expect(sampledItem.getBound().x).toBeCloseTo(115)
+      f.stage.tools.scene.discard(prepared)
+      await f.accept([...sample])
+      f.stage.tools.progress({ timeMs: 100 })
+      f.stage.tools.scene.settleTransition()
+    }
+    await f.accept([child("owner", [["surface", transparent(rect(300, 25))]])])
+    f.stage.tools.progress({ timeMs: 50 })
+    expect(f.shape("item").getBound().x).toBeCloseTo(210)
+    f.stage.destroy()
+  })
+
+  it("retains only referenced transparent handoff geometry and redirects from its displayed position", async () => {
+    const f = fixture([
+      child("owner", [["surface", transparent(rect(0, 100))], ["unrelated", transparent(rect(500, 100))]]),
+      child("inner", [["surface", setSceneExitOwner(transparent(rect(10, 60)), ref)]]),
+      child("item", [["body", setSceneExitOwner(rect(20), { childId: "inner", shapeName: "surface" })]]),
+    ])
+    const prepared = await f.stage.tools.scene.prepare(f.stage.tools.scene.beginUpdate(), {
+      revision: "transparent-handoff", resourceRevision: "resources", children: [{
+        id: "owner", className: "scene", slices: [{ name: "surface", frames: [transparent(rect(200, 50))] }],
+      }],
+    }, { transitionId: "shape", control: { kind: "timeline", durationMs: 100 }, signal: signal() })
+    const committed = f.stage.tools.scene.commit(prepared)
+    f.next(0)
+    await committed
+    f.next(50)
+    await f.accept([child("owner", [["surface", transparent(rect(300, 25))]])])
+    expect(f.shape("item").getBound().x).toBeCloseTo(115)
+    f.stage.tools.progress({ timeMs: 50 })
+    expect(f.shape("item").getBound().x).toBeCloseTo(210)
+    expect((f.stage.tools.getChildById("owner") as StayAnimatedChild).shapeFramesMap.has("unrelated")).toBe(false)
+    f.stage.destroy()
+  })
+
   it.each(["morph", "crossfade"] as const)("moves a removed Child with its owner using %s", async (mode) => {
     const source = setSceneExitOwner(wrapSceneShape(rect(20), mode), ref)
     const f = fixture([child("owner", [["surface", wrapSceneShape(rect(0, 100), mode)]]), child("item", [["body", source]])])

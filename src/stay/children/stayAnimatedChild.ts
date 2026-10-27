@@ -13,6 +13,7 @@ import { uuid4 } from "../../utils/identifiers"
 import { StayInstantChild } from "./stayInstantChild"
 import { Canvas } from "../../canvas"
 import { SetShapeChildCurrentTime } from "../types"
+import type { SceneExitShapeFactory } from "../scene/exitOwner"
 
 export class StayAnimatedChild<
   T extends AnimatedShape = AnimatedShape
@@ -437,7 +438,8 @@ export class StayAnimatedChild<
   }
 
   /** @internal Prepares only new keyframes; no existing timeline is copied or changed. */
-  prepareStepAppend(shapes: ReadonlyMap<string, T>, startTimeMs: number, durationMs: number):
+  prepareStepAppend(shapes: ReadonlyMap<string, T>, startTimeMs: number, durationMs: number,
+    exitShape?: SceneExitShapeFactory):
     (sample: SetShapeChildCurrentTime) => () => void {
     const additions = new Map<string, T[]>()
     const names = new Set([...this.shapeFramesMap.keys(), ...shapes.keys()])
@@ -447,7 +449,9 @@ export class StayAnimatedChild<
       const target = shapes.get(name)
       if (!target && (!previous || (!previous.shouldFill() && !previous.shouldStroke()))) return
       if (target && previous?.sameAs(target)) return
-      const next = target ? target.copy() as T : previous!._zeroShape(this.shapeFramesMap) as T
+      const next = target ? target.copy() as T
+        : (exitShape ? exitShape(previous!, () => previous!._zeroShape(this.shapeFramesMap))
+          : previous!._zeroShape(this.shapeFramesMap)) as T
       const frames = this.compileSlice(name, [next], !slice)
       if (previous?.sameAs(next)) return
       const lastEndMs = slice ? this.stepSliceEnds.get(slice) ?? this.getSliceTotalDurationMs(name) : 0

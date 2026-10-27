@@ -4,6 +4,12 @@ import type { ChildPlacement } from "./transform"
 declare const sceneEpochBrand: unique symbol
 declare const preparedSceneBrand: unique symbol
 
+/** An enclosing surface in a finite ownership hierarchy within one placement space. */
+export interface SceneShapeReference {
+  readonly childId: string
+  readonly shapeName: string
+}
+
 export interface SceneEpoch {
   readonly [sceneEpochBrand]: true
 }

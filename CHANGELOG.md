@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.4.0
+
+### Added
+
+- Complete timeline replacement and atomic scene transactions with batched preparation and continuous handoffs.
+- Complete-step append, independent offline scene sampling, and controlled transitions to a single target.
+- `WorkerStayCanvas`, worker clients, and the `react-stay-canvas/worker` entry for background scene preparation, drawing, playback, and capture.
+- Extensible native shape-transition modules and explicit enclosing-surface references for departing shapes.
+
+### Changed
+
+- Playback redraws only changed layers, and shapes defer unused paint defaults.
+
+### Fixed
+
+- Departing content moves and scales with its enclosing surface, including transparent surfaces and interrupted composed transitions.
+- Completed departures retire their position records so returning content enters at its new target.
+- Worker mounting pairs each owner with its cleanup, and background preparation preserves playback timing.
+
 ## 1.3.1
 
 ### Added

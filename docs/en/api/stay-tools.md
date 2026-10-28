@@ -114,6 +114,18 @@ Preparation, cancellation, stale-update rejection, commit-frame validation, and 
 
 This interface serves a scene that keeps one current pose and one temporary target. Motion Studio owns an editable history of keyframes, so its seek and import flows continue to use the full-timeline interfaces. Controlled single-target integration coverage belongs to the Stay application; the existing library examples do not yet contain a matching complete user flow.
 
+### Fit exiting content into its owner
+
+`setSceneExitOwner(shape, { childId, shapeName })` explicitly associates a Shape with its enclosing surface in a finite container hierarchy; `sceneExitOwner(shape)` reads that reference. Both are exported by the main and worker entrypoints. The reference travels with each Shape's `shapeStore`, including copies and offline samples.
+
+```ts
+setSceneExitOwner(node, { childId: "call-card", shapeName: "surface" })
+```
+
+When that Shape disappears, scene preparation follows its source ownership chain to a surface still present in the target. It uniformly fits the source surface into the target surface, centers it, and applies that mapping to the disappearing Shape's native zero state. Exit geometry uses the target owner's easing. Wrapped compositions move every visible component, retaining component opacity while native paint alpha fades; retained Shapes keep their chosen transition. References must use the same Child placement coordinate space. A reference names a surface Shape, rather than the Child's combined bounds.
+
+This applies to controlled transitions, complete steps, append, offline sampling and replacement handoff. If no owner is declared or the whole owner chain exits, the existing native fade applies. A pause retains the displayed geometry and ownership for the next transition; endpoint settlement still removes exits. Stay owns the complete integration flow covering playback, reverse dragging, interruption, capture and selection; this API does not add application keyframe history.
+
 ### Read an offline animation sample
 
 `tools.scene.sample(prepared, timeMs)` returns independent `SceneStepChild` geometry at a time in the prepared target's own timeline. It uses the same native interpolation as playback, restores the offline projection afterward, and does not publish the target or change the visible scene, pointer interaction, viewport, history, or playback clock.

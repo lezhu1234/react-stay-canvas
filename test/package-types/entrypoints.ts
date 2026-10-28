@@ -1,5 +1,7 @@
 import type { SceneStepSubmission, SceneSubmission } from "../../dist/index"
 import { Rectangle, StayAnimatedChild } from "../../dist/index"
+import { setSceneExitOwner, sceneExitOwner, type SceneShapeReference } from "../../dist/index"
+import { setSceneExitOwner as workerSetSceneExitOwner } from "../../dist/worker"
 import {
   ViewportBackground, wrapSceneShape, createShapeTransitionRegistry,
   defaultShapeTransitionRegistry, type ShapeTransitionModule,
@@ -24,6 +26,9 @@ void wrapped
 void workerBackground
 
 const shape: Rectangle = new WorkerRectangle({ x: 0, y: 0, width: 20, height: 20 })
+const exitOwner: SceneShapeReference = { childId: "owner", shapeName: "surface" }
+const sameShape: Rectangle = setSceneExitOwner(shape, exitOwner)
+workerSetSceneExitOwner(sameShape, sceneExitOwner(sameShape)!)
 const workerShape: WorkerRectangle = new Rectangle({ x: 0, y: 0, width: 20, height: 20 })
 const target: SceneStepSubmission = {
   revision: "step", resourceRevision: "resources", durationMs: 0,

@@ -13,6 +13,7 @@ import { uuid4 } from "../../utils/identifiers"
 import { StayInstantChild } from "./stayInstantChild"
 import { Canvas } from "../../canvas"
 import { SetShapeChildCurrentTime } from "../types"
+import type { SceneExitShapeFactory } from "../scene/exitOwner"
 
 export class StayAnimatedChild<
   T extends AnimatedShape = AnimatedShape
@@ -182,6 +183,27 @@ export class StayAnimatedChild<
     console.warn("change property of AnimatedShape may cause unexpected behavior")
   }
 
+  /** @internal Includes unpainted layout surfaces in the current native projection. */
+  currentShape(name: string): T | undefined {
+    return this.shapeMap.get(name) ?? this.frameMapInfo.get(name)?.shape
+  }
+
+  /** @internal Handoff overrides the displayed projection, including its owner surfaces. */
+  applyCurrentProjection(shapes: ReadonlyMap<string, T>): void {
+    const visible = new Map<string, T>()
+    const currentFrameMapInfo = new Map<string, FrameBoundInfo<T>>()
+    shapes.forEach((shape, name) => {
+      shape.parent = this
+      if (shape.shouldFill() || shape.shouldStroke()) visible.set(name, shape)
+      const info = this.frameMapInfo.get(name)
+      currentFrameMapInfo.set(name, info ? { ...info, shape } : {
+        beforeTime: 0, afterTime: 0, beforeShape: shape, afterShape: shape, ratio: 0, shape,
+      })
+    })
+    this.frameMapInfo = currentFrameMapInfo
+    this.shapeMap = visible
+  }
+
   setCurrentTime({ time, bound }: SetShapeChildCurrentTime) {
     if (bound && bound.afterMs < bound.beforeMs) {
       const temp = bound.afterMs
@@ -190,6 +212,7 @@ export class StayAnimatedChild<
     }
 
     const currentShapeMap = new Map<string, T>()
+    const currentFrameMapInfo = new Map<string, FrameBoundInfo<T>>()
 
     // Helper functions to improve readability
     const hasFrameBoundInfoChanged = (
@@ -233,7 +256,7 @@ export class StayAnimatedChild<
         if (layerChanged) this.updatedLayers.add(previousLayer)
         this.updatedLayers.add(shape.layer)
       }
-      this.frameMapInfo.set(name, frameBoundInfo)
+      currentFrameMapInfo.set(name, frameBoundInfo)
       return shape
     }
 
@@ -303,6 +326,7 @@ export class StayAnimatedChild<
       return updateCurrentShape(name, currentShape, frameBoundInfo)
     })
 
+    this.frameMapInfo = currentFrameMapInfo
     this.shapeMap = currentShapeMap
   }
 
@@ -437,7 +461,8 @@ export class StayAnimatedChild<
   }
 
   /** @internal Prepares only new keyframes; no existing timeline is copied or changed. */
-  prepareStepAppend(shapes: ReadonlyMap<string, T>, startTimeMs: number, durationMs: number):
+  prepareStepAppend(shapes: ReadonlyMap<string, T>, startTimeMs: number, durationMs: number,
+    exitShape?: SceneExitShapeFactory):
     (sample: SetShapeChildCurrentTime) => () => void {
     const additions = new Map<string, T[]>()
     const names = new Set([...this.shapeFramesMap.keys(), ...shapes.keys()])
@@ -447,7 +472,9 @@ export class StayAnimatedChild<
       const target = shapes.get(name)
       if (!target && (!previous || (!previous.shouldFill() && !previous.shouldStroke()))) return
       if (target && previous?.sameAs(target)) return
-      const next = target ? target.copy() as T : previous!._zeroShape(this.shapeFramesMap) as T
+      const next = target ? target.copy() as T
+        : (exitShape ? exitShape(previous!, () => previous!._zeroShape(this.shapeFramesMap))
+          : previous!._zeroShape(this.shapeFramesMap)) as T
       const frames = this.compileSlice(name, [next], !slice)
       if (previous?.sameAs(next)) return
       const lastEndMs = slice ? this.stepSliceEnds.get(slice) ?? this.getSliceTotalDurationMs(name) : 0
@@ -548,17 +575,15 @@ export class StayAnimatedChild<
   /** @internal Retains already-owned native shapes without copying or recompiling them. */
   retainTimelineShapes(shapes: ReadonlyMap<string, T>): void {
     const frames = new Map<string, T[]>()
-    const visible = new Map<string, T>()
     shapes.forEach((shape, name) => {
       shape.transition = { ...shape.transition, durationMs: 0, delayMs: 0 }
       frames.set(name, [shape])
-      if (shape.shouldFill() || shape.shouldStroke()) visible.set(name, shape)
       this.updatedLayers.add(shape.layer)
     })
     this.shapeFramesMap = frames
-    this.shapeMap = visible
     this.frameMapInfo = new Map()
     this.totalDurationMs = 0
+    this.setCurrentTime({ time: 0 })
   }
 
   getSliceTotalDurationMs(name: string) {

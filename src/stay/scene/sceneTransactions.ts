@@ -23,6 +23,7 @@ import { Renderer } from "../renderer"
 import { captureSceneChild } from "../sceneTransfer"
 import type { SetShapeChildCurrentTime } from "../types"
 import type Canvas from "../../canvas"
+import { createSceneExitShape, includeSceneExitOwners, type SceneExitShapeFactory, type SceneShapeIndex } from "./exitOwner"
 
 type UpdateState = "new" | "preparing" | "prepared" | "queued" | "committed" |
   "cancelled" | "discarded" | "stale" | "failed"
@@ -65,8 +66,11 @@ interface SceneHandoff {
   exitingLeases: SceneResourceLease[]
 }
 
-function capturePreparedChild(child: StayAnimatedChild): SceneStepChild {
+function capturePreparedChild(child: StayAnimatedChild, geometry: ReadonlyMap<string, AnimatedShape>): SceneStepChild {
   const captured = captureSceneChild(child)
+  geometry.forEach((shape, name) => {
+    if (!captured.shapes.has(name)) captured.shapes.set(name, shape.copy() as AnimatedShape)
+  })
   return {
     id: captured.sourceId,
     className: captured.className,
@@ -152,9 +156,17 @@ export class CanvasSceneTransactions implements SceneTransactions {
       })
       children.set(spec.id, child)
     })
+    const exitShape: SceneExitShapeFactory = (source, zeroShape) => createSceneExitShape(
+      source, zeroShape,
+      ({ childId, shapeName }) => {
+        const frames = children.get(childId)?.shapeFramesMap.get(shapeName)
+        return frames && frames[frames.length - 1]
+      },
+      ({ childId, shapeName }) => specs.get(childId)?.shapes.get(shapeName),
+    )
     return [...children.values()].map((child) => ({
       child,
-      apply: child.prepareStepAppend(specs.get(child.id)?.shapes ?? new Map(), startTimeMs, target.durationMs),
+      apply: child.prepareStepAppend(specs.get(child.id)?.shapes ?? new Map(), startTimeMs, target.durationMs, exitShape),
     }))
   }
 
@@ -215,10 +227,11 @@ export class CanvasSceneTransactions implements SceneTransactions {
     const transition = this.#transition
     if (!transition) return
     const atTarget = this.currentSample().time >= transition.durationMs
+    const current = atTarget ? undefined : this.#currentSceneShapes(this.#animatedChildren())
     const retained: StayAnimatedChild[] = []
     for (const child of this.children.map.values()) {
       if (!(child instanceof StayAnimatedChild)) continue
-      const shapes = atTarget ? transition.targets.get(child.id) : child.shapeMap
+      const shapes = atTarget ? transition.targets.get(child.id) : current!.get(child.id)
       if (!shapes || (!atTarget && shapes.size === 0)) continue
       child.retainTimelineShapes(shapes)
       retained.push(child)
@@ -278,7 +291,8 @@ export class CanvasSceneTransactions implements SceneTransactions {
       update.children!.forEach((child) => {
         restoreProjections.push(child.beginCurrentTimeProjection({ time: timeMs }))
       })
-      return update.children!.map(capturePreparedChild)
+      const geometry = this.#currentSceneShapes(update.children!)
+      return update.children!.map((child) => capturePreparedChild(child, geometry.get(child.id)!))
     } finally {
       restoreProjections.reverse().forEach((restore) => restore())
     }
@@ -330,30 +344,54 @@ export class CanvasSceneTransactions implements SceneTransactions {
     const handoff = this.#handoff
     if (!handoff) return
     const progress = Math.max(0, Math.min(1, (now - handoff.startedAt) / handoff.durationMs))
+    const targets = this.#handoffTargets(handoff)
+    const exitShape: SceneExitShapeFactory = (source, zeroShape) => createSceneExitShape(
+      source, zeroShape,
+      ({ childId, shapeName }) => handoff.sources.get(childId)?.get(shapeName),
+      ({ childId, shapeName }) => targets.get(childId)?.get(shapeName),
+    )
     handoff.sources.forEach((sourceShapes, id) => {
       const exiting = handoff.exiting.get(id)
       const child = exiting ?? this.children.get(id)
       if (!(child instanceof StayAnimatedChild)) return
-      if (!exiting) child.setCurrentTime(this.currentSample())
-      const projected = new Map(child.shapeMap)
+      const projected = new Map(targets.get(id))
+      if (progress === 1) {
+        // Only the target timeline owns geometry after this handoff ends.
+        child.applyCurrentProjection(projected)
+        return
+      }
       sourceShapes.forEach((source, name) => {
-        const target = exiting ? source._zeroShape(new Map())
-          : projected.get(name) ?? source._zeroShape(new Map())
+        const target = projected.get(name) ?? exitShape(source, () => source._zeroShape(new Map()))
         const shape = progress === 0
           ? source
-          : progress === 1
-            ? target
-            : target.intermediateState(source, target, progress, target.transition.type)
+          : target.intermediateState(source, target, progress, target.transition.type)
         shape.parent = child
-        if (shape.shouldStroke() || shape.shouldFill()) projected.set(name, shape)
-        else projected.delete(name)
+        projected.set(name, shape)
       })
-      child.shapeMap = projected
+      child.applyCurrentProjection(projected)
     })
     this.renderer.forceUpdateAllLayers()
     if (progress < 1) return
     this.#handoff = undefined
     handoff.exitingLeases.forEach((lease) => this.#releaseLease(lease))
+  }
+
+  #handoffTargets(handoff: SceneHandoff) {
+    const targets = new Map<string, Map<string, AnimatedShape>>()
+    handoff.sources.forEach((_, id) => {
+      if (handoff.exiting.has(id)) return
+      const child = this.children.get(id)
+      if (!(child instanceof StayAnimatedChild)) return
+      child.setCurrentTime(this.currentSample())
+      const geometry = new Map(child.shapeMap)
+      handoff.sources.get(id)!.forEach((_, name) => {
+        if (!child.shapeFramesMap.has(name)) return
+        const shape = child.currentShape(name)
+        if (shape) geometry.set(name, shape)
+      })
+      targets.set(id, geometry)
+    })
+    return targets
   }
 
   #accept(update: Update, frame: number, now: number): SceneCommitReceipt {
@@ -425,13 +463,16 @@ export class CanvasSceneTransactions implements SceneTransactions {
     const sources = new Map<string, Map<string, AnimatedShape>>()
     const exitingChildren = new Map<string, StayAnimatedChild>()
     const nextIds = new Set(prepared.map(({ id }) => id))
+    const previousGeometry = durationMs > 0 ? this.#currentSceneShapes(this.#animatedChildren()) : new Map()
     const children = prepared.map((candidate) => {
-      const live = this.children.get(candidate.id) as StayAnimatedChild | undefined
-      const previous = live ?? this.#handoff?.exiting.get(candidate.id)
+      const live = this.children.get(candidate.id)
+      const previous = live instanceof StayAnimatedChild ? live : this.#handoff?.exiting.get(candidate.id)
       candidate.setCurrentTime(this.currentSample())
       if (durationMs === 0) return candidate
-      const sourceShapes = this.#sourcesFor(candidate, previous)
+      const sourceShapes = this.#sourcesFor(candidate, previous, previousGeometry.get(candidate.id))
       sources.set(candidate.id, sourceShapes)
+      candidate.applyCurrentProjection(sourceShapes)
+      // Initial handoff exposes entering zero states before the first timed projection.
       candidate.shapeMap = new Map(sourceShapes)
       return candidate
     })
@@ -442,7 +483,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
       ]
       visibleChildren.forEach((previous) => {
         if (!(previous instanceof StayAnimatedChild) || nextIds.has(previous.id)) return
-        const sourceShapes = this.#copyVisibleShapes(previous)
+        const sourceShapes = this.#copyShapes(previousGeometry.get(previous.id))
         if (sourceShapes.size === 0) return
         const exiting = new StayAnimatedChild({
           id: previous.id,
@@ -450,8 +491,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
           placement: previous.placement,
           canvas: this.canvas,
         })
-        sourceShapes.forEach((shape) => { shape.parent = exiting })
-        exiting.shapeMap = new Map(sourceShapes)
+        exiting.applyCurrentProjection(sourceShapes)
         exitingChildren.set(previous.id, exiting)
         sources.set(exiting.id, sourceShapes)
       })
@@ -459,23 +499,35 @@ export class CanvasSceneTransactions implements SceneTransactions {
     return { children, sources, exiting: exitingChildren }
   }
 
-  #sourcesFor(candidate: StayAnimatedChild, previous?: StayAnimatedChild) {
-    const sources = this.#copyVisibleShapes(previous)
+  #sourcesFor(candidate: StayAnimatedChild, previous?: StayAnimatedChild, geometry?: ReadonlyMap<string, AnimatedShape>) {
+    const sources = this.#copyShapes(geometry)
     candidate.shapeFramesMap.forEach((frames, name) => {
       const source = sources.get(name)
-      const target = candidate.shapeMap.get(name) ?? frames[0]
-      if (!source) sources.set(name, target._zeroShape(new Map()))
+      const target = candidate.currentShape(name) ?? frames[0]
+      if (!source) sources.set(name, previous?.currentShape(name)?.copy() as AnimatedShape ?? target._zeroShape(new Map()))
     })
     sources.forEach((shape) => { shape.parent = candidate })
     return sources
   }
 
-  #copyVisibleShapes(child?: StayAnimatedChild) {
+  #copyShapes(shapes?: ReadonlyMap<string, AnimatedShape>) {
     return new Map<string, AnimatedShape>(
-      [...(child?.shapeMap ?? new Map<string, AnimatedShape>())].map(
+      [...(shapes ?? new Map<string, AnimatedShape>())].map(
         ([name, shape]) => [name, shape.copy() as AnimatedShape]
       )
     )
+  }
+
+  #animatedChildren(): StayAnimatedChild[] {
+    return [...this.children.values(), ...this.renderingExits()]
+      .filter((child): child is StayAnimatedChild => child instanceof StayAnimatedChild)
+  }
+
+  #currentSceneShapes(children: readonly StayAnimatedChild[]): SceneShapeIndex {
+    const sourceChildren = new Map(children.map((child) => [child.id, child]))
+    const geometry = new Map(children.map((child) => [child.id, new Map(child.shapeMap)]))
+    includeSceneExitOwners(geometry, ({ childId, shapeName }) => sourceChildren.get(childId)?.currentShape(shapeName))
+    return geometry
   }
 
   #prepareTransitionChildren(update: Update, target: SceneStepSubmission): void {
@@ -490,14 +542,21 @@ export class CanvasSceneTransactions implements SceneTransactions {
     for (const child of this.renderingExits()) {
       if (!remaining.has(child.id)) remaining.set(child.id, child)
     }
+    const sourceGeometry = this.#currentSceneShapes([...remaining.values()])
+    const specs = new Map(target.children.map((spec) => [spec.id, spec]))
+    const exitShape: SceneExitShapeFactory = (source, zeroShape) => createSceneExitShape(
+      source, zeroShape,
+      ({ childId, shapeName }) => sourceGeometry.get(childId)?.get(shapeName),
+      ({ childId, shapeName }) => specs.get(childId)?.shapes.get(shapeName),
+    )
     update.children = []
     for (const spec of target.children) {
-      const endpoint = this.#prepareTransitionChild(update, remaining.get(spec.id), spec, target.durationMs)
+      const endpoint = this.#prepareTransitionChild(update, remaining.get(spec.id), spec, target.durationMs, exitShape, sourceGeometry.get(spec.id))
       targets.set(spec.id, endpoint)
       remaining.delete(spec.id)
     }
     for (const live of remaining.values()) {
-      this.#prepareTransitionChild(update, live, undefined, target.durationMs)
+      this.#prepareTransitionChild(update, live, undefined, target.durationMs, exitShape, sourceGeometry.get(live.id))
     }
     update.transition = { durationMs: target.durationMs, targets }
     update.timelineEndTimeMs = target.durationMs
@@ -507,7 +566,9 @@ export class CanvasSceneTransactions implements SceneTransactions {
     update: Update,
     live: StayAnimatedChild | undefined,
     target: SceneStepChild | undefined,
-    durationMs: number
+    durationMs: number,
+    exitShape: SceneExitShapeFactory,
+    sourceGeometry: ReadonlyMap<string, AnimatedShape> | undefined,
   ): Map<string, AnimatedShape> {
     this.#assertPreparing(update)
     const child = new StayAnimatedChild({
@@ -516,7 +577,7 @@ export class CanvasSceneTransactions implements SceneTransactions {
       placement: target?.placement ?? live?.placement,
       canvas: this.canvas,
     })
-    const endpoint = this.#prepareTransitionTimeline(child, live, target, durationMs)
+    const endpoint = this.#prepareTransitionTimeline(child, live, target, durationMs, exitShape, sourceGeometry)
     this.#assertPreparing(update)
     update.children!.push(child)
     return endpoint
@@ -526,18 +587,20 @@ export class CanvasSceneTransactions implements SceneTransactions {
     child: StayAnimatedChild,
     live: StayAnimatedChild | undefined,
     target: SceneStepChild | undefined,
-    durationMs: number
+    durationMs: number,
+    exitShape: SceneExitShapeFactory,
+    sourceGeometry: ReadonlyMap<string, AnimatedShape> | undefined,
   ): Map<string, AnimatedShape> {
     const endpoints = new Map<string, AnimatedShape>()
     const frames = new Map<string, AnimatedShape[]>()
     for (const [name, submitted] of target?.shapes ?? []) {
-      const slice = this.#transitionSlice(child, live?.shapeMap.get(name), submitted, live?.shapeMap, durationMs)
+      const slice = this.#transitionSlice(child, live?.currentShape(name), submitted, live?.shapeMap, durationMs, exitShape)
       frames.set(name, slice)
       endpoints.set(name, slice[1])
     }
-    for (const [name, source] of live?.shapeMap ?? []) {
+    for (const [name, source] of sourceGeometry ?? []) {
       if (target?.shapes.has(name)) continue
-      frames.set(name, this.#transitionSlice(child, source, undefined, live!.shapeMap, durationMs))
+      frames.set(name, this.#transitionSlice(child, source, undefined, live!.shapeMap, durationMs, exitShape))
     }
     child.replaceTimeline(frames, false)
     child.setCurrentTime({ time: 0 })
@@ -549,12 +612,13 @@ export class CanvasSceneTransactions implements SceneTransactions {
     source: AnimatedShape | undefined,
     submitted: AnimatedShape | undefined,
     sourceShapes: Map<string, AnimatedShape> | undefined,
-    durationMs: number
+    durationMs: number,
+    exitShape: SceneExitShapeFactory,
   ): [AnimatedShape, AnimatedShape] {
     const copiedSource = source?.copy() as AnimatedShape | undefined
     const endpoint = submitted
       ? submitted.copy() as AnimatedShape
-      : copiedSource!._zeroShape(sourceShapes ?? new Map())
+      : exitShape(copiedSource!, () => copiedSource!._zeroShape(sourceShapes ?? new Map()))
     child.checkShape(endpoint)
     const start = copiedSource ?? endpoint._zeroShape(new Map())
     start.transition = { ...start.transition, durationMs: 0, delayMs: 0 }

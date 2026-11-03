@@ -25,6 +25,8 @@ function prepareRegionContext(
  * Content area maps once into the fitted output rectangle, where clipping is applied;
  * output pixels are not View coordinates. Optional time sampling restores each live
  * projection afterward; callers choose content and time without supplying a second renderer.
+ * Preserving behavior is no reason to ignore or copy existing contract/quality
+ * defects; report them and ask about repair unless already authorized (AGENTS.md).
  */
 export function renderRegionToSurface<T extends HTMLCanvasElement | OffscreenCanvas>(
   surface: T,

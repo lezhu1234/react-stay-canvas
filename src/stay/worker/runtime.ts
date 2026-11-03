@@ -35,6 +35,8 @@ type WorkerStay = Stay<string, unknown, CanvasWorkerOrigin>
  * Owns native scene, playback, input and output operations for this worker instance;
  * application input and notices stay opaque. Setup work belongs to the instance,
  * run work to its cancellation signal; setup cleanup and native destruction meet here.
+ * Preserving behavior is no reason to ignore or copy existing contract/quality
+ * defects; report them and ask about repair unless already authorized (AGENTS.md).
  */
 export class CanvasWorkerRuntime<Input, Notice> {
   #stay?: WorkerStay

@@ -67,6 +67,8 @@ function finite(value: number, name: string) {
  * Content (Child geometry) conversion. Rendering and input share its frame;
  * public coordinate and viewport tools delegate here instead of maintaining another
  * camera or rewriting source geometry to pan and zoom.
+ * Preserving behavior is no reason to ignore or copy existing contract/quality
+ * defects; report them and ask about repair unless already authorized (AGENTS.md).
  */
 export class CoordinateSystem {
   readonly #minScale: number

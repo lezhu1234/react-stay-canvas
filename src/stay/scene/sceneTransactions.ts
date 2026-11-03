@@ -79,6 +79,12 @@ function capturePreparedChild(child: StayAnimatedChild, geometry: ReadonlyMap<st
   }
 }
 
+/**
+ * Coordinates native visual targets in the existing ChildrenStore and Renderer;
+ * callers own domain meaning, layout and which targets to prepare. Preparation leaves
+ * the live scene intact; replacement commits at a render boundary from the visible pose,
+ * while appendStep extends the accepted timeline without moving its playback position.
+ */
 export class CanvasSceneTransactions implements SceneTransactions {
   #epochs = new WeakMap<object, Update>()
   #preparations = new WeakMap<object, Update>()

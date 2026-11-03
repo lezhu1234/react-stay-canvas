@@ -62,6 +62,12 @@ function finite(value: number, name: string) {
   return value
 }
 
+/**
+ * Sole owner of viewport state and Client (browser), View (logical surface) and
+ * Content (Child geometry) conversion. Rendering and input share its frame;
+ * public coordinate and viewport tools delegate here instead of maintaining another
+ * camera or rewriting source geometry to pan and zoom.
+ */
 export class CoordinateSystem {
   readonly #minScale: number
   readonly #maxScale: number

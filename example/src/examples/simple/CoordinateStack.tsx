@@ -32,7 +32,7 @@ import {
 
 import { CanvasSurface, colors, rgba, sceneCanvasArea } from "../../components/DemoKit"
 import { useI18n } from "../../i18n"
-import coordinateRoomBackdropUrl from "../../assets/coordinate-room-backdrop-v1.png"
+import coordinateRoomBackdropUrl from "../../assets/coordinate-room-backdrop-graded-v1.webp"
 import { hasPointerPosition } from "../actionEventGuards"
 import {
   clippedRectEdges,
@@ -90,6 +90,46 @@ export { expandRangeToAspect } from "./coordinateLabModel"
 
 const STACK_WIDTH = 240
 const STACK_HEIGHT = 120
+const COORDINATE_PIXEL_RATIO_CAP = 1.25
+const COORDINATE_DYNAMIC_PIXEL_RATIO_CAP = 1
+
+function capCoordinateLayerPixelRatio(canvas: HTMLCanvasElement, pixelRatioCap: number) {
+  const logicalWidth = Number.parseFloat(canvas.style.width)
+  const logicalHeight = Number.parseFloat(canvas.style.height)
+  if (!Number.isFinite(logicalWidth) || !Number.isFinite(logicalHeight)) return
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, pixelRatioCap)
+  const width = Math.round(logicalWidth * pixelRatio)
+  const height = Math.round(logicalHeight * pixelRatio)
+  if (canvas.width !== width) canvas.width = width
+  if (canvas.height !== height) canvas.height = height
+}
+
+export const coordinateCanvas2DContext = (canvas: HTMLCanvasElement) => {
+  capCoordinateLayerPixelRatio(canvas, COORDINATE_PIXEL_RATIO_CAP)
+  return canvas.getContext("2d")
+}
+
+export const coordinateDynamicCanvas2DContext = (canvas: HTMLCanvasElement) => {
+  capCoordinateLayerPixelRatio(canvas, COORDINATE_DYNAMIC_PIXEL_RATIO_CAP)
+  return canvas.getContext("2d")
+}
+
+const coordinateWebGL2Context = (canvas: HTMLCanvasElement) => {
+  capCoordinateLayerPixelRatio(canvas, COORDINATE_PIXEL_RATIO_CAP)
+  return canvas.getContext("webgl2", {
+    alpha: true,
+    depth: true,
+  })
+}
+
+const coordinateDynamicWebGL2Context = (canvas: HTMLCanvasElement) => {
+  capCoordinateLayerPixelRatio(canvas, COORDINATE_DYNAMIC_PIXEL_RATIO_CAP)
+  return canvas.getContext("webgl2", {
+    alpha: true,
+    depth: true,
+  })
+}
+
 const POINT_LABEL_RISE_RATIO: Readonly<Record<PlaneName, number>> = {
   client: 0.17,
   view: 0.19,
@@ -949,93 +989,6 @@ function createCoordinateRoomLightingTexture() {
 
 let coordinateRoomTexturePromise: Promise<ImageTexture> | undefined
 
-function coordinateRoomWindowSourceY(normalizedY: number) {
-  const ceilingAnchor = 0.353
-  const mountainDestination = 0.506
-  const mountainSource = 0.455
-  const floorAnchor = 0.592
-  if (normalizedY <= ceilingAnchor || normalizedY >= floorAnchor) return normalizedY
-  if (normalizedY <= mountainDestination) {
-    const progress = (normalizedY - ceilingAnchor)
-      / (mountainDestination - ceilingAnchor)
-    return ceilingAnchor + (mountainSource - ceilingAnchor) * progress
-  }
-  const progress = (normalizedY - mountainDestination)
-    / (floorAnchor - mountainDestination)
-  return mountainSource + (floorAnchor - mountainSource) * progress
-}
-
-function sharpenCoordinateRoomPixels(
-  pixels: Uint8ClampedArray,
-  width: number,
-  height: number,
-) {
-  const sharpened = new Uint8ClampedArray(pixels)
-  if (width < 3 || height < 3) return sharpened
-  const kernel = [1, 2, 1, 2, 4, 2, 1, 2, 1] as const
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const centerOffset = (y * width + x) * 4
-      for (let channel = 0; channel < 3; channel += 1) {
-        let blurred = 0
-        let kernelIndex = 0
-        for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
-          for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
-            const sampleOffset = ((y + offsetY) * width + x + offsetX) * 4 + channel
-            blurred += pixels[sampleOffset] * kernel[kernelIndex]
-            kernelIndex += 1
-          }
-        }
-        const center = pixels[centerOffset + channel]
-        sharpened[centerOffset + channel] = center + (center - blurred / 16)
-      }
-    }
-  }
-  return sharpened
-}
-
-export function gradeCoordinateRoomPixels(
-  pixels: Uint8ClampedArray,
-  width: number,
-  height: number,
-) {
-  if (width <= 0 || height <= 0 || pixels.length !== width * height * 4) {
-    throw new RangeError("coordinate room pixels must match positive image dimensions")
-  }
-  const sourcePixels = sharpenCoordinateRoomPixels(pixels, width, height)
-  const graded = new Uint8ClampedArray(sourcePixels)
-  const wallGrades = [32, 31, 28] as const
-  const upperWindowGrades = [20, 13, 7] as const
-  for (let y = 0; y < height; y += 1) {
-    const normalizedY = height === 1 ? 0 : y / (height - 1)
-    const sourceY = coordinateRoomWindowSourceY(normalizedY) * (height - 1)
-    const sourceTop = Math.floor(sourceY)
-    const sourceBottom = Math.min(height - 1, sourceTop + 1)
-    const sourceProgress = sourceY - sourceTop
-    for (let x = 0; x < width; x += 1) {
-      const normalizedX = width === 1 ? 0 : x / (width - 1)
-      const wallWeight = 1 - smoothUnitRange(0.7, 0.78, normalizedX)
-      const upperWindowWeight = smoothUnitRange(0.72, 0.8, normalizedX)
-        * (1 - smoothUnitRange(0.42, 0.48, normalizedY))
-      const offset = (y * width + x) * 4
-      const windowWeight = smoothUnitRange(0.755, 0.78, normalizedX)
-      for (let channel = 0; channel < 3; channel += 1) {
-        const remapped = sourcePixels[(sourceTop * width + x) * 4 + channel]
-          + (sourcePixels[(sourceBottom * width + x) * 4 + channel]
-            - sourcePixels[(sourceTop * width + x) * 4 + channel]) * sourceProgress
-        const source = sourcePixels[offset + channel]
-          + (remapped - sourcePixels[offset + channel]) * windowWeight
-        const wallGrade = wallGrades[channel] * wallWeight
-        graded[offset + channel] = Math.max(
-          0,
-          source - wallGrade - upperWindowGrades[channel] * upperWindowWeight,
-        )
-      }
-    }
-  }
-  return graded
-}
-
 function loadCoordinateRoomTexture() {
   coordinateRoomTexturePromise ??= new Promise<ImageTexture>((resolve, reject) => {
     const image = new Image()
@@ -1048,7 +1001,7 @@ function loadCoordinateRoomTexture() {
         const context = decodeCanvas.getContext("2d", { willReadFrequently: true })
         if (!context) throw new Error("Unable to decode the coordinate room texture")
         context.drawImage(image, 0, 0)
-        const pixels = context.getImageData(
+        const data = context.getImageData(
           0,
           0,
           image.naturalWidth,
@@ -1057,7 +1010,7 @@ function loadCoordinateRoomTexture() {
         resolve(new ImageTexture({
           width: image.naturalWidth,
           height: image.naturalHeight,
-          data: gradeCoordinateRoomPixels(pixels, image.naturalWidth, image.naturalHeight),
+          data,
         }))
       } catch (error) {
         reject(error)
@@ -1103,6 +1056,7 @@ type PlaneOverlay = {
 type PlaneRuntime = PlaneDefinition & {
   basis: PlaneBasis
   detailsVisible: boolean
+  lastRange?: Readonly<Rect>
   meshes: PlaneMeshes
   overlay: PlaneOverlay
   presentation: PlanePresentationMetrics
@@ -1223,7 +1177,19 @@ type StackRuntime = {
   signalMeshes: [Mesh, Mesh, Mesh]
   signalGlowPath: Path
   signalHighlightPath: Path
+  outputDefinition?: PlaneDefinition
+  outputBasis?: PlaneBasis
+  sceneLayoutInitialized?: boolean
+  evidenceOpen?: boolean
+  heroCopyKey?: string
   materialFocus?: CoordinateMappingFocus
+}
+
+function rectValuesMatch(first: Readonly<Rect> | undefined, second: Readonly<Rect>) {
+  return first?.x === second.x
+    && first.y === second.y
+    && first.width === second.width
+    && first.height === second.height
 }
 
 function planeRange(
@@ -2518,6 +2484,36 @@ function updateOutputPanelOverlay(
   })
 }
 
+const COMPACT_CONSOLE_ACTION_TEXT: Partial<Record<CoordinateConsoleControlName, string>> = {
+  "css-reset": "CSS",
+  "zoom-in": "ZOOM +",
+  "zoom-out": "ZOOM −",
+  "viewport-reset": "RESET",
+  evidence: "PROOF",
+}
+
+function consoleActionPresentation(name: CoordinateConsoleControlName, compact: boolean) {
+  if (compact) {
+    return {
+      yOffset: 5,
+      text: COMPACT_CONSOLE_ACTION_TEXT[name] ?? "",
+      fontSize: 9,
+      fontWeight: 400,
+      label: "",
+    }
+  }
+  if (name === "css-reset") {
+    return { yOffset: 14, text: "□", fontSize: 32, fontWeight: 400, label: "RESET" }
+  }
+  if (name === "viewport-reset") {
+    return { yOffset: 16, text: "", fontSize: 36, fontWeight: 300, label: "FIT TO VIEW" }
+  }
+  if (name === "evidence") {
+    return { yOffset: 8, text: "?", fontSize: 24, fontWeight: 400, label: "PROOF" }
+  }
+  return { yOffset: 8, text: "", fontSize: 24, fontWeight: 400, label: "" }
+}
+
 function updateConsolePanelOverlay(
   overlay: ConsolePanelOverlay,
   frame: Readonly<Rect> | undefined,
@@ -2885,7 +2881,7 @@ function updateConsolePanelOverlay(
   })
   const actionNames = compact
     ? (["css-reset", "zoom-in", "zoom-out", "viewport-reset", "evidence"] as const)
-    : (["css-reset", "viewport-reset", "pan", "pan", "pan"] as const)
+    : (["evidence", "css-reset", "viewport-reset", "pan", "pan"] as const)
   overlay.viewportButtons.forEach((button, index) => {
     const name = actionNames[index]
     const rect = controlRects[name]
@@ -2949,15 +2945,14 @@ function updateConsolePanelOverlay(
   overlay.viewportActions.forEach((action, index) => {
     const name = actionNames[index]
     const rect = controlRects[name]
+    const presentation = consoleActionPresentation(name, compact)
     action.update({
       x: rect.x + rect.width / 2,
-      y: rect.y + rect.height / 2 - (compact ? 5 : index === 0 ? 14 : index === 1 ? 16 : 8),
-      text: compact
-        ? ["CSS", "ZOOM +", "ZOOM −", "RESET", "PROOF"][index]
-        : name === "css-reset" ? "□" : "",
+      y: rect.y + rect.height / 2 - presentation.yOffset,
+      text: presentation.text,
       font: {
-        size: compact ? 9 : index === 0 ? 32 : index === 1 ? 36 : 24,
-        fontWeight: compact ? 400 : index === 1 ? 300 : 400,
+        size: presentation.fontSize,
+        fontWeight: presentation.fontWeight,
       },
       fillConfig: { color: controlColor },
     })
@@ -3001,16 +2996,14 @@ function updateConsolePanelOverlay(
       },
     })
   })
-  const actionLabels = compact
-    ? ["", "", "", "", ""]
-    : ["RESET", "FIT TO VIEW", "", "", ""]
   overlay.viewportActionLabels.forEach((label, index) => {
     const name = actionNames[index]
     const rect = controlRects[name]
+    const presentation = consoleActionPresentation(name, compact)
     label.update({
       x: rect.x + rect.width / 2,
       y: rect.y + rect.height + (compact ? -8 : 13),
-      text: rect.width > 0 && name !== "pan" ? actionLabels[index] : "",
+      text: rect.width > 0 && name !== "pan" ? presentation.label : "",
       font: { size: compact ? 8 : 14, fontWeight: 400 },
       fillConfig: { color: rgba(20, 23, 22, compact ? 0.78 : 1) },
     })
@@ -3482,10 +3475,10 @@ function updateCoordinatePlaneFocus(
       plane.fill,
       (active ? 1 : 0.82) * PANEL_FACE_ALPHA_SCALE,
     ))
+    plane.overlay.title.update({
+      fillConfig: { color: { ...plane.stroke, a: active ? 0.9 : 0.72 } },
+    })
   }
-  plane.overlay.title.update({
-    fillConfig: { color: { ...plane.stroke, a: active ? 0.9 : 0.72 } },
-  })
 }
 
 function updateCoordinatePlaneProbe({
@@ -3511,7 +3504,10 @@ function updateCoordinatePlaneProbe({
   const contentPoint = pointIsInsidePlane(localPoint)
     ? projectPlanePoint(plane, localPoint)
     : undefined
-  updateCoordinatePlaneTicks(plane, range, plotInsets, plotBottom)
+  if (!rectValuesMatch(plane.lastRange, range)) {
+    updateCoordinatePlaneTicks(plane, range, plotInsets, plotBottom)
+    plane.lastRange = { ...range }
+  }
 
   const guideStart = contentPoint
     ? projectPlanePoint(plane, { x: localPoint.x, y: PLANE_PLOT_TOP })
@@ -3679,26 +3675,10 @@ function updateCoordinateSignal(
   worldPoints: Readonly<Partial<Record<PlaneName, Vector3>>>,
   clientToRootView: CoordinateSceneUpdateInput["clientToRootView"],
 ) {
-  const outputDefinition = updateScenePanelGeometry(
-    runtime.outputPanel,
-    sceneLayout.output,
-    runtime,
-    OUTPUT_PANEL_THICKNESS,
-    OUTPUT_PANEL_BEVEL_RADIUS,
-    6,
-  )
-  const outputBasis = createPlaneBasis(outputDefinition)
-  runtime.outputPanel.edgeTint.setGeometry(rectMeshGeometry(
-    outputDefinition,
-    outputBasis,
-    {
-      x: -5,
-      y: 3,
-      width: 10,
-      height: Math.max(0, outputDefinition.height - 6),
-    },
-    OUTPUT_PANEL_THICKNESS / 2 + 0.002,
-  ))
+  const { outputDefinition, outputBasis } = runtime
+  if (!outputDefinition || !outputBasis) {
+    throw new Error("Coordinate output geometry must be initialized before its signal")
+  }
   const updateSignalMesh = (
     index: 0 | 1 | 2,
     start: Readonly<Vector3> | undefined,
@@ -3837,6 +3817,28 @@ function updateCoordinatePhysicalPanels(
   runtime: StackRuntime,
   sceneLayout: Readonly<CoordinateSceneLayout>,
 ) {
+  const outputDefinition = updateScenePanelGeometry(
+    runtime.outputPanel,
+    sceneLayout.output,
+    runtime,
+    OUTPUT_PANEL_THICKNESS,
+    OUTPUT_PANEL_BEVEL_RADIUS,
+    6,
+  )
+  const outputBasis = createPlaneBasis(outputDefinition)
+  runtime.outputPanel.edgeTint.setGeometry(rectMeshGeometry(
+    outputDefinition,
+    outputBasis,
+    {
+      x: -5,
+      y: 3,
+      width: 10,
+      height: Math.max(0, outputDefinition.height - 6),
+    },
+    OUTPUT_PANEL_THICKNESS / 2 + 0.002,
+  ))
+  runtime.outputDefinition = outputDefinition
+  runtime.outputBasis = outputBasis
   updateOutputGroundEffects(runtime.outputSignal, sceneLayout.output)
   updateScenePanelGeometry(
     runtime.consolePanel,
@@ -3860,6 +3862,7 @@ function updateCoordinateSceneOverlays({
   shapeProjection,
   visibleContent,
   text,
+  layoutChanged,
 }: {
   runtime: StackRuntime
   sceneLayout: Readonly<CoordinateSceneLayout>
@@ -3871,18 +3874,9 @@ function updateCoordinateSceneOverlays({
   shapeProjection: Readonly<CoordinateEvidence["shape"]>
   visibleContent: Readonly<Rect>
   text: CoordinateSceneUpdateInput["text"]
+  layoutChanged: boolean
 }) {
-  updateOutputPanelOverlay(runtime.outputOverlay, sceneLayout.output, visibleContent)
-  updateConsolePanelOverlay(
-    runtime.consoleOverlay,
-    sceneLayout.console,
-    sample,
-    currentViewport,
-    cssDisplay,
-    eventEvidence,
-  )
-  updateConsoleControlTargets(runtime.consoleControlTargets, sceneLayout.console)
-  updateHeroOverlay(runtime.heroOverlay, runtime.viewSize, {
+  const heroCopy = {
     eyebrow: text("Coordinate laboratory · 01", "坐标实验室 · 01"),
     first: text("One point,", "一个点，"),
     second: text("three spaces.", "三个空间。"),
@@ -3891,30 +3885,50 @@ function updateCoordinateSceneOverlays({
       "One point and one Shape, mapped across three coordinate spaces and rendered on Live Canvas.",
       "同一点与同一 Shape，在三个坐标空间中映射，最终呈现于 Live Canvas。",
     ),
-  })
-  updateEvidenceOverlay(
-    runtime.evidenceOverlay,
-    evidenceOpen,
-    runtime.viewSize,
+  }
+  const heroCopyKey = Object.values(heroCopy).join("\u0000")
+  if (layoutChanged) {
+    updateOutputPanelOverlay(runtime.outputOverlay, sceneLayout.output, visibleContent)
+    updateConsoleControlTargets(runtime.consoleControlTargets, sceneLayout.console)
+  }
+  if (layoutChanged || runtime.heroCopyKey !== heroCopyKey) {
+    updateHeroOverlay(runtime.heroOverlay, runtime.viewSize, heroCopy)
+    runtime.heroCopyKey = heroCopyKey
+  }
+  updateConsolePanelOverlay(
+    runtime.consoleOverlay,
+    sceneLayout.console,
     sample,
     currentViewport,
-    shapeProjection,
-    visibleContent,
+    cssDisplay,
     eventEvidence,
-    {
-      heading: text("Projection evidence", "投影证据"),
-      intro: text("Zoom changes the projection, not the Shape", "缩放改变投影，不改变 Shape"),
-      labels: [
-        text("Content Shape geometry", "Content Shape 几何"),
-        "Viewport",
-        text("CSS View to Client", "CSS View 到 Client"),
-        text("View projection", "View 中的投影"),
-        text("Client footprint", "Client 中的显示区域"),
-        text("Visible Content window", "可见 Content 窗口"),
-        "Canvas event · Content · e.point",
-      ],
-    },
   )
+  if (evidenceOpen || runtime.evidenceOpen !== evidenceOpen) {
+    updateEvidenceOverlay(
+      runtime.evidenceOverlay,
+      evidenceOpen,
+      runtime.viewSize,
+      sample,
+      currentViewport,
+      shapeProjection,
+      visibleContent,
+      eventEvidence,
+      {
+        heading: text("Projection evidence", "投影证据"),
+        intro: text("Zoom changes the projection, not the Shape", "缩放改变投影，不改变 Shape"),
+        labels: [
+          text("Content Shape geometry", "Content Shape 几何"),
+          "Viewport",
+          text("CSS View to Client", "CSS View 到 Client"),
+          text("View projection", "View 中的投影"),
+          text("Client footprint", "Client 中的显示区域"),
+          text("Visible Content window", "可见 Content 窗口"),
+          "Canvas event · Content · e.point",
+        ],
+      },
+    )
+    runtime.evidenceOpen = evidenceOpen
+  }
 }
 
 function updateCoordinateScene({
@@ -3934,6 +3948,11 @@ function updateCoordinateScene({
   if (!coordinateEvidence) return
   const { shape: shapeProjection, visibleContent } = coordinateEvidence
   const sceneLayout = createCoordinateSceneLayout(runtime.viewSize.width, runtime.viewSize.height)
+  const layoutChanged = !runtime.sceneLayoutInitialized
+  if (layoutChanged) {
+    updateCoordinatePhysicalPanels(runtime, sceneLayout)
+    runtime.sceneLayoutInitialized = true
+  }
   const { points, worldPoints, ranges } = updateCoordinatePlanes({
     runtime,
     sample,
@@ -3952,7 +3971,6 @@ function updateCoordinateScene({
     worldPoints,
     clientToRootView,
   )
-  updateCoordinatePhysicalPanels(runtime, sceneLayout)
   updateCoordinateSceneOverlays({
     runtime,
     sceneLayout,
@@ -3964,8 +3982,9 @@ function updateCoordinateScene({
     shapeProjection,
     visibleContent,
     text,
+    layoutChanged,
   })
-  onSceneLayoutChange?.(sceneLayout)
+  if (layoutChanged) onSceneLayoutChange?.(sceneLayout)
   runtime.materialFocus = mappingFocus
 }
 
@@ -4006,15 +4025,17 @@ export function CoordinateStack({
     {
       backend: "webgl2",
       camera,
+      context: coordinateWebGL2Context,
     },
-    { backend: "canvas2d" },
+    { backend: "canvas2d", context: coordinateCanvas2DContext },
     {
       backend: "webgl2",
       camera,
+      context: coordinateDynamicWebGL2Context,
       environment,
       lights: lighting,
     },
-    { backend: "canvas2d" },
+    { backend: "canvas2d", context: coordinateCanvas2DContext },
   ], [camera, environment, lighting])
   const controlListeners = useMemo<ListenerProps[]>(() => [{
     name: "coordinate-console-controls",
@@ -4060,7 +4081,6 @@ export function CoordinateStack({
     )
     runtimeRef.current = runtime
     clientToRootViewRef.current = (point) => tools.coordinates.clientToView(point)
-    onSceneLayoutChange?.(createCoordinateSceneLayout(runtime.viewSize.width, runtime.viewSize.height))
     setRuntimeGeneration((current) => current + 1)
   }
 

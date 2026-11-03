@@ -84,6 +84,8 @@ function capturePreparedChild(child: StayAnimatedChild, geometry: ReadonlyMap<st
  * callers own domain meaning, layout and which targets to prepare. Preparation leaves
  * the live scene intact; replacement commits at a render boundary from the visible pose,
  * while appendStep extends the accepted timeline without moving its playback position.
+ * Preserving behavior is no reason to ignore or copy existing contract/quality
+ * defects; report them and ask about repair unless already authorized (AGENTS.md).
  */
 export class CanvasSceneTransactions implements SceneTransactions {
   #epochs = new WeakMap<object, Update>()

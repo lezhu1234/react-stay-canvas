@@ -20,7 +20,12 @@ function prepareRegionContext(
   context.translate(-area.x, -area.y)
 }
 
-/** Uses the same native projection and drawing pass for DOM and worker output. */
+/**
+ * DOM and worker capture share native Canvas2D projection and drawing. The requested
+ * Content area maps once into the fitted output rectangle, where clipping is applied;
+ * output pixels are not View coordinates. Optional time sampling restores each live
+ * projection afterward; callers choose content and time without supplying a second renderer.
+ */
 export function renderRegionToSurface<T extends HTMLCanvasElement | OffscreenCanvas>(
   surface: T,
   { area, targetSize = { width: area.width, height: area.height }, children, progress }: RegionToTargetCanvasProps,

@@ -31,7 +31,11 @@ export interface CanvasWorkerScope<Input, Notice> {
 type ActiveRun = { id: number; controller: AbortController; completion: Promise<void> }
 type WorkerStay = Stay<string, unknown, CanvasWorkerOrigin>
 
-/** The library owns the native runtime and task lifecycle; input remains opaque. */
+/**
+ * Owns native scene, playback, input and output operations for this worker instance;
+ * application input and notices stay opaque. Setup work belongs to the instance,
+ * run work to its cancellation signal; setup cleanup and native destruction meet here.
+ */
 export class CanvasWorkerRuntime<Input, Notice> {
   #stay?: WorkerStay
   #canvas?: CanvasRuntimeTools

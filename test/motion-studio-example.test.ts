@@ -112,6 +112,32 @@ describe("integrated motion studio example", () => {
     expect(layerBody(layers[0]).x).toBe(304)
   })
 
+  it("scrubs independently delayed labels without sampling a held frame", () => {
+    const { stage } = createStage({ width: 840, height: 430, layers: 3 })
+    const project = seedMotionProject(text)
+    try {
+      renderMotionProject(stage.tools, project, 0)
+      const hero = motionLayers(stage.tools)[0]
+      const heldLabel = layerLabel(hero)!
+      const heldBounds = heldLabel.getBound()
+      const interpolation = vi.spyOn(heldLabel, "intermediateState")
+
+      progressMotionProject(stage.tools, project, 725)
+      expect(layerBody(hero).x).toBeGreaterThan(72)
+      expect(layerLabel(hero)).toBe(heldLabel)
+      expect(interpolation).not.toHaveBeenCalled()
+
+      progressMotionProject(stage.tools, project, 1100)
+      expect(layerLabel(hero)!.getBound().x).toBeGreaterThan(heldBounds.x)
+      progressMotionProject(stage.tools, project, 725)
+      expect(layerLabel(hero)).toBe(heldLabel)
+      expect(layerLabel(hero)!.getBound()).toEqual(heldBounds)
+
+      progressMotionProject(stage.tools, project, project.durationMs)
+      expect(motionLayers(stage.tools).every((child) => child.shapeMap.size === 0)).toBe(true)
+    } finally { stage.destroy() }
+  })
+
   it("animates a loaded image slice from zero and removes every slice at the project exit", async () => {
     const { stage } = createStage({ width: 840, height: 430, layers: 3 })
     const project = seedMotionProject(text)

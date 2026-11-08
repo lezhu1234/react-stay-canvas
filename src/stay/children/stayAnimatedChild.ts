@@ -15,6 +15,14 @@ import { Canvas } from "../../canvas"
 import { SetShapeChildCurrentTime } from "../types"
 import type { SceneExitShapeFactory } from "../scene/exitOwner"
 
+/**
+ * Contract for changes — visualization master §§14.2, 14.6, 23.3:
+ * Canvas supplies time; this Child resolves slices and samples native Shapes.
+ * Cursor holds retain the selected frame; explicit bounds define their own interval.
+ * Progress and capture reuse this sampling owner; application policies stay in callers.
+ * Preserving behavior is no reason to ignore or copy existing contract/quality
+ * defects; report them and ask about repair unless already authorized (AGENTS.md).
+ */
 export class StayAnimatedChild<
   T extends AnimatedShape = AnimatedShape
 > extends StayInstantChild<T> {
@@ -283,7 +291,9 @@ export class StayAnimatedChild<
         }
       }
 
-      const ratio = (time - beforeTime) / (afterTime - beforeTime + 1e-9)
+      // An explicit bound declares its own interval, even while the cursor holds.
+      const holdsTimelineFrame = !bound && timeBound.beforeIndex === timeBound.afterIndex
+      const ratio = holdsTimelineFrame ? 0 : (time - beforeTime) / (afterTime - beforeTime + 1e-9)
 
       const frameBoundInfo: FrameBoundInfo<T> = {
         beforeTime,
@@ -306,7 +316,7 @@ export class StayAnimatedChild<
         throw new Error("time must be less than afterTime")
       }
 
-      if (beforeTime === afterTime) {
+      if (holdsTimelineFrame || beforeTime === afterTime) {
         return updateCurrentShape(name, afterShape, frameBoundInfo)
       }
 

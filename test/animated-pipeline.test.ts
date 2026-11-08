@@ -122,6 +122,26 @@ describe("animated: getTimelineIndexBound (the timeline cursor)", () => {
     // totalDurationMs = 300 + (100 delay + 200 dur) = 600
     expect(child.totalDurationMs).toBe(600)
   })
+
+  it("holds the exact prior frame during delay without invoking interpolation", () => {
+    const { stage } = createStage({})
+    try {
+      const child = animatedRect(stage)
+      child.appendKeyFrame("default", new Rectangle({
+        x: 110, y: 20, width: 40, height: 30, strokeConfig: stroke,
+        transition: { durationMs: 200, delayMs: 100, type: "linear" },
+      }))
+      const prior = child.getSlice("default")[1]
+      const interpolation = vi.spyOn(prior, "intermediateState")
+      for (const time of [300, 325, 375, 400, 350]) {
+        child.setCurrentTime({ time })
+        expect(child.shapeMap.get("default")).toBe(prior)
+      }
+      expect(interpolation).not.toHaveBeenCalled()
+      child.setCurrentTime({ time: 500 })
+      expect((child.shapeMap.get("default") as Rectangle).x).toBeCloseTo(60)
+    } finally { stage.destroy() }
+  })
 })
 
 describe("animated: setCurrentTime / progress() drive the shapeMap + paint", () => {
